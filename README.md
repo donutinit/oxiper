@@ -237,7 +237,7 @@ terminal's own ANSI palette, exactly like the originals). The rest:
 
 `biome = "classic"` is asciiquarium, exactly. Every other setting goes further, in asciiquarium's
 own drawing style: seven biomes with **281 fish**, 93 other creatures, 85 plants and corals,
-69 props and 78 passers-by, and they all notice each other.
+69 props and 84 passers-by, and they all notice each other.
 
 <p align="center"><img src="assets/biomes.png" alt="The aquarium in each biome: classic, reef, ocean, kelp, deep, fresh, arctic and tank" width="840"></p>
 

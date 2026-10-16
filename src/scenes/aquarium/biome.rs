@@ -235,6 +235,26 @@ pub(super) fn swim_motion(rng: &mut fastrand::Rng, style: Swim, base: f32) -> Mo
     }
 }
 
+/// A weight scaled by how well a thing fits the screen (see `Aquarium::fit`),
+/// never quite zero.
+fn scaled(weight: u8, fit: f32) -> u32 {
+    (weight as f32 * 100.0 * fit).round().max(1.0) as u32
+}
+
+/// asciiquarium's own passers-by's shapes, in `CLASSIC_VISITORS` order, and
+/// whether they swim underwater (where their height counts against the room).
+const CLASSIC_SPRITES: [(u16, bool); 9] = [
+    (SP_SHIP, false),
+    (SP_WHALE, false),
+    (SP_MONSTER, false),
+    (SP_BIG_FISH, true),
+    (SP_SHARK, true),
+    (SP_HOOK, false),
+    (SP_SWAN, false),
+    (SP_DUCKS, false),
+    (SP_DOLPHIN, false),
+];
+
 /// splitmix64, for patterns that must stay put from frame to frame.
 pub(super) fn hash(mut x: u64) -> u64 {
     x = x.wrapping_add(0x9e37_79b9_7f4a_7c15);
@@ -256,6 +276,18 @@ impl Aquarium {
     /// The first row of water.
     pub(super) fn water_top(&self) -> i32 {
         if self.surface() { 9 } else { 1 }
+    }
+
+    /// How well a shape `sw` by `sh` suits this screen, 0 to 1: 1 while it
+    /// takes at most `fw` of the width and `fh` of the water's height, less
+    /// (squared) the more it outgrows them. Big things come rarely to a small
+    /// window and as usual to a big one, so the sea scales with the terminal.
+    pub(super) fn fit(&self, sw: i32, sh: i32, fw: f32, fh: f32) -> f32 {
+        let room = (self.h - self.water_top()).max(1) as f32;
+        let fx = self.w.max(1) as f32 * fw / sw.max(1) as f32;
+        let fy = room * fh / sh.max(1) as f32;
+        let f = fx.min(fy).min(1.0);
+        f * f
     }
 
     /// The rows a creature `sh` tall may swim in, for its zone.
@@ -378,11 +410,11 @@ impl Aquarium {
         // Groups instead of asciiquarium's single fish, a little sparser since
         // schools bring several.
         let water = ((self.h - self.water_top()) * self.w).max(0) as f32;
-        let groups = (water / 400.0 * self.fish_density).round() as usize;
+        let groups = (water / 650.0 * self.fish_density).round() as usize;
         for _ in 0..groups {
             self.add_group(false, true);
         }
-        let crawlers = (self.w as f32 / 40.0 * self.fish_density).round() as usize;
+        let crawlers = (self.w as f32 / 60.0 * self.fish_density).round() as usize;
         for _ in 0..crawlers {
             self.add_group(true, true);
         }
@@ -396,21 +428,24 @@ impl Aquarium {
             return;
         };
         let pool = if crawler { &w.crawlers } else { &w.swimmers };
-        // Day and night change who is about.
+        // Day and night change who is about, and the screen's size how big.
         let weights: Vec<u32> = pool
             .iter()
             .map(|&i| {
-                let d = lib.species[i as usize].def;
-                (d.weight as f32 * 10.0 * self.activity(d.traits)).round() as u32
+                let sp = &lib.species[i as usize];
+                let s = &lib.sprites[sp.spr as usize];
+                let fit = self.fit(s.w, s.h, 0.2, 0.33);
+                scaled(sp.def.weight, fit * self.activity(sp.def.traits))
             })
             .collect();
         let Some(k) = weighted(&mut self.rng, weights.len(), |k| weights[k]) else {
             return;
         };
         let si = pool[k] as usize;
+        // Big schools at half their size, so they do not crowd the screen.
         let (lo, hi) = lib.species[si].def.school;
         let n = if w.schools && hi > 1 {
-            self.rng.u8(lo..=hi)
+            self.rng.u8(lo.min(hi / 2).max(1)..=(hi / 2).max(1))
         } else {
             1
         };
@@ -603,9 +638,15 @@ impl Aquarium {
             return;
         };
         let pool = &w.plant_pool;
-        let Some(k) = weighted(&mut self.rng, pool.len(), |k| {
-            lib.plants[pool[k] as usize].weight as u32
-        }) else {
+        let weights: Vec<u32> = pool
+            .iter()
+            .map(|&i| {
+                let p = &lib.plants[i as usize];
+                let s = &lib.sprites[p.spr as usize];
+                scaled(p.weight, self.fit(s.w, s.h, 0.3, 0.5))
+            })
+            .collect();
+        let Some(k) = weighted(&mut self.rng, pool.len(), |k| weights[k]) else {
             return;
         };
         let p = &lib.plants[pool[k] as usize];
@@ -653,9 +694,18 @@ impl Aquarium {
             cands.len()
         };
         let mut taken: Vec<(i32, i32)> = Vec::new();
+        let fits: Vec<(u16, f32)> = cands
+            .iter()
+            .map(|&i| {
+                let s = &lib.sprites[lib.decor[i as usize].spr as usize];
+                (i, self.fit(s.w, s.h, 0.45, 0.6))
+            })
+            .collect();
+        let fit_of = |i: u16| fits.iter().find(|f| f.0 == i).map_or(1.0, |f| f.1);
         for _ in 0..want {
             let Some(k) = weighted(&mut self.rng, cands.len(), |k| {
-                lib.decor[cands[k] as usize].weight as u32
+                let i = cands[k];
+                scaled(lib.decor[i as usize].weight, fit_of(i))
             }) else {
                 break;
             };
@@ -695,12 +745,30 @@ impl Aquarium {
             return;
         };
         let pool = &w.visit_pool;
-        let Some(k) = weighted(&mut self.rng, pool.len(), |k| match pool[k] {
-            // The hook waits for a bite; without fish it would wait forever.
-            Visit::Classic(FISHHOOK) if !has_fish => 0,
-            Visit::Classic(_) => 6,
-            Visit::Data(i) => lib.visitors[i as usize].def.weight as u32,
-        }) else {
+        // Above the water only the width counts; below it, the height too.
+        let weights: Vec<u32> = pool
+            .iter()
+            .map(|&v| match v {
+                // The hook waits for a bite; without fish it would wait forever.
+                Visit::Classic(FISHHOOK) if !has_fish => 0,
+                Visit::Classic(k) => {
+                    let (spr, under) = CLASSIC_SPRITES[k as usize % 9];
+                    let s = &lib.sprites[spr as usize];
+                    let fh = if under { 0.5 } else { f32::INFINITY };
+                    scaled(6, self.fit(s.w, s.h, 0.6, fh))
+                }
+                Visit::Data(i) => {
+                    let v = &lib.visitors[i as usize];
+                    let s = &lib.sprites[v.spr as usize];
+                    let fh = match v.def.lane {
+                        Lane::Deep | Lane::Floor => 0.5,
+                        _ => f32::INFINITY,
+                    };
+                    scaled(v.def.weight, self.fit(s.w, s.h, 0.6, fh))
+                }
+            })
+            .collect();
+        let Some(k) = weighted(&mut self.rng, pool.len(), |k| weights[k]) else {
             return;
         };
         let v = pool[k];
@@ -1114,6 +1182,26 @@ mod tests {
             }
             assert!(moving > 500 && resting > 200, "{moving} {resting}");
         });
+    }
+
+    #[test]
+    fn big_things_come_rarely_to_small_screens() {
+        // The share of groups led by something big (120 cells or more).
+        let big_share = |w: u16, h: u16| {
+            let mut big = 0;
+            scene(&[("biome", s("mixed"))], |ctx, a| {
+                a.resize(ctx, w, h);
+                for _ in 0..600 {
+                    let n = a.ents.len();
+                    a.add_group(false, true);
+                    big += usize::from(a.ents.get(n).is_some_and(|e| e.size >= 120));
+                }
+            });
+            big as f32 / 600.0
+        };
+        let (small, large) = (big_share(80, 24), big_share(220, 60));
+        eprintln!("big: {small} on 80x24, {large} on 220x60");
+        assert!(small < large * 0.6, "{small} on 80x24, {large} on 220x60");
     }
 
     #[test]

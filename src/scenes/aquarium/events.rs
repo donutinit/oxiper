@@ -637,7 +637,13 @@ impl Aquarium {
 
     fn begin_migration(&mut self, run: &mut Run) -> bool {
         let lib = library();
-        let Some(si) = self.pick_species(|_| true) else {
+        // Swimmers that get somewhere: jellies drifting along make no procession.
+        let Some(si) = self.pick_species(|sp| {
+            matches!(
+                sp.def.swim,
+                assets::Swim::Cruise | assets::Swim::Wave | assets::Swim::Dart
+            ) && sp.def.speed.1 >= 0.5
+        }) else {
             return false;
         };
         let sp = &lib.species[si];
@@ -1026,10 +1032,11 @@ mod tests {
         scene(&[("biome", s("ocean")), ("events", rate(1.0))], |ctx, a| {
             a.resize(ctx, 140, 45);
             assert!(a.start_event(Event::BaitBall));
+            // The ball's members (creatures circling their homes do not count).
             let orbiting = |a: &Aquarium| {
                 a.ents
                     .iter()
-                    .filter(|e| matches!(e.motion, Motion::Orbit { .. }))
+                    .filter(|e| e.tag != 0 && matches!(e.motion, Motion::Orbit { .. }))
                     .count()
             };
             let n = orbiting(a);
@@ -1043,7 +1050,12 @@ mod tests {
             let seen = a
                 .ents
                 .iter()
-                .filter(|e| matches!(e.motion, Motion::Orbit { .. }) && e.x >= 0.0 && e.x < 140.0)
+                .filter(|e| {
+                    e.tag != 0
+                        && matches!(e.motion, Motion::Orbit { .. })
+                        && e.x >= 0.0
+                        && e.x < 140.0
+                })
                 .count();
             assert!(seen >= n / 3, "{seen} of {n} on screen");
             for _ in 0..500 {

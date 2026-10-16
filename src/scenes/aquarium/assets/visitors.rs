@@ -2866,4 +2866,220 @@ YY Y  Y  Y  Y  Y YY
     .weight(2)
     .traits(PREDATOR | SCARY)
     .biomes(OCEAN | ARCTIC | KELP),
+    Visitor::new(
+        "panga",
+        Lane::Boat,
+        &[
+            r"
+                    ,
+         o        ,'
+        /|\     ,'
+ _      _|_\--,'___
+[#]=\__________  /
+  ~ \__________/
+",
+            r"
+                    ,
+         o        ,'
+        /|\     ,'
+ _      _|_\--,'___
+[#]=\__________  /
+  - \__________/
+",
+        ],
+        &[r"
+                    k
+         Y        kk
+        yyy     kk
+ w      yyyykkkk111
+KKKk11111111111111
+  C 111111111111
+"],
+    )
+    .tint("1:wWcCyY")
+    .speed(0.3, 0.7)
+    .fps(0.25)
+    .weight(7)
+    .traits(FISHING)
+    .biomes(OCEAN | REEF | KELP),
+    Visitor::new(
+        "shrimp-trawler",
+        Lane::Boat,
+        &[
+            r"
+  \          |           /
+  :\         |  ___     /:
+  : \        |  |_o_|  / :
+  :  \_______|_o_o____/  :
+  :   \_o__o__o__o___/   :
+     ~ \____________/
+",
+            r"
+  \          |           /
+  :\         |  ___     /:
+  : \        |  |_o_|  / :
+  :  \_______|_o_o____/  :
+  :   \_o__o__o__o___/   :
+     - \____________/
+",
+        ],
+        &[r"
+  w          w           w
+  cw         w  WWW     wc
+  c w        w  WWYWW  w c
+  c  w1111111w1Y1Y1111w  c
+  c   11Y11Y11Y11Y1111   c
+     C 11111111111111
+"],
+    )
+    .tint("1:rRbBgG")
+    .speed(0.3, 0.6)
+    .fps(0.15)
+    .weight(6)
+    .traits(NET | SCARY)
+    .biomes(OCEAN | REEF),
+    Visitor::new(
+        "purse-seiner",
+        Lane::Boat,
+        &[
+            r"
+         |
+         |-O       |
+    ___  |        ___
+   \___/ |       |_o_|
+  _#####_|_______________
+   \__o__o__o__o__o____/'
+",
+            r"
+         |
+         |-o       |
+    ___  |        ___
+   \___/ |       |_o_|
+  _#####_|_______________
+   \__o__o__o__o__o____/,
+",
+        ],
+        &[r"
+         w
+         wwY       w
+    RRR  w        WWW
+   RRRRR w       WWYWW
+  1ccccc1w111111111111111
+   111Y11Y11Y11Y11Y11111
+"],
+    )
+    .tint("1:rRbBgG")
+    .speed(0.25, 0.5)
+    .fps(0.2)
+    .weight(6)
+    .traits(NET | SCARY)
+    .biomes(OCEAN | KELP | ARCTIC),
+    Visitor::new(
+        "sport-fishing-boat",
+        Lane::Boat,
+        &[
+            r"
+                          ,
+        _____           ,'
+       |_o_o_|        ,'
+     |_o__o___|_____,'
+  _______________________
+   \__o__o__o__o_______/'
+",
+            r"
+                          ,
+        _____           ,'
+       |_o_o_|        ,'
+     |_o__o___|_____,'
+  _______________________
+   \__o__o__o__o_______/,
+",
+        ],
+        &[r"
+                          y
+        WWWWW           yy
+       WWcWcWW        yy
+     WWcWWcWWWWWWWWWyy
+  WWWWWWWWWWWWWWWWWWWWWWW
+   111c11c11c11c11111111
+"],
+    )
+    .tint("1:bBcCrR")
+    .speed(0.35, 0.8)
+    .fps(0.25)
+    .weight(7)
+    .traits(FISHING | SCARY)
+    .biomes(OCEAN | REEF),
+    Visitor::new(
+        "lobster-boat",
+        Lane::Boat,
+        &[
+            r"
+             |           ,
+             |         ,'
+           _____     ,'
+ o o [#]  |[] []|  ,'
+ ________________________
+  \____________________/'
+",
+            r"
+             |           ,
+             |         ,'
+           _____     ,'
+ o o [#]  |[] []|  ,'
+ ________________________
+  \____________________/,
+",
+        ],
+        &[r"
+             w           y
+             w         yy
+           WWWWW     yy
+ R Y yyy  WccWccW  yy
+ 111111111111111111111111
+  1111111111111111111111
+"],
+    )
+    .tint("1:wWbBgG")
+    .speed(0.25, 0.6)
+    .fps(0.25)
+    .weight(7)
+    .traits(FISHING)
+    .biomes(KELP | ARCTIC | OCEAN),
+    Visitor::new(
+        "rowboat-angler",
+        Lane::Boat,
+        &[
+            r"
+                 ,
+     .^.       ,'
+     (_)     ,'
+     /|\---,'
+  ,--/_\------.
+   \_________/
+",
+            r"
+                 .
+     .^.       ,'
+     (_)     ,'
+     /|\---,'
+  ,--/_\------.
+   \_________/ ~
+",
+        ],
+        &[r"
+                 y
+     YYY       yy
+     yyy     yy
+     bbbyyyyy
+  111bbb1111111
+   11111111111
+"],
+    )
+    .tint("1:rRgGyY")
+    .speed(0.2, 0.4)
+    .fps(0.2)
+    .weight(6)
+    .traits(FISHING)
+    .biomes(FRESH),
 ];
