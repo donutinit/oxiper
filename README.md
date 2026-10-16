@@ -38,8 +38,8 @@ plus eight more scenes. One small binary. Nearly no CPU. Your terminal's transpa
   **281 kinds of fish** and hundreds more creatures, plants, props and passers-by, drawn by hand
   in Unicode and all reacting to each other. The rain is neo's droplet model, falling at neo's real
   speed. Nyan Cat flies with the original twelve frames.
-- **One binary, thirteen scenes.** Mix them into a playlist and give each one its own theme, pace and
-  time on screen.
+- **One binary, seventeen scenes.** Mix them into a playlist and give each one its own theme, pace and
+  time on screen. And now and then, when you least expect it, a train or a duck goes by.
 - **Transparency first.** oxiper never paints a background it doesn't have to, so blurred or
   translucent terminals stay see-through. It even asks your terminal what its background looks like,
   so fading trails fade *into it*.
@@ -82,6 +82,14 @@ plus eight more scenes. One small binary. Nearly no CPU. Your terminal's transpa
 </tr>
 <tr>
 <td align="center"><img src="assets/particles.gif" alt="particles"><br><b>particles</b> · a flow field, or fireworks<br><sub><code>oxiper -s particles -t rosepine</code></sub></td>
+<td align="center"><img src="assets/dog.gif" alt="dog"><br><b>dog</b> · after <a href="https://github.com/SantiagoSchez/tanim">tanim</a><br><sub><code>oxiper -s dog</code></sub></td>
+</tr>
+<tr>
+<td align="center"><img src="assets/fireworks.gif" alt="fireworks"><br><b>fireworks</b> · after <a href="https://github.com/SantiagoSchez/tanim">tanim</a><br><sub><code>oxiper -s fireworks</code></sub></td>
+<td align="center"><img src="assets/metaballs.gif" alt="metaballs"><br><b>metaballs</b> · after <a href="https://github.com/SantiagoSchez/tanim">tanim</a><br><sub><code>oxiper -s metaballs -t synthwave</code></sub></td>
+</tr>
+<tr>
+<td align="center"><img src="assets/hollywood.gif" alt="hollywood"><br><b>hollywood</b> · after <a href="https://github.com/dustinkirkland/hollywood">hollywood</a><br><sub><code>oxiper -s hollywood</code></sub></td>
 <td align="center"><img src="assets/themes.png" alt="the same scene in six themes"><br><b>23 themes</b> · or follow your terminal's palette<br><sub><code>oxiper list themes</code></sub></td>
 </tr>
 </table>
@@ -220,6 +228,11 @@ colors = ["#4f7cff", "#ff6ac1", "#5af78e", "#f3f99d"] # accents
 Anything in the file can also be set for a single run: `-o theme=nord`, `-o neo.density=2`,
 `-o saver.idle=60`.
 
+Speed (`speed`, a scene's `pace`, `--speed`, the `+` and `-` keys) only changes how fast things
+move. Clocks keep real time: at a tenth of the speed the aquarium still moves to another biome
+every five minutes and its day still lasts fifteen, a finished bonsai still waits its `wait`, and
+Nyan Cat's counter still counts real seconds.
+
 ### Themes
 
 `classic` keeps every scene in the colors of the program it pays homage to (the ports use your
@@ -232,6 +245,27 @@ terminal's own ANSI palette, exactly like the originals). The rest:
 | **moods** | `synthwave` · `vaporwave` · `matrix` · `amber` · `ember` · `ocean` · `forest` · `sakura` · `mono` |
 
 `oxiper list themes` shows swatches. Press <kbd>↑</kbd>/<kbd>↓</kbd> while it runs to flip through them.
+
+## Easter eggs
+
+Every so often (about once an hour, never in the first minute) something crosses the screen over
+whatever scene is playing, then leaves on its own within 30 seconds:
+
+- **sl**: the steam locomotive you get for mistyping `ls`, at sl's own pace. Usually the D51,
+  sometimes the little one or the C51, and once in a while sl's `-a` accident, with people
+  shouting for help.
+- **duckpond**: the duck from [duckpond.sh](https://github.com/gsobell/duckpond.sh) paddles
+  along a line of water, quacking.
+
+They are not scenes, so they never show up in a playlist. Make them rarer, more frequent, or
+turn them off:
+
+```toml
+eggs = "all"          # "none", or a list like "sl"
+egg_rate = 1.2        # per hour of playing time; 0 = never
+```
+
+Can't wait? Press <kbd>E</kbd>.
 
 ## The aquarium
 
@@ -272,6 +306,10 @@ animation, and they all notice each other.
 - **asciiquarium's cast stays.** The shark still eats fish and the hook still catches them. The
   ship, whale, sea monster, ducks, swan and dolphins pass by alongside submarines, divers, orcas,
   pirate ships, seagulls and the occasional UFO.
+- **Clear or painted water.** By default the water is your terminal's own background, so a
+  translucent terminal stays see-through. `water = "deep"` paints the sea instead: a gradient
+  from bright to dark, slow shafts of light and sandy dunes, after the aquarium in
+  [tanim](https://github.com/SantiagoSchez/tanim).
 
 ```toml
 [scenes.aquarium]
@@ -283,6 +321,7 @@ visitors = "-ufo"
 day_length = 1800                  # a slower day; 0 keeps it day
 events = 2                         # something special twice as often
 interactions = false               # everyone minds their own business
+water = "deep"                     # paint the sea instead of showing your background
 ```
 
 `oxiper list species` names every fish, critter, plant, prop and visitor, and the biomes each one
@@ -332,19 +371,23 @@ Per-frame cost of every scene at 200×60 (`oxiper bench`, release build):
 
 | scene | simulate + draw (µs) | diff + encode (µs) | bytes / frame | cells changed |
 |---|--:|--:|--:|--:|
-| bonsai | 6 | 77 | 24 | 0.0% |
-| aquarium | 24 | 104 | 1470 | 1.6% |
-| neo | 67 | 131 | 4394 | 1.7% |
-| nyancat | 62 | 107 | 1897 | 2.4% |
-| fire | 137 | 421 | 159432 | 48.7% |
-| constellation | 156 | 146 | 19919 | 7.5% |
-| waveform | 112 | 122 | 11366 | 7.2% |
-| pipes | 45 | 139 | 253 | 0.1% |
-| rain | 20 | 147 | 25563 | 12.7% |
-| dvd | 5 | 79 | 397 | 0.4% |
-| boids | 273 | 117 | 8065 | 3.5% |
-| orrery | 82 | 130 | 7992 | 3.1% |
-| particles | 406 | 411 | 109411 | 42.4% |
+| bonsai | 6 | 71 | 22 | 0.0% |
+| aquarium | 31 | 130 | 1840 | 2.1% |
+| neo | 56 | 125 | 4154 | 1.6% |
+| nyancat | 62 | 112 | 1942 | 2.4% |
+| dog | 415 | 330 | 22318 | 8.3% |
+| fire | 137 | 428 | 159136 | 48.6% |
+| fireworks | 188 | 117 | 8712 | 2.8% |
+| constellation | 155 | 144 | 20705 | 7.8% |
+| waveform | 112 | 115 | 11271 | 7.2% |
+| pipes | 45 | 158 | 253 | 0.1% |
+| rain | 21 | 140 | 25643 | 12.7% |
+| dvd | 5 | 73 | 398 | 0.4% |
+| boids | 280 | 114 | 8375 | 3.6% |
+| orrery | 81 | 125 | 7942 | 3.1% |
+| particles | 421 | 393 | 109235 | 42.4% |
+| metaballs | 415 | 542 | 194936 | 50.9% |
+| hollywood | 45 | 114 | 5742 | 11.1% |
 
 <sub>Intel i7-9700KF, one core. Even the busiest scenes stay under 1 ms per frame at 30 fps, i.e. under 3 % of one core.</sub>
 
@@ -393,6 +436,7 @@ Aliases: `asciiquarium`, `fish`
 | `visitors` | `""` | Only these passers-by (comma separated; -name leaves one out) |
 | `schools` | `true` | Schooling fish swim in groups |
 | `floor` | `true` | Sand and pebbles along the bottom (not in classic) |
+| `water` | `"clear"` | clear (the terminal's own background shows through) or deep (the sea painted: a gradient, slow rays of light, sandy dunes; not in classic) |
 | `snow` | `true` | Marine snow drifting down in the deep sea |
 | `interactions` | `true` | Everything reacts to everything: predators hunt, prey flees or hides, birds dive, nets and lines catch fish, cleaners ride along (not in classic) |
 | `day_length` | `900.0` | Seconds for a whole day and night; 0 is always day (not in classic) |
@@ -404,7 +448,7 @@ Aliases: `asciiquarium`, `fish`
 | `castle` | `true` | Show the castle (in classic and in the tank) |
 | `random_objects` | `true` | Send ships, whales, sharks, divers, submarines, birds... one at a time |
 | `bubbles` | `true` | Fish blow bubbles |
-| `speed` | `1.0` | Pace relative to the original |
+| `speed` | `1.0` | Pace relative to the original (motion only: the biome's stay, days and events keep real time) |
 | `smooth` | `true` | Move continuously; false steps at the original 10 frames per second |
 | `waves` | `false` | Let the water surface drift (it is still in the original) |
 
@@ -452,6 +496,21 @@ Aliases: `nyan`
 </details>
 
 <details>
+<summary><b>dog</b> — a dog runs, naps and chases butterflies in a meadow, after tanim</summary>
+
+Aliases: `meadow`
+
+| option | default | |
+|---|---|---|
+| `speed` | `1.0` | Pace of the dog, the clouds and the grass (the day keeps real time) |
+| `day` | `180` | Real seconds for a full day, from dawn through night to dawn (10-86400) |
+| `zoom` | `2` | How close the camera is to the dog, 0 (whole meadow) to 6 |
+| `butterflies` | `true` | Let butterflies pass by by day for the dog to chase |
+| `sky` | `true` | Paint the sky; off leaves it see-through above the hills |
+
+</details>
+
+<details>
 <summary><b>fire</b> — a roaring fire, after aalib's aafire</summary>
 
 Aliases: `aafire`
@@ -464,6 +523,21 @@ Aliases: `aafire`
 | `wind` | `0.0` | Sideways lean, -2 (left) to 2 (right), with gentle gusts |
 | `cooling` | `0.5` | Turbulent cooling that breaks flames into tongues (0 = pure aafire) |
 | `sparks` | `true` | Embers drifting up from the flame tips |
+
+</details>
+
+<details>
+<summary><b>fireworks</b> — rockets bursting into colorful sparks over a city, after tanim</summary>
+
+Aliases: `rockets`
+
+| option | default | |
+|---|---|---|
+| `speed` | `1.0` | How fast everything moves (0.1-4) |
+| `rate` | `1.0` | How often rockets launch, 0 = never (0-5) |
+| `skyline` | `true` | Draw the city with its lit windows |
+| `stars` | `true` | Faint stars in the night sky |
+| `sky` | `false` | Paint the night sky instead of leaving it transparent |
 
 </details>
 
@@ -608,6 +682,34 @@ Aliases: `flow`
 
 </details>
 
+<details>
+<summary><b>metaballs</b> — glossy blobs merging like drops of gel, after tanim</summary>
+
+Aliases: `blobs`, `gel`
+
+| option | default | |
+|---|---|---|
+| `speed` | `1.0` | How fast the blobs drift |
+| `blobs` | `0` | Number of blobs (1-16, 0 = a random 5-8) |
+| `size` | `1.0` | Blob size multiplier (0.4-2.5) |
+| `background` | `false` | Paint a dark backdrop instead of the terminal's own |
+
+</details>
+
+<details>
+<summary><b>hollywood</b> — a Hollywood hacker screen full of technobabble, after hollywood</summary>
+
+Aliases: `hacker`, `technobabble`
+
+| option | default | |
+|---|---|---|
+| `speed` | `1.0` | Motion pace of the widgets |
+| `panes` | `6` | Most panes on screen at once (3 to 12) |
+| `reshuffle` | `15.0` | Average seconds between layout changes (real time) |
+| `babble` | `7` | How much technobabble, 0 (plain logs) to 10 (maximum) |
+
+</details>
+
 ## Other commands
 
 ```sh
@@ -631,6 +733,13 @@ oxiper stands on the shoulders of these wonderful programs:
 - **aafire** from [AA-lib](https://aa-project.sourceforge.net/aalib/) by Jan Hubička, Kamil Toman and others (LGPL): the fire algorithm.
 - [**pipes.sh**](https://github.com/pipeseroni/pipes.sh) (MIT): pipe pieces and behavior.
 - [**drift**](https://github.com/phlx0/drift) by phlx0 (MIT): inspiration for several ambient scenes and for idle activation.
+- [**tanim**](https://github.com/SantiagoSchez/tanim) by Santiago Sánchez (MIT): the dog,
+  fireworks and metaballs scenes are adapted from it, and its aquarium inspired the painted water.
+- [**sl**](https://github.com/mtoyoda/sl) by Toyoda Masashi: the locomotives of the `sl` easter
+  egg, under its own license, whose notice is kept in [`sl.rs`](src/eggs/sl.rs).
+- [**duckpond.sh**](https://github.com/gsobell/duckpond.sh) by Gavi Sobell (GPL-3.0): the duck.
+- [**hollywood**](https://github.com/dustinkirkland/hollywood) by Dustin Kirkland (Apache-2.0):
+  the idea and the widgets of the hollywood scene, rebuilt natively with far more technobabble.
 - Craig Reynolds, for [boids](https://www.red3d.com/cwr/boids/).
 
 ## License

@@ -31,7 +31,11 @@ pub const INFO: SceneInfo = SceneInfo {
 3. `retheme(ctx)` is called after creation and whenever the theme changes.
    Cache colors and gradients here instead of computing them per frame.
 4. Every frame: `update(ctx, dt)` with `dt` in seconds (already multiplied by the
-   speed setting), then `draw(ctx, canvas)` on a freshly cleared canvas.
+   speed setting), then `draw(ctx, canvas)` on a freshly cleared canvas. Speed
+   only changes how fast things move: a scene with clocks (how long something
+   lasts: a pause between trees, a day, a playlist of events) overrides
+   `tick(ctx, dt, real)` instead, which also gets the wall-clock seconds, and
+   runs its clocks on `real` so slowing it down never stretches them.
 5. Optionally, `next_change()` returns the seconds until the picture changes again
    (`f32::INFINITY` when it is static). The app sleeps until then instead of redrawing
    identical frames; that's how a grown bonsai costs no CPU. The default (0) means

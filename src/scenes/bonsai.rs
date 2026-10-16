@@ -796,7 +796,7 @@ fn theme_pairs(ctx: &Ctx) -> [Color; 5] {
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 enum Phase {
     Growing,
-    /// The tree is complete; `hold` counts toward `wait`.
+    /// The tree is complete; `hold` counts toward `wait`, in real seconds.
     Done,
 }
 
@@ -829,6 +829,9 @@ struct Bonsai {
     shown: usize,
     acc: f64,
     hold: f64,
+    /// Scene seconds per real second, from the last tick: growing follows
+    /// scene time, the wait between trees the wall clock.
+    pace: f64,
     phase: Phase,
     grown: bool,
     grid: Grid,
@@ -903,6 +906,7 @@ impl Bonsai {
             shown: 0,
             acc: 0.0,
             hold: 0.0,
+            pace: 1.0,
             phase: Phase::Growing,
             grown: false,
             grid: Grid::default(),
@@ -1060,8 +1064,16 @@ impl Scene for Bonsai {
         };
     }
 
-    fn update(&mut self, _ctx: &Ctx, dt: f32) {
+    fn update(&mut self, ctx: &Ctx, dt: f32) {
+        self.tick(ctx, dt, dt);
+    }
+
+    fn tick(&mut self, _ctx: &Ctx, dt: f32, real: f32) {
         let mut t = (dt.max(0.0) as f64).min(86_400.0);
+        let mut r = (real.max(0.0) as f64).min(86_400.0);
+        if t > 0.0 && r > 0.0 {
+            self.pace = t / r;
+        }
         // A huge dt may finish a tree and start the next; a few phases per call is plenty.
         for _ in 0..6 {
             match self.phase {
@@ -1074,7 +1086,8 @@ impl Scene for Bonsai {
                     if self.shown < self.strokes.len() {
                         return;
                     }
-                    t = self.acc.max(0.0);
+                    // What is left of this tick, on the wall clock, starts the wait.
+                    r = self.acc.max(0.0) / self.pace;
                     self.acc = 0.0;
                     self.hold = 0.0;
                     self.phase = Phase::Done;
@@ -1083,11 +1096,11 @@ impl Scene for Bonsai {
                     if !self.infinite {
                         return;
                     }
-                    self.hold += t;
+                    self.hold += r;
                     if self.hold < self.wait {
                         return;
                     }
-                    t = self.hold - self.wait;
+                    t = (self.hold - self.wait) * self.pace;
                     self.seed = self.seeder.u32(..);
                     self.start_tree();
                 }
@@ -1098,7 +1111,8 @@ impl Scene for Bonsai {
     fn next_change(&self) -> f32 {
         match self.phase {
             Phase::Growing => (self.step - self.acc).max(0.0) as f32,
-            Phase::Done if self.infinite => (self.wait - self.hold).max(0.0) as f32,
+            // The wait is in real seconds; this is asked in scene seconds.
+            Phase::Done if self.infinite => ((self.wait - self.hold).max(0.0) * self.pace) as f32,
             Phase::Done => f32::INFINITY,
         }
     }
@@ -1220,6 +1234,34 @@ mod tests {
         b.update(&ctx, 0.95);
         assert_eq!((b.phase, b.shown), (Phase::Growing, 0));
         assert_ne!(b.seed, 42);
+    }
+
+    #[test]
+    fn the_wait_between_trees_is_real_time() {
+        let theme = Theme::classic();
+        let opts = Opts::new(
+            INFO.options,
+            "seed = 42\nstep = 0.5\nwait = 2.0".parse().unwrap(),
+        );
+        let ctx = Ctx {
+            theme: &theme,
+            opts: &opts,
+            bg: Color::Reset,
+            seed: 1,
+        };
+        let mut b = Bonsai::new(&ctx);
+        b.resize(&ctx, 60, 24);
+        let n = b.strokes.len();
+        // At a tenth of the speed the tree takes ten times as long to grow...
+        let grow = 0.5 * n as f32 + 0.001;
+        b.tick(&ctx, grow, grow * 10.0);
+        assert_eq!((b.phase, b.shown), (Phase::Done, n));
+        // ...but the finished tree waits its two real seconds, not twenty.
+        b.tick(&ctx, 0.19, 1.9);
+        assert_eq!(b.phase, Phase::Done);
+        assert!(b.next_change() < 0.02, "{}", b.next_change());
+        b.tick(&ctx, 0.02, 0.2);
+        assert_eq!(b.phase, Phase::Growing);
     }
 
     #[test]

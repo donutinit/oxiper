@@ -49,8 +49,19 @@ pub trait Scene {
     fn resize(&mut self, ctx: &Ctx, w: u16, h: u16);
     /// Called after creation and whenever the theme changes; cache colors here.
     fn retheme(&mut self, _ctx: &Ctx) {}
-    /// Advances the simulation by `dt` seconds (already scaled by the speed setting).
+    /// Advances the simulation by `dt` seconds of scene time (already scaled
+    /// by the speed setting).
     fn update(&mut self, ctx: &Ctx, dt: f32);
+    /// Advances the scene: `dt` seconds of scene time, scaled by the speed
+    /// setting, set how far things move and animate, while `real` seconds
+    /// pass on the wall clock. Clocks (how long something lasts: a biome's
+    /// stay, a finished tree's wait, a day) follow `real`, so slowing a scene
+    /// down never stretches them. The default is `update(ctx, dt)`, for
+    /// scenes without clocks.
+    fn tick(&mut self, ctx: &Ctx, dt: f32, real: f32) {
+        let _ = real;
+        self.update(ctx, dt);
+    }
     /// Draws the current state. The canvas has already been cleared.
     fn draw(&mut self, ctx: &Ctx, c: &mut Canvas);
     /// Seconds (of scene time) until the picture next changes. Scenes that only

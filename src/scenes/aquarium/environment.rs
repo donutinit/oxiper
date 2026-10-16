@@ -153,7 +153,9 @@ impl Env {
     }
 
     /// Advances the clock, the weather and the current.
-    fn tick(&mut self, rng: &mut fastrand::Rng, dt: f32, surface: bool) {
+    /// `dt` is scene time (the current, the twinkle); `real` is wall-clock
+    /// time, which the day and the storms follow.
+    fn tick(&mut self, rng: &mut fastrand::Rng, dt: f32, real: f32, surface: bool) {
         if !self.started {
             self.started = true;
             self.phase = rng.f32();
@@ -165,7 +167,7 @@ impl Env {
         }
         self.t += dt;
         if self.day_length > 0.0 {
-            self.phase = (self.phase + dt / self.day_length).rem_euclid(1.0);
+            self.phase = (self.phase + real / self.day_length).rem_euclid(1.0);
             self.daylight = Env::day_light(self.phase);
         } else {
             self.phase = 0.5;
@@ -176,9 +178,9 @@ impl Env {
             self.storm_left = 0.0;
             self.level = 0.0;
         } else if self.storm_left > 0.0 {
-            self.storm_left -= dt;
+            self.storm_left -= real;
         } else {
-            self.storm_cd -= dt;
+            self.storm_cd -= real;
             if self.storm_cd <= 0.0 {
                 self.storm_left = between(rng, self.span.0, self.span.1);
                 self.storm_cd = between(rng, self.gap.0, self.gap.1);
@@ -186,15 +188,15 @@ impl Env {
             }
         }
         let goal = if self.storm_left > 0.0 { 1.0 } else { 0.0 };
-        let step = dt / STORM_RAMP;
+        let step = real / STORM_RAMP;
         self.level = if (goal - self.level).abs() <= step {
             goal
         } else {
             self.level + step * (goal - self.level).signum()
         };
-        self.flash = (self.flash - dt).max(0.0);
+        self.flash = (self.flash - real).max(0.0);
         if self.level > 0.6 {
-            self.bolt_cd -= dt;
+            self.bolt_cd -= real;
             if self.bolt_cd <= 0.0 {
                 self.bolt_cd = between(rng, 3.0, 12.0);
                 self.flash = 0.12;
@@ -296,7 +298,7 @@ impl Aquarium {
             return;
         };
         let env = &mut w.env;
-        env.tick(&mut self.rng, dt, surface);
+        env.tick(&mut self.rng, dt, dt * self.clock, surface);
         let (cur, lean) = (env.cur, env.lean);
         for e in &mut self.ents {
             if e.dead {

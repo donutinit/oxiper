@@ -1,6 +1,7 @@
 mod app;
 mod color;
 mod config;
+mod eggs;
 mod headless;
 mod render;
 mod scene;
@@ -37,7 +38,7 @@ struct Cli {
     /// Target frames per second
     #[arg(long, global = true)]
     fps: Option<u32>,
-    /// Animation speed multiplier
+    /// Animation speed multiplier (motion only; clocks keep real time)
     #[arg(long, global = true)]
     speed: Option<f64>,
     /// Seconds per scene when playing several (0 = no cycling)

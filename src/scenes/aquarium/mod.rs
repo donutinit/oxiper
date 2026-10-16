@@ -96,6 +96,12 @@ pub const INFO: SceneInfo = SceneInfo {
             help: "Sand and pebbles along the bottom (not in classic)",
         },
         Opt {
+            key: "water",
+            default: Val::S("clear"),
+            help: "clear (the terminal's own background shows through) or deep (the sea painted: \
+                   a gradient, slow rays of light, sandy dunes; not in classic)",
+        },
+        Opt {
             key: "snow",
             default: Val::B(true),
             help: "Marine snow drifting down in the deep sea",
@@ -155,7 +161,7 @@ pub const INFO: SceneInfo = SceneInfo {
         Opt {
             key: "speed",
             default: Val::F(1.0),
-            help: "Pace relative to the original",
+            help: "Pace relative to the original (motion only: the biome's stay, days and events keep real time)",
         },
         Opt {
             key: "smooth",
@@ -613,6 +619,10 @@ struct Aquarium {
     water: [(Color, u8); 4],
     /// Everything beyond classic; `None` is asciiquarium exactly.
     world: Option<biome::World>,
+    /// Real seconds per second of scene time, from the last tick: the
+    /// world's clocks (the biome's stay, the day, storms, events, a plant's
+    /// life) follow the wall clock however fast the scene runs.
+    clock: f32,
 }
 
 impl Aquarium {
@@ -647,6 +657,7 @@ impl Aquarium {
             pens: classic_pens(),
             water: [(Color::Ansi(C), 0); 4],
             world: biome::World::from_opts(o),
+            clock: 1.0,
         }
     }
 
@@ -998,7 +1009,8 @@ impl Aquarium {
     /// collisions, then deaths and their callbacks.
     fn step(&mut self, dt: f32) {
         self.time += dt;
-        self.world_clock(dt);
+        // Clocks run on real time (see `clock`), motion on scene time.
+        self.world_clock(dt * self.clock);
         if self.world.is_some() {
             self.environment(dt);
             self.events(dt);
@@ -1016,7 +1028,12 @@ impl Aquarium {
             if e.dead {
                 continue;
             }
-            e.ttl -= dt;
+            // A plant's life is a clock; everything else's ttl is part of its motion.
+            e.ttl -= if e.kind == Kind::Seaweed {
+                dt * self.clock
+            } else {
+                dt
+            };
             let offscreen = e.x >= sw || e.y >= sh || e.x < -e.w || e.y < -e.h;
             let time_up = e.ttl <= 0.0
                 && (!matches!(e.kind, Kind::Fish | Kind::Critter)
@@ -1228,7 +1245,8 @@ impl Aquarium {
         for cell in s.frame(e.frame as usize) {
             let (x, y) = (x0 + cell.dx as i32, y0 + cell.dy as i32);
             if cell.ch == ' ' {
-                // Opaque but invisible: erase what is behind, keep the terminal background.
+                // Opaque but invisible: erase what is behind. `set_attr` leaves the cell's
+                // background alone, so the terminal's shows, or the painted sea's.
                 c.set_attr(x, y, ' ', Color::Reset, 0);
             } else {
                 let (col, attr) = pens[e.pen(cell.code) as usize];
@@ -1323,6 +1341,12 @@ impl Scene for Aquarium {
 
     fn retheme(&mut self, ctx: &Ctx) {
         let th = ctx.theme;
+        if let Some(w) = self.world.as_mut() {
+            w.tint = (!th.native).then(|| {
+                let g: Gradient = ctx.ramp(&[]);
+                (g.at(0.6), g.at(0.1))
+            });
+        }
         if th.native {
             self.pens = classic_pens();
             self.water = [(Color::Ansi(C), 0); 4];
@@ -1358,6 +1382,14 @@ impl Scene for Aquarium {
             *slot = (grad.at(0.55 - 0.08 * i as f32), 0);
         }
         self.retheme_world(ctx);
+    }
+
+    fn tick(&mut self, ctx: &Ctx, dt: f32, real: f32) {
+        let scene = dt * self.speed;
+        if scene.is_finite() && scene > 0.0 && real.is_finite() && real > 0.0 {
+            self.clock = real / scene;
+        }
+        self.update(ctx, dt);
     }
 
     fn update(&mut self, _ctx: &Ctx, dt: f32) {

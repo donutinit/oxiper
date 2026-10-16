@@ -105,6 +105,12 @@ pub(super) struct World {
     pub(super) schools: bool,
     pub(super) floor: bool,
     pub(super) snow: bool,
+    /// Paint the water and the floor (`water = "deep"`) instead of leaving the
+    /// terminal's own background showing.
+    pub(super) paint: bool,
+    /// Under a theme (not `classic`): its ramp's light and dark ends, which
+    /// tint the painted water so it matches.
+    pub(super) tint: Option<(Color, Color)>,
     /// What may come now: indices into the library.
     pub(super) swimmers: Vec<u16>,
     pub(super) crawlers: Vec<u16>,
@@ -158,6 +164,11 @@ impl World {
             schools: o.b("schools"),
             floor: o.b("floor"),
             snow: o.b("snow"),
+            paint: matches!(
+                o.s("water").trim().to_ascii_lowercase().as_str(),
+                "deep" | "painted"
+            ),
+            tint: None,
             swimmers: Vec::new(),
             crawlers: Vec::new(),
             plant_pool: Vec::new(),
@@ -1018,7 +1029,14 @@ impl Aquarium {
         let Some(w) = self.world.as_ref() else {
             return;
         };
-        if w.floor && self.h > self.water_top() + 2 {
+        // Strict transparency forbids backgrounds, so there the water stays clear.
+        let painted = w.paint && !c.strict && self.w > 0 && self.h > 0;
+        if painted {
+            self.paint_water(c, w);
+            if w.floor && self.h > self.water_top() + 4 {
+                self.paint_floor(c, w);
+            }
+        } else if w.floor && self.h > self.water_top() + 2 {
             let y = self.h - 1;
             let (sand, stone) = match w.biome {
                 DEEP => (K, K + BRIGHT),
@@ -1059,6 +1077,255 @@ impl Aquarium {
     }
 }
 
+/// The colors of a painted sea at full daylight.
+struct Pal {
+    top: Color,
+    mid: Color,
+    bot: Color,
+    ray: Color,
+    sand: Color,
+    dark: Color,
+    stone: Color,
+}
+
+const fn rgb(r: u8, g: u8, b: u8) -> Color {
+    Color::Rgb(r, g, b)
+}
+
+impl Aquarium {
+    /// The palette of the current biome, matched to the theme and dimmed to the
+    /// light of the hour. The ocean's water and sand are tanim's colors (MIT,
+    /// Copyright (c) 2026 Santiago Sánchez); the other biomes vary them.
+    fn palette(&self, w: &World) -> Pal {
+        // top, middle, bottom, ray, sand, sand in the shade, stone
+        let mut t = match w.biome {
+            REEF => [
+                rgb(30, 142, 170),
+                rgb(12, 92, 132),
+                rgb(6, 46, 82),
+                rgb(150, 238, 232),
+                rgb(238, 228, 200),
+                rgb(188, 174, 140),
+                rgb(150, 150, 156),
+            ],
+            KELP => [
+                rgb(28, 122, 112),
+                rgb(14, 82, 82),
+                rgb(6, 42, 50),
+                rgb(130, 212, 170),
+                rgb(168, 158, 110),
+                rgb(108, 98, 70),
+                rgb(110, 116, 100),
+            ],
+            FRESH => [
+                rgb(52, 134, 100),
+                rgb(30, 94, 76),
+                rgb(14, 54, 48),
+                rgb(172, 222, 150),
+                rgb(150, 138, 108),
+                rgb(98, 90, 68),
+                rgb(128, 116, 100),
+            ],
+            ARCTIC => [
+                rgb(152, 202, 232),
+                rgb(90, 150, 200),
+                rgb(40, 82, 132),
+                rgb(232, 246, 255),
+                rgb(198, 208, 216),
+                rgb(138, 150, 166),
+                rgb(120, 130, 148),
+            ],
+            TANK => [
+                rgb(40, 132, 222),
+                rgb(20, 92, 192),
+                rgb(10, 52, 132),
+                rgb(150, 212, 255),
+                rgb(224, 206, 152),
+                rgb(170, 150, 100),
+                rgb(130, 130, 140),
+            ],
+            DEEP => [
+                rgb(8, 24, 48),
+                rgb(4, 12, 30),
+                rgb(2, 5, 14),
+                rgb(44, 84, 124),
+                rgb(40, 38, 44),
+                rgb(20, 20, 26),
+                rgb(64, 62, 72),
+            ],
+            // The ocean, and mixed (a bit of everything).
+            _ => [
+                rgb(26, 104, 160),
+                rgb(10, 54, 104),
+                rgb(4, 20, 52),
+                rgb(110, 190, 225),
+                rgb(206, 182, 128),
+                rgb(150, 126, 84),
+                rgb(104, 104, 114),
+            ],
+        };
+        if let Some((hi, lo)) = w.tint {
+            // Part of the way to the theme's own light and dark, so the sea belongs to it.
+            let mid = hi.lerp(lo, 0.5);
+            let goal = [
+                hi.scale(0.5),
+                mid.scale(0.4),
+                lo.scale(0.5),
+                hi,
+                hi.scale(0.8),
+                lo.scale(0.8),
+                mid,
+            ];
+            for (c, g) in t.iter_mut().zip(goal) {
+                if let Some((r, gr, b)) = rgb_of(g) {
+                    *c = c.lerp(Color::Rgb(r, gr, b), 0.45);
+                }
+            }
+        }
+        // Night (the deep has none) sinks toward a moonlit blue; a storm too.
+        let l = if w.biome == DEEP { 1.0 } else { self.light() };
+        if l < 0.999 {
+            for c in t.iter_mut() {
+                *c = c
+                    .scale(0.3)
+                    .lerp(Color::Rgb(12, 24, 64), 0.3)
+                    .lerp(*c, l.clamp(0.0, 1.0));
+            }
+        }
+        Pal {
+            top: t[0],
+            mid: t[1],
+            bot: t[2],
+            ray: t[3],
+            sand: t[4],
+            dark: t[5],
+            stone: t[6],
+        }
+    }
+
+    /// The water as a gradient, light under the surface and dark below, with
+    /// slow rays of light slanting down by day. Only backgrounds are painted;
+    /// everything drawn later keeps them, spaces included.
+    fn paint_water(&self, c: &mut Canvas, w: &World) {
+        let pal = self.palette(w);
+        let y0 = if self.surface() { 5 } else { 0 }.min(self.h - 1);
+        let span = (self.h - 1 - y0).max(1) as f32;
+        // Rays need light: faint at dusk, none at night, and not in the deep.
+        let l = if w.biome == DEEP { 0.0 } else { self.light() };
+        let strength = (l * l * 0.5 * if w.biome == ARCTIC { 1.2 } else { 1.0 }).min(0.6);
+        // Two slow waves drifting apart, as in tanim's `draw_water` (MIT,
+        // Copyright (c) 2026 Santiago Sánchez); each row shifts the pattern a
+        // little, so the rays lean.
+        let t = self.time;
+        let rays: Vec<f32> = if strength > 0.01 {
+            (0..self.w + self.h + 1)
+                .map(|u| {
+                    let u = u as f32;
+                    let s = ((u * 0.1 + t * 0.33).sin() + (u * 0.043 - t * 0.18).sin()) * 0.5;
+                    s.max(0.0).powi(3) * strength
+                })
+                .collect()
+        } else {
+            Vec::new()
+        };
+        let reach = (self.h - y0) as f32 * 0.7;
+        for y in y0..self.h {
+            let k = (y - y0) as f32 / span;
+            let base = if k < 0.5 {
+                pal.top.lerp(pal.mid, k * 2.0)
+            } else {
+                pal.mid.lerp(pal.bot, (k - 0.5) * 2.0)
+            };
+            let fall = (1.0 - (y - y0) as f32 / reach).max(0.0);
+            for x in 0..self.w {
+                let bg = if rays.is_empty() || fall <= 0.0 {
+                    base
+                } else {
+                    // Coarse steps, so a terminal only resends cells whose level changes.
+                    let q = (rays[(x + y * 2 / 3) as usize] * fall * 14.0).round() / 14.0;
+                    if q > 0.0 { base.lerp(pal.ray, q) } else { base }
+                };
+                c.set_bg(x, y, bg);
+            }
+        }
+    }
+
+    /// Sandy dunes in half-block pixels, with pebbles and shells on them. The
+    /// idea and the sand's speckles are tanim's (MIT, Copyright (c) 2026
+    /// Santiago Sánchez); the dunes are sines of our own.
+    fn paint_floor(&self, c: &mut Canvas, w: &World) {
+        let pal = self.palette(w);
+        let ph = self.h * 2;
+        let seed = w.seed;
+        let a = (hash(seed ^ 0xD00E) % 628) as f32 / 100.0;
+        let b = (hash(seed ^ 0xD00F) % 628) as f32 / 100.0;
+        // Where the sand starts in each column, in pixel rows.
+        let top: Vec<i32> = (0..self.w)
+            .map(|x| {
+                let x = x as f32;
+                let d = (x * 0.07 + a).sin() * 1.6 + (x * 0.19 + b).sin();
+                (ph - 4 + d.round() as i32).clamp(ph - 7, ph - 2)
+            })
+            .collect();
+        let (every, shells) = match w.biome {
+            FRESH => (3, false),
+            ARCTIC => (4, false),
+            DEEP => (6, false),
+            _ => (5, true),
+        };
+        let white = Color::Rgb(255, 255, 255);
+        let pixel = |x: i32, py: i32| -> Option<Color> {
+            let t = top[x as usize];
+            if py >= t {
+                let depth = (py - t) as f32 / (ph - t).max(1) as f32;
+                let mut s = if py == t {
+                    pal.sand.lerp(white, 0.15)
+                } else {
+                    pal.sand.lerp(pal.dark, depth * 0.7)
+                };
+                match hash(seed ^ ((x as u64) << 20) ^ py as u64) % 9 {
+                    0 => s = s.scale(0.86),
+                    1 => s = s.lerp(white, 0.12),
+                    _ => {}
+                }
+                return Some(s);
+            }
+            // Things lying on the sand: one candidate per six columns.
+            let cell = x / 6;
+            let h = hash(seed ^ 0x570E ^ ((cell as u64) << 8));
+            let cx = (cell * 6 + 1 + ((h >> 8) % 4) as i32).min(self.w - 1);
+            let tc = top[cx as usize];
+            let dx = (x - cx).abs();
+            match h % every {
+                0 if (dx <= 1 && py == tc - 1) || (dx == 0 && py == tc - 2 && h & 0x1000 != 0) => {
+                    let shade = 0.8 + ((h >> 20) % 40) as f32 / 100.0;
+                    let lit = if py == tc - 1 && dx == 0 { 1.1 } else { 1.0 };
+                    Some(pal.stone.scale(shade * lit))
+                }
+                1 if shells && dx <= 1 && py == tc - 1 && (h >> 14) & 1 == 0 => Some(if dx == 0 {
+                    Color::Rgb(250, 232, 226).lerp(pal.sand, 0.2)
+                } else {
+                    Color::Rgb(226, 170, 160).lerp(pal.sand, 0.3)
+                }),
+                _ => None,
+            }
+        };
+        for cy in ((ph - 8) / 2).max(0)..self.h {
+            for x in 0..self.w {
+                match (pixel(x, cy * 2), pixel(x, cy * 2 + 1)) {
+                    (None, None) => {}
+                    (Some(u), Some(d)) => {
+                        c.set_attr(x, cy, '▀', u, 0);
+                        c.set_bg(x, cy, d);
+                    }
+                    (None, Some(d)) => c.set_attr(x, cy, '▄', d, 0),
+                    (Some(u), None) => c.set_attr(x, cy, '▀', u, 0),
+                }
+            }
+        }
+    }
+}
+
 /// Grains of sand on the floor row.
 pub(super) const SAND: [char; 5] = ['⣀', '⡀', '▁', '▂', '⠤'];
 /// Pebbles among the sand.
@@ -1090,6 +1357,39 @@ mod tests {
 
     fn s(v: &str) -> toml::Value {
         toml::Value::String(v.into())
+    }
+
+    /// `water = "deep"` paints a background under every water cell, sprites'
+    /// opaque spaces included; `clear` and `classic` paint none at all.
+    #[test]
+    fn the_painted_sea_leaves_no_holes_and_clear_paints_nothing() {
+        let bgs = |opts: &[(&str, toml::Value)]| {
+            let mut out = Vec::new();
+            scene(opts, |ctx, a| {
+                a.resize(ctx, 100, 40);
+                for _ in 0..300 {
+                    a.update(ctx, 1.0 / 30.0);
+                }
+                let mut c = Canvas::new(100, 40, Color::Reset);
+                a.draw(ctx, &mut c);
+                out = (0..40)
+                    .flat_map(|y| (0..100).map(move |x| (x, y)))
+                    .map(|(x, y)| (y, c.get(x, y).unwrap().bg))
+                    .collect();
+            });
+            out
+        };
+        for biome in ["reef", "deep", "classic"] {
+            let clear = bgs(&[("biome", s(biome))]);
+            assert!(clear.iter().all(|&(_, bg)| bg == Color::Reset), "{biome}");
+            let deep = bgs(&[("biome", s(biome)), ("water", s("deep"))]);
+            if biome == "classic" {
+                assert!(deep.iter().all(|&(_, bg)| bg == Color::Reset));
+            } else {
+                // Everything from the waves down is painted.
+                assert!(deep.iter().all(|&(y, bg)| y < 5 || bg != Color::Reset));
+            }
+        }
     }
 
     #[test]
@@ -1135,6 +1435,28 @@ mod tests {
                 .count();
             assert_eq!(water, if a.surface() { 4 } else { 0 });
         });
+    }
+
+    #[test]
+    fn slowing_down_does_not_stretch_the_clocks() {
+        // A tenth of the speed: the sea still moves on after its 10 real seconds.
+        scene(
+            &[
+                ("biome_time", toml::Value::Float(10.0)),
+                ("speed", toml::Value::Float(0.1)),
+            ],
+            |ctx, a| {
+                a.resize(ctx, 120, 40);
+                let start = a.world.as_ref().unwrap().biome;
+                let x0 = a.time;
+                for _ in 0..30 * 12 {
+                    a.tick(ctx, 1.0 / 30.0, 1.0 / 30.0);
+                }
+                assert_ne!(a.world.as_ref().unwrap().biome, start, "it moved on");
+                // While the creatures swam a tenth as far.
+                assert!((a.time - x0 - 1.2).abs() < 0.05, "{}", a.time - x0);
+            },
+        );
     }
 
     #[test]

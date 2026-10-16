@@ -7,6 +7,7 @@ use std::time::{Duration, Instant};
 
 use crate::color::{Color, ColorMode};
 use crate::config::{Background, Config, Override};
+use crate::eggs::{self, Eggs};
 use crate::render::{BOLD, Canvas, DIM, Renderer};
 use crate::scene::{Ctx, Opts, Scene, SceneInfo};
 use crate::scenes;
@@ -86,6 +87,8 @@ pub struct Player {
     pub elapsed: f64,
     /// A theme picked interactively; wins over per-scene and global themes.
     forced_theme: Option<String>,
+    /// The easter egg now playing, if any (see `crate::eggs`).
+    eggs: Eggs,
 }
 
 impl Player {
@@ -107,6 +110,11 @@ impl Player {
         let opts = Opts::new(info.options, cfg.scene_table(info.name));
         let bg = Player::bg_for(&cfg, &theme, &tc);
         let scene = Player::make(info, &theme, &opts, bg, seed, w, h);
+        let mut eggs = Eggs::new(w, h);
+        // A forced rate (for testing) plays an egg even in `snap` and `record`.
+        if cfg.egg_rate >= eggs::FORCE_RATE {
+            eggs.start(&cfg.eggs);
+        }
         Ok(Player {
             cfg,
             theme,
@@ -123,6 +131,7 @@ impl Player {
             h,
             elapsed: 0.0,
             forced_theme: None,
+            eggs,
         })
     }
 
@@ -212,7 +221,23 @@ impl Player {
             bg: self.bg,
             seed: self.seed,
         };
-        self.scene.update(&ctx, dt * self.speed());
+        // Scene time for motion, wall-clock time for the scene's clocks.
+        self.scene.tick(&ctx, dt * self.speed(), dt);
+        self.eggs.update(dt);
+        if self.cfg.egg_rate >= eggs::FORCE_RATE {
+            self.eggs.start(&self.cfg.eggs);
+        }
+    }
+
+    /// Rolls for an easter egg after `dt` real seconds (the interactive loop
+    /// only: `snap`, `record` and `bench` stay reproducible).
+    pub fn roll_egg(&mut self, dt: f64, allow: bool) {
+        self.eggs.roll(&self.cfg.eggs, self.cfg.egg_rate, dt, allow);
+    }
+
+    /// Plays an easter egg now (the hidden `E` key).
+    pub fn start_egg(&mut self) {
+        self.eggs.start(&self.cfg.eggs);
     }
 
     pub fn draw(&mut self, c: &mut Canvas) {
@@ -223,10 +248,14 @@ impl Player {
             seed: self.seed,
         };
         self.scene.draw(&ctx, c);
+        self.eggs.draw(c, &self.theme);
     }
 
     /// Real seconds until the scene's picture changes (see `Scene::next_change`).
     pub fn next_change(&self) -> f64 {
+        if self.eggs.active() {
+            return 0.0;
+        }
         let speed = self.speed() as f64;
         (self.scene.next_change() as f64 / speed.max(1e-6)).max(0.0)
     }
@@ -234,6 +263,7 @@ impl Player {
     pub fn resize(&mut self, w: u16, h: u16) {
         self.w = w;
         self.h = h;
+        self.eggs.resize(w, h);
         let ctx = Ctx {
             theme: &self.theme,
             opts: &self.opts,
@@ -456,6 +486,7 @@ pub fn run(cfg: Config, ro: RunOpts) -> Result<(), String> {
     while !term::QUIT.load(Ordering::SeqCst) {
         let frame_start = Instant::now();
         let dt = (frame_start - last).as_secs_f32().min(0.1);
+        let real_dt = (frame_start - last).as_secs_f64();
         last = frame_start;
         let fps = if focused {
             player.cfg.fps
@@ -466,6 +497,7 @@ pub fn run(cfg: Config, ro: RunOpts) -> Result<(), String> {
 
         if running {
             player.update(dt);
+            player.roll_egg(real_dt, !hud.help);
             player.elapsed += dt as f64;
             dirty = true;
             if player.duration() > 0.0
@@ -614,6 +646,7 @@ pub fn run(cfg: Config, ro: RunOpts) -> Result<(), String> {
                                 hud.show(format!("{} · reseeded", player.info.name), 1.2);
                             }
                             Key::Char('?') => hud.help = !hud.help,
+                            Key::Char('E') if !hud.help => player.start_egg(),
                             _ => {}
                         }
                         dirty = true;

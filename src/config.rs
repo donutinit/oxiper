@@ -32,6 +32,10 @@ pub struct Config {
     pub hud: bool,
     pub seed: Option<u64>,
     pub exit_on_mouse: bool,
+    /// Easter eggs allowed to play (see `crate::eggs`).
+    pub eggs: Vec<&'static crate::eggs::Info>,
+    /// Average eggs per hour of real playing time.
+    pub egg_rate: f64,
     pub idle: u64,
     /// The merged table, for scene options and user themes.
     pub raw: toml::Table,
@@ -75,7 +79,7 @@ pub const GLOBAL: &[Opt] = &[
     Opt {
         key: "speed",
         default: Val::F(1.0),
-        help: "Global animation speed multiplier",
+        help: "Global animation speed multiplier (motion only: clocks such as a biome's stay or a day keep real time)",
     },
     Opt {
         key: "color",
@@ -112,6 +116,16 @@ pub const GLOBAL: &[Opt] = &[
         default: Val::B(false),
         help: "In saver mode, also wake up on mouse clicks",
     },
+    Opt {
+        key: "eggs",
+        default: Val::S("all"),
+        help: "Easter eggs that may appear now and then: \"all\", \"none\", or names like \"sl, duckpond\"",
+    },
+    Opt {
+        key: "egg_rate",
+        default: Val::F(1.2),
+        help: "Average easter eggs per hour of playing time (0 = never; never in the first minute)",
+    },
 ];
 
 /// Keys every `[scenes.<name>]` table accepts on top of the scene's own options.
@@ -124,7 +138,7 @@ pub const PER_SCENE: &[Opt] = &[
     Opt {
         key: "pace",
         default: Val::F(1.0),
-        help: "Time multiplier for this scene only (on top of the global speed)",
+        help: "Speed multiplier for this scene only, on top of the global speed (motion only)",
     },
     Opt {
         key: "duration",
@@ -396,6 +410,7 @@ impl Config {
             }
         }
 
+        let eggs = crate::eggs::parse(&string("eggs", &mut warnings), &mut warnings);
         Ok(Config {
             scenes: list,
             duration: num("duration", &mut warnings).max(0.0),
@@ -411,6 +426,8 @@ impl Config {
             hud: boolean("hud", &mut warnings),
             seed: (seed != 0).then_some(seed),
             exit_on_mouse: boolean("exit_on_mouse", &mut warnings),
+            eggs,
+            egg_rate: num("egg_rate", &mut warnings).max(0.0),
             idle,
             raw,
             path,

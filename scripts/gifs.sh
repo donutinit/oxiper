@@ -30,6 +30,10 @@ SHOTS=(
   "boids|8|3|80x24|24|-s boids --seed 12 -t dracula"
   "orrery|10|2|80x24|24|-s orrery --seed 3"
   "particles|6|3|80x24|15|-s particles --seed 7 -t rosepine"
+  "dog|8|0|80x24|15|-s dog --seed 2"
+  "fireworks|10|3|80x24|24|-s fireworks --seed 4"
+  "metaballs|4|0|80x24|10|-s metaballs --seed 3 -t synthwave"
+  "hollywood|10|4|80x24|15|-s hollywood --seed 3"
   "tour|24|0|100x30|15|-s bonsai,aquarium,neo,nyancat,fire,constellation,pipes,orrery -d 3 --seed 4 -o bonsai.step=0.004"
 )
 

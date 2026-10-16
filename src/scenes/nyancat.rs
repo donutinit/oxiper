@@ -159,7 +159,10 @@ struct Nyancat {
 
     acc: f64,
     ticks: u64,
+    /// Real seconds nyaned, for the counter.
     seconds: f64,
+    /// Scene seconds per real second, from the last tick.
+    pace: f64,
     rng: fastrand::Rng,
 }
 
@@ -191,6 +194,7 @@ impl Nyancat {
             acc: 0.0,
             ticks: 0,
             seconds: 0.0,
+            pace: 1.0,
             rng: ctx.rng(),
         };
         n.retheme(ctx);
@@ -355,12 +359,20 @@ impl Scene for Nyancat {
         };
     }
 
-    fn update(&mut self, _ctx: &Ctx, dt: f32) {
+    fn update(&mut self, ctx: &Ctx, dt: f32) {
+        self.tick(ctx, dt, dt);
+    }
+
+    fn tick(&mut self, _ctx: &Ctx, dt: f32, real: f32) {
         if !dt.is_finite() || dt <= 0.0 {
             return;
         }
+        // The counter counts real seconds, whatever the speed.
+        if real.is_finite() && real > 0.0 {
+            self.seconds += real as f64;
+            self.pace = dt as f64 / real as f64;
+        }
         let dt = dt as f64;
-        self.seconds += dt;
         self.acc += dt;
         let n = (self.acc / self.delay).floor();
         self.acc -= n * self.delay;
@@ -371,7 +383,8 @@ impl Scene for Nyancat {
         let frame = (self.delay - self.acc).max(0.0);
         // The counter ticks over on whole seconds.
         let counter = if self.counter {
-            1.0 - self.seconds.fract()
+            // Real seconds to the next whole one, in scene seconds.
+            (1.0 - self.seconds.fract()) * self.pace
         } else {
             f64::INFINITY
         };
@@ -525,6 +538,27 @@ mod tests {
         assert_eq!(sample(&f, false, 0, 24), b',');
         assert_eq!(sample(&f, true, -1, 24), b'>');
         assert_eq!(sample(&f, false, -400, 50), b',');
+    }
+
+    #[test]
+    fn the_counter_counts_real_seconds() {
+        use crate::scene::Opts;
+        use crate::theme::Theme;
+        let theme = Theme::classic();
+        let opts = Opts::new(INFO.options, toml::Table::new());
+        let ctx = Ctx {
+            theme: &theme,
+            opts: &opts,
+            bg: Color::Reset,
+            seed: 1,
+        };
+        let mut n = Nyancat::new(&ctx);
+        // Five real seconds at a tenth of the speed.
+        for _ in 0..50 {
+            n.tick(&ctx, 0.01, 0.1);
+        }
+        assert!((n.seconds - 5.0).abs() < 1e-6, "{}", n.seconds);
+        assert!(n.next_change() <= 0.1 + 1e-6);
     }
 
     /// Odd option values and sizes must not panic (the registry test covers the defaults).

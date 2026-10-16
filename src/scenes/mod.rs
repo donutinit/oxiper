@@ -6,8 +6,12 @@ pub mod aquarium;
 pub mod boids;
 pub mod bonsai;
 pub mod constellation;
+pub mod dog;
 pub mod dvd;
 pub mod fire;
+pub mod fireworks;
+pub mod hollywood;
+pub mod metaballs;
 pub mod neo;
 pub mod nyancat;
 pub mod orrery;
@@ -22,7 +26,9 @@ pub const ALL: &[&SceneInfo] = &[
     &aquarium::INFO,
     &neo::INFO,
     &nyancat::INFO,
+    &dog::INFO,
     &fire::INFO,
+    &fireworks::INFO,
     &constellation::INFO,
     &waveform::INFO,
     &pipes::INFO,
@@ -31,6 +37,8 @@ pub const ALL: &[&SceneInfo] = &[
     &boids::INFO,
     &orrery::INFO,
     &particles::INFO,
+    &metaballs::INFO,
+    &hollywood::INFO,
 ];
 
 /// Finds a scene by name or alias (case-insensitive).

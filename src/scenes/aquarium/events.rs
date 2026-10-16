@@ -235,8 +235,13 @@ impl Aquarium {
             let first = between(&mut self.rng, 60.0, 120.0) / rate;
             w.ev.wait = Some(first);
         }
+        // The quiet spell between events is a clock: real time.
+        let clock = self.clock;
+        let Some(w) = self.world.as_mut() else {
+            return;
+        };
         let wait = w.ev.wait.get_or_insert(0.0);
-        *wait -= dt;
+        *wait -= dt * clock;
         if *wait <= 0.0 {
             self.start_random_event(rate);
         }
