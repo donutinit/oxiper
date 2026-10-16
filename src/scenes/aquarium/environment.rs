@@ -11,6 +11,49 @@ use super::assets::{DEEP, GLOW, LEGENDARY, NOCTURNAL};
 use super::biome::{between, hash};
 use super::*;
 
+/// Stars, bright to faint.
+const STARS: [char; 3] = ['✦', '✧', '∙'];
+/// Glow sparks around luminous creatures, bright to faint.
+const SPARKS: [char; 3] = ['✦', '✧', '∙'];
+/// The sun's disc, and its two sets of rays (straight, diagonal) at `SUN_RAY_AT`.
+const SUN: [&str; 2] = ["◢█◣", "◥█◤"];
+const SUN_RAY_AT: [(i32, i32); 10] = [
+    (1, -1),
+    (1, 2),
+    (-1, 0),
+    (-1, 1),
+    (3, 0),
+    (3, 1),
+    (-1, -1),
+    (3, -1),
+    (-1, 2),
+    (3, 2),
+];
+const SUN_RAYS: [[char; 10]; 2] = [
+    ['│', '│', '─', '─', '─', '─', ' ', ' ', ' ', ' '],
+    [' ', ' ', ' ', ' ', ' ', ' ', '╲', '╱', '╱', '╲'],
+];
+/// Moon phases (two rows each): full, gibbous and half lit on the right, then
+/// the waning ones.
+const MOON: [[&str; 2]; 5] = [
+    ["◢██◣", "◥██◤"],
+    ["  ◢█", "  ◥█"],
+    ["█◣  ", "█◤  "],
+    [" ◢██", " ◥██"],
+    ["██◣ ", "██◤ "],
+];
+/// Two shapes of cloud, two rows each, soft at the edges.
+const CLOUDS: [[&str; 2]; 2] = [
+    ["  ▗▄██▄▖  ", "░▒██████▒░"],
+    ["   ▄██▄▖   ", "░▒▓██████▓▒░"],
+];
+/// The same clouds at night: thin and dim.
+const CLOUDS_NIGHT: [[&str; 2]; 2] = [["  ░░░░   ", "░░░▒▒░░░░"], ["   ░░░░░   ", "░░░░▒▒░░░░"]];
+/// Rain: slanting right, slanting left, a short drop, a streak.
+const RAIN: [char; 4] = ['╲', '╱', '╎', '│'];
+/// Lightning: leaning left, leaning right, halo.
+const BOLT: [char; 3] = ['╱', '╲', '░'];
+
 /// Fraction of the day cycle (0 is midnight): the night is dark within this
 /// distance of midnight, and the dawn and dusk take the next stretch.
 const NIGHT_HALF: f32 = 0.15;
@@ -403,11 +446,11 @@ impl Aquarium {
                 let speed = 0.8 + ((r >> 30) % 100) as f32 / 100.0 * 1.5;
                 let tw = (time * speed + ((r >> 40) % 628) as f32 / 100.0).sin();
                 let (ch, pen) = if tw > 0.6 {
-                    ('*', W + BRIGHT)
+                    (STARS[0], W + BRIGHT)
                 } else if tw > -0.2 {
-                    ('+', W + BRIGHT)
+                    (STARS[1], W + BRIGHT)
                 } else if tw > -0.7 {
-                    ('.', W)
+                    (STARS[2], W)
                 } else {
                     continue;
                 };
@@ -429,8 +472,15 @@ impl Aquarium {
                     Y + BRIGHT
                 };
                 let (col, attr) = env.day[pen as usize];
-                for (dx, ch) in "(O)".chars().enumerate() {
-                    c.set_attr(x + dx as i32, y, ch, col, attr);
+                for (dy, row) in SUN.iter().enumerate() {
+                    for (dx, ch) in row.chars().enumerate() {
+                        c.set_attr(x + dx as i32, y + dy as i32, ch, col, attr);
+                    }
+                }
+                // Rays: straight and diagonal ones take turns.
+                let rays = &SUN_RAYS[(time * 1.5) as usize & 1];
+                for (&(dx, dy), ch) in SUN_RAY_AT.iter().zip(rays) {
+                    c.set_attr(x + dx, y + dy, *ch, col, attr);
                 }
             }
             if let Some(f) = arc(p, 1.0 - NIGHT_HALF, 2.0 * NIGHT_HALF)
@@ -439,9 +489,14 @@ impl Aquarium {
                 let x = (-3.0 + f * span) as i32;
                 let y = 3 - ((f * PI).sin() * 2.6).round() as i32;
                 let (col, attr) = env.day[(W + BRIGHT) as usize];
-                for (dx, (a, b)) in ".-.".chars().zip("'-'".chars()).enumerate() {
-                    c.set_attr(x + dx as i32, y, a, col, attr);
-                    c.set_attr(x + dx as i32, y + 1, b, col, attr);
+                // Each night shows one phase of the moon.
+                let rows = &MOON[(w.seed >> 7) as usize % MOON.len()];
+                for (dy, row) in rows.iter().enumerate() {
+                    for (dx, ch) in row.chars().enumerate() {
+                        if ch != ' ' {
+                            c.set_attr(x + dx as i32, y + dy as i32, ch, col, attr);
+                        }
+                    }
                 }
             }
         }
@@ -449,7 +504,10 @@ impl Aquarium {
         let calm = (self.w / 45).clamp(0, 3) as u64;
         let n = calm + (storm * self.w as f32 / 20.0) as u64;
         let twilight = env.daylight > 0.05 && env.daylight < 0.95;
-        let pen = if storm > 0.3 {
+        let dim = storm <= 0.3 && night > 0.5;
+        let pen = if dim {
+            K
+        } else if storm > 0.3 {
             K + BRIGHT
         } else if twilight {
             if env.phase < 0.5 { Y } else { R }
@@ -457,7 +515,7 @@ impl Aquarium {
             W
         };
         let (col, attr) = self.pens[pen as usize];
-        const CLOUDS: [[&str; 2]; 2] = [[" .--. ", "(____)"], ["  .-~~-.", " (______)"]];
+        let shapes = if dim { &CLOUDS_NIGHT } else { &CLOUDS };
         for i in 0..n.min(16) {
             let r = hash(w.seed ^ i.wrapping_mul(0x9e37) ^ 0xC10D);
             let speed = 0.25 + ((r >> 8) % 100) as f32 / 100.0 * 0.4;
@@ -468,7 +526,7 @@ impl Aquarium {
             } else {
                 (r >> 40) % 3
             } as i32;
-            for (dy, row) in CLOUDS[(r >> 3) as usize & 1].iter().enumerate() {
+            for (dy, row) in shapes[(r >> 3) as usize % CLOUDS.len()].iter().enumerate() {
                 for (dx, ch) in row.chars().enumerate() {
                     if ch != ' ' {
                         c.set_attr(x + dx as i32, y + dy as i32, ch, col, attr);
@@ -500,13 +558,13 @@ impl Aquarium {
                     (((r >> 32) % rows as u64) as f32 + self.time * speed).rem_euclid(rows as f32);
                 let x = ((r % self.w as u64) as f32 + y * slant).rem_euclid(self.w as f32);
                 let ch = if slant > 0.2 {
-                    '\\'
+                    RAIN[0]
                 } else if slant < -0.2 {
-                    '/'
+                    RAIN[1]
                 } else if r & 3 == 0 {
-                    '\''
+                    RAIN[2]
                 } else {
-                    '|'
+                    RAIN[3]
                 };
                 let (x, y) = (x as i32, y as i32);
                 // Rain falls behind the ships and the waves' crests.
@@ -527,7 +585,12 @@ impl Aquarium {
             for row in 0..5 {
                 let left = (env.bolt_seed >> (row + 1)) & 1 == 0;
                 x += if left { -1 } else { 1 };
-                c.set_attr(x, row, if left { '/' } else { '\\' }, col, attr);
+                let (a, b) = if left { (BOLT[0], 1) } else { (BOLT[1], -1) };
+                // A faint halo on the side the bolt leans away from.
+                if c.get(x + b, row).is_some_and(|k| k.ch == ' ') {
+                    c.set_attr(x + b, row, BOLT[2], col, attr);
+                }
+                c.set_attr(x, row, a, col, attr);
             }
         }
         // Glowing things sparkle in the dark.
@@ -551,11 +614,11 @@ impl Aquarium {
                 let x = e.x.floor() as i32 + (r % ew) as i32;
                 let y = e.y.floor() as i32 + ((r >> 16) % eh) as i32 - 1;
                 let ch = if v > 0.97 {
-                    '*'
+                    SPARKS[0]
                 } else if v > 0.93 {
-                    '+'
+                    SPARKS[1]
                 } else {
-                    '.'
+                    SPARKS[2]
                 };
                 let pen = [C, G, B, Y][(h >> 8) as usize & 3] + BRIGHT;
                 let (col, attr) = env.day[pen as usize];
@@ -838,7 +901,7 @@ mod tests {
                     a.draw_env_overlay(&mut c);
                     sparks += (0..40)
                         .flat_map(|y| (0..120).map(move |x| (x, y)))
-                        .filter(|&(x, y)| matches!(c.get(x, y).unwrap().ch, '*' | '+' | '.'))
+                        .filter(|&(x, y)| SPARKS.contains(&c.get(x, y).unwrap().ch))
                         .count();
                 }
                 assert!(sparks > 0);
@@ -1037,6 +1100,37 @@ mod tests {
                     });
                 }
             }
+        }
+    }
+
+    #[test]
+    fn the_sky_is_drawn_in_unicode() {
+        use super::super::biome::{SAND, SNOW, STONES};
+        use super::super::events::{CANDLE, HAND, HAND_FOOD, PETALS};
+        let mut all = String::new();
+        for g in [&STARS, &SPARKS, &RAIN[..], &BOLT[..], &SAND, &SNOW, &STONES]
+            .into_iter()
+            .chain([&PETALS[..], &CANDLE, &HAND_FOOD])
+        {
+            all.extend(g.iter());
+        }
+        for r in SUN
+            .iter()
+            .chain(MOON.iter().flatten())
+            .chain(CLOUDS.iter().flatten())
+            .chain(CLOUDS_NIGHT.iter().flatten())
+            .chain(HAND.iter())
+        {
+            all.push_str(r);
+        }
+        for r in SUN_RAYS {
+            all.extend(r.iter());
+        }
+        for ch in all.chars().filter(|&c| c != ' ') {
+            assert!(
+                super::super::assets::drawable(ch) && !ch.is_ascii_punctuation(),
+                "{ch:?}"
+            );
         }
     }
 }

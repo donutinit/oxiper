@@ -814,20 +814,14 @@ impl Aquarium {
         }
         let x = run.x.round() as i32;
         let (col, attr) = self.pens[(W + BRIGHT) as usize];
-        c.text_attr(x - 4, 2, "===\\", col, attr);
-        c.text_attr(x - 1, 3, "()", col, attr);
+        c.text_attr(x - 4, 2, HAND[0], col, attr);
+        c.text_attr(x - 1, 3, HAND[1], col, attr);
         let (col, attr) = self.pens[Y as usize];
         let beat = (self.time * 8.0) as u64;
         for (k, dx) in [-1, 0, 1].into_iter().enumerate() {
             let r = hash(beat.wrapping_mul(3).wrapping_add(k as u64));
             if !r.is_multiple_of(3) {
-                c.set_attr(
-                    x + dx,
-                    4,
-                    [',', '\'', '.'][(r >> 8) as usize % 3],
-                    col,
-                    attr,
-                );
+                c.set_attr(x + dx, 4, HAND_FOOD[(r >> 8) as usize % 3], col, attr);
             }
         }
     }
@@ -841,7 +835,7 @@ impl Aquarium {
         let pens = [Y + BRIGHT, Y, R + BRIGHT];
         let petal = |r: u64| {
             let (col, attr) = self.pens[pens[(r >> 8) as usize % 3] as usize];
-            (b"*',"[(r >> 12) as usize % 3] as char, col, attr)
+            (PETALS[(r >> 12) as usize % 3], col, attr)
         };
         if self.surface() {
             for i in 0..(w / 5).max(1) as u64 {
@@ -890,10 +884,32 @@ impl Aquarium {
                 (self.time * 5.0 + i as f32 * 1.7).sin() + (self.time * 13.0 + i as f32).sin();
             let pen = if flick > 0.3 { Y + BRIGHT } else { R + BRIGHT };
             let (col, attr) = self.pens[pen as usize];
-            c.set_attr(x, h - 1, 'i', col, attr);
+            let bright = flick > 0.3;
+            c.set_attr(x, h - 1, CANDLE[0], col, attr);
+            if h >= 3 {
+                c.set_attr(x, h - 2, CANDLE[if bright { 1 } else { 2 }], col, attr);
+            }
+            // A glow on the sand beside it while the flame is high.
+            if bright && h >= 4 {
+                let (col, attr) = self.pens[Y as usize];
+                for dx in [-1, 1] {
+                    if c.get(x + dx, h - 1).is_some_and(|k| k.ch == ' ') {
+                        c.set_attr(x + dx, h - 1, CANDLE[3], col, attr);
+                    }
+                }
+            }
         }
     }
 }
+
+/// The feeding hand: sleeve and fist.
+pub(super) const HAND: [&str; 2] = ["═══╗", "◖◗"];
+/// Food crumbs from the fingers.
+pub(super) const HAND_FOOD: [char; 3] = ['⠂', '∙', '⠐'];
+/// Cempasúchil petals.
+pub(super) const PETALS: [char; 3] = ['✿', '❀', '❁'];
+/// Candle: body, high flame, low flame, glow.
+pub(super) const CANDLE: [char; 4] = ['▮', '▲', '▴', '░'];
 
 #[cfg(test)]
 mod tests {
@@ -1135,7 +1151,7 @@ mod tests {
                     a.update(ctx, 0.1);
                     let mut c = Canvas::new(120, 40, Color::Reset);
                     a.draw_event_overlay(&mut c);
-                    n = c.to_text().chars().filter(|ch| "*',".contains(*ch)).count();
+                    n = c.to_text().chars().filter(|ch| PETALS.contains(ch)).count();
                 },
             );
             n
@@ -1155,8 +1171,8 @@ mod tests {
                 a.draw_candles(&mut c, 7, true, 0.0);
                 let text = c.to_text();
                 let rows: Vec<&str> = text.lines().collect();
-                assert!(rows[39].contains('i'));
-                assert!(rows[..39].iter().all(|r| !r.contains('i')));
+                assert!(rows[39].contains(CANDLE[0]));
+                assert!(rows[..38].iter().all(|r| !r.contains(CANDLE[0])));
             },
         );
     }
