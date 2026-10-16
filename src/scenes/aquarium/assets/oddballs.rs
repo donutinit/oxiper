@@ -5,578 +5,422 @@ pub const SPECIES: &[Species] = &[
         "great-white-shark",
         &[
             r"
-        _
-       / \
- |\ _.-'  `-.__
-<  \__________ o`.
- |/  `-.___,--''
+            _
+           / \
+          /   \
+ \       /     `-.__
+  `-.___/          ``--.__
+ <  `-._____________  o   `-.
+  .-'`-.__ ``--.___.---.___.-'
+ /'      `-.__.--'
 ",
             r"
-        _
-       / \
- |/ _.-'  `-.__
-<  \__________ o`.
- |\  `-.___,--''
+            _
+           / \
+          /   \
+         /     `-.__
+ \`-.___/          ``--.__
+<   `-._____________  o   `-.
+ /.-'`-.__ ``--.___.---.___.-'
+         `-.__.--'
 ",
         ],
-        &[
-            r"
-        2
-       2 2
- 66 1111  11111
-6  11111111111 455
- 66  33311111111
-",
-            r"
-        2
-       2 2
- 66 1111  11111
-6  11111111111 455
- 66  33311111111
-",
-        ],
+        &[r"
+            1
+           1 1
+          1   1
+         1     11111
+  1111111          1111111
+    1111111111111111  4   111
+  WWWWWWWW WWWWWWWWWWWWWWWWWWW
+         WWWWWWWWW
+"],
     )
-    .left(
-        &[
-            r"
-         _
-        / \
-   __.-'  `-._ /|
-.'o __________/  >
-  ``--,___.-'  \|
-",
-            r"
-         _
-        / \
-   __.-'  `-._ \|
-.'o __________/  >
-  ``--,___.-'  /|
-",
-        ],
-        &[
-            r"
-         2
-        2 2
-   11111  1111 66
-554 11111111111  6
-  11111111333  66
-",
-            r"
-         2
-        2 2
-   11111  1111 66
-554 11111111111  6
-  11111111333  66
-",
-        ],
-    )
-    .tint("1:wcb 2:wcb 3:wcb 6:wcb 4:kK 5:rR")
+    .tint("1:bcw 2:W")
     .zone(Zone::Middle)
-    .fps(0.2)
     .speed(0.8, 1.8)
+    .fps(0.2)
     .weight(4)
-    .biomes(OCEAN | KELP | REEF),
+    .biomes(OCEAN | KELP | REEF)
+    .traits(PREDATOR),
     Species::new(
         "scalloped-hammerhead",
         &[
             r"
         _
-       / \
- |\ _.-'  `-.___,---.
-<  \_____________| o  >
- |/  `-.__,-----'`---'
+       / \         .-.
+ \    /   `-.__    | |
+  `-./         ``--| o
+ <   `-.___________| |
+  .-'`-.__.--.___.-| |
+ /'       `-'      `-'
 ",
             r"
         _
-       / \
- |/ _.-'  `-.___,---.
-<  \_____________| o  >
- |\  `-.__,-----'`---'
+       / \         .-.
+      /   `-.__    | |
+ \`-./         ``--| o
+<    `-.___________| |
+ /.-'`-.__.--.___.-| |
+          `-'      `-'
 ",
         ],
-        &[
-            r"
-        2
-       2 2
- 66 1111  11111111111
-6  111111111111111 4  5
- 66  33311111111111111
-",
-            r"
-        2
-       2 2
- 66 1111  11111111111
-6  111111111111111 4  5
- 66  33311111111111111
-",
-        ],
+        &[r"
+        c
+       c c         ccc
+      c   ccccc    c c
+  cccc         ccccc 4
+     WWWWWWWWWWWWWW
+  WWWWWWWWWWWWWWWWW
+          WWW
+"],
     )
-    .left(
-        &[
-            r"
-              _
-             / \
-  .---,___.-'  `-._ /|
-<  o |_____________/  >
- `---'`-----,__.-'  \|
-",
-            r"
-              _
-             / \
-  .---,___.-'  `-._ \|
-<  o |_____________/  >
- `---'`-----,__.-'  /|
-",
-        ],
-        &[
-            r"
-              2
-             2 2
-  11111111111  1111 66
-5  4 111111111111111  6
- 11111111111111333  66
-",
-            r"
-              2
-             2 2
-  11111111111  1111 66
-5  4 111111111111111  6
- 11111111111111333  66
-",
-        ],
-    )
-    .tint("1:wcy 2:wcy 3:wcy 6:wcy 4:kK 5:kK")
     .zone(Zone::Middle)
-    .fps(0.2)
     .speed(0.7, 1.6)
+    .fps(0.2)
     .school(1, 4)
     .weight(5)
-    .biomes(REEF | OCEAN),
+    .biomes(REEF | OCEAN)
+    .traits(PREDATOR),
     Species::new(
         "great-hammerhead",
         &[
             r"
            _
           / \
-         /   \
- \\__.-'      `-.___,-----.
-<   \________________| o   >
- //  `-.__.---.__,----'`----'
+         /   \         .-.
+ \      /     `-.__    | |
+  `-.__/          ``--.| |
+ <   `-._______________| o
+  .-'`-.__ ``--.___.---| |
+ /'       `-.__.--'    | |
+                       `-'
 ",
             r"
            _
           / \
-         /   \
- //__.-'      `-.___,-----.
-<   \________________| o   >
- \\  `-.__.---.__,----'`----'
+         /   \         .-.
+        /     `-.__    | |
+ \`-.__/          ``--.| |
+<    `-._______________| o
+ /.-'`-.__ ``--.___.---| |
+          `-.__.--'    | |
+                       `-'
 ",
         ],
-        &[
-            r"
-           2
-          2 2
-         2   2
- 6611111      1111111111111
-6   111111111111111111 4   5
- 66  133311111111111111111111
-",
-            r"
-           2
-          2 2
-         2   2
- 6611111      1111111111111
-6   111111111111111111 4   5
- 66  133311111111111111111111
-",
-        ],
+        &[r"
+           b
+          b b
+         b   b
+        b     bbbbb
+  bbbbbb          bbbbb
+     bbbbbbbbbbbbbbbbbb  4
+  WWWWWWWW WWWWWWWWWWWW
+          WWWWWWWWW
+
+"],
     )
-    .left(
-        &[
-            r"
-                 _
-                / \
-               /   \
-  .-----,___.-'      `-.__//
- <   o |________________/   >
-`----'`----,__.---.__.-'  \\
-",
-            r"
-                 _
-                / \
-               /   \
-  .-----,___.-'      `-.__\\
- <   o |________________/   >
-`----'`----,__.---.__.-'  //
-",
-        ],
-        &[
-            r"
-                 2
-                2 2
-               2   2
-  1111111111111      1111166
- 5   4 111111111111111111   6
-111111111111111111113331  66
-",
-            r"
-                 2
-                2 2
-               2   2
-  1111111111111      1111166
- 5   4 111111111111111111   6
-111111111111111111113331  66
-",
-        ],
-    )
-    .tint("1:wcb 2:wcb 3:wcb 6:wcb 4:kK 5:kK")
     .zone(Zone::Middle)
-    .fps(0.15)
     .speed(0.6, 1.4)
+    .fps(0.15)
     .weight(3)
-    .biomes(REEF | OCEAN),
+    .biomes(REEF | OCEAN)
+    .traits(PREDATOR),
     Species::new(
         "tiger-shark",
+        &[
+            r"
+         _
+        / \
+ \     /   `-.____
+  `-.-'|/|/|/|/|/`--.__
+ <  `-.|\|\|\|\|\_ o  `)
+  .-'`-._______.---.__.-'
+ /'      `-.__.-'
+",
+            r"
+         _
+        / \
+       /   `-.____
+ \`-.-'|/|/|/|/|/`--.__
+<   `-.|\|\|\|\|\_ o  `)
+ /.-'`-._______.---.__.-'
+         `-.__.-'
+",
+        ],
         &[r"
-         __
-        /  \
- |\_.-'    `-.____
-<  \_|_|_|_|_|_|__ o`.
- |/ `-.__,--.__.---'
-"],
-        &[r"
-         22
-        2  2
- 661111    1111111
-6  117171717171711 455
- 66 1111111111111111
+
+
+
+      KKKKKKKKKKKKK
+      KKKKKKKKKKKK 4
+  WWWWWWWWWWWWWWWWWWWWWWW
+         WWWWWWWW
 "],
     )
-    .left(
-        &[r"
-           __
-          /  \
-    ____.-'    `-._/|
-.'o __|_|_|_|_|_|_/  >
-  `---.__.--,__.-' \|
-"],
-        &[r"
-           22
-          2  2
-    1111111    111166
-554 117171717171711  6
-  1111111111111111 66
-"],
-    )
-    .tint("1:wcb 7:kKb 2:wcb 3:wcb 6:wcb 4:kK 5:rR")
+    .color('c')
     .zone(Zone::Middle)
     .speed(0.7, 1.5)
+    .fps(0.2)
     .weight(4)
-    .biomes(REEF | OCEAN),
+    .biomes(REEF | OCEAN)
+    .traits(PREDATOR | SCAVENGER),
     Species::new(
         "bull-shark",
+        &[
+            r"
+         _
+ \     _/ \_
+  `-._/      `-.__
+ <   |            `-.
+  `-.|___________  o |
+    `-.___,--.___.--'`
+",
+            r"
+         _
+       _/ \_
+ \`-._/      `-.__
+<    |            `-.
+ /.-.|___________  o |
+    `-.___,--.___.--'`
+",
+        ],
         &[r"
-       _
-      / \
- |\_.-'  `-.___
-<  \__________ O`>
- |/ `-.__.-.-'''
-"],
-        &[r"
-       2
-      2 2
- 661111  111111
-6  11111111111 455
- 66 333111111111
-"],
-    )
-    .left(
-        &[r"
-          _
-         / \
-   ___.-'  `-._/|
-<'O __________/  >
-  ```-.-.__.-' \|
-"],
-        &[r"
-          2
-         2 2
-   111111  111166
-554 11111111111  6
-  111111111333 66
+
+
+
+
+      WWWWWWWWWWW  4 W
+      WWWWWWWWWWWWWWWW
 "],
     )
-    .tint("1:wc 2:wc 3:wc 6:wc 4:kK 5:rR")
+    .color('c')
     .zone(Zone::Middle)
     .speed(0.8, 1.7)
+    .fps(0.2)
     .weight(5)
-    .biomes(OCEAN | REEF | FRESH),
+    .biomes(OCEAN | REEF | FRESH)
+    .traits(PREDATOR),
     Species::new(
         "blacktip-reef-shark",
         &[
             r"
-       /|
-      / |
- ,---'    `---.__
-<_____________ o >
-  `\_,--.___,-'
+          /|
+         /_|
+ \    _.-'  `-.__
+  `-.-'          `--._
+ <   `-.__________ o `>
+  .-'`-.___.---.---'`-'
+ /'
 ",
             r"
-       /|
-      / |
- ,---'    `---.__
-<_____________ o >
-  `/_,--.___,-'
+          /|
+         /_|
+      _.-'  `-.__
+ \`-.-'          `--._
+<    `-.__________ o `>
+ /.-'`-.___.---.---'`-'
+   
 ",
         ],
-        &[
-            r"
-       22
-      2 2
- 66111    1111111
-66611111111111 4 5
-  6133311111111
-",
-            r"
-       22
-      2 2
- 66111    1111111
-66611111111111 4 5
-  6133311111111
-",
-        ],
+        &[r"
+          KK
+         K K
+
+
+                   4
+        WWWWWWWWWWWWWWW
+
+"],
     )
-    .left(
-        &[
-            r"
-         |\
-         | \
- __.---'    `---,
-< o _____________>
-   `-,___.--,_/'
-",
-            r"
-         |\
-         | \
- __.---'    `---,
-< o _____________>
-   `-,___.--,_\'
-",
-        ],
-        &[
-            r"
-         22
-         2 2
- 1111111    11166
-5 4 11111111111666
-   1111111133316
-",
-            r"
-         22
-         2 2
- 1111111    11166
-5 4 11111111111666
-   1111111133316
-",
-        ],
-    )
-    .tint("1:wy 2:kK 3:kK 6:kK 4:kK 5:rR")
+    .color('c')
     .zone(Zone::Middle)
-    .fps(0.2)
     .speed(0.8, 1.8)
+    .fps(0.2)
     .school(1, 3)
     .weight(7)
-    .biomes(REEF),
+    .biomes(REEF)
+    .traits(PREDATOR),
     Species::new(
         "whitetip-reef-shark",
-        &[r"
+        &[
+            r"
         _
-       / \
- _.---'   `----._
-<_____________ o `>
-  `\_,-.___,-'
-"],
+ \   _.-' `-.__
+  `-'          ``--.___
+ <   `-.____________  o   `)
+  .-'`-.___.---.___.-----'
+",
+            r"
+        _
+     _.-' `-.__
+ \ -'          ``--.___
+<    `-.____________  o   `)
+ /.-'`-.___.---.___.-----'
+",
+        ],
         &[r"
-        2
-       2 2
- 661111   1111111
-66611111111111 4 55
-  613331111111
+        W
+
+
+                      4
+  WWWW
 "],
     )
-    .left(
-        &[r"
-          _
-         / \
-  _.----'   `---._
-<' o _____________>
-     `-,___.-,_/'
-"],
-        &[r"
-          2
-         2 2
-  1111111   111166
-55 4 11111111111666
-     111111133316
-"],
-    )
-    .tint("1:wy 2:wW 3:wW 6:wW 4:kK 5:kK")
+    .color('b')
     .zone(Zone::Lower)
     .speed(0.5, 1.2)
+    .fps(0.2)
     .weight(6)
-    .biomes(REEF),
+    .biomes(REEF)
+    .traits(NOCTURNAL)
+    .home("cave,rock,coral"),
     Species::new(
         "nurse-shark",
+        &[
+            r"
+        _   _
+\\___.-'  `-'  `-._____
+<   _______________  o `)
+//  `-.__,-----.___,'`-.__\
+                       `~'
+",
+            r"
+        _   _
+  \_..-'  `-'  `-._____
+<    ______________  o `)
+\\  `-.__,-----.___,'`-.__\
+                       `~'
+",
+        ],
         &[r"
-        _
-       / \
-\\___.-'   `-._____
-<  _______________ o `
-//   `-.__,-----.___,'
-"],
-        &[r"
-        2
-       2 2
-66611111   11111111
-6  111111111111111 4 5
-66   11111111111111111
-"],
-    )
-    .left(
-        &[r"
-             _
-            / \
-   _____.-'   `-.___//
-' o _______________  >
-`,___.-----,__.-'   \\
-"],
-        &[r"
-             2
-            2 2
-   11111111   11111666
-5 4 111111111111111  6
-11111111111111111   66
+
+
+                     4
+
+                       YYY
 "],
     )
-    .tint("1:ywk 2:ywk 3:ywk 6:ywk 4:kK 5:kK")
+    .color('y')
     .zone(Zone::Lower)
     .speed(0.3, 0.8)
+    .fps(0.2)
     .weight(5)
-    .biomes(REEF | OCEAN),
+    .biomes(REEF | OCEAN)
+    .traits(NOCTURNAL | SCAVENGER)
+    .home("cave,rock,wreck"),
     Species::new(
         "lemon-shark",
+        &[
+            r"
+         _     __
+        / \  ,'  `
+ \    _/   `'    `-._
+  `-.'              ``--.__
+ <   `-.________________  o `)
+  .-'`-.__.-.-.___.---'---'
+ /'
+",
+            r"
+         _     __
+        / \  ,'  `
+      _/   `'    `-._
+ \`-.'              ``--.__
+<    `-.________________  o `)
+ /.-'`-.__.-.-.___.---'---'
+   
+",
+        ],
         &[r"
-       _
-     _/ \_
- |\_.-'  `-.____
-<  \_____________ o`.
- |/ `-.___.-.-.--'
-"],
-        &[r"
-       2
-     22 22
- 661111  1111111
-6  11111111111111 455
- 66 33311111111111
+
+
+
+
+                          4
+        YYYYYYYYYYYYYYYYYYY
+
 "],
     )
-    .left(
-        &[r"
-             _
-           _/ \_
-     ____.-'  `-._/|
-.'o _____________/  >
-   `--.-.-.___.-' \|
-"],
-        &[r"
-             2
-           22 22
-     1111111  111166
-554 11111111111111  6
-   11111111111333 66
-"],
-    )
-    .tint("1:yY 2:yY 3:yY 6:yY 4:kK 5:kK")
+    .color('y')
     .zone(Zone::Middle)
     .speed(0.5, 1.2)
+    .fps(0.2)
     .weight(4)
-    .biomes(REEF | OCEAN),
+    .biomes(REEF | OCEAN)
+    .traits(PREDATOR),
     Species::new(
         "leopard-shark",
-        &[r"
+        &[
+            r"
         _
-       / \
- |\_.-'o  `-.___
-<  \_o__o__o__ o`.
- |/ `-.__,--.__,'
-"],
+ \   _.-'`-.____
+  `-'o  o  o  o`--.__
+ <  `-.o__o__o__ o `)
+  .-'`-.__,--.___,--'
+ /'
+",
+            r"
+        _
+     _.-'`-.____
+ \`-'o  o  o  o`--.__
+<   `-.o__o__o__ o `)
+ /.-'`-.__,--.___,--'
+   
+",
+        ],
         &[r"
-        2
-       2 2
- 6611117  111111
-6  11711711711 455
- 66 3331111111111
+
+
+     K  K  K  K
+       K  K  K   4
+        WWWWWWWWWWWWW
+
 "],
     )
-    .left(
-        &[r"
-         _
-        / \
-  ___.-'  o`-._/|
-.'o __o__o__o_/  >
- `,__.--,__.-' \|
-"],
-        &[r"
-         2
-        2 2
-  111111  7111166
-554 11711711711  6
- 1111111111333 66
-"],
-    )
-    .tint("1:wy 7:kK 2:wy 3:wy 6:wy 4:kK 5:kK")
+    .color('c')
     .zone(Zone::Lower)
     .speed(0.4, 1.0)
+    .fps(0.2)
     .weight(5)
-    .biomes(KELP | REEF),
+    .biomes(KELP | REEF)
+    .traits(SCAVENGER | CURIOUS),
     Species::new(
         "zebra-shark",
+        &[
+            r"
+               _
+ \           _/ \_
+  `-.______.'  o  `-._
+ <  `-.______o__o__ o_  o `)
+  .-'`-._______________.---'
+ /'
+",
+            r"
+               _
+             _/ \_
+ \`-.______.'  o  `-._
+<   `-.______o__o__ o_  o `)
+ /.-'`-._______________.---'
+   
+",
+        ],
         &[r"
-        _
-      _/ \_
-\\_.-'  o  `-.___
-<  \__o__o__o__ o`.
-//  `-.___.---.__,-'
-"],
-        &[r"
-        2
-      22 22
-666111  7  111111
-6  111711711711 455
-66  3331111111111111
-"],
-    )
-    .left(
-        &[r"
-           _
-         _/ \_
-   ___.-'  o  `-._//
- .'o __o__o__o__/  >
-`-,__.---.___.-'  \\
-"],
-        &[r"
-           2
-         22 22
-   111111  7  111666
- 554 117117117111  6
-1111111111111333  66
+
+
+               K
+             K  K   K   4
+  YYYYYYYYYYYYYYYYYYYYYYYYYY
+
 "],
     )
-    .tint("1:yY 7:kK 2:yY 3:yY 6:yY 4:kK 5:kK")
+    .color('y')
     .zone(Zone::Lower)
     .speed(0.3, 0.9)
+    .fps(0.2)
     .weight(4)
-    .biomes(REEF),
+    .biomes(REEF)
+    .traits(NOCTURNAL | SCAVENGER)
+    .home("coral,rock"),
     Species::new(
         "whale-shark",
         &[r"
@@ -622,7 +466,8 @@ pub const SPECIES: &[Species] = &[
     .zone(Zone::Upper)
     .speed(0.2, 0.6)
     .weight(2)
-    .biomes(OCEAN | REEF),
+    .biomes(OCEAN | REEF)
+    .traits(FILTER | CURIOUS),
     Species::new(
         "basking-shark",
         &[r"
@@ -664,82 +509,41 @@ pub const SPECIES: &[Species] = &[
     .zone(Zone::Upper)
     .speed(0.3, 0.8)
     .weight(3)
-    .biomes(OCEAN | KELP | ARCTIC),
+    .biomes(OCEAN | KELP | ARCTIC)
+    .traits(FILTER),
     Species::new(
         "shortfin-mako",
         &[
             r"
-       _
-      / \
-\\_.-'   `-._____
-<<  __________  o `-._
-//`-.__,----,-'_____.-'
+           _
+ \        / \
+  \___.--'   `--._____
+ <   `-.______________  o `>
+  /`-.___.---'`--.__.-'
 ",
             r"
-       _
-      / \
-//_.-'   `-._____
-<<  __________  o `-._
-\\`-.__,----,-'_____.-'
+           _
+          / \
+ \____.--'   `--._____
+<    `-.______________  o `>
+ //`-.___.---'`--.__.-'
 ",
         ],
-        &[
-            r"
-       2
-      2 2
-661111   11111111
-66  1111111111  4 5555
-66113331111111111111111
-",
-            r"
-       2
-      2 2
-661111   11111111
-66  1111111111  4 5555
-66113331111111111111111
-",
-        ],
+        &[r"
+           1
+          1 1
+  11111111   111111111
+     11111111111111111  4 11
+    WWWWWWWWWWWWWWWWWWW
+"],
     )
-    .left(
-        &[
-            r"
-               _
-              / \
-      _____.-'   `-._//
- _.-' o  __________  >>
-`-._____`-,----,__.-'\\
-",
-            r"
-               _
-              / \
-      _____.-'   `-._\\
- _.-' o  __________  >>
-`-._____`-,----,__.-'//
-",
-        ],
-        &[
-            r"
-               2
-              2 2
-      11111111   111166
- 5555 4  1111111111  66
-11111111111111113331166
-",
-            r"
-               2
-              2 2
-      11111111   111166
- 5555 4  1111111111  66
-11111111111111113331166
-",
-        ],
-    )
-    .tint("1:bcw 2:bcw 3:bcw 6:bcw 4:kK 5:kK")
+    .tint("1:bc")
     .zone(Zone::Upper)
-    .fps(0.3)
     .speed(1.6, 3.0)
+    .fps(0.3)
     .weight(4)
-    .biomes(OCEAN),
+    .biomes(OCEAN)
+    .traits(PREDATOR),
     Species::new(
         "thresher-shark",
         &[
@@ -830,7 +634,8 @@ ____.--'   \___.-'
     .fps(0.2)
     .speed(0.7, 1.6)
     .weight(3)
-    .biomes(OCEAN | REEF),
+    .biomes(OCEAN | REEF)
+    .traits(PREDATOR),
     Species::new(
         "blue-shark",
         &[
@@ -921,7 +726,8 @@ _.-' o   _________   >>
     .fps(0.2)
     .speed(0.8, 1.8)
     .weight(5)
-    .biomes(OCEAN),
+    .biomes(OCEAN)
+    .traits(PREDATOR | CURIOUS),
     Species::new(
         "goblin-shark",
         &[r"
@@ -959,7 +765,8 @@ _.---------'   o ________/  >
     .zone(Zone::Lower)
     .speed(0.2, 0.7)
     .weight(1)
-    .biomes(DEEP),
+    .biomes(DEEP)
+    .traits(PREDATOR | LEGENDARY),
     Species::new(
         "frilled-shark",
         &[
@@ -1027,7 +834,8 @@ _.---------'   o ________/  >
     .fps(0.25)
     .speed(0.3, 0.8)
     .weight(1)
-    .biomes(DEEP),
+    .biomes(DEEP)
+    .traits(NOCTURNAL),
     Species::new(
         "cookiecutter-shark",
         &[r"
@@ -1057,74 +865,42 @@ _.---------'   o ________/  >
     .zone(Zone::Lower)
     .speed(0.4, 1.0)
     .weight(2)
-    .biomes(DEEP | OCEAN),
+    .biomes(DEEP | OCEAN)
+    .traits(GLOW | NOCTURNAL),
     Species::new(
         "epaulette-shark",
         &[
             r"
-       __
-\\__.-'  `-._______
-<  _o__o__o__o___ O`.
-//`-.__,.--.__.__,-'
+        _
+\\__.-'/ `-._______
+<  _o_o_o_(O)_o_o_  o `.
+//`-.__,.-'.__.__,-'
+       ''  ''
 ",
             r"
-       __
-//__.-'  `-._______
-<  _o__o__o__o___ O`.
-\\`-.__,.--.__.__,-'
+        _
+\\__.-'/ `-._______
+<   o_o_o_(O)_o_o_  o `.
+\\ -.__,.-'.__.__,-'
+       ''  ''
 ",
         ],
-        &[
-            r"
-       22
-6661111  1111111111
-6  17117117117111 455
-66611111111111111111
-",
-            r"
-       22
-6661111  1111111111
-6  17117117117111 455
-66611111111111111111
-",
-        ],
+        &[r"
+
+
+    K K K  KKKK K   4
+
+
+"],
     )
-    .left(
-        &[
-            r"
-            __
-  _______.-'  `-.__//
-.'O ___o__o__o__o_  >
- `-,__.__.--.,__.-'\\
-",
-            r"
-            __
-  _______.-'  `-.__\\
-.'O ___o__o__o__o_  >
- `-,__.__.--.,__.-'//
-",
-        ],
-        &[
-            r"
-            22
-  1111111111  1111666
-554 11171171171171  6
- 11111111111111111666
-",
-            r"
-            22
-  1111111111  1111666
-554 11171171171171  6
- 11111111111111111666
-",
-        ],
-    )
-    .tint("1:yw 2:yw 3:yw 6:yw 7:kK 4:kK 5:kK")
+    .color('y')
     .zone(Zone::Lower)
-    .fps(0.2)
     .speed(0.3, 0.8)
+    .fps(0.2)
     .weight(4)
-    .biomes(REEF),
+    .biomes(REEF)
+    .traits(NOCTURNAL | SCAVENGER)
+    .home("coral,rock"),
     Species::new(
         "tasselled-wobbegong",
         &[r"
@@ -1158,7 +934,9 @@ _.---------'   o ________/  >
     .zone(Zone::Lower)
     .speed(0.2, 0.6)
     .weight(3)
-    .biomes(REEF),
+    .biomes(REEF)
+    .traits(PREDATOR | NOCTURNAL)
+    .home("coral,rock,wreck"),
     Species::new(
         "angel-shark",
         &[r"
@@ -1192,45 +970,41 @@ _.---------'   o ________/  >
     .zone(Zone::Lower)
     .speed(0.2, 0.7)
     .weight(3)
-    .biomes(KELP | OCEAN | REEF),
+    .biomes(KELP | OCEAN | REEF)
+    .traits(PREDATOR | NOCTURNAL),
     Species::new(
         "greenland-shark",
+        &[
+            r"
+        _
+ \\_.-' `-._
+  <_.--------.`-.
+ <  ________  o  `)
+  //`-.____.---'
+",
+            r"
+        _
+  \_.-' `-._
+  <_.--------.`-.
+<   ________  o  `)
+ ///`-.____.---'
+",
+        ],
         &[r"
-       __
-      /  \
- |\_.'    `-.____
-<  \________ o  `)
- |/`-.___.----.__.'
-"],
-        &[r"
-       22
-      2  2
- 66111    1111111
-6  111111111 4  55
- 661111111111111111
-"],
-    )
-    .left(
-        &[r"
-          __
-         /  \
-  ____.-'    `._/|
- ('  o ________/  >
-`.__.----.___.-'\|
-"],
-        &[r"
-          22
-         2  2
-  1111111    11166
- 55  4 111111111  6
-111111111111111166
+
+
+
+              4
+
 "],
     )
-    .tint("1:wk 2:wk 3:wk 6:wk 4:rR 5:kK")
+    .color('b')
     .zone(Zone::Lower)
     .speed(0.2, 0.6)
+    .fps(0.15)
     .weight(3)
-    .biomes(ARCTIC | DEEP),
+    .biomes(ARCTIC | DEEP)
+    .traits(SCAVENGER),
     Species::new(
         "megamouth-shark",
         &[r"
@@ -1272,41 +1046,62 @@ _.---------'   o ________/  >
     .zone(Zone::Middle)
     .speed(0.2, 0.7)
     .weight(1)
-    .biomes(DEEP | OCEAN),
+    .biomes(DEEP | OCEAN)
+    .traits(FILTER | LEGENDARY),
     Species::new(
         "swell-shark",
-        &[r"
+        &[
+            r"
        _
- |\_.-' `-.___
-<  \_|_|_|_|_ o>
- |/`-.__,-.__.'
-"],
+ \ _.-' `-.___
+  `-|_|_|_|_|_`-.
+ <  `-.____o  `>
+  /'`-.__.__.-'
+",
+            r"
+       _
+   _.-' `-.___
+ \--|_|_|_|_|_`-.
+<   `-.____o  `>
+ //'`-.__.__.-'
+",
+        ],
         &[r"
-       2
- 661111 111111
-6  1171717171 45
- 66111111111111
+
+
+    K K K K K
+           4
+
 "],
     )
-    .left(
-        &[r"
-        _
-  ___.-' `-._/|
-<o _|_|_|_|_/  >
- `.__.-,__.-'\|
-"],
-        &[r"
-        2
-  111111 111166
-54 1717171711  6
- 11111111111166
-"],
-    )
-    .tint("1:yw 7:kK 2:yw 3:yw 6:yw 4:kK 5:kK")
+    .color('y')
     .zone(Zone::Lower)
     .speed(0.2, 0.7)
+    .fps(0.2)
     .weight(4)
-    .biomes(KELP | REEF),
+    .biomes(KELP | REEF)
+    .traits(NOCTURNAL | PUFF)
+    .home("kelp,rock,cave")
+    .alt(
+        &[r"
+           _
+      __.-' `-.__
+   \.'  |  |  |  `.
+  \ <  |  |  |  |  o )
+  / `.   |  |  |  .'
+   /'-.__     __.-'
+         `---'
+"],
+        &[r"
+
+
+        K  K  K
+       K  K  K  K  4
+         K  K  K
+
+
+"],
+    ),
     Species::new(
         "manta-ray",
         &[
@@ -1470,7 +1265,8 @@ _.---------'   o ________/  >
     .fps(0.3)
     .speed(0.4, 1.0)
     .weight(3)
-    .biomes(OCEAN | REEF),
+    .biomes(OCEAN | REEF)
+    .traits(FILTER | CURIOUS),
     Species::new(
         "spotted-eagle-ray",
         &[
@@ -1562,7 +1358,8 @@ __.-'   o  o  o  `--~~
     .fps(0.3)
     .speed(0.5, 1.2)
     .weight(4)
-    .biomes(REEF | OCEAN),
+    .biomes(REEF | OCEAN)
+    .traits(SCAVENGER),
     Species::new(
         "southern-stingray",
         &[
@@ -1646,7 +1443,8 @@ _.-'            `-._
     .fps(0.3)
     .speed(0.3, 0.8)
     .weight(5)
-    .biomes(REEF | OCEAN),
+    .biomes(REEF | OCEAN)
+    .traits(STING | SCAVENGER),
     Species::new(
         "electric-ray",
         &[
@@ -1721,7 +1519,8 @@ Y   11  4 4  11  66
     .fps(0.25)
     .speed(0.3, 0.8)
     .weight(3)
-    .biomes(OCEAN | REEF | KELP),
+    .biomes(OCEAN | REEF | KELP)
+    .traits(STING | NOCTURNAL),
     Species::new(
         "cownose-ray",
         &[
@@ -1806,7 +1605,8 @@ Y   11  4 4  11  66
     .speed(0.5, 1.2)
     .school(3, 8)
     .weight(5)
-    .biomes(OCEAN | REEF),
+    .biomes(OCEAN | REEF)
+    .traits(SCAVENGER),
     Species::new(
         "guitarfish",
         &[r"
@@ -1844,7 +1644,8 @@ __.--'  ____________/  >
     .zone(Zone::Lower)
     .speed(0.3, 0.8)
     .weight(4)
-    .biomes(OCEAN | REEF),
+    .biomes(OCEAN | REEF)
+    .traits(SCAVENGER),
     Species::new(
         "smalltooth-sawfish",
         &[r"
@@ -1882,7 +1683,8 @@ W W W W W W 11111111111111 66
     .zone(Zone::Lower)
     .speed(0.3, 0.9)
     .weight(2)
-    .biomes(OCEAN | FRESH | REEF),
+    .biomes(OCEAN | FRESH | REEF)
+    .traits(PREDATOR),
     Species::new(
         "green-moray",
         &[
@@ -1998,7 +1800,9 @@ __.-'  o   `-..-''    ``-..-'
     .fps(0.3)
     .speed(0.3, 0.9)
     .weight(6)
-    .biomes(REEF | KELP),
+    .biomes(REEF | KELP)
+    .traits(PREDATOR | NOCTURNAL)
+    .home("rock,cave,wreck,coral"),
     Species::new(
         "snowflake-moray",
         &[
@@ -2114,7 +1918,9 @@ __.-'  o   `-..:''    ``-..:'
     .fps(0.3)
     .speed(0.3, 0.8)
     .weight(5)
-    .biomes(REEF),
+    .biomes(REEF)
+    .traits(SHY | NOCTURNAL)
+    .home("rock,coral,cave"),
     Species::new(
         "conger-eel",
         &[
@@ -2230,7 +2036,9 @@ __.-'  O   `.---'     `..---'
     .fps(0.25)
     .speed(0.3, 0.8)
     .weight(5)
-    .biomes(OCEAN | KELP | REEF),
+    .biomes(OCEAN | KELP | REEF)
+    .traits(PREDATOR | NOCTURNAL)
+    .home("wreck,rock,cave"),
     Species::new(
         "electric-eel",
         &[
@@ -2314,7 +2122,9 @@ __.-'  O   `.---'     `..---'
     .fps(0.3)
     .speed(0.3, 0.9)
     .weight(5)
-    .biomes(FRESH),
+    .biomes(FRESH)
+    .traits(STING | NOCTURNAL)
+    .home("log,boulder"),
     Species::new(
         "ribbon-eel",
         &[
@@ -2398,7 +2208,9 @@ __.-'  O   `.---'     `..---'
     .fps(0.3)
     .speed(0.2, 0.6)
     .weight(4)
-    .biomes(REEF),
+    .biomes(REEF)
+    .traits(SHY)
+    .home("rock,coral"),
     Species::new(
         "pipefish",
         &[r"
@@ -2426,7 +2238,9 @@ __.-'  O   `.---'     `..---'
     .speed(0.2, 0.6)
     .school(1, 3)
     .weight(6)
-    .biomes(REEF | KELP | TANK),
+    .biomes(REEF | KELP | TANK)
+    .traits(SHY)
+    .home("grass,kelp,seaweed"),
     Species::new(
         "trumpetfish",
         &[r"
@@ -2456,7 +2270,9 @@ __.-'  O   `.---'     `..---'
     .zone(Zone::Middle)
     .speed(0.3, 0.9)
     .weight(5)
-    .biomes(REEF),
+    .biomes(REEF)
+    .traits(PREDATOR)
+    .home("sea-whip,sea-rod,sea-fan"),
     Species::new(
         "cornetfish",
         &[
@@ -2507,7 +2323,8 @@ __.-'  O   `.---'     `..---'
     .fps(0.2)
     .speed(0.4, 1.0)
     .weight(4)
-    .biomes(REEF),
+    .biomes(REEF)
+    .traits(CURIOUS),
     Species::new(
         "frogfish",
         &[r"
@@ -2554,7 +2371,9 @@ __.-'  O   `.---'     `..---'
     .swim(Swim::Hover)
     .speed(0.1, 0.4)
     .weight(3)
-    .biomes(REEF | KELP),
+    .biomes(REEF | KELP)
+    .traits(PREDATOR | SHY)
+    .home("sponge,coral,rock"),
     Species::new(
         "stonefish",
         &[r"
@@ -2589,7 +2408,9 @@ __.-'  O   `.---'     `..---'
     .swim(Swim::Hover)
     .speed(0.1, 0.4)
     .weight(3)
-    .biomes(REEF),
+    .biomes(REEF)
+    .traits(PREDATOR | STING | DEFENDED)
+    .home("rock,coral"),
     Species::new(
         "scorpionfish",
         &[
@@ -2665,7 +2486,9 @@ __.-'  O   `.---'     `..---'
     .fps(0.15)
     .speed(0.2, 0.6)
     .weight(4)
-    .biomes(REEF | KELP),
+    .biomes(REEF | KELP)
+    .traits(PREDATOR | STING | DEFENDED)
+    .home("rock,coral"),
     Species::new(
         "mudskipper",
         &[r"
@@ -2699,7 +2522,9 @@ __.-'  O   `.---'     `..---'
     .zone(Zone::Lower)
     .speed(0.2, 0.7)
     .weight(4)
-    .biomes(FRESH | REEF),
+    .biomes(FRESH | REEF)
+    .traits(GRAZER)
+    .home("log,rock"),
     Species::new(
         "lungfish",
         &[r"
@@ -2734,7 +2559,9 @@ __.-'  O   `.---'     `..---'
     .swim(Swim::Wave)
     .speed(0.2, 0.6)
     .weight(3)
-    .biomes(FRESH),
+    .biomes(FRESH)
+    .traits(SCAVENGER)
+    .home("log,lily"),
     Species::new(
         "batfish",
         &[
@@ -2850,7 +2677,8 @@ __.-'  O   `.---'     `..---'
     .fps(0.15)
     .speed(0.2, 0.7)
     .weight(3)
-    .biomes(REEF | TANK),
+    .biomes(REEF | TANK)
+    .traits(CURIOUS),
     Species::new(
         "unicornfish",
         &[r"
@@ -2888,5 +2716,6 @@ __.-'  O   `.---'     `..---'
     .zone(Zone::Middle)
     .speed(0.5, 1.4)
     .weight(5)
-    .biomes(REEF),
+    .biomes(REEF)
+    .traits(GRAZER),
 ];

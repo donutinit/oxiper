@@ -246,28 +246,51 @@ pub const VISITORS: &[Visitor] = &[
     .speed(2.5, 4.5)
     .fps(0.4)
     .weight(4)
+    .traits(SCARY)
     .biomes(OCEAN | REEF | KELP | FRESH),
     Visitor::new(
         "swan-pedalo",
         Lane::Boat,
-        &[r"
-          __
-         /o >
-        (  _)
-   ____ ) (
-  /_o_o\(__\_
- (___________)
-"],
-        &[r"
-          WW
-         WC y
-        W  WW
-   WWWW W W
-  WWCWCWWWWWW
- WWWWWWWWWWWWW
-"],
+        &[
+            r"
+             ,-.
+     o  o   ( o>
+    /|\/|\   \ |
+  ,-'-'-'-.__/ |
+ (            _.'
+  `-.._____..-'
+",
+            r"
+             ,-.
+     o  o   ( o>
+    \|/\|/   \ |
+  ,-'-'-'-.__/ |
+ (            _.'
+  `-.._____..-'
+",
+        ],
+        &[
+            r"
+             WWW
+     1  1   WkWY
+    111111   W W
+  WWWWWWWWWWWWWW
+ WWWWWWWWWWWWWWWW
+  WWWWWWWWWWWWW
+",
+            r"
+             WWW
+     1  1   WkWY
+    111111   W W
+  WWWWWWWWWWWWWW
+ WWWWWWWWWWWWWWWW
+  WWWWWWWWWWWWW
+",
+        ],
     )
     .speed(0.3, 0.6)
+    .fps(0.15)
+    .tint("1:rRbBgG")
     .weight(4)
     .biomes(FRESH | TANK),
     Visitor::new(
@@ -314,6 +337,7 @@ pub const VISITORS: &[Visitor] = &[
     .speed(0.2, 0.5)
     .fps(0.1)
     .weight(5)
+    .traits(FISHING)
     .biomes(FRESH),
     Visitor::new(
         "pirate-ship",
@@ -358,6 +382,7 @@ pub const VISITORS: &[Visitor] = &[
     .speed(0.5, 0.9)
     .fps(0.15)
     .weight(3)
+    .traits(SCARY)
     .biomes(OCEAN | REEF),
     Visitor::new(
         "steamship",
@@ -403,6 +428,7 @@ pub const VISITORS: &[Visitor] = &[
     .speed(0.5, 0.9)
     .fps(0.2)
     .weight(5)
+    .traits(SCARY)
     .biomes(OCEAN | KELP | FRESH),
     Visitor::new(
         "cruise-liner",
@@ -448,6 +474,7 @@ pub const VISITORS: &[Visitor] = &[
     .speed(0.4, 0.7)
     .fps(0.15)
     .weight(3)
+    .traits(SCARY)
     .biomes(OCEAN | REEF),
     Visitor::new(
         "container-ship",
@@ -493,6 +520,7 @@ pub const VISITORS: &[Visitor] = &[
     .speed(0.4, 0.8)
     .fps(0.15)
     .weight(4)
+    .traits(SCARY)
     .biomes(OCEAN),
     Visitor::new(
         "yacht",
@@ -515,6 +543,7 @@ pub const VISITORS: &[Visitor] = &[
     .tint("1:bBkKrR")
     .speed(0.7, 1.3)
     .weight(5)
+    .traits(SCARY)
     .biomes(OCEAN | REEF | KELP),
     Visitor::new(
         "paddle-steamer",
@@ -560,6 +589,7 @@ yyyyyyyyyyyyyyyyyyyyyyyy
     .speed(0.4, 0.8)
     .fps(0.3)
     .weight(4)
+    .traits(SCARY)
     .biomes(FRESH),
     Visitor::new(
         "icebreaker",
@@ -583,6 +613,7 @@ yyyyyyyyyyyyyyyyyyyyyyyy
     )
     .speed(0.4, 0.8)
     .weight(4)
+    .traits(SCARY)
     .biomes(ARCTIC),
     Visitor::new(
         "tugboat",
@@ -628,6 +659,7 @@ yyyyyyyyyyyyyyyyyyyyyyyy
     .speed(0.4, 0.8)
     .fps(0.2)
     .weight(5)
+    .traits(SCARY)
     .biomes(OCEAN | FRESH | KELP),
     Visitor::new(
         "river-barge",
@@ -693,6 +725,7 @@ yyyyyyyyyyyyyyyyyyyyyyyy
     .speed(0.3, 0.7)
     .fps(0.15)
     .weight(5)
+    .traits(NET | SCARY)
     .biomes(OCEAN | KELP | ARCTIC),
     Visitor::new(
         "longship",
@@ -782,6 +815,7 @@ yyyyyyyyyyyyyyyyyyyyyyyy
     .speed(0.5, 1.2)
     .fps(0.4)
     .weight(5)
+    .traits(LURE | GLOW)
     .biomes(OCEAN | REEF | KELP | DEEP | ARCTIC),
     Visitor::new(
         "bathyscaphe",
@@ -830,6 +864,7 @@ yyyyyyyyyyyyyyyyyyyyyyyy
     .speed(0.2, 0.5)
     .fps(0.2)
     .weight(3)
+    .traits(LURE | GLOW)
     .biomes(DEEP | OCEAN),
     Visitor::new(
         "scuba-diver",
@@ -870,6 +905,7 @@ yyyyyyyyyyyyyyyyyyyyyyyy
     .speed(0.3, 0.8)
     .fps(0.3)
     .weight(5)
+    .traits(LURE)
     .biomes(OCEAN | REEF | KELP | DEEP | TANK),
     Visitor::new(
         "orca",
@@ -922,6 +958,7 @@ yyyyyyyyyyyyyyyyyyyyyyyy
     .speed(1.2, 2.2)
     .fps(0.25)
     .weight(5)
+    .traits(PREDATOR | SCARY)
     .biomes(OCEAN | ARCTIC | KELP),
     Visitor::new(
         "humpback-whale",
@@ -978,6 +1015,7 @@ yyyyyyyyyyyyyyyyyyyyyyyy
     .speed(0.8, 1.4)
     .fps(0.2)
     .weight(5)
+    .traits(FILTER)
     .biomes(OCEAN | REEF | KELP | ARCTIC),
     Visitor::new(
         "sperm-whale",
@@ -1030,6 +1068,7 @@ yyyyyyyyyyyyyyyyyyyyyyyy
     .speed(0.5, 1.0)
     .fps(0.15)
     .weight(4)
+    .traits(PREDATOR)
     .biomes(DEEP | OCEAN),
     Visitor::new(
         "narwhal",
@@ -1170,6 +1209,7 @@ yyyyyyyyyyyyyyyyyyyyyyyy
     .speed(0.4, 0.8)
     .fps(0.12)
     .weight(2)
+    .traits(FILTER)
     .biomes(OCEAN | DEEP | ARCTIC),
     Visitor::new(
         "giant-whale-shark",
@@ -1218,6 +1258,7 @@ yyyyyyyyyyyyyyyyyyyyyyyy
     .speed(0.4, 0.9)
     .fps(0.2)
     .weight(3)
+    .traits(FILTER)
     .biomes(OCEAN | REEF | DEEP),
     Visitor::new(
         "giant-manta",
@@ -1266,6 +1307,7 @@ yyyyyyyyyyyyyyyyyyyyyyyy
     .speed(0.6, 1.2)
     .fps(0.25)
     .weight(3)
+    .traits(FILTER)
     .biomes(OCEAN | REEF | DEEP),
     Visitor::new(
         "giant-squid",
@@ -1326,6 +1368,7 @@ R  rrRRRRRr          RRR                              RR
     .speed(0.4, 0.9)
     .fps(0.2)
     .weight(3)
+    .traits(PREDATOR | SCARY | LEGENDARY)
     .biomes(DEEP | OCEAN),
     Visitor::new(
         "sea-serpent",
@@ -1378,6 +1421,7 @@ gggggg          ggggggg          ggggggg          ggggggg  gggg
     .speed(0.5, 1.0)
     .fps(0.3)
     .weight(2)
+    .traits(PREDATOR | SCARY | LEGENDARY)
     .biomes(OCEAN | DEEP | KELP),
     Visitor::new(
         "rov",
@@ -1426,6 +1470,7 @@ gggggg          ggggggg          ggggggg          ggggggg  gggg
     .speed(0.3, 0.7)
     .fps(0.3)
     .weight(3)
+    .traits(LURE | GLOW)
     .biomes(DEEP | OCEAN | REEF),
     Visitor::new(
         "toy-submarine",
@@ -1486,6 +1531,7 @@ gggggg          ggggggg          ggggggg          ggggggg  gggg
     .speed(0.3, 0.8)
     .fps(0.4)
     .weight(6)
+    .traits(LURE)
     .biomes(TANK),
     Visitor::new(
         "mermaid",
@@ -1534,42 +1580,57 @@ gggggg          ggggggg          ggggggg          ggggggg  gggg
     .speed(0.4, 0.9)
     .fps(0.3)
     .weight(1)
+    .traits(LURE | LEGENDARY)
     .biomes(REEF | OCEAN | KELP),
     Visitor::new(
         "swimmer",
         Lane::Float,
         &[
             r"
-          __
-   ..  _.'  o
- ~'~.==(____)-.__
-  ~'~.~~'~~.~'~~
+          ___
+   . '   /   \(o
+ ~.'~=====~==-'~~--
+  ~'~.~~'~~.~'~~~
 ",
             r"
-              _
-   ,,  __..-'(o
- ~'~.==(____)'`
-  ~'~.~~'~~.~'~~
+               _.-.
+   ' .        (o   `.
+ ~.'~=====~=====~~'~-
+  ~'~.~~'~~.~'~~~
+",
+            r"
+          ___
+  '  .   /   \(o
+ ~'.~=====~==-'~~--
+  ~.~'~~.~~'~.~~~
 ",
         ],
         &[
             r"
-          ww
-   WW  wWC  Y
- CCCWyywwwwwwCWww
-  CCCWCCCCCWCCCC
+          yyy
+   W W   y   y11
+ CCCCyyyyyCyyyCCCyy
+  CCCCCCCCCCCCCCC
 ",
             r"
-              w
-   WW  wwWWCCwY
- CCCWyywwwwwwCC
-  CCCWCCCCCWCCCC
+               yyyy
+   W W        11   WW
+ CCCCyyyyyCyyyyyCCCCy
+  CCCCCCCCCCCCCCC
+",
+            r"
+          yyy
+  W  W   y   y11
+ CCCCyyyyyCyyyCCCyy
+  CCCCCCCCCCCCCCC
 ",
         ],
     )
+    .tint("1:rRbBgG")
     .speed(0.3, 0.7)
     .fps(0.3)
     .weight(6)
+    .traits(LURE)
     .biomes(OCEAN | REEF | KELP | FRESH),
     Visitor::new(
         "surfer",
@@ -1741,20 +1802,22 @@ gggggg          ggggggg          ggggggg          ggggggg  gggg
         "ice-floe-bear",
         Lane::Float,
         &[r"
-         __  _
-    ____/  `' `o_
-   (   ______ ___>
-   /|_|    |_|_|_
- .'-----------------'.
- `-._______________.-'
+                 __
+         ___..--'o `>
+    _.--'`
+   (    ,-----.,..-'
+   /|__/|     |/|_ \
+ .-'`-'`-'---'`-'`-`-.
+ `-._________________.-'
 "],
         &[r"
-         WW  W
-    WWWWW  WW WkW
-   W   WWWWWW WWWk
-   WWWW    WWWWWW
+                 WW
+         WWWWWWWWk Wk
+    WWWWWW
+   W    WWWWWWWWWWWW
+   WWWWWW     WWWW W
  CCCCCCCCCCCCCCCCCCCCC
- CCCCCCCCCCCCCCCCCCCCC
+ CCCCCCCCCCCCCCCCCCCCCCC
 "],
     )
     .speed(0.1, 0.3)
@@ -1968,6 +2031,7 @@ gggggg          ggggggg          ggggggg          ggggggg  gggg
     .speed(0.2, 0.5)
     .fps(0.15)
     .weight(4)
+    .traits(LURE | GLOW)
     .biomes(DEEP | OCEAN | REEF | KELP | TANK),
     Visitor::new(
         "sea-rover",
@@ -2004,6 +2068,7 @@ gggggg          ggggggg          ggggggg          ggggggg  gggg
     .speed(0.15, 0.4)
     .fps(0.4)
     .weight(4)
+    .traits(LURE | GLOW)
     .biomes(DEEP | OCEAN),
     Visitor::new(
         "seagulls",
@@ -2061,6 +2126,7 @@ gggggg          ggggggg          ggggggg          ggggggg  gggg
     .speed(0.8, 1.6)
     .fps(0.25)
     .weight(8)
+    .traits(PLUNGE)
     .biomes(OCEAN | KELP | REEF | ARCTIC | FRESH),
     Visitor::new(
         "gull-pair",
@@ -2102,6 +2168,7 @@ gggggg          ggggggg          ggggggg          ggggggg  gggg
     .speed(0.6, 1.2)
     .fps(0.25)
     .weight(6)
+    .traits(PLUNGE)
     .biomes(OCEAN | KELP | REEF | ARCTIC | FRESH),
     Visitor::new(
         "pelican",
@@ -2142,6 +2209,7 @@ gggggg          ggggggg          ggggggg          ggggggg  gggg
     .speed(0.7, 1.2)
     .fps(0.2)
     .weight(4)
+    .traits(PLUNGE)
     .biomes(OCEAN | REEF | KELP | FRESH),
     Visitor::new(
         "albatross",
@@ -2182,6 +2250,7 @@ gggggg          ggggggg          ggggggg          ggggggg  gggg
     .speed(0.9, 1.6)
     .fps(0.2)
     .weight(3)
+    .traits(PLUNGE)
     .biomes(OCEAN | ARCTIC),
     Visitor::new(
         "plane-banner",
@@ -2480,5 +2549,321 @@ YY Y  Y  Y  Y  Y YY
     .speed(1.5, 3.5)
     .fps(0.4)
     .weight(1)
+    .traits(GLOW | LEGENDARY)
     .biomes(OCEAN | ARCTIC),
+    Visitor::new(
+        "gannet",
+        Lane::Sky,
+        &[
+            r"
+      \\   //
+       \\_//
+ <==-.__\/___o>>
+",
+            r"
+ <==-.__/\___o>>
+      //  \\
+     //    \\
+",
+        ],
+        &[
+            r"
+      KK   KK
+       WWWWW
+ WWWWWWWWWWWWkYY
+",
+            r"
+ WWWWWWWWWWWWkYY
+      WW  WW
+     KK    KK
+",
+        ],
+    )
+    .speed(1.0, 1.8)
+    .fps(0.25)
+    .weight(5)
+    .traits(PLUNGE)
+    .biomes(OCEAN | KELP | ARCTIC),
+    Visitor::new(
+        "kingfisher",
+        Lane::Sky,
+        &[
+            r"
+   \  /
+ <-=\/=o>>
+   `--'
+",
+            r"
+
+ <-=/\=o>>
+  /`--'\
+",
+        ],
+        &[
+            r"
+   B  B
+ BBBBBBkkk
+   YYYY
+",
+            r"
+
+ BBBBBBkkk
+  YYYYYY
+",
+        ],
+    )
+    .speed(0.9, 1.6)
+    .fps(0.4)
+    .weight(5)
+    .traits(PLUNGE)
+    .biomes(FRESH),
+    Visitor::new(
+        "osprey",
+        Lane::Sky,
+        &[
+            r"
+   .\\      //.
+    `\\.__.//'
+ <===-.\\//._o>
+      `-..-'
+",
+            r"
+
+ <===-.//\\._o>
+      //`--'\\
+     //      \\
+",
+        ],
+        &[
+            r"
+   yyy      yyy
+    yyyyyyyyyy
+ yyyyyyyyyyyykk
+      WWWWWW
+",
+            r"
+
+ yyyyyyyyyyyykk
+      yyyyyyyy
+     yy      yy
+",
+        ],
+    )
+    .speed(0.8, 1.4)
+    .fps(0.2)
+    .weight(4)
+    .traits(PLUNGE)
+    .biomes(FRESH | KELP | OCEAN),
+    Visitor::new(
+        "brown-pelican",
+        Lane::Sky,
+        &[
+            r"
+   / `.
+  /    `.             ___
+ | _.--._`-._..--._.-'o  `-.__
+  `'    `-.__ ____    `-.  ___`=====-.
+         `--'    `-.__  `-'
+",
+            r"
+            ___
+  _..---.__.'  `-.      ,-.__
+ `-._  ___  `-.__ `-.--'o  ___`=====-.
+     `'   ``--.__ )-'`-.______.-'
+         `-._
+",
+        ],
+        &[
+            r"
+   y yy
+  y    yy             yyy
+ y yyyyyyyyyyyyyyyyyyyk  yyyyy
+  yy    yyyyy yyyy    yyy  yyyyYYYYYyy
+         yyyy    yyyyy  yyy
+",
+            r"
+            yyy
+  yyyyyyyyyyy  yyy      yyyyy
+ yyyy  yyy  yyyyy yyyyyyk  yyyyYYYYYyy
+     yy   yyyyyyy yyyyyyyyyyyyyyy
+         yyyy
+",
+        ],
+    )
+    .speed(0.7, 1.2)
+    .fps(0.2)
+    .weight(4)
+    .traits(PLUNGE)
+    .biomes(OCEAN | KELP | REEF),
+    Visitor::new(
+        "puffin",
+        Lane::Sky,
+        &[
+            r"
+  \  /
+ ==\/-(o<
+   ``'
+",
+            r"
+
+ ==/\-(o<
+  / `' \
+",
+        ],
+        &[
+            r"
+  K  K
+ KKKKKWkY
+   WWW
+",
+            r"
+
+ KKKKKWkY
+  W WW W
+",
+        ],
+    )
+    .speed(1.0, 1.7)
+    .fps(0.4)
+    .weight(5)
+    .traits(PLUNGE)
+    .biomes(ARCTIC | KELP),
+    Visitor::new(
+        "humpback-with-calf",
+        Lane::Deep,
+        &[
+            r"
+?????????????????????????,-----.
+????????????????????_.--'       `--._
+?\ /    __..--'    o            `-._
+???V.--'  ,-----.                    `-.
+?,--'`.,'  .-.  `.   .  .  .  .  .  . `.
+?`.  `-.__.' / '--`-.__.__.__.__.__.__.`)
+???`-._    /  /   `--...____________..-'
+???????`--/  /???????????????_.--.__
+??????????`-'??????????\ /_.-'  o  `-.
+?????????????????????????V.-.__ __.--'
+?????????????????????????????`-'`-'
+",
+            r"
+?????????????????????????,-----.
+????????????????????_.--'       `--._
+????????__..--'    o            `-._
+???>.--'  ,-----.                    `-.
+?,--'`.,'  .-.  `.   .  .  .  .  .  . `.
+?`.  `-.__.' / '--`-.__.__.__.__.__.__.`)
+???`-._    /  /   `--...____________..-'
+???????`--/  /???????????????_.--.__
+??????????`-'??????????\ /_.-'  o  `-.
+?????????????????????????>.-.__ __.--'
+?????????????????????????????`-'`-'
+",
+        ],
+        &[
+            r"
+                         bbbbbbW
+                    bWbbb       bbbWb
+ b b    bbWWbbb    W            bbWb
+   bWbbb  bbbbbbW                    bbW
+ bbbbbWbb  WbW  bW   W  W  W  W  W  W bW
+ bW  bbWbbWb b bbbbbWbbWbbWbbWbbWbbWbbWbb
+   BBWB    B  B   BBBWWWBBBBBBBBBBBBWWBB
+       BBBB  B               bbbbbb
+          BBB          b bbbbb  W  bbb
+                         bbWbbb bbbBB
+                             BBBBB
+",
+            r"
+                         bbbbbbW
+                    bWbbb       bbbWb
+        bbWWbbb    W            bbWb
+   bWbbb  bbbbbbW                    bbW
+ bbbbbWbb  WbW  bW   W  W  W  W  W  W bW
+ bW  bbWbbWb b bbbbbWbbWbbWbbWbbWbbWbbWbb
+   BBWB    B  B   BBBWWWBBBBBBBBBBBBWWBB
+       BBBB  B               bbbbbb
+          BBB          b bbbbb  W  bbb
+                         bbWbbb bbbBB
+                             BBBBB
+",
+        ],
+    )
+    .speed(0.7, 1.2)
+    .fps(0.2)
+    .weight(3)
+    .traits(FILTER)
+    .biomes(OCEAN | REEF | KELP | ARCTIC),
+    Visitor::new(
+        "orca-pod",
+        Lane::Deep,
+        &[
+            r"
+????????????????????????????????????????????????????,\
+???????????????????????????????????????????????????/  \
+???????????????????????????????\ /      _.-------'    `--.___
+?????????????????????????????????V.--.-'                   `-.__
+??????????????????????,\???????,--'    `.   ___     (o)  ___   `.
+?????????????????????/  \??????`.  `-.__ `-'   `-._        `--._ |
+??????????_.-------'    `--.___??`-._       `--..______..`---'
+????.--.-'                   `-.__???`---..__________..---'
+?,--'    `.   ___     (o)  ___   `.
+?`.  `-.__ `-'   `-._        `--._ |????????,\
+??/\`-._       `--..______..`---'????\ /_.-'  `-.__
+???????`---..__________..---'??????????V.-' (o)  `-.
+???????????????????????????????????????`-..____..-'
+",
+            r"
+????????????????????????????????????????????????????,\
+???????????????????????????????????????????????????/  \
+????????????????????????????????????????_.-------'    `--.___
+??????????????????????????????????.--.-'                   `-.__
+??????????????????????,\???????,--'    `.   ___     (o)  ___   `.
+?????????????????????/  \??????`.  `-.__ `-'   `-._        `--._ |
+?\ /      _.-------'    `--.___?/\`-._       `--..______..`---'
+???V.--.-'                   `-.__???`---..__________..---'
+?,--'    `.   ___     (o)  ___   `.
+?`.  `-.__ `-'   `-._        `--._ |????????,\
+???`-._       `--..______..`---'??????_.-'  `-.__
+???????`---..__________..---'??????????.-' (o)  `-.
+??????????????????????????????????????/\-..____..-'
+",
+        ],
+        &[
+            r"
+                                                    KK
+                                                   K  K
+                               K K      KKKKKKKKKK    KKKKKKK
+                                 KKKKKKK                   KKKKK
+                      KK       KKKK    KK   KKK     KWK  KKK   KK
+                     K  K      WW  WWWWW WWW   WWWW        WWWWW W
+          KKKKKKKKKK    KKKKKKK  WWWW       WWWWWWWWWWWWWWWWWW
+    KKKKKK                   KKKKK   WWWWWWWWWWWWWWWWWWWWWW
+ KKKK    KK   KKK     KWK  KKK   KK
+ WW  WWWWW WWW   WWWW        WWWWW W        KK
+  WWWWWW       WWWWWWWWWWWWWWWWWW    K KKKKK  KKKKK
+       WWWWWWWWWWWWWWWWWWWWWW          KKKKK KWK  KK
+                                       WWWWWWWWWWWW
+",
+            r"
+                                                    KK
+                                                   K  K
+                                        KKKKKKKKKK    KKKKKKK
+                                  KKKKKK                   KKKKK
+                      KK       KKKK    KK   KKK     KWK  KKK   KK
+                     K  K      WW  WWWWW WWW   WWWW        WWWWW W
+ K K      KKKKKKKKKK    KKKKKKK WWWWWW       WWWWWWWWWWWWWWWWWW
+   KKKKKKK                   KKKKK   WWWWWWWWWWWWWWWWWWWWWW
+ KKKK    KK   KKK     KWK  KKK   KK
+ WW  WWWWW WWW   WWWW        WWWWW W        KK
+   WWWW       WWWWWWWWWWWWWWWWWW       KKKKK  KKK
+       WWWWWWWWWWWWWWWWWWWWWW          KKKKK KWK  K
+                                       WWWWWWWWWWWW
+",
+        ],
+    )
+    .speed(1.0, 1.8)
+    .fps(0.25)
+    .weight(2)
+    .traits(PREDATOR | SCARY)
+    .biomes(OCEAN | ARCTIC | KELP),
 ];

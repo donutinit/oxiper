@@ -40,7 +40,8 @@ pub const SPECIES: &[Species] = &[
     .zone(Zone::Middle)
     .speed(2.0, 3.5)
     .weight(5)
-    .biomes(OCEAN),
+    .biomes(OCEAN)
+    .traits(PREDATOR),
     Species::new(
         "yellowfin-tuna",
         &[r"
@@ -86,7 +87,8 @@ pub const SPECIES: &[Species] = &[
     .zone(Zone::Middle)
     .speed(2.0, 3.5)
     .weight(5)
-    .biomes(OCEAN),
+    .biomes(OCEAN)
+    .traits(PREDATOR),
     Species::new(
         "skipjack-tuna",
         &[r"
@@ -209,7 +211,8 @@ WWWWWWWW        11     666
     .zone(Zone::Upper)
     .speed(2.5, 4.0)
     .weight(3)
-    .biomes(OCEAN),
+    .biomes(OCEAN)
+    .traits(PREDATOR),
     Species::new(
         "striped-marlin",
         &[r"
@@ -247,7 +250,8 @@ WWWWWWWW        11     666
     .zone(Zone::Upper)
     .speed(2.5, 4.0)
     .weight(3)
-    .biomes(OCEAN),
+    .biomes(OCEAN)
+    .traits(PREDATOR),
     Species::new(
         "swordfish",
         &[r"
@@ -285,7 +289,8 @@ WWWWWWWWW111111    4    66
     .zone(Zone::Middle)
     .speed(2.2, 3.6)
     .weight(3)
-    .biomes(OCEAN),
+    .biomes(OCEAN)
+    .traits(PREDATOR | NOCTURNAL),
     Species::new(
         "sailfish",
         &[r"
@@ -327,7 +332,8 @@ WWWWWWWWW111111    4    66
     .zone(Zone::Upper)
     .speed(2.8, 4.0)
     .weight(3)
-    .biomes(OCEAN),
+    .biomes(OCEAN)
+    .traits(PREDATOR),
     Species::new(
         "mahi-mahi",
         &[r"
@@ -365,7 +371,8 @@ WWWWWWWWW111111    4    66
     .zone(Zone::Upper)
     .speed(1.5, 3.0)
     .weight(5)
-    .biomes(OCEAN),
+    .biomes(OCEAN)
+    .traits(CURIOUS),
     Species::new(
         "wahoo",
         &[r"
@@ -395,7 +402,8 @@ WWWWWWWWW111111    4    66
     .zone(Zone::Upper)
     .speed(2.5, 4.0)
     .weight(3)
-    .biomes(OCEAN | REEF),
+    .biomes(OCEAN | REEF)
+    .traits(PREDATOR),
     Species::new(
         "king-mackerel",
         &[r"
@@ -486,7 +494,8 @@ WWWWWWWWW111111    4    66
     .speed(1.0, 2.2)
     .school(6, 12)
     .weight(8)
-    .biomes(OCEAN | KELP),
+    .biomes(OCEAN | KELP)
+    .traits(FILTER),
     Species::new(
         "anchovy",
         &[r"
@@ -501,7 +510,8 @@ WWWWWWWWW111111    4    66
     .speed(0.8, 1.8)
     .school(8, 12)
     .weight(7)
-    .biomes(OCEAN | KELP | REEF),
+    .biomes(OCEAN | KELP | REEF)
+    .traits(FILTER),
     Species::new(
         "atlantic-herring",
         &[r"
@@ -516,7 +526,8 @@ WWWWWWWWW111111    4    66
     .speed(1.0, 2.4)
     .school(6, 12)
     .weight(8)
-    .biomes(OCEAN | ARCTIC | KELP),
+    .biomes(OCEAN | ARCTIC | KELP)
+    .traits(FILTER),
     Species::new(
         "menhaden",
         &[r"
@@ -546,7 +557,8 @@ WWWWWWWWW111111    4    66
     .speed(0.8, 1.8)
     .school(5, 10)
     .weight(6)
-    .biomes(OCEAN | KELP),
+    .biomes(OCEAN | KELP)
+    .traits(FILTER),
     Species::new(
         "flying-fish",
         &[r"
@@ -656,7 +668,8 @@ WWWWWWWWW111111    4    66
     .fps(0.3)
     .speed(0.25, 0.6)
     .weight(2)
-    .biomes(OCEAN | KELP),
+    .biomes(OCEAN | KELP)
+    .traits(CURIOUS),
     Species::new(
         "opah",
         &[r"
@@ -734,7 +747,8 @@ WWWWWWWWW111111    4    66
     .swim(Swim::Dart)
     .speed(0.8, 3.6)
     .weight(4)
-    .biomes(REEF | OCEAN),
+    .biomes(REEF | OCEAN)
+    .traits(PREDATOR | CURIOUS),
     Species::new(
         "atlantic-bonito",
         &[r"
@@ -804,7 +818,8 @@ WWWWWWWWW111111    4    66
     .speed(1.2, 2.8)
     .school(1, 3)
     .weight(4)
-    .biomes(OCEAN | REEF),
+    .biomes(OCEAN | REEF)
+    .traits(CURIOUS),
     Species::new(
         "yellowtail",
         &[r"
@@ -865,7 +880,8 @@ WWWWWWWWW111111    4    66
     .zone(Zone::Middle)
     .speed(1.0, 2.4)
     .weight(3)
-    .biomes(OCEAN | REEF),
+    .biomes(OCEAN | REEF)
+    .traits(PREDATOR | CURIOUS),
     Species::new(
         "tarpon",
         &[r"
@@ -934,7 +950,8 @@ WWWWWWWWW111111    4    66
     .speed(1.0, 2.6)
     .school(1, 3)
     .weight(4)
-    .biomes(REEF | OCEAN),
+    .biomes(REEF | OCEAN)
+    .traits(SCAVENGER),
     Species::new(
         "needlefish",
         &[r"
@@ -995,7 +1012,8 @@ RRRRR111111111116  6
     .speed(1.2, 2.6)
     .school(3, 7)
     .weight(5)
-    .biomes(OCEAN | REEF),
+    .biomes(OCEAN | REEF)
+    .traits(GRAZER),
     Species::new(
         "garibaldi",
         &[
@@ -1047,7 +1065,9 @@ RRRRR111111111116  6
     .fps(0.4)
     .speed(0.4, 1.2)
     .weight(5)
-    .biomes(KELP),
+    .biomes(KELP)
+    .traits(GRAZER | CURIOUS)
+    .home("kelp,rock"),
     Species::new(
         "california-sheephead",
         &[r"
@@ -1085,7 +1105,9 @@ kkkkkkkk
     .zone(Zone::Lower)
     .speed(0.5, 1.5)
     .weight(4)
-    .biomes(KELP),
+    .biomes(KELP)
+    .traits(SCAVENGER)
+    .home("rock,kelp"),
     Species::new(
         "kelp-bass",
         &[r"
@@ -1119,7 +1141,9 @@ kkkkkkkk
     .zone(Zone::Lower)
     .speed(0.5, 1.4)
     .weight(5)
-    .biomes(KELP),
+    .biomes(KELP)
+    .traits(CURIOUS)
+    .home("kelp"),
     Species::new(
         "vermilion-rockfish",
         &[r"
@@ -1154,7 +1178,9 @@ kkkkkkkk
     .swim(Swim::Hover)
     .speed(0.3, 1.0)
     .weight(5)
-    .biomes(KELP),
+    .biomes(KELP)
+    .traits(SHY)
+    .home("rock,kelp"),
     Species::new(
         "lingcod",
         &[r"
@@ -1184,7 +1210,9 @@ WWWW111111111111111111116  6
     .zone(Zone::Lower)
     .speed(0.5, 1.4)
     .weight(4)
-    .biomes(KELP),
+    .biomes(KELP)
+    .traits(PREDATOR)
+    .home("rock,cave"),
     Species::new(
         "cabezon",
         &[r"
@@ -1219,7 +1247,9 @@ WWWW111111111111111111116  6
     .swim(Swim::Hover)
     .speed(0.3, 1.0)
     .weight(3)
-    .biomes(KELP),
+    .biomes(KELP)
+    .traits(SCAVENGER)
+    .home("rock"),
     Species::new(
         "opaleye",
         &[r"
@@ -1254,7 +1284,9 @@ WWWW111111111111111111116  6
     .speed(0.5, 1.4)
     .school(2, 5)
     .weight(5)
-    .biomes(KELP),
+    .biomes(KELP)
+    .traits(GRAZER)
+    .home("kelp"),
     Species::new(
         "atlantic-cod",
         &[r"
@@ -1328,7 +1360,8 @@ WWWW111111111111111111116  6
     .speed(0.6, 1.6)
     .school(2, 5)
     .weight(5)
-    .biomes(OCEAN | ARCTIC),
+    .biomes(OCEAN | ARCTIC)
+    .traits(SCAVENGER),
     Species::new(
         "pollock",
         &[r"
@@ -1432,7 +1465,9 @@ __.-'            )=<
     .speed(0.5, 1.4)
     .school(1, 3)
     .weight(5)
-    .biomes(REEF | OCEAN),
+    .biomes(REEF | OCEAN)
+    .traits(CURIOUS)
+    .home("wreck,rock"),
     Species::new(
         "goliath-grouper",
         &[r"
@@ -1475,7 +1510,9 @@ __.-'            )=<
     .swim(Swim::Hover)
     .speed(0.3, 0.9)
     .weight(2)
-    .biomes(REEF | OCEAN),
+    .biomes(REEF | OCEAN)
+    .traits(PREDATOR | CURIOUS)
+    .home("wreck,rock,cave"),
     Species::new(
         "florida-pompano",
         &[r"
@@ -1548,7 +1585,8 @@ __.-'            )=<
     .zone(Zone::Any)
     .speed(0.6, 1.6)
     .weight(3)
-    .biomes(OCEAN | REEF),
+    .biomes(OCEAN | REEF)
+    .traits(CLEANER),
     Species::new(
         "pilot-fish",
         &[r"
@@ -1579,7 +1617,8 @@ __.-'            )=<
     .speed(0.8, 2.2)
     .school(2, 6)
     .weight(4)
-    .biomes(OCEAN | REEF),
+    .biomes(OCEAN | REEF)
+    .traits(CLEANER),
     Species::new(
         "john-dory",
         &[r"
@@ -1724,7 +1763,9 @@ __.-'            )=<
     .speed(0.5, 1.4)
     .school(3, 7)
     .weight(5)
-    .biomes(KELP),
+    .biomes(KELP)
+    .traits(CLEANER)
+    .home("kelp"),
     Species::new(
         "blue-rockfish",
         &[r"
@@ -1755,7 +1796,9 @@ __.-'            )=<
     .speed(0.5, 1.4)
     .school(4, 9)
     .weight(5)
-    .biomes(KELP),
+    .biomes(KELP)
+    .traits(SHY)
+    .home("kelp"),
     Species::new(
         "jack-mackerel",
         &[r"

@@ -95,7 +95,8 @@ pub const SPECIES: &[Species] = &[
     .speed(0.1, 0.35)
     .fps(0.15)
     .weight(6)
-    .biomes(DEEP),
+    .biomes(DEEP)
+    .traits(PREDATOR | GLOW),
     Species::new(
         "triplewart-seadevil",
         &[
@@ -188,7 +189,8 @@ pub const SPECIES: &[Species] = &[
     .speed(0.1, 0.3)
     .fps(0.2)
     .weight(4)
-    .biomes(DEEP),
+    .biomes(DEEP)
+    .traits(PREDATOR | GLOW),
     Species::new(
         "football-fish",
         &[
@@ -281,7 +283,8 @@ pub const SPECIES: &[Species] = &[
     .speed(0.1, 0.3)
     .fps(0.15)
     .weight(5)
-    .biomes(DEEP),
+    .biomes(DEEP)
+    .traits(PREDATOR | GLOW),
     Species::new(
         "wolftrap-angler",
         &[
@@ -374,7 +377,8 @@ pub const SPECIES: &[Species] = &[
     .speed(0.1, 0.3)
     .fps(0.2)
     .weight(3)
-    .biomes(DEEP),
+    .biomes(DEEP)
+    .traits(PREDATOR | GLOW),
     Species::new(
         "viperfish",
         &[r"
@@ -414,7 +418,8 @@ pub const SPECIES: &[Species] = &[
     .swim(Swim::Dart)
     .speed(0.2, 0.7)
     .weight(6)
-    .biomes(DEEP),
+    .biomes(DEEP)
+    .traits(PREDATOR | GLOW),
     Species::new(
         "fangtooth",
         &[r"
@@ -454,7 +459,8 @@ pub const SPECIES: &[Species] = &[
     .swim(Swim::Cruise)
     .speed(0.2, 0.5)
     .weight(6)
-    .biomes(DEEP),
+    .biomes(DEEP)
+    .traits(PREDATOR),
     Species::new(
         "gulper-eel",
         &[
@@ -513,7 +519,8 @@ C1111111111
     .speed(0.15, 0.5)
     .fps(0.25)
     .weight(4)
-    .biomes(DEEP),
+    .biomes(DEEP)
+    .traits(PREDATOR),
     Species::new(
         "pelican-eel",
         &[
@@ -590,7 +597,8 @@ y111111111111111141  111
     .speed(0.15, 0.45)
     .fps(0.2)
     .weight(3)
-    .biomes(DEEP),
+    .biomes(DEEP)
+    .traits(PREDATOR),
     Species::new(
         "marine-hatchetfish",
         &[r"
@@ -631,7 +639,8 @@ y111111111111111141  111
     .speed(0.3, 0.9)
     .school(4, 10)
     .weight(8)
-    .biomes(DEEP),
+    .biomes(DEEP)
+    .traits(GLOW | NOCTURNAL),
     Species::new(
         "lanternfish",
         &[r"
@@ -668,7 +677,8 @@ y111111111111111141  111
     .speed(0.4, 1.1)
     .school(4, 9)
     .weight(9)
-    .biomes(DEEP),
+    .biomes(DEEP)
+    .traits(GLOW | NOCTURNAL),
     Species::new(
         "barreleye",
         &[r"
@@ -708,7 +718,8 @@ y111111111111111141  111
     .swim(Swim::Hover)
     .speed(0.1, 0.4)
     .weight(4)
-    .biomes(DEEP),
+    .biomes(DEEP)
+    .traits(CURIOUS),
     Species::new(
         "black-dragonfish",
         &[
@@ -793,7 +804,8 @@ y111111111111111141  111
     .speed(0.2, 0.6)
     .fps(0.2)
     .weight(5)
-    .biomes(DEEP),
+    .biomes(DEEP)
+    .traits(PREDATOR | GLOW),
     Species::new(
         "stoplight-loosejaw",
         &[r"
@@ -833,7 +845,8 @@ y111111111111111141  111
     .swim(Swim::Dart)
     .speed(0.2, 0.6)
     .weight(4)
-    .biomes(DEEP),
+    .biomes(DEEP)
+    .traits(PREDATOR | GLOW),
     Species::new(
         "blobfish",
         &[r"
@@ -877,7 +890,8 @@ y111111111111111141  111
     .swim(Swim::Drift)
     .speed(0.1, 0.25)
     .weight(4)
-    .biomes(DEEP),
+    .biomes(DEEP)
+    .home("rock"),
     Species::new(
         "giant-oarfish",
         &[
@@ -954,7 +968,8 @@ y111111111111111141  111
     .speed(0.15, 0.4)
     .fps(0.3)
     .weight(1)
-    .biomes(DEEP),
+    .biomes(DEEP)
+    .traits(LEGENDARY),
     Species::new(
         "coelacanth",
         &[
@@ -1047,7 +1062,8 @@ y111111111111111141  111
     .speed(0.1, 0.3)
     .fps(0.15)
     .weight(1)
-    .biomes(DEEP),
+    .biomes(DEEP)
+    .traits(LEGENDARY | NOCTURNAL),
     Species::new(
         "spotted-ratfish",
         &[
@@ -1112,7 +1128,9 @@ y111111111111111141  111
     .speed(0.15, 0.4)
     .fps(0.2)
     .weight(4)
-    .biomes(DEEP),
+    .biomes(DEEP)
+    .traits(NOCTURNAL | SCAVENGER)
+    .home("rock"),
     Species::new(
         "telescopefish",
         &[r"
@@ -1148,7 +1166,8 @@ G1141 1111111111  6
     .swim(Swim::Wave)
     .speed(0.2, 0.6)
     .weight(4)
-    .biomes(DEEP),
+    .biomes(DEEP)
+    .traits(PREDATOR),
     Species::new(
         "giant-grenadier",
         &[r"
@@ -1188,7 +1207,9 @@ G1141 1111111111  6
     .swim(Swim::Cruise)
     .speed(0.15, 0.4)
     .weight(3)
-    .biomes(DEEP),
+    .biomes(DEEP)
+    .traits(SCAVENGER | PREDATOR)
+    .home("whale"),
     Species::new(
         "cusk-eel",
         &[r"
@@ -1224,7 +1245,9 @@ G1141 1111111111  6
     .swim(Swim::Wave)
     .speed(0.15, 0.4)
     .weight(5)
-    .biomes(DEEP),
+    .biomes(DEEP)
+    .traits(SHY | NOCTURNAL)
+    .home("cave,rock"),
     Species::new(
         "hadal-snailfish",
         &[r"
@@ -1260,7 +1283,9 @@ G1141 1111111111  6
     .swim(Swim::Drift)
     .speed(0.1, 0.25)
     .weight(4)
-    .biomes(DEEP),
+    .biomes(DEEP)
+    .traits(SCAVENGER)
+    .home("vent,rock"),
     Species::new(
         "deep-sea-lizardfish",
         &[r"
@@ -1296,7 +1321,8 @@ G1141 1111111111  6
     .swim(Swim::Hover)
     .speed(0.1, 0.4)
     .weight(5)
-    .biomes(DEEP),
+    .biomes(DEEP)
+    .traits(PREDATOR),
     Species::new(
         "sabertooth-fish",
         &[r"
@@ -1336,7 +1362,8 @@ WWWWW1   111
     .swim(Swim::Dart)
     .speed(0.2, 0.7)
     .weight(5)
-    .biomes(DEEP),
+    .biomes(DEEP)
+    .traits(PREDATOR),
     Species::new(
         "bristlemouth",
         &[r"
@@ -1369,7 +1396,8 @@ WWWWW1   111
     .speed(0.4, 1.0)
     .school(5, 12)
     .weight(9)
-    .biomes(DEEP),
+    .biomes(DEEP)
+    .traits(GLOW | FILTER),
     Species::new(
         "ribbon-sawtail-fish",
         &[r"
@@ -1401,7 +1429,8 @@ WWWWW1   111
     .swim(Swim::Wave)
     .speed(0.2, 0.6)
     .weight(5)
-    .biomes(DEEP),
+    .biomes(DEEP)
+    .traits(PREDATOR | GLOW),
     Species::new(
         "slickhead",
         &[r"
@@ -1437,7 +1466,8 @@ WWWWW1   111
     .swim(Swim::Cruise)
     .speed(0.2, 0.5)
     .weight(6)
-    .biomes(DEEP),
+    .biomes(DEEP)
+    .traits(PREDATOR),
     Species::new(
         "bigscale",
         &[r"
@@ -1473,7 +1503,8 @@ WWWWW1   111
     .swim(Swim::Cruise)
     .speed(0.2, 0.6)
     .weight(6)
-    .biomes(DEEP),
+    .biomes(DEEP)
+    .traits(FILTER),
     Species::new(
         "pacific-blackdragon",
         &[
@@ -1550,7 +1581,8 @@ WWWWW1   111
     .speed(0.2, 0.6)
     .fps(0.25)
     .weight(5)
-    .biomes(DEEP),
+    .biomes(DEEP)
+    .traits(PREDATOR | GLOW),
     Species::new(
         "threadfin-dragonfish",
         &[
@@ -1635,7 +1667,8 @@ mmmmmmm        14111
     .speed(0.15, 0.45)
     .fps(0.2)
     .weight(3)
-    .biomes(DEEP),
+    .biomes(DEEP)
+    .traits(PREDATOR | GLOW),
     Species::new(
         "hagfish",
         &[r"
@@ -1667,7 +1700,9 @@ mmmmmmm        14111
     .swim(Swim::Wave)
     .speed(0.1, 0.3)
     .weight(5)
-    .biomes(DEEP),
+    .biomes(DEEP)
+    .traits(SCAVENGER | SHY)
+    .home("whale"),
     Species::new(
         "giant-tube-eye",
         &[
@@ -1736,7 +1771,8 @@ mmmmmmm        14111
     .speed(0.1, 0.35)
     .fps(0.2)
     .weight(3)
-    .biomes(DEEP),
+    .biomes(DEEP)
+    .traits(PREDATOR | GLOW),
     Species::new(
         "snipe-eel",
         &[r"
@@ -1756,7 +1792,8 @@ mmmmmmm        14111
     .swim(Swim::Wave)
     .speed(0.15, 0.4)
     .weight(4)
-    .biomes(DEEP),
+    .biomes(DEEP)
+    .traits(PREDATOR),
     Species::new(
         "daggertooth",
         &[r"
@@ -1788,7 +1825,8 @@ mmmmmmm        14111
     .swim(Swim::Dart)
     .speed(0.2, 0.7)
     .weight(5)
-    .biomes(DEEP),
+    .biomes(DEEP)
+    .traits(PREDATOR),
     Species::new(
         "arctic-char",
         &[r"
@@ -1825,7 +1863,8 @@ mmmmmmm        14111
     .speed(0.5, 1.4)
     .school(1, 3)
     .weight(7)
-    .biomes(ARCTIC | FRESH),
+    .biomes(ARCTIC | FRESH)
+    .traits(PREDATOR),
     Species::new(
         "polar-cod",
         &[r"
@@ -1862,7 +1901,8 @@ _.-~~~~._/>
     .speed(0.6, 1.5)
     .school(4, 9)
     .weight(8)
-    .biomes(ARCTIC),
+    .biomes(ARCTIC)
+    .traits(FILTER),
     Species::new(
         "crocodile-icefish",
         &[r"
@@ -1898,7 +1938,8 @@ _.-~~~~._/>
     .swim(Swim::Hover)
     .speed(0.1, 0.35)
     .weight(3)
-    .biomes(ARCTIC),
+    .biomes(ARCTIC)
+    .traits(PREDATOR),
     Species::new(
         "lumpsucker",
         &[r"
@@ -1938,7 +1979,9 @@ _.-~~~~._/>
     .swim(Swim::Hover)
     .speed(0.1, 0.4)
     .weight(5)
-    .biomes(ARCTIC),
+    .biomes(ARCTIC)
+    .traits(SHY | DEFENDED)
+    .home("rock"),
     Species::new(
         "atlantic-wolffish",
         &[r"
@@ -1978,7 +2021,9 @@ _.-~~~~._/>
     .swim(Swim::Wave)
     .speed(0.2, 0.5)
     .weight(4)
-    .biomes(ARCTIC),
+    .biomes(ARCTIC)
+    .traits(PREDATOR | DEFENDED)
+    .home("rock"),
     Species::new(
         "capelin",
         &[r"
@@ -2011,7 +2056,8 @@ _.-~~~~._/>
     .speed(0.7, 1.8)
     .school(6, 12)
     .weight(9)
-    .biomes(ARCTIC),
+    .biomes(ARCTIC)
+    .traits(FILTER),
     Species::new(
         "shorthorn-sculpin",
         &[r"
@@ -2051,7 +2097,9 @@ _.-~~~~._/>
     .swim(Swim::Dart)
     .speed(0.1, 0.5)
     .weight(5)
-    .biomes(ARCTIC),
+    .biomes(ARCTIC)
+    .traits(SHY | PREDATOR)
+    .home("rock"),
     Species::new(
         "antarctic-toothfish",
         &[r"
@@ -2087,7 +2135,8 @@ _.-~~~~._/>
     .swim(Swim::Cruise)
     .speed(0.2, 0.6)
     .weight(3)
-    .biomes(ARCTIC),
+    .biomes(ARCTIC)
+    .traits(PREDATOR),
     Species::new(
         "arctic-cod",
         &[r"
@@ -2124,7 +2173,8 @@ _.-~~~~._/>
     .speed(0.5, 1.3)
     .school(5, 10)
     .weight(7)
-    .biomes(ARCTIC),
+    .biomes(ARCTIC)
+    .traits(FILTER),
     Species::new(
         "eelpout",
         &[r"
@@ -2156,7 +2206,9 @@ _.-~~~~._/>
     .swim(Swim::Wave)
     .speed(0.15, 0.4)
     .weight(5)
-    .biomes(ARCTIC),
+    .biomes(ARCTIC)
+    .traits(SHY)
+    .home("rock"),
     Species::new(
         "sea-raven",
         &[r"
@@ -2196,7 +2248,9 @@ _.-~~~~._/>
     .swim(Swim::Hover)
     .speed(0.1, 0.4)
     .weight(4)
-    .biomes(ARCTIC),
+    .biomes(ARCTIC)
+    .traits(PREDATOR | SHY)
+    .home("rock"),
     Species::new(
         "sea-lamprey",
         &[r"
@@ -2228,7 +2282,8 @@ WWW   WW  WW  WW  WW  WW   1
     .swim(Swim::Wave)
     .speed(0.2, 0.5)
     .weight(4)
-    .biomes(ARCTIC | FRESH),
+    .biomes(ARCTIC | FRESH)
+    .traits(PREDATOR),
     Species::new(
         "antarctic-silverfish",
         &[r"
@@ -2265,7 +2320,8 @@ WWW   WW  WW  WW  WW  WW   1
     .speed(0.5, 1.2)
     .school(5, 10)
     .weight(7)
-    .biomes(ARCTIC),
+    .biomes(ARCTIC)
+    .traits(FILTER),
     Species::new(
         "emerald-rockcod",
         &[r"
@@ -2301,7 +2357,9 @@ WWW   WW  WW  WW  WW  WW   1
     .swim(Swim::Hover)
     .speed(0.1, 0.4)
     .weight(5)
-    .biomes(ARCTIC),
+    .biomes(ARCTIC)
+    .traits(PREDATOR | SHY)
+    .home("rock"),
     Species::new(
         "arctic-snailfish",
         &[r"
@@ -2337,5 +2395,7 @@ WWW   WW  WW  WW  WW  WW   1
     .swim(Swim::Drift)
     .speed(0.1, 0.25)
     .weight(4)
-    .biomes(ARCTIC),
+    .biomes(ARCTIC)
+    .traits(SHY | SCAVENGER)
+    .home("rock"),
 ];

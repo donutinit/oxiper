@@ -41,7 +41,9 @@ pub const SPECIES: &[Species] = &[
     .speed(0.10, 0.35)
     .fps(0.40)
     .weight(7)
-    .biomes(KELP | OCEAN | REEF),
+    .biomes(KELP | OCEAN | REEF)
+    .traits(SCAVENGER | DEFENDED | SHY)
+    .home("rock,cave,trap,pot"),
     Species::new(
         "blue-crab",
         &[
@@ -84,7 +86,8 @@ pub const SPECIES: &[Species] = &[
     .speed(0.12, 0.40)
     .fps(0.45)
     .weight(6)
-    .biomes(OCEAN | KELP),
+    .biomes(OCEAN | KELP)
+    .traits(SCAVENGER | PREDATOR),
     Species::new(
         "hermit-crab",
         &[
@@ -154,7 +157,9 @@ pub const SPECIES: &[Species] = &[
     .fps(0.40)
     .school(1, 4)
     .weight(7)
-    .biomes(REEF | KELP | TANK | OCEAN),
+    .biomes(REEF | KELP | TANK | OCEAN)
+    .traits(SCAVENGER | SHY)
+    .home("rock"),
     Species::new(
         "fiddler-crab",
         &[
@@ -197,7 +202,9 @@ pub const SPECIES: &[Species] = &[
     .speed(0.08, 0.30)
     .fps(0.45)
     .weight(6)
-    .biomes(REEF | KELP | TANK),
+    .biomes(REEF | KELP | TANK)
+    .traits(SCAVENGER | SHY)
+    .home("rock"),
     Species::new(
         "decorator-crab",
         &[
@@ -274,7 +281,9 @@ pub const SPECIES: &[Species] = &[
     .speed(0.06, 0.20)
     .fps(0.40)
     .weight(3)
-    .biomes(REEF | KELP | OCEAN),
+    .biomes(REEF | KELP | OCEAN)
+    .traits(SCAVENGER | SHY)
+    .home("rock,coral"),
     Species::new(
         "japanese-spider-crab",
         &[
@@ -329,7 +338,9 @@ pub const SPECIES: &[Species] = &[
     .speed(0.04, 0.12)
     .fps(0.30)
     .weight(2)
-    .biomes(DEEP | KELP | OCEAN),
+    .biomes(DEEP | KELP | OCEAN)
+    .traits(SCAVENGER | DEFENDED)
+    .home("rock,whale"),
     Species::new(
         "red-king-crab",
         &[
@@ -406,7 +417,9 @@ pub const SPECIES: &[Species] = &[
     .speed(0.06, 0.20)
     .fps(0.35)
     .weight(6)
-    .biomes(ARCTIC | KELP),
+    .biomes(ARCTIC | KELP)
+    .traits(SCAVENGER | DEFENDED)
+    .home("rock"),
     Species::new(
         "snow-crab",
         &[
@@ -475,7 +488,9 @@ pub const SPECIES: &[Species] = &[
     .speed(0.06, 0.22)
     .fps(0.40)
     .weight(5)
-    .biomes(ARCTIC | KELP),
+    .biomes(ARCTIC | KELP)
+    .traits(SCAVENGER)
+    .home("rock"),
     Species::new(
         "yeti-crab",
         &[
@@ -521,7 +536,9 @@ w  wWwWwWwWw  w
     .speed(0.04, 0.14)
     .fps(0.30)
     .weight(3)
-    .biomes(DEEP),
+    .biomes(DEEP)
+    .traits(SCAVENGER | FILTER)
+    .home("vent"),
     Species::new(
         "sally-lightfoot-crab",
         &[
@@ -560,7 +577,9 @@ _\ \||/ /_
     .speed(0.15, 0.40)
     .fps(0.50)
     .weight(4)
-    .biomes(REEF | OCEAN),
+    .biomes(REEF | OCEAN)
+    .traits(SCAVENGER | GRAZER | SHY)
+    .home("rock"),
     Species::new(
         "horseshoe-crab",
         &[
@@ -637,7 +656,8 @@ _\ \||/ /_
     .speed(0.04, 0.14)
     .fps(0.30)
     .weight(4)
-    .biomes(OCEAN | KELP | REEF),
+    .biomes(OCEAN | KELP | REEF)
+    .traits(SCAVENGER | DEFENDED),
     Species::new(
         "american-lobster",
         &[
@@ -676,7 +696,9 @@ _\ \||/ /_
     .speed(0.10, 0.22)
     .fps(0.35)
     .weight(5)
-    .biomes(KELP | OCEAN | ARCTIC),
+    .biomes(KELP | OCEAN | ARCTIC)
+    .traits(SCAVENGER | PREDATOR | NOCTURNAL)
+    .home("rock,cave,trap,pot"),
     Species::new(
         "spiny-lobster",
         &[
@@ -719,7 +741,9 @@ _\ \||/ /_
     .speed(0.10, 0.25)
     .fps(0.35)
     .weight(4)
-    .biomes(REEF | OCEAN | KELP),
+    .biomes(REEF | OCEAN | KELP)
+    .traits(SCAVENGER | NOCTURNAL | DEFENDED)
+    .home("rock,cave,trap,pot"),
     Species::new(
         "slipper-lobster",
         &[
@@ -788,7 +812,9 @@ _\ \||/ /_
     .speed(0.08, 0.18)
     .fps(0.35)
     .weight(3)
-    .biomes(REEF | OCEAN),
+    .biomes(REEF | OCEAN)
+    .traits(SCAVENGER | NOCTURNAL | SHY)
+    .home("rock,cave"),
     Species::new(
         "crayfish",
         &[
@@ -827,7 +853,9 @@ _\ \||/ /_
     .speed(0.10, 0.30)
     .fps(0.40)
     .weight(7)
-    .biomes(FRESH),
+    .biomes(FRESH)
+    .traits(SCAVENGER | NOCTURNAL | SHY)
+    .home("rock"),
     Species::new(
         "amano-shrimp",
         &[
@@ -865,7 +893,9 @@ _\ \||/ /_
     .speed(0.08, 0.25)
     .fps(0.50)
     .weight(5)
-    .biomes(TANK | FRESH),
+    .biomes(TANK | FRESH)
+    .traits(GRAZER | SHY)
+    .home("seaweed,rock"),
     Species::new(
         "pistol-shrimp",
         &[
@@ -904,7 +934,9 @@ _\ \||/ /_
     .speed(0.06, 0.20)
     .fps(0.40)
     .weight(3)
-    .biomes(REEF | KELP),
+    .biomes(REEF | KELP)
+    .traits(SHY)
+    .home("rock"),
     Species::new(
         "mantis-shrimp",
         &[
@@ -943,7 +975,9 @@ _\ \||/ /_
     .speed(0.10, 0.30)
     .fps(0.50)
     .weight(3)
-    .biomes(REEF),
+    .biomes(REEF)
+    .traits(PREDATOR | SHY)
+    .home("rock,coral"),
     Species::new(
         "sea-star",
         &[r"
@@ -987,7 +1021,8 @@ _\ \||/ /_
     .swim(Swim::Crawl)
     .speed(0.02, 0.06)
     .weight(8)
-    .biomes(REEF | OCEAN | KELP | ARCTIC | TANK),
+    .biomes(REEF | OCEAN | KELP | ARCTIC | TANK)
+    .traits(SCAVENGER | PREDATOR),
     Species::new(
         "knobby-sea-star",
         &[r"
@@ -1031,7 +1066,8 @@ o--'/o\`--o
     .swim(Swim::Crawl)
     .speed(0.02, 0.05)
     .weight(5)
-    .biomes(REEF | KELP | OCEAN),
+    .biomes(REEF | KELP | OCEAN)
+    .traits(SCAVENGER),
     Species::new(
         "crown-of-thorns",
         &[
@@ -1074,7 +1110,8 @@ o--'/o\`--o
     .speed(0.02, 0.06)
     .fps(0.20)
     .weight(3)
-    .biomes(REEF),
+    .biomes(REEF)
+    .traits(STING | DEFENDED | GRAZER),
     Species::new(
         "brittle-star",
         &[
@@ -1151,7 +1188,9 @@ o--'/o\`--o
     .speed(0.03, 0.08)
     .fps(0.30)
     .weight(6)
-    .biomes(REEF | OCEAN | KELP | DEEP | ARCTIC),
+    .biomes(REEF | OCEAN | KELP | DEEP | ARCTIC)
+    .traits(SCAVENGER | SHY)
+    .home("rock"),
     Species::new(
         "basket-star",
         &[
@@ -1190,7 +1229,9 @@ o--'/o\`--o
     .speed(0.02, 0.05)
     .fps(0.25)
     .weight(4)
-    .biomes(ARCTIC | DEEP | KELP),
+    .biomes(ARCTIC | DEEP | KELP)
+    .traits(FILTER | NOCTURNAL)
+    .home("coral"),
     Species::new(
         "purple-sea-urchin",
         &[
@@ -1230,7 +1271,8 @@ o--'/o\`--o
     .fps(0.20)
     .school(1, 3)
     .weight(7)
-    .biomes(KELP | OCEAN | ARCTIC | REEF),
+    .biomes(KELP | OCEAN | ARCTIC | REEF)
+    .traits(GRAZER | DEFENDED),
     Species::new(
         "pencil-urchin",
         &[r"
@@ -1250,7 +1292,9 @@ o--'/o\`--o
     .swim(Swim::Crawl)
     .speed(0.02, 0.06)
     .weight(4)
-    .biomes(REEF),
+    .biomes(REEF)
+    .traits(GRAZER | DEFENDED | NOCTURNAL)
+    .home("rock,coral"),
     Species::new(
         "sea-cucumber",
         &[
@@ -1311,7 +1355,8 @@ o--'/o\`--o
     .speed(0.02, 0.05)
     .fps(0.30)
     .weight(6)
-    .biomes(OCEAN | KELP | REEF | TANK),
+    .biomes(OCEAN | KELP | REEF | TANK)
+    .traits(SCAVENGER),
     Species::new(
         "sea-pig",
         &[
@@ -1350,7 +1395,8 @@ o--'/o\`--o
     .speed(0.02, 0.05)
     .fps(0.30)
     .weight(5)
-    .biomes(DEEP),
+    .biomes(DEEP)
+    .traits(SCAVENGER),
     Species::new(
         "moon-snail",
         &[
@@ -1419,7 +1465,8 @@ o o     / (@@) \
     .speed(0.02, 0.06)
     .fps(0.30)
     .weight(4)
-    .biomes(OCEAN | KELP | REEF),
+    .biomes(OCEAN | KELP | REEF)
+    .traits(PREDATOR | SCAVENGER),
     Species::new(
         "queen-conch",
         &[
@@ -1462,7 +1509,8 @@ o o     / (@@) \
     .speed(0.02, 0.05)
     .fps(0.30)
     .weight(4)
-    .biomes(REEF | OCEAN),
+    .biomes(REEF | OCEAN)
+    .traits(GRAZER | DEFENDED),
     Species::new(
         "tiger-cowrie",
         &[
@@ -1531,7 +1579,9 @@ o o   .'.o.o.o.`,
     .speed(0.02, 0.05)
     .fps(0.30)
     .weight(4)
-    .biomes(REEF),
+    .biomes(REEF)
+    .traits(GRAZER | DEFENDED | NOCTURNAL)
+    .home("rock,coral"),
     Species::new(
         "nerite-snail",
         &[
@@ -1601,7 +1651,8 @@ o o   .'.o.o.o.`,
     .fps(0.30)
     .school(1, 3)
     .weight(7)
-    .biomes(TANK | FRESH | REEF),
+    .biomes(TANK | FRESH | REEF)
+    .traits(GRAZER | DEFENDED),
     Species::new(
         "apple-snail",
         &[
@@ -1678,7 +1729,8 @@ o o   | (@@) |
     .speed(0.02, 0.06)
     .fps(0.30)
     .weight(6)
-    .biomes(FRESH | TANK),
+    .biomes(FRESH | TANK)
+    .traits(GRAZER),
     Species::new(
         "ramshorn-snail",
         &[
@@ -1748,7 +1800,8 @@ o o   | (@@) |
     .fps(0.30)
     .school(1, 3)
     .weight(5)
-    .biomes(FRESH | TANK),
+    .biomes(FRESH | TANK)
+    .traits(GRAZER),
     Species::new(
         "spanish-shawl",
         &[
@@ -1817,7 +1870,8 @@ y y     ~ ~ ~ ~
     .speed(0.02, 0.06)
     .fps(0.30)
     .weight(3)
-    .biomes(KELP | OCEAN),
+    .biomes(KELP | OCEAN)
+    .traits(STING | DEFENDED),
     Species::new(
         "sea-bunny",
         &[
@@ -1886,7 +1940,8 @@ y y     ~ ~ ~ ~
     .speed(0.02, 0.04)
     .fps(0.30)
     .weight(3)
-    .biomes(OCEAN | REEF | KELP),
+    .biomes(OCEAN | REEF | KELP)
+    .traits(GRAZER | DEFENDED),
     Species::new(
         "chiton",
         &[
@@ -1947,7 +2002,9 @@ y y     ~ ~ ~ ~
     .speed(0.01, 0.03)
     .fps(0.20)
     .weight(3)
-    .biomes(KELP | OCEAN | REEF | ARCTIC),
+    .biomes(KELP | OCEAN | REEF | ARCTIC)
+    .traits(GRAZER | DEFENDED)
+    .home("rock"),
     Species::new(
         "summer-flounder",
         &[
@@ -2007,7 +2064,8 @@ oo.-~~~~~~~~~~~-,
     .speed(0.10, 0.35)
     .fps(0.50)
     .weight(6)
-    .biomes(OCEAN | KELP | REEF),
+    .biomes(OCEAN | KELP | REEF)
+    .traits(PREDATOR | SHY),
     Species::new(
         "atlantic-halibut",
         &[
@@ -2075,7 +2133,8 @@ oo.-~~~~~~~~~~~-,
     .speed(0.08, 0.25)
     .fps(0.40)
     .weight(3)
-    .biomes(ARCTIC | OCEAN | KELP),
+    .biomes(ARCTIC | OCEAN | KELP)
+    .traits(PREDATOR),
     Species::new(
         "common-sole",
         &[
@@ -2135,7 +2194,8 @@ oo.-~~~~~~~~~~~-,
     .speed(0.10, 0.30)
     .fps(0.50)
     .weight(5)
-    .biomes(KELP | OCEAN | ARCTIC),
+    .biomes(KELP | OCEAN | ARCTIC)
+    .traits(SHY | NOCTURNAL),
     Species::new(
         "peacock-flounder",
         &[
@@ -2195,7 +2255,8 @@ oo.-~~~~~~~~~~~-,
     .speed(0.10, 0.30)
     .fps(0.50)
     .weight(3)
-    .biomes(REEF),
+    .biomes(REEF)
+    .traits(SHY | PREDATOR),
     Species::new(
         "stargazer",
         &[r"
@@ -2226,7 +2287,8 @@ R11111111111111
     .swim(Swim::Crawl)
     .speed(0.05, 0.15)
     .weight(3)
-    .biomes(REEF | OCEAN | KELP),
+    .biomes(REEF | OCEAN | KELP)
+    .traits(PREDATOR | SHY | NOCTURNAL),
     Species::new(
         "bristlenose-pleco",
         &[
@@ -2286,7 +2348,9 @@ W111133111111311
     .speed(0.05, 0.15)
     .fps(0.40)
     .weight(6)
-    .biomes(TANK | FRESH),
+    .biomes(TANK | FRESH)
+    .traits(GRAZER | NOCTURNAL | SHY)
+    .home("rock,wreck"),
     Species::new(
         "bronze-corydoras",
         &[
@@ -2347,7 +2411,9 @@ W111133111111311
     .fps(0.50)
     .school(3, 6)
     .weight(7)
-    .biomes(TANK | FRESH),
+    .biomes(TANK | FRESH)
+    .traits(SCAVENGER | SHY)
+    .home("rock"),
     Species::new(
         "red-lipped-batfish",
         &[
@@ -2415,7 +2481,8 @@ RR111111111111
     .speed(0.03, 0.10)
     .fps(0.35)
     .weight(2)
-    .biomes(REEF),
+    .biomes(REEF)
+    .traits(PREDATOR | SHY),
     Species::new(
         "sea-robin",
         &[
@@ -2483,7 +2550,8 @@ RR111111111111
     .speed(0.06, 0.20)
     .fps(0.40)
     .weight(4)
-    .biomes(KELP | OCEAN),
+    .biomes(KELP | OCEAN)
+    .traits(SCAVENGER),
     Species::new(
         "hellbender",
         &[
@@ -2551,7 +2619,9 @@ RR111111111111
     .speed(0.02, 0.06)
     .fps(0.30)
     .weight(3)
-    .biomes(FRESH),
+    .biomes(FRESH)
+    .traits(PREDATOR | NOCTURNAL | SHY)
+    .home("rock"),
     Species::new(
         "neon-goby",
         &[r"
@@ -2570,7 +2640,9 @@ RR111111111111
     .fps(0.50)
     .school(1, 3)
     .weight(4)
-    .biomes(REEF | TANK),
+    .biomes(REEF | TANK)
+    .traits(SHY)
+    .home("coral,rock"),
     Species::new(
         "tripod-fish",
         &[
@@ -2612,7 +2684,8 @@ RR111111111111
     .speed(0.01, 0.03)
     .fps(0.30)
     .weight(2)
-    .biomes(DEEP),
+    .biomes(DEEP)
+    .traits(FILTER),
     Species::new(
         "garden-eel",
         &[
@@ -2659,7 +2732,8 @@ RR111111111111
     .fps(0.25)
     .school(3, 6)
     .weight(5)
-    .biomes(REEF | OCEAN),
+    .biomes(REEF | OCEAN)
+    .traits(FILTER | SHY),
     Species::new(
         "giant-isopod",
         &[
@@ -2728,7 +2802,9 @@ RR111111111111
     .speed(0.02, 0.06)
     .fps(0.30)
     .weight(4)
-    .biomes(DEEP),
+    .biomes(DEEP)
+    .traits(SCAVENGER)
+    .home("whale,rock"),
     Species::new(
         "sea-spider",
         &[
@@ -2763,5 +2839,7 @@ RR111111111111
     .speed(0.02, 0.07)
     .fps(0.35)
     .weight(3)
-    .biomes(ARCTIC | DEEP | KELP),
+    .biomes(ARCTIC | DEEP | KELP)
+    .traits(SHY)
+    .home("rock"),
 ];

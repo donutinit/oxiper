@@ -10,16 +10,17 @@
 use std::f32::consts::TAU;
 
 use super::assets::{
-    self, ALL, ARCTIC, BIOMES, Biomes, DEEP, FRESH, KELP, Lane, OCEAN, REEF, Swim, TANK, Zone,
+    self, ALL, ALWAYS, ARCTIC, BIOMES, Biomes, DEEP, FRESH, KELP, LEGENDARY, Lane, OCEAN, REEF,
+    Season, Swim, TANK, Zone,
 };
 use super::library::library;
 use super::*;
 
 /// A comma separated list of names from the options; `-name` leaves one out.
 #[derive(Default)]
-struct Filter {
-    only: Vec<String>,
-    not: Vec<String>,
+pub(super) struct Filter {
+    pub(super) only: Vec<String>,
+    pub(super) not: Vec<String>,
 }
 
 impl Filter {
@@ -36,7 +37,7 @@ impl Filter {
     }
 
     /// Listed names come anywhere; without a list, whatever belongs `here` does.
-    fn allows(&self, name: &str, here: bool) -> bool {
+    pub(super) fn allows(&self, name: &str, here: bool) -> bool {
         if self.not.iter().any(|n| n == name) {
             false
         } else if self.only.is_empty() {
@@ -63,42 +64,63 @@ pub(super) const CLASSIC_VISITORS: [(&str, Biomes, bool); 9] = [
 const FISHHOOK: u8 = 5;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-enum Visit {
+pub(super) enum Visit {
     Classic(u8),
     Data(u16),
 }
 
-struct Group {
-    id: u32,
-    alive: u16,
-    crawler: bool,
+pub(super) struct Group {
+    pub(super) id: u32,
+    pub(super) alive: u16,
+    pub(super) crawler: bool,
+    /// Replaced by another group when the last one is gone. Groups an event
+    /// brings are not.
+    pub(super) replace: bool,
+}
+
+/// What a `Kind::Food` is (its `who`).
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[repr(u16)]
+pub(super) enum Food {
+    /// Fish food sprinkled from above: sinks slowly.
+    Flake = 0,
+    /// Plankton: drifts.
+    Plankton = 1,
+    /// Left over when something is eaten: sinks.
+    Scrap = 2,
 }
 
 pub(super) struct World {
     /// The biomes the sea moves between, and where it is now (0 before the start).
-    biomes: Vec<Biomes>,
-    biome: Biomes,
-    stay: f32,
-    clock: f32,
-    species: Filter,
-    plants: Filter,
-    decor: Filter,
-    visitors: Filter,
-    no_decor: bool,
-    castle: bool,
-    schools: bool,
-    floor: bool,
-    snow: bool,
+    pub(super) biomes: Vec<Biomes>,
+    pub(super) biome: Biomes,
+    pub(super) stay: f32,
+    pub(super) clock: f32,
+    pub(super) species: Filter,
+    pub(super) plants: Filter,
+    pub(super) decor: Filter,
+    pub(super) visitors: Filter,
+    pub(super) no_decor: bool,
+    pub(super) castle: bool,
+    pub(super) schools: bool,
+    pub(super) floor: bool,
+    pub(super) snow: bool,
     /// What may come now: indices into the library.
-    swimmers: Vec<u16>,
-    crawlers: Vec<u16>,
-    plant_pool: Vec<u16>,
-    decor_pool: Vec<u16>,
-    visit_pool: Vec<Visit>,
-    groups: Vec<Group>,
-    next_group: u32,
+    pub(super) swimmers: Vec<u16>,
+    pub(super) crawlers: Vec<u16>,
+    pub(super) plant_pool: Vec<u16>,
+    pub(super) decor_pool: Vec<u16>,
+    pub(super) visit_pool: Vec<Visit>,
+    pub(super) groups: Vec<Group>,
+    pub(super) next_group: u32,
     /// Picks the sand pattern and the marine snow.
-    seed: u64,
+    pub(super) seed: u64,
+    /// What season it is: things of this season come too.
+    pub(super) season: Season,
+    pub(super) eco: ecology::Eco,
+    pub(super) enc: encounters::Enc,
+    pub(super) env: environment::Env,
+    pub(super) ev: events::Events,
 }
 
 impl World {
@@ -144,12 +166,21 @@ impl World {
             groups: Vec::new(),
             next_group: 0,
             seed: 0,
+            season: events::season_from_opts(o),
+            eco: ecology::Eco::from_opts(o),
+            enc: encounters::Enc::from_opts(o),
+            env: environment::Env::from_opts(o),
+            ev: events::Events::from_opts(o),
         })
     }
 }
 
 /// A random index, each `i` with probability proportional to `w(i)`.
-fn weighted(rng: &mut fastrand::Rng, n: usize, w: impl Fn(usize) -> u32) -> Option<usize> {
+pub(super) fn weighted(
+    rng: &mut fastrand::Rng,
+    n: usize,
+    w: impl Fn(usize) -> u32,
+) -> Option<usize> {
     let total: u32 = (0..n).map(&w).sum();
     if total == 0 {
         return None;
@@ -167,7 +198,7 @@ fn weighted(rng: &mut fastrand::Rng, n: usize, w: impl Fn(usize) -> u32) -> Opti
 
 /// Colors for the mask digits: the tint's choices, or random like asciiquarium's
 /// fish, with white eyes.
-fn tint_pal(rng: &mut fastrand::Rng, t: &assets::Tint) -> [u8; 10] {
+pub(super) fn tint_pal(rng: &mut fastrand::Rng, t: &assets::Tint) -> [u8; 10] {
     let mut pal = [DEFAULT; 10];
     for (d, slot) in pal.iter_mut().enumerate().skip(1) {
         let c = t.choices(d);
@@ -182,11 +213,11 @@ fn tint_pal(rng: &mut fastrand::Rng, t: &assets::Tint) -> [u8; 10] {
     pal
 }
 
-fn between(rng: &mut fastrand::Rng, a: f32, b: f32) -> f32 {
+pub(super) fn between(rng: &mut fastrand::Rng, a: f32, b: f32) -> f32 {
     a + rng.f32() * (b - a)
 }
 
-fn swim_motion(rng: &mut fastrand::Rng, style: Swim, base: f32) -> Motion {
+pub(super) fn swim_motion(rng: &mut fastrand::Rng, style: Swim, base: f32) -> Motion {
     let (amp, period) = match style {
         Swim::Cruise | Swim::Crawl => (0.0, 1.0),
         Swim::Wave => (between(rng, 0.5, 1.3), between(rng, 4.0, 9.0)),
@@ -205,30 +236,30 @@ fn swim_motion(rng: &mut fastrand::Rng, style: Swim, base: f32) -> Motion {
 }
 
 /// splitmix64, for patterns that must stay put from frame to frame.
-fn hash(mut x: u64) -> u64 {
+pub(super) fn hash(mut x: u64) -> u64 {
     x = x.wrapping_add(0x9e37_79b9_7f4a_7c15);
     x = (x ^ (x >> 30)).wrapping_mul(0xbf58_476d_1ce4_e5b9);
     x = (x ^ (x >> 27)).wrapping_mul(0x94d0_49bb_1331_11eb);
     x ^ (x >> 31)
 }
 
-fn frames(spr: u16) -> f32 {
+pub(super) fn frames(spr: u16) -> f32 {
     sprites().get(spr as usize).map_or(1, |s| s.frame_count()) as f32
 }
 
 impl Aquarium {
     /// The deep sea has no surface: no waves, no boats, no sky.
-    fn surface(&self) -> bool {
+    pub(super) fn surface(&self) -> bool {
         self.world.as_ref().is_none_or(|w| w.biome != DEEP)
     }
 
     /// The first row of water.
-    fn water_top(&self) -> i32 {
+    pub(super) fn water_top(&self) -> i32 {
         if self.surface() { 9 } else { 1 }
     }
 
     /// The rows a creature `sh` tall may swim in, for its zone.
-    fn zone_range(&self, zone: Zone, sh: i32) -> (f32, f32) {
+    pub(super) fn zone_range(&self, zone: Zone, sh: i32) -> (f32, f32) {
         let top = self.water_top();
         let bottom = (self.h - sh).max(top);
         let span = (bottom - top) as f32;
@@ -267,7 +298,7 @@ impl Aquarium {
     }
 
     /// What may come in this biome, given the filters and the screen size.
-    fn refresh_pools(&mut self) {
+    pub(super) fn refresh_pools(&mut self) {
         let lib = library();
         let surface = self.surface();
         let room = self.h - self.water_top();
@@ -276,6 +307,11 @@ impl Aquarium {
             return;
         };
         let b = w.biome;
+        let season = w.season;
+        // Things of another season, and legends, only come when named.
+        let usual = |s: Season, traits: assets::Traits| {
+            (s == ALWAYS || s == season) && traits & LEGENDARY == 0
+        };
         w.swimmers.clear();
         w.crawlers.clear();
         w.plant_pool.clear();
@@ -283,8 +319,8 @@ impl Aquarium {
         w.visit_pool.clear();
         for (i, sp) in lib.species.iter().enumerate() {
             let d = sp.def;
-            if !w.species.allows(d.name, d.biomes & b != 0) || lib.sprites[sp.spr as usize].h > room
-            {
+            let here = d.biomes & b != 0 && usual(d.season, d.traits);
+            if !w.species.allows(d.name, here) || lib.sprites[sp.spr as usize].h > room {
                 continue;
             }
             if d.swim == Swim::Crawl {
@@ -298,7 +334,10 @@ impl Aquarium {
                 Some((min, _)) => min as i32,
                 None => lib.sprites[p.spr as usize].h,
             };
-            if h < room && w.plants.allows(p.name, p.biomes & b != 0) {
+            if h < room
+                && w.plants
+                    .allows(p.name, p.biomes & b != 0 && usual(p.season, 0))
+            {
                 w.plant_pool.push(i as u16);
             }
         }
@@ -308,7 +347,8 @@ impl Aquarium {
                 if (d.name != "castle" || w.castle)
                     && s.h < room
                     && s.w <= width
-                    && w.decor.allows(d.name, d.biomes & b != 0)
+                    && w.decor
+                        .allows(d.name, d.biomes & b != 0 && usual(d.season, 0))
                 {
                     w.decor_pool.push(i as u16);
                 }
@@ -325,13 +365,16 @@ impl Aquarium {
                 Lane::Sky | Lane::Boat | Lane::Float => surface,
                 Lane::Deep | Lane::Floor => lib.sprites[v.spr as usize].h < room,
             };
-            if fits && w.visitors.allows(d.name, d.biomes & b != 0) {
+            if fits
+                && w.visitors
+                    .allows(d.name, d.biomes & b != 0 && usual(d.season, d.traits))
+            {
                 w.visit_pool.push(Visit::Data(i as u16));
             }
         }
     }
 
-    fn add_all_creatures(&mut self) {
+    pub(super) fn add_all_creatures(&mut self) {
         // Groups instead of asciiquarium's single fish, a little sparser since
         // schools bring several.
         let water = ((self.h - self.water_top()) * self.w).max(0) as f32;
@@ -345,40 +388,64 @@ impl Aquarium {
         }
     }
 
-    /// A school (or a loner) of one species. At the start they are scattered
-    /// over the screen; later they swim in from a side.
-    fn add_group(&mut self, crawler: bool, scatter: bool) {
+    /// A school (or a loner) of a species that belongs here. At the start
+    /// they are scattered over the screen; later they swim in from a side.
+    pub(super) fn add_group(&mut self, crawler: bool, scatter: bool) {
         let lib = library();
+        let Some(w) = self.world.as_ref() else {
+            return;
+        };
+        let pool = if crawler { &w.crawlers } else { &w.swimmers };
+        // Day and night change who is about.
+        let weights: Vec<u32> = pool
+            .iter()
+            .map(|&i| {
+                let d = lib.species[i as usize].def;
+                (d.weight as f32 * 10.0 * self.activity(d.traits)).round() as u32
+            })
+            .collect();
+        let Some(k) = weighted(&mut self.rng, weights.len(), |k| weights[k]) else {
+            return;
+        };
+        let si = pool[k] as usize;
+        let (lo, hi) = lib.species[si].def.school;
+        let n = if w.schools && hi > 1 {
+            self.rng.u8(lo..=hi)
+        } else {
+            1
+        };
+        self.spawn_group(si, n, scatter, true);
+    }
+
+    /// `n` of species `si` (at most one per ten columns), swimming together;
+    /// returns the group's id. `replace`: when they are all gone, another
+    /// group of whatever belongs here comes.
+    pub(super) fn spawn_group(
+        &mut self,
+        si: usize,
+        n: u8,
+        scatter: bool,
+        replace: bool,
+    ) -> Option<u32> {
+        let lib = library();
+        let sp = lib.species.get(si)?;
+        let d = sp.def;
+        let crawler = d.swim == Swim::Crawl;
         let max_school = (self.w / 10).clamp(1, 255) as u8;
-        let (si, n, id) = {
-            let Some(w) = self.world.as_mut() else {
-                return;
-            };
-            let pool = if crawler { &w.crawlers } else { &w.swimmers };
-            let Some(k) = weighted(&mut self.rng, pool.len(), |k| {
-                lib.species[pool[k] as usize].def.weight as u32
-            }) else {
-                return;
-            };
-            let si = pool[k] as usize;
-            let (lo, hi) = lib.species[si].def.school;
-            let n = if w.schools && hi > 1 {
-                self.rng.u8(lo..=hi)
-            } else {
-                1
-            };
-            let n = n.min(max_school).max(1);
+        let n = n.min(max_school).max(1);
+        let id = {
+            let w = self.world.as_mut()?;
             let id = w.next_group;
             w.next_group = w.next_group.wrapping_add(1);
             w.groups.push(Group {
                 id,
                 alive: n as u16,
                 crawler,
+                replace,
             });
-            (si, n, id)
+            id
         };
-        let sp = &lib.species[si];
-        let d = sp.def;
+        let layer = if crawler { 0 } else { self.pick_layer(si) };
         let left = self.rng.bool();
         let spr = sp.spr + left as u16;
         let s = &lib.sprites[spr as usize];
@@ -430,10 +497,19 @@ impl Aquarium {
             if let Motion::Swim { base, .. } = &mut e.motion {
                 *base = y;
             }
+            e.who = si as u16;
+            e.traits = d.traits;
+            e.size = sp.size;
+            e.speed = speed * TICK;
             // In case it never shows up (a crawler lost off the edge).
             e.ttl = (self.w as f32 + 2.0 * fw + behind) / (speed * TICK) * 3.0 + 60.0;
+            if layer > 0 {
+                e.layer = layer;
+                self.make_far(&mut e);
+            }
             self.spawn(e);
         }
+        Some(id)
     }
 
     /// One of group `g` is gone; when it was the last, another group comes.
@@ -446,9 +522,12 @@ impl Aquarium {
         };
         w.groups[k].alive = w.groups[k].alive.saturating_sub(1);
         if w.groups[k].alive == 0 {
-            let crawler = w.groups[k].crawler;
-            w.groups.swap_remove(k);
-            self.add_group(crawler, false);
+            let Group {
+                crawler, replace, ..
+            } = w.groups.swap_remove(k);
+            if replace {
+                self.add_group(crawler, false);
+            }
         }
     }
 
@@ -510,7 +589,7 @@ impl Aquarium {
         animate
     }
 
-    fn add_all_plants(&mut self) {
+    pub(super) fn add_all_plants(&mut self) {
         let n = (self.w as f32 / 12.0 * self.seaweed_density) as usize;
         for _ in 0..n {
             self.add_plant();
@@ -550,6 +629,9 @@ impl Aquarium {
         )
         .per_frame(0.0, 0.0, sway)
         .on_death(Death::Seaweed);
+        e.who = pool[k];
+        e.traits = p.traits;
+        e.size = s.frame(0).len().min(u16::MAX as usize) as u16;
         e.pal = tint_pal(&mut self.rng, &p.tint);
         // Plants live 8 to 12 minutes, like asciiquarium's seaweed.
         e.ttl = between(&mut self.rng, 8.0, 12.0) * 60.0;
@@ -559,7 +641,7 @@ impl Aquarium {
 
     /// Props along the floor, apart from each other: one per 70 columns, or
     /// every one the `decor` option names.
-    fn add_decor(&mut self) {
+    pub(super) fn add_decor(&mut self) {
         let lib = library();
         let Some(w) = self.world.as_ref() else {
             return;
@@ -577,7 +659,8 @@ impl Aquarium {
             }) else {
                 break;
             };
-            let d = &lib.decor[cands.swap_remove(k) as usize];
+            let di = cands.swap_remove(k);
+            let d = &lib.decor[di as usize];
             let s = &lib.sprites[d.spr as usize];
             let spot = (0..16)
                 .map(|_| self.rng.i32(0..=(self.w - s.w).max(0)))
@@ -597,6 +680,9 @@ impl Aquarium {
             .per_frame(0.0, 0.0, d.fps);
             e.pal = tint_pal(&mut self.rng, &d.tint);
             e.emit = d.bubbles;
+            e.who = di;
+            e.traits = d.traits;
+            e.size = s.frame(0).len().min(u16::MAX as usize) as u16;
             self.spawn(e);
         }
     }
@@ -632,7 +718,7 @@ impl Aquarium {
         }
     }
 
-    fn add_visitor(&mut self, i: u16) {
+    pub(super) fn add_visitor(&mut self, i: u16) {
         let lib = library();
         let v = &lib.visitors[i as usize];
         let d = v.def;
@@ -666,7 +752,150 @@ impl Aquarium {
         let mut e = visitor(spr, x, y as f32, z, v.color).per_frame(dx, 0.0, d.fps);
         e.pal = tint_pal(&mut self.rng, &v.tint);
         e.frame = self.rng.f32() * frames(spr);
+        e.who = i;
+        e.traits = d.traits;
+        e.size = v.size;
+        e.speed = speed * TICK;
         self.spawn(e);
+    }
+
+    /// Something to eat at (`x`, `y`): flakes and scraps sink, plankton drifts.
+    pub(super) fn add_food(&mut self, x: f32, y: f32, what: Food) {
+        let fx = &library().fx;
+        let (spr, pen, vy, ttl) = match what {
+            Food::Flake => (
+                fx.flake,
+                [Y + BRIGHT, R + BRIGHT, G + BRIGHT, Y][self.rng.usize(0..4)],
+                between(&mut self.rng, 0.6, 1.4),
+                between(&mut self.rng, 40.0, 60.0),
+            ),
+            Food::Plankton => (
+                fx.plankton,
+                [G, C, G + BRIGHT, W][self.rng.usize(0..4)],
+                between(&mut self.rng, -0.15, 0.25),
+                between(&mut self.rng, 25.0, 45.0),
+            ),
+            Food::Scrap => (
+                fx.scrap,
+                [R, W, Y][self.rng.usize(0..3)],
+                between(&mut self.rng, 1.0, 2.0),
+                between(&mut self.rng, 20.0, 35.0),
+            ),
+        };
+        let mut e = Ent::new(Kind::Food, spr, x, y, Z_FISH_START, pen);
+        e.vy = vy;
+        e.vx = if what == Food::Plankton {
+            between(&mut self.rng, -0.3, 0.3)
+        } else {
+            0.0
+        };
+        e.ttl = ttl;
+        e.who = what as u16;
+        e.frame = self.rng.usize(0..frames(spr) as usize) as f32;
+        self.spawn(e);
+    }
+
+    /// A cloud of ink at (`x`, `y`) (its center) that thins out in about three seconds.
+    pub(super) fn add_ink(&mut self, x: f32, y: f32, z: i32) {
+        let ink = library().fx.ink;
+        let mut e = Ent::new(Kind::Ink, ink, x - 2.0, y - 1.0, z, K + BRIGHT);
+        e.fps = frames(ink) / 3.0;
+        e.ttl = 3.0;
+        self.spawn(e);
+    }
+
+    /// Turns a creature or a data visitor to face left or right, keeping its
+    /// shape (normal or `alt`). Its velocity is the caller's business.
+    pub(super) fn face(e: &mut Ent, left: bool) {
+        let lib = library();
+        let pair = match e.kind {
+            Kind::Fish | Kind::Critter => lib.species.get(e.who as usize).and_then(|sp| {
+                [Some(sp.spr), sp.alt]
+                    .into_iter()
+                    .flatten()
+                    .find(|&b| e.spr == b || e.spr == b + 1)
+            }),
+            Kind::Visitor => lib.visitors.get(e.who as usize).map(|v| v.spr),
+            _ => None,
+        };
+        if let Some(b) = pair {
+            e.spr = b + left as u16;
+        }
+    }
+
+    /// Whether a creature or data visitor faces left.
+    pub(super) fn facing_left(e: &Ent) -> bool {
+        let lib = library();
+        match e.kind {
+            Kind::Fish | Kind::Critter => lib
+                .species
+                .get(e.who as usize)
+                .is_some_and(|sp| e.spr == sp.spr + 1 || sp.alt.is_some_and(|a| e.spr == a + 1)),
+            Kind::Visitor if e.who != NOBODY => lib
+                .visitors
+                .get(e.who as usize)
+                .is_some_and(|v| e.spr == v.spr + 1),
+            _ => e.vx < 0.0,
+        }
+    }
+
+    /// Changes a creature's shape between its normal one and its `alt`
+    /// (keeping the way it faces), and its size to match. Returns whether it
+    /// has that shape now.
+    pub(super) fn set_alt(e: &mut Ent, alt: bool) -> bool {
+        let lib = library();
+        let Some(sp) = lib.species.get(e.who as usize) else {
+            return false;
+        };
+        if !matches!(e.kind, Kind::Fish | Kind::Critter) {
+            return false;
+        }
+        let base = if alt {
+            match sp.alt {
+                Some(a) => a,
+                None => return false,
+            }
+        } else {
+            sp.spr
+        };
+        let left = Self::facing_left(e);
+        e.spr = base + left as u16;
+        let s = &lib.sprites[e.spr as usize];
+        e.w = s.w as f32;
+        e.h = s.h as f32;
+        true
+    }
+
+    /// One step of `Motion::Orbit`.
+    pub(super) fn orbit(&mut self, e: &mut Ent, dt: f32) {
+        let Motion::Orbit {
+            cx,
+            cy,
+            rx,
+            ry,
+            omega,
+            phase,
+        } = e.motion
+        else {
+            return;
+        };
+        let phase = (phase + omega * dt) % TAU;
+        e.x = cx + rx * phase.cos() - e.w / 2.0;
+        e.y = cy + ry * phase.sin() - e.h / 2.0;
+        // d/dt of cos is -sin: going left while omega * sin(phase) > 0.
+        let left = omega * phase.sin() > 0.0;
+        if left != Self::facing_left(e) {
+            Self::face(e, left);
+        }
+        e.vx = if left { -e.speed.abs() } else { e.speed.abs() };
+        e.motion = Motion::Orbit {
+            cx,
+            cy,
+            rx,
+            ry,
+            omega,
+            phase,
+        };
     }
 
     /// Counts down to the next biome.
@@ -694,7 +923,7 @@ impl Aquarium {
     /// The sea moves on: a new floor at once; the creatures already swimming
     /// finish their crossing. Diving into (or rising out of) the deep, the
     /// surface and everything that needs it come or go too.
-    fn migrate(&mut self, had_surface: bool) {
+    pub(super) fn migrate(&mut self, had_surface: bool) {
         self.refresh_pools();
         self.ents
             .retain(|e| !matches!(e.kind, Kind::Seaweed | Kind::Decor));
@@ -802,7 +1031,8 @@ mod tests {
                     }
                 }
                 let w = a.world.as_ref().unwrap();
-                assert_eq!(w.groups.len(), start, "{name}: groups");
+                let lasting = w.groups.iter().filter(|g| g.replace).count();
+                assert_eq!(lasting, start, "{name}: groups");
                 assert!(a.ents.len() < 400, "{name}: {} entities", a.ents.len());
                 if !w.swimmers.is_empty() {
                     assert!(start > 0, "{name}: nobody came");

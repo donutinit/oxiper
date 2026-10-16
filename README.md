@@ -35,8 +35,9 @@ plus eight more scenes. One small binary. Nearly no CPU. Your terminal's transpa
   glibc's `rand()`, so `-o bonsai.seed=42` grows *exactly* the tree `cbonsai -s 42` grows. The aquarium
   carries all 95 sprites of asciiquarium, verified glyph by glyph against Term::Animation, with
   sharks that eat fish and hooks that catch them, and then grows into seven biomes with
-  **277 kinds of fish** and hundreds more creatures, plants, props and passers-by. The rain is neo's droplet model, falling at
-  neo's real speed. Nyan Cat flies with the original twelve frames.
+  **281 kinds of fish** and hundreds more creatures, plants, props and passers-by, all reacting
+  to each other. The rain is neo's droplet model, falling at neo's real speed. Nyan Cat flies with
+  the original twelve frames.
 - **One binary, thirteen scenes.** Mix them into a playlist and give each one its own theme, pace and
   time on screen.
 - **Transparency first.** oxiper never paints a background it doesn't have to, so blurred or
@@ -235,8 +236,8 @@ terminal's own ANSI palette, exactly like the originals). The rest:
 ## The aquarium
 
 `biome = "classic"` is asciiquarium, exactly. Every other setting goes further, in asciiquarium's
-own drawing style: seven biomes with **277 fish**, 90 other creatures, 82 plants and corals,
-64 props and 67 passers-by.
+own drawing style: seven biomes with **281 fish**, 93 other creatures, 85 plants and corals,
+69 props and 78 passers-by, and they all notice each other.
 
 <p align="center"><img src="assets/biomes.png" alt="The aquarium in each biome: classic, reef, ocean, kelp, deep, fresh, arctic and tank" width="840"></p>
 
@@ -246,6 +247,23 @@ own drawing style: seven biomes with **277 fish**, 90 other creatures, 82 plants
 - **Alive in different ways.** Fish swim in schools that keep formation. Others cruise straight,
   rise and sink, dart in bursts, drift like jellyfish or hover like seahorses, and crabs, lobsters,
   starfish and snails walk the sand, stopping now and then.
+- **Everything reacts to everything.** Sharks, barracudas and pike hunt smaller fish, and schools
+  scatter and regroup. Shy fish duck behind corals and wrecks, octopuses squirt ink, pufferfish
+  puff up, and jellyfish and lionfish sting whoever brushes them. Clownfish keep to their
+  anemones and morays to their caves. Remoras ride along with whale sharks, groupers and sea lions
+  come over to look at divers, and grazers nibble the plants. Pelicans and gannets plunge in for a
+  fish, trawlers drag nets, anglers lower a line, orcas take a bite, crabs clean up the scraps, and
+  the seaweed sways as fish push through it.
+- **Day, night and weather.** A sun crosses the sky. At night the water dims, the stars come out,
+  nocturnal fish appear and lanternfish and comb jellies glow. A current bends the plants and
+  carries the bubbles, storms roll in now and then with rain and lightning, and dim creatures swim
+  far back behind the plants.
+- **Something special now and then.** Feeding time in the tank, a plankton bloom that brings a
+  whale shark, a ball of sardines swirling until the predators arrive, a long migration, a pod of
+  orcas, and very rarely a legend: a coelacanth, a giant squid, a mermaid.
+- **Día de Muertos.** From October 28 to November 3, cempasúchil petals float on the water,
+  candles flicker on the floor at night, and calavera fish, alebrijes, an ofrenda and a trajinera
+  join in (`season = "muertos"` brings them any day).
 - **Never the same twice.** Each creature takes its colors from its species' palette, so no two
   clownfish match. The sea starts in a random biome and moves on every five minutes. The floor
   changes at once, and the creatures already swimming finish their crossing.
@@ -260,6 +278,9 @@ biome_time = 600                   # seconds in each place
 species = "-krill-swarm"           # leave some out, or name the only ones you want
 decor = "sunken-galleon,treasure-chest"
 visitors = "-ufo"
+day_length = 1800                  # a slower day; 0 keeps it day
+events = 2                         # something special twice as often
+interactions = false               # everyone minds their own business
 ```
 
 `oxiper list species` names every fish, critter, plant, prop and visitor, and the biomes each one
@@ -301,7 +322,7 @@ CPU and memory against the originals, each in a 120×40 tmux pane for 15 s
 | scene | original | oxiper |
 |---|---|---|
 | bonsai (live, infinite) | cbonsai: 0.1 % · 3.3 MB | **0.07 %** · 3.9 MB |
-| aquarium | asciiquarium: 2.5 % · 12.4 MB | **0.6 %** · 6.4 MB |
+| aquarium | asciiquarium: 7.1 % · 11.7 MB | **1.2 %** · 7.0 MB |
 | neo | neo: 2.3 % · 5.6 MB | **1.3 %** · 3.9 MB |
 | nyancat | nyancat: 0.3 % · 1.9 MB | **0.27 %** · 4.1 MB |
 
@@ -310,7 +331,7 @@ Per-frame cost of every scene at 200×60 (`oxiper bench`, release build):
 | scene | simulate + draw (µs) | diff + encode (µs) | bytes / frame | cells changed |
 |---|--:|--:|--:|--:|
 | bonsai | 6 | 77 | 24 | 0.0% |
-| aquarium | 28 | 93 | 2241 | 2.7% |
+| aquarium | 37 | 95 | 2617 | 3.9% |
 | neo | 67 | 131 | 4394 | 1.7% |
 | nyancat | 62 | 107 | 1897 | 2.4% |
 | fire | 137 | 421 | 159432 | 48.7% |
@@ -371,6 +392,13 @@ Aliases: `asciiquarium`, `fish`
 | `schools` | `true` | Schooling fish swim in groups |
 | `floor` | `true` | Sand and pebbles along the bottom (not in classic) |
 | `snow` | `true` | Marine snow drifting down in the deep sea |
+| `interactions` | `true` | Everything reacts to everything: predators hunt, prey flees or hides, birds dive, nets and lines catch fish, cleaners ride along (not in classic) |
+| `day_length` | `900.0` | Seconds for a whole day and night; 0 is always day (not in classic) |
+| `depth` | `0.3` | Share of creatures swimming far back, dim and behind the plants |
+| `current` | `1.0` | Strength of the current that sways plants and carries bubbles; 0 is still water |
+| `weather` | `true` | Storms now and then: wind, rain and lightning over the water |
+| `events` | `1.0` | How often something special happens (feeding time, a bait ball, a rare sighting...); 0 never |
+| `season` | `"auto"` | auto (by the date), none, or muertos (Día de Muertos) |
 | `castle` | `true` | Show the castle (in classic and in the tank) |
 | `random_objects` | `true` | Send ships, whales, sharks, divers, submarines, birds... one at a time |
 | `bubbles` | `true` | Fish blow bubbles |

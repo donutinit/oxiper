@@ -32,7 +32,8 @@ pub const PLANTS: &[Plant] = &[
         .color('y')
         .fps(0.25)
         .weight(7)
-        .biomes(OCEAN),
+        .biomes(OCEAN)
+        .traits(SHELTER),
     Plant::stalk("red-ribbon-algae", "{", " }", 3, 9)
         .color('r')
         .fps(0.25)
@@ -42,12 +43,14 @@ pub const PLANTS: &[Plant] = &[
         .color('g')
         .fps(0.25)
         .weight(6)
-        .biomes(FRESH),
+        .biomes(FRESH)
+        .traits(SHELTER),
     Plant::stalk("cabomba", "}|{", " ~|~", 4, 10)
         .color('g')
         .fps(0.3)
         .weight(6)
-        .biomes(TANK | FRESH),
+        .biomes(TANK | FRESH)
+        .traits(SHELTER),
     Plant::stalk("rotala", "-|", " |-", 4, 11)
         .color('R')
         .fps(0.25)
@@ -77,7 +80,8 @@ pub const PLANTS: &[Plant] = &[
         .color('g')
         .fps(0.25)
         .weight(5)
-        .biomes(FRESH),
+        .biomes(FRESH)
+        .traits(SHELTER),
     Plant::stalk("chara", "*", " +", 2, 6)
         .color('G')
         .fps(0.2)
@@ -140,7 +144,8 @@ pub const PLANTS: &[Plant] = &[
     .color('g')
     .fps(0.25)
     .weight(6)
-    .biomes(REEF),
+    .biomes(REEF)
+    .traits(SHELTER),
     Plant::sprite(
         "elkhorn-coral",
         &[r"
@@ -164,7 +169,8 @@ pub const PLANTS: &[Plant] = &[
     .color('g')
     .fps(0.25)
     .weight(4)
-    .biomes(REEF),
+    .biomes(REEF)
+    .traits(SHELTER),
     Plant::sprite(
         "sea-fan",
         &[
@@ -216,7 +222,8 @@ pub const PLANTS: &[Plant] = &[
     .color('g')
     .fps(0.15)
     .weight(6)
-    .biomes(REEF),
+    .biomes(REEF)
+    .traits(SHELTER),
     Plant::sprite(
         "mushroom-coral",
         &[r"
@@ -294,7 +301,8 @@ pub const PLANTS: &[Plant] = &[
     .color('g')
     .fps(0.25)
     .weight(4)
-    .biomes(REEF),
+    .biomes(REEF)
+    .traits(SHELTER),
     Plant::sprite(
         "table-coral",
         &[r"
@@ -316,7 +324,8 @@ pub const PLANTS: &[Plant] = &[
     .color('g')
     .fps(0.25)
     .weight(4)
-    .biomes(REEF),
+    .biomes(REEF)
+    .traits(SHELTER),
     Plant::sprite(
         "tube-coral",
         &[r"
@@ -358,7 +367,8 @@ pub const PLANTS: &[Plant] = &[
     .color('g')
     .fps(0.25)
     .weight(5)
-    .biomes(REEF),
+    .biomes(REEF)
+    .traits(SHELTER),
     Plant::sprite(
         "christmas-tree-worms",
         &[
@@ -465,7 +475,8 @@ pub const PLANTS: &[Plant] = &[
     .color('g')
     .fps(0.25)
     .weight(6)
-    .biomes(REEF),
+    .biomes(REEF)
+    .traits(SHELTER),
     Plant::sprite(
         "tube-sponges",
         &[r"
@@ -487,7 +498,8 @@ pub const PLANTS: &[Plant] = &[
     .color('g')
     .fps(0.25)
     .weight(6)
-    .biomes(REEF),
+    .biomes(REEF)
+    .traits(SHELTER),
     Plant::sprite(
         "vase-sponge",
         &[r"
@@ -509,7 +521,8 @@ pub const PLANTS: &[Plant] = &[
     .color('g')
     .fps(0.25)
     .weight(5)
-    .biomes(REEF),
+    .biomes(REEF)
+    .traits(SHELTER),
     Plant::sprite(
         "pink-anemone",
         &[
@@ -537,7 +550,8 @@ pub const PLANTS: &[Plant] = &[
     .color('g')
     .fps(0.3)
     .weight(7)
-    .biomes(REEF | TANK),
+    .biomes(REEF | TANK)
+    .traits(SHELTER | STING),
     Plant::sprite(
         "bubble-tip-anemone",
         &[
@@ -577,7 +591,8 @@ pub const PLANTS: &[Plant] = &[
     .color('g')
     .fps(0.3)
     .weight(6)
-    .biomes(REEF | TANK),
+    .biomes(REEF | TANK)
+    .traits(SHELTER | STING),
     Plant::sprite(
         "sea-grass-meadow",
         &[
@@ -597,7 +612,8 @@ pub const PLANTS: &[Plant] = &[
     .color('g')
     .fps(0.3)
     .weight(7)
-    .biomes(REEF | OCEAN),
+    .biomes(REEF | OCEAN)
+    .traits(SHELTER),
     Plant::sprite(
         "fire-coral",
         &[r"
@@ -617,7 +633,8 @@ pub const PLANTS: &[Plant] = &[
     .color('g')
     .fps(0.25)
     .weight(3)
-    .biomes(REEF),
+    .biomes(REEF)
+    .traits(STING),
     Plant::sprite(
         "sea-rod-fans",
         &[
@@ -651,7 +668,8 @@ pub const PLANTS: &[Plant] = &[
     .color('g')
     .fps(0.15)
     .weight(4)
-    .biomes(REEF),
+    .biomes(REEF)
+    .traits(SHELTER),
     Plant::sprite(
         "giant-kelp",
         &[
@@ -710,7 +728,8 @@ pub const PLANTS: &[Plant] = &[
     .color('y')
     .fps(0.2)
     .weight(6)
-    .biomes(KELP),
+    .biomes(KELP)
+    .traits(SHELTER),
     Plant::sprite(
         "bull-kelp",
         &[
@@ -765,7 +784,8 @@ pub const PLANTS: &[Plant] = &[
     .color('y')
     .fps(0.2)
     .weight(6)
-    .biomes(KELP | ARCTIC),
+    .biomes(KELP | ARCTIC)
+    .traits(SHELTER),
     Plant::sprite(
         "feather-boa-kelp",
         &[r"
@@ -789,7 +809,8 @@ pub const PLANTS: &[Plant] = &[
     .color('y')
     .fps(0.25)
     .weight(5)
-    .biomes(KELP),
+    .biomes(KELP)
+    .traits(SHELTER),
     Plant::sprite(
         "sea-palm",
         &[
@@ -822,7 +843,8 @@ pub const PLANTS: &[Plant] = &[
     .color('y')
     .fps(0.25)
     .weight(5)
-    .biomes(KELP),
+    .biomes(KELP)
+    .traits(SHELTER),
     Plant::sprite(
         "surfgrass",
         &[
@@ -842,7 +864,8 @@ pub const PLANTS: &[Plant] = &[
     .color('G')
     .fps(0.3)
     .weight(6)
-    .biomes(KELP | OCEAN),
+    .biomes(KELP | OCEAN)
+    .traits(SHELTER),
     Plant::sprite(
         "coralline-algae",
         &[r"
@@ -933,7 +956,8 @@ pub const PLANTS: &[Plant] = &[
     .color('y')
     .fps(0.2)
     .weight(6)
-    .biomes(OCEAN),
+    .biomes(OCEAN)
+    .traits(SHELTER),
     Plant::sprite(
         "deep-kelp-frond",
         &[
@@ -963,7 +987,8 @@ pub const PLANTS: &[Plant] = &[
     .color('g')
     .fps(0.2)
     .weight(5)
-    .biomes(OCEAN | KELP),
+    .biomes(OCEAN | KELP)
+    .traits(SHELTER),
     Plant::sprite(
         "sea-grass-tuft",
         &[
@@ -993,7 +1018,8 @@ pub const PLANTS: &[Plant] = &[
     .color('y')
     .fps(0.3)
     .weight(4)
-    .biomes(OCEAN),
+    .biomes(OCEAN)
+    .traits(SHELTER),
     Plant::sprite(
         "bladder-wrack",
         &[
@@ -1036,7 +1062,8 @@ pub const PLANTS: &[Plant] = &[
     .color('y')
     .fps(0.25)
     .weight(5)
-    .biomes(OCEAN | KELP),
+    .biomes(OCEAN | KELP)
+    .traits(SHELTER),
     Plant::sprite(
         "sea-lettuce-patch",
         &[r"
@@ -1128,7 +1155,8 @@ pub const PLANTS: &[Plant] = &[
     .color('W')
     .fps(0.25)
     .weight(5)
-    .biomes(DEEP),
+    .biomes(DEEP)
+    .traits(SHELTER),
     Plant::sprite(
         "venus-flower-basket",
         &[r"
@@ -1153,7 +1181,8 @@ pub const PLANTS: &[Plant] = &[
     .color('W')
     .fps(0.25)
     .weight(3)
-    .biomes(DEEP),
+    .biomes(DEEP)
+    .traits(SHELTER),
     Plant::sprite(
         "bamboo-coral",
         &[r"
@@ -1204,7 +1233,8 @@ pub const PLANTS: &[Plant] = &[
     .color('K')
     .fps(0.25)
     .weight(5)
-    .biomes(DEEP),
+    .biomes(DEEP)
+    .traits(SHELTER),
     Plant::sprite(
         "giant-tube-worms",
         &[
@@ -1237,7 +1267,8 @@ pub const PLANTS: &[Plant] = &[
     .color('W')
     .fps(0.2)
     .weight(6)
-    .biomes(DEEP),
+    .biomes(DEEP)
+    .traits(SHELTER),
     Plant::sprite(
         "sea-pen",
         &[
@@ -1289,7 +1320,8 @@ pub const PLANTS: &[Plant] = &[
     .color('g')
     .fps(0.1)
     .weight(5)
-    .biomes(DEEP | ARCTIC),
+    .biomes(DEEP | ARCTIC)
+    .traits(GLOW),
     Plant::sprite(
         "carnivorous-sponge",
         &[
@@ -1353,7 +1385,8 @@ pub const PLANTS: &[Plant] = &[
     .color('w')
     .fps(0.25)
     .weight(4)
-    .biomes(DEEP),
+    .biomes(DEEP)
+    .traits(SHELTER),
     Plant::sprite(
         "pondweed",
         &[
@@ -1379,7 +1412,8 @@ pub const PLANTS: &[Plant] = &[
     .color('g')
     .fps(0.2)
     .weight(5)
-    .biomes(FRESH),
+    .biomes(FRESH)
+    .traits(SHELTER),
     Plant::sprite(
         "lily-pad-stem",
         &[
@@ -1452,7 +1486,8 @@ pub const PLANTS: &[Plant] = &[
     .color('g')
     .fps(0.15)
     .weight(3)
-    .biomes(FRESH),
+    .biomes(FRESH)
+    .traits(SHELTER),
     Plant::sprite(
         "cattail-roots",
         &[
@@ -1495,7 +1530,8 @@ pub const PLANTS: &[Plant] = &[
     .color('g')
     .fps(0.2)
     .weight(5)
-    .biomes(FRESH),
+    .biomes(FRESH)
+    .traits(SHELTER),
     Plant::sprite(
         "elodea",
         &[
@@ -1519,7 +1555,8 @@ pub const PLANTS: &[Plant] = &[
     .color('G')
     .fps(0.3)
     .weight(5)
-    .biomes(FRESH | TANK),
+    .biomes(FRESH | TANK)
+    .traits(SHELTER),
     Plant::sprite(
         "bulrush",
         &[r"
@@ -1535,7 +1572,8 @@ pub const PLANTS: &[Plant] = &[
     .color('g')
     .fps(0.25)
     .weight(3)
-    .biomes(FRESH),
+    .biomes(FRESH)
+    .traits(SHELTER),
     Plant::sprite(
         "dead-mans-fingers",
         &[r"
@@ -1590,7 +1628,8 @@ pub const PLANTS: &[Plant] = &[
     .color('g')
     .fps(0.25)
     .weight(6)
-    .biomes(ARCTIC),
+    .biomes(ARCTIC)
+    .traits(SHELTER | STING),
     Plant::sprite(
         "plumose-anemone",
         &[
@@ -1624,7 +1663,8 @@ pub const PLANTS: &[Plant] = &[
     .color('g')
     .fps(0.2)
     .weight(5)
-    .biomes(ARCTIC),
+    .biomes(ARCTIC)
+    .traits(SHELTER | STING),
     Plant::sprite(
         "arctic-laminaria",
         &[
@@ -1652,7 +1692,8 @@ pub const PLANTS: &[Plant] = &[
     .color('y')
     .fps(0.2)
     .weight(6)
-    .biomes(ARCTIC | KELP),
+    .biomes(ARCTIC | KELP)
+    .traits(SHELTER),
     Plant::sprite(
         "cold-water-coral",
         &[r"
@@ -1676,7 +1717,8 @@ pub const PLANTS: &[Plant] = &[
     .color('w')
     .fps(0.25)
     .weight(4)
-    .biomes(ARCTIC | DEEP),
+    .biomes(ARCTIC | DEEP)
+    .traits(SHELTER),
     Plant::sprite(
         "sea-raspberry",
         &[r"
@@ -1720,7 +1762,8 @@ pub const PLANTS: &[Plant] = &[
     .color('g')
     .fps(0.25)
     .weight(7)
-    .biomes(TANK),
+    .biomes(TANK)
+    .traits(SHELTER),
     Plant::sprite(
         "java-fern",
         &[
@@ -1746,7 +1789,8 @@ pub const PLANTS: &[Plant] = &[
     .color('G')
     .fps(0.2)
     .weight(7)
-    .biomes(TANK),
+    .biomes(TANK)
+    .traits(SHELTER),
     Plant::sprite(
         "anubias",
         &[r"
@@ -1767,7 +1811,8 @@ pub const PLANTS: &[Plant] = &[
     .color('g')
     .fps(0.25)
     .weight(6)
-    .biomes(TANK),
+    .biomes(TANK)
+    .traits(SHELTER),
     Plant::sprite(
         "java-moss",
         &[r"
@@ -1779,7 +1824,8 @@ pub const PLANTS: &[Plant] = &[
     .color('g')
     .fps(0.25)
     .weight(6)
-    .biomes(TANK),
+    .biomes(TANK)
+    .traits(SHELTER),
     Plant::sprite(
         "marimo",
         &[r"
@@ -1820,7 +1866,8 @@ pub const PLANTS: &[Plant] = &[
     .color('g')
     .fps(0.0)
     .weight(3)
-    .biomes(TANK),
+    .biomes(TANK)
+    .traits(SHELTER),
     Plant::sprite(
         "hairgrass",
         &[
@@ -1856,5 +1903,6 @@ pub const PLANTS: &[Plant] = &[
     .color('g')
     .fps(0.25)
     .weight(4)
-    .biomes(TANK | FRESH),
+    .biomes(TANK | FRESH)
+    .traits(SHELTER),
 ];

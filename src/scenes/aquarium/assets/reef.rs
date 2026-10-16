@@ -25,6 +25,8 @@ pub const SPECIES: &[Species] = &[
     .swim(Swim::Wave)
     .speed(0.3, 1.0)
     .weight(8)
+    .traits(SHY)
+    .home("anemone")
     .biomes(REEF | TANK),
     Species::new(
         "maroon-clownfish",
@@ -58,6 +60,8 @@ pub const SPECIES: &[Species] = &[
     .swim(Swim::Wave)
     .speed(0.25, 0.8)
     .weight(4)
+    .traits(SHY)
+    .home("anemone")
     .biomes(REEF | TANK),
     Species::new(
         "tomato-clownfish",
@@ -81,6 +85,8 @@ pub const SPECIES: &[Species] = &[
     .swim(Swim::Wave)
     .speed(0.3, 0.9)
     .weight(4)
+    .traits(SHY)
+    .home("anemone")
     .biomes(REEF | TANK),
     Species::new(
         "blue-tang",
@@ -111,6 +117,7 @@ pub const SPECIES: &[Species] = &[
     .swim(Swim::Wave)
     .speed(0.4, 1.2)
     .weight(8)
+    .traits(GRAZER | SHY)
     .biomes(REEF | TANK),
     Species::new(
         "yellow-tang",
@@ -132,6 +139,7 @@ pub const SPECIES: &[Species] = &[
     .swim(Swim::Wave)
     .speed(0.4, 1.3)
     .weight(8)
+    .traits(GRAZER | SHY)
     .biomes(REEF | TANK),
     Species::new(
         "powder-blue-tang",
@@ -153,6 +161,7 @@ pub const SPECIES: &[Species] = &[
     .swim(Swim::Wave)
     .speed(0.4, 1.1)
     .weight(5)
+    .traits(GRAZER | SHY)
     .biomes(REEF | TANK),
     Species::new(
         "naso-tang",
@@ -176,6 +185,7 @@ pub const SPECIES: &[Species] = &[
     .swim(Swim::Cruise)
     .speed(0.4, 1.0)
     .weight(4)
+    .traits(GRAZER)
     .biomes(REEF),
     Species::new(
         "achilles-tang",
@@ -197,6 +207,7 @@ pub const SPECIES: &[Species] = &[
     .swim(Swim::Wave)
     .speed(0.4, 1.1)
     .weight(3)
+    .traits(GRAZER | SHY)
     .biomes(REEF),
     Species::new(
         "convict-tang",
@@ -218,6 +229,7 @@ pub const SPECIES: &[Species] = &[
     .swim(Swim::Wave)
     .speed(0.4, 1.1)
     .weight(4)
+    .traits(GRAZER)
     .biomes(REEF),
     Species::new(
         "moorish-idol",
@@ -257,6 +269,7 @@ pub const SPECIES: &[Species] = &[
     .swim(Swim::Wave)
     .speed(0.3, 0.8)
     .weight(4)
+    .traits(GRAZER | SHY)
     .biomes(REEF),
     Species::new(
         "copperband-butterflyfish",
@@ -280,6 +293,7 @@ pub const SPECIES: &[Species] = &[
     .swim(Swim::Wave)
     .speed(0.3, 0.9)
     .weight(5)
+    .traits(SHY)
     .biomes(REEF | TANK),
     Species::new(
         "raccoon-butterflyfish",
@@ -303,6 +317,7 @@ pub const SPECIES: &[Species] = &[
     .swim(Swim::Wave)
     .speed(0.3, 1.0)
     .weight(5)
+    .traits(SHY)
     .biomes(REEF | TANK),
     Species::new(
         "longnose-butterflyfish",
@@ -326,6 +341,7 @@ pub const SPECIES: &[Species] = &[
     .swim(Swim::Wave)
     .speed(0.3, 0.9)
     .weight(4)
+    .traits(SHY)
     .biomes(REEF),
     Species::new(
         "threadfin-butterflyfish",
@@ -351,6 +367,7 @@ pub const SPECIES: &[Species] = &[
     .swim(Swim::Wave)
     .speed(0.3, 0.9)
     .weight(4)
+    .traits(SHY)
     .biomes(REEF | TANK),
     Species::new(
         "emperor-angelfish",
@@ -378,6 +395,7 @@ pub const SPECIES: &[Species] = &[
     .swim(Swim::Wave)
     .speed(0.25, 0.7)
     .weight(4)
+    .traits(GRAZER)
     .biomes(REEF | TANK),
     Species::new(
         "queen-angelfish",
@@ -403,6 +421,7 @@ pub const SPECIES: &[Species] = &[
     .swim(Swim::Wave)
     .speed(0.25, 0.7)
     .weight(4)
+    .traits(GRAZER | CURIOUS)
     .biomes(REEF | TANK),
     Species::new(
         "french-angelfish",
@@ -426,6 +445,7 @@ pub const SPECIES: &[Species] = &[
     .swim(Swim::Wave)
     .speed(0.25, 0.8)
     .weight(4)
+    .traits(GRAZER | CURIOUS)
     .biomes(REEF | TANK),
     Species::new(
         "flame-angelfish",
@@ -449,6 +469,7 @@ pub const SPECIES: &[Species] = &[
     .swim(Swim::Wave)
     .speed(0.3, 0.9)
     .weight(4)
+    .traits(GRAZER | SHY)
     .biomes(REEF | TANK),
     Species::new(
         "regal-angelfish",
@@ -472,6 +493,7 @@ pub const SPECIES: &[Species] = &[
     .swim(Swim::Wave)
     .speed(0.3, 0.9)
     .weight(3)
+    .traits(GRAZER | SHY)
     .biomes(REEF),
     Species::new(
         "potters-angelfish",
@@ -493,6 +515,7 @@ pub const SPECIES: &[Species] = &[
     .swim(Swim::Wave)
     .speed(0.4, 1.2)
     .weight(4)
+    .traits(GRAZER | SHY)
     .biomes(REEF | TANK),
     Species::new(
         "red-lionfish",
@@ -522,6 +545,7 @@ pub const SPECIES: &[Species] = &[
     .swim(Swim::Wave)
     .speed(0.2, 0.6)
     .weight(3)
+    .traits(PREDATOR | STING | DEFENDED | NOCTURNAL)
     .biomes(REEF | TANK),
     Species::new(
         "clown-triggerfish",
@@ -545,6 +569,7 @@ pub const SPECIES: &[Species] = &[
     .swim(Swim::Wave)
     .speed(0.3, 0.9)
     .weight(4)
+    .traits(PREDATOR)
     .biomes(REEF | TANK),
     Species::new(
         "picasso-triggerfish",
@@ -568,6 +593,7 @@ pub const SPECIES: &[Species] = &[
     .swim(Swim::Wave)
     .speed(0.3, 0.9)
     .weight(4)
+    .traits(PREDATOR | CURIOUS)
     .biomes(REEF | TANK),
     Species::new(
         "stoplight-parrotfish",
@@ -591,6 +617,7 @@ pub const SPECIES: &[Species] = &[
     .swim(Swim::Wave)
     .speed(0.3, 0.9)
     .weight(6)
+    .traits(GRAZER)
     .biomes(REEF | TANK),
     Species::new(
         "bumphead-parrotfish",
@@ -620,6 +647,7 @@ pub const SPECIES: &[Species] = &[
     .swim(Swim::Wave)
     .speed(0.25, 0.6)
     .weight(2)
+    .traits(GRAZER)
     .biomes(REEF),
     Species::new(
         "bluestreak-cleaner-wrasse",
@@ -639,6 +667,7 @@ pub const SPECIES: &[Species] = &[
     .swim(Swim::Dart)
     .speed(0.3, 1.0)
     .weight(5)
+    .traits(CLEANER)
     .biomes(REEF | TANK),
     Species::new(
         "bird-wrasse",
@@ -662,6 +691,7 @@ pub const SPECIES: &[Species] = &[
     .swim(Swim::Cruise)
     .speed(0.4, 1.1)
     .weight(4)
+    .traits(PREDATOR)
     .biomes(REEF),
     Species::new(
         "humphead-wrasse",
@@ -691,6 +721,7 @@ pub const SPECIES: &[Species] = &[
     .swim(Swim::Wave)
     .speed(0.2, 0.6)
     .weight(2)
+    .traits(PREDATOR | CURIOUS)
     .biomes(REEF),
     Species::new(
         "six-line-wrasse",
@@ -710,6 +741,7 @@ pub const SPECIES: &[Species] = &[
     .swim(Swim::Dart)
     .speed(0.4, 1.3)
     .weight(5)
+    .traits(SHY)
     .biomes(REEF | TANK),
     Species::new(
         "mandarin-dragonet",
@@ -729,6 +761,8 @@ pub const SPECIES: &[Species] = &[
     .swim(Swim::Hover)
     .speed(0.15, 0.5)
     .weight(3)
+    .traits(SHY)
+    .home("coral")
     .biomes(REEF | TANK),
     Species::new(
         "royal-gramma",
@@ -770,6 +804,8 @@ pub const SPECIES: &[Species] = &[
     .swim(Swim::Wave)
     .speed(0.3, 0.9)
     .weight(5)
+    .traits(SHY)
+    .home("rock")
     .biomes(REEF | TANK)
     .fps(0.25),
     Species::new(
@@ -794,6 +830,7 @@ pub const SPECIES: &[Species] = &[
     .swim(Swim::Wave)
     .speed(0.2, 0.7)
     .weight(5)
+    .traits(SHY | DEFENDED)
     .biomes(REEF | TANK),
     Species::new(
         "longhorn-cowfish",
@@ -817,6 +854,7 @@ pub const SPECIES: &[Species] = &[
     .swim(Swim::Wave)
     .speed(0.2, 0.7)
     .weight(3)
+    .traits(SHY | DEFENDED)
     .biomes(REEF | TANK),
     Species::new(
         "porcupinefish",
@@ -844,6 +882,27 @@ pub const SPECIES: &[Species] = &[
     .swim(Swim::Hover)
     .speed(0.15, 0.5)
     .weight(4)
+    .traits(PUFF | DEFENDED)
+    .alt(
+        &[r"
+       \  |  /  |  /  |
+     .-'`'`'`'`'`'`'`'`-.
+   \ /  .   .   .   .   \
+  >=<    .   .   .    O  )
+   / \  .   .   .   .   /
+     '-.___________.-'
+       /  |  /  |  /  |
+"],
+        &[r"
+       2  2  2  2  2  2
+     22222222222222222222
+   6 6 171117111711171111
+  666  1171117111711114111
+   6 6 171117111711171111
+     22222222222222222
+       2  2  2  2  2  2
+"],
+    )
     .biomes(REEF | TANK | OCEAN),
     Species::new(
         "dogface-pufferfish",
@@ -867,6 +926,27 @@ pub const SPECIES: &[Species] = &[
     .swim(Swim::Hover)
     .speed(0.2, 0.6)
     .weight(5)
+    .traits(PUFF | DEFENDED)
+    .alt(
+        &[r"
+      ,-------.
+   .-'  . . .  `-.
+\  /  .  . . .  . \
+ >=<   . . . .  .  O )
+/  \  .  . . .  . /
+   `-.  . . .  .-'
+      `-------'
+"],
+        &[r"
+      111111117
+   711 17171711117
+6  6  7117171711711
+ 666   717171711711411
+6  6  7117171711711
+   117 17171711711
+      111111111
+"],
+    )
     .biomes(REEF | TANK),
     Species::new(
         "firefish-goby",
@@ -888,6 +968,8 @@ pub const SPECIES: &[Species] = &[
     .swim(Swim::Hover)
     .speed(0.2, 0.7)
     .weight(5)
+    .traits(SHY)
+    .home("coral")
     .biomes(REEF | TANK),
     Species::new(
         "yellow-watchman-goby",
@@ -907,6 +989,8 @@ pub const SPECIES: &[Species] = &[
     .swim(Swim::Dart)
     .speed(0.2, 0.8)
     .weight(4)
+    .traits(SHY)
+    .home("rock")
     .biomes(REEF | TANK),
     Species::new(
         "banggai-cardinalfish",
@@ -931,6 +1015,8 @@ pub const SPECIES: &[Species] = &[
     .speed(0.2, 0.7)
     .school(5, 10)
     .weight(6)
+    .traits(SHY)
+    .home("anemone,coral")
     .biomes(REEF | TANK),
     Species::new(
         "foxface-rabbitfish",
@@ -954,6 +1040,7 @@ pub const SPECIES: &[Species] = &[
     .swim(Swim::Wave)
     .speed(0.3, 0.9)
     .weight(5)
+    .traits(GRAZER | STING | DEFENDED)
     .biomes(REEF | TANK),
     Species::new(
         "harlequin-sweetlips",
@@ -977,6 +1064,7 @@ pub const SPECIES: &[Species] = &[
     .swim(Swim::Wave)
     .speed(0.2, 0.6)
     .weight(3)
+    .traits(SHY)
     .biomes(REEF),
     Species::new(
         "flame-hawkfish",
@@ -1000,6 +1088,8 @@ pub const SPECIES: &[Species] = &[
     .swim(Swim::Hover)
     .speed(0.2, 0.7)
     .weight(4)
+    .traits(PREDATOR)
+    .home("coral")
     .biomes(REEF | TANK),
     Species::new(
         "squirrelfish",
@@ -1023,6 +1113,7 @@ pub const SPECIES: &[Species] = &[
     .swim(Swim::Wave)
     .speed(0.2, 0.7)
     .weight(4)
+    .traits(NOCTURNAL | SHY)
     .biomes(REEF | TANK),
     Species::new(
         "lyretail-anthias",
@@ -1043,6 +1134,7 @@ pub const SPECIES: &[Species] = &[
     .speed(0.4, 1.2)
     .school(5, 12)
     .weight(7)
+    .traits(SHY | FILTER)
     .biomes(REEF | TANK),
     Species::new(
         "coral-grouper",
@@ -1070,6 +1162,8 @@ pub const SPECIES: &[Species] = &[
     .swim(Swim::Wave)
     .speed(0.2, 0.5)
     .weight(3)
+    .traits(PREDATOR)
+    .home("rock")
     .biomes(REEF | TANK),
     Species::new(
         "bicolor-blenny",
@@ -1089,6 +1183,8 @@ pub const SPECIES: &[Species] = &[
     .swim(Swim::Dart)
     .speed(0.2, 0.8)
     .weight(5)
+    .traits(SHY | GRAZER)
+    .home("rock")
     .biomes(REEF | TANK),
     Species::new(
         "orchid-dottyback",
@@ -1108,6 +1204,8 @@ pub const SPECIES: &[Species] = &[
     .swim(Swim::Wave)
     .speed(0.3, 0.9)
     .weight(4)
+    .traits(SHY | PREDATOR)
+    .home("rock")
     .biomes(REEF | TANK),
     Species::new(
         "blue-devil-damselfish",
@@ -1131,6 +1229,8 @@ pub const SPECIES: &[Species] = &[
     .swim(Swim::Dart)
     .speed(0.3, 1.1)
     .weight(7)
+    .traits(SHY)
+    .home("staghorn,coral")
     .biomes(REEF | TANK),
     Species::new(
         "domino-damsel",
@@ -1154,6 +1254,8 @@ pub const SPECIES: &[Species] = &[
     .swim(Swim::Dart)
     .speed(0.3, 1.1)
     .weight(6)
+    .traits(SHY)
+    .home("staghorn,coral")
     .biomes(REEF | TANK),
     Species::new(
         "sergeant-major",
@@ -1178,6 +1280,7 @@ pub const SPECIES: &[Species] = &[
     .speed(0.3, 1.1)
     .school(1, 3)
     .weight(7)
+    .traits(CURIOUS)
     .biomes(REEF | TANK),
     Species::new(
         "green-chromis",
@@ -1205,6 +1308,8 @@ pub const SPECIES: &[Species] = &[
     .speed(0.4, 1.3)
     .school(6, 12)
     .weight(8)
+    .traits(SHY | FILTER)
+    .home("staghorn,coral")
     .biomes(REEF | TANK)
     .fps(0.4),
 ];

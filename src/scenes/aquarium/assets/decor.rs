@@ -65,7 +65,8 @@ pub const DECOR: &[Decor] = &[
     .fps(0.04)
     .bubbles(6, 2)
     .weight(7)
-    .biomes(REEF | OCEAN | TANK),
+    .biomes(REEF | OCEAN | TANK)
+    .traits(SHELTER),
     Decor::new(
         "coin-hoard",
         &[
@@ -150,7 +151,8 @@ yYYYyYyYYYy
     .color('g')
     .bubbles(4, 0)
     .weight(4)
-    .biomes(KELP | OCEAN | REEF),
+    .biomes(KELP | OCEAN | REEF)
+    .traits(SHELTER),
     Decor::new(
         "bottle-lying",
         &[r"
@@ -167,7 +169,8 @@ yYYYyYyYYYy
     )
     .color('g')
     .weight(5)
-    .biomes(KELP | OCEAN | FRESH | ARCTIC),
+    .biomes(KELP | OCEAN | FRESH | ARCTIC)
+    .traits(SHELTER),
     Decor::new(
         "old-boot",
         &[r"
@@ -189,7 +192,8 @@ yYYYyYyYYYy
     )
     .color('y')
     .weight(5)
-    .biomes(KELP | OCEAN | FRESH),
+    .biomes(KELP | OCEAN | FRESH)
+    .traits(SHELTER),
     Decor::new(
         "skull-and-crossbones",
         &[r"
@@ -221,7 +225,8 @@ yYYYyYyYYYy
 "],
     )
     .weight(5)
-    .biomes(TANK | KELP | DEEP),
+    .biomes(TANK | KELP | DEEP)
+    .traits(SHELTER),
     Decor::new(
         "ships-wheel",
         &[r"
@@ -253,7 +258,8 @@ yYYYyYyYYYy
     .color('y')
     .bubbles(5, 4)
     .weight(3)
-    .biomes(OCEAN | ARCTIC | REEF),
+    .biomes(OCEAN | ARCTIC | REEF)
+    .traits(SHELTER),
     Decor::new(
         "diver-helmet",
         &[r"
@@ -272,7 +278,8 @@ yYYYyYyYYYy
     .color('y')
     .bubbles(4, 0)
     .weight(4)
-    .biomes(OCEAN | REEF | TANK),
+    .biomes(OCEAN | REEF | TANK)
+    .traits(SHELTER),
     Decor::new(
         "ship-anchor",
         &[r"
@@ -323,7 +330,8 @@ yYYYyYyYYYy
     )
     .color('k')
     .weight(4)
-    .biomes(OCEAN | REEF),
+    .biomes(OCEAN | REEF)
+    .traits(SHELTER),
     Decor::new(
         "barrel-stack",
         &[r"
@@ -345,7 +353,8 @@ yYYYyYyYYYy
     )
     .color('y')
     .weight(5)
-    .biomes(OCEAN | REEF | KELP),
+    .biomes(OCEAN | REEF | KELP)
+    .traits(SHELTER),
     Decor::new(
         "giant-clam",
         &[
@@ -402,7 +411,8 @@ yYYYyYyYYYy
     .fps(0.035)
     .bubbles(9, 3)
     .weight(6)
-    .biomes(REEF),
+    .biomes(REEF)
+    .traits(SHELTER),
     Decor::new(
         "temple-ruins",
         &[r"
@@ -430,7 +440,8 @@ yYYYyYyYYYy
 "],
     )
     .weight(4)
-    .biomes(REEF | OCEAN),
+    .biomes(REEF | OCEAN)
+    .traits(SHELTER),
     Decor::new(
         "standing-columns",
         &[r"
@@ -448,7 +459,8 @@ _|_||_|_   _|_||_|_   _|_||_|_
 "],
     )
     .weight(4)
-    .biomes(REEF | OCEAN | TANK),
+    .biomes(REEF | OCEAN | TANK)
+    .traits(SHELTER),
     Decor::new(
         "broken-columns",
         &[r"
@@ -465,7 +477,8 @@ _|_||_|_   _|_||_|_   _|_||_|_
 "],
     )
     .weight(5)
-    .biomes(REEF | OCEAN),
+    .biomes(REEF | OCEAN)
+    .traits(SHELTER),
     Decor::new(
         "moai-head",
         &[r"
@@ -483,7 +496,8 @@ _|_||_|_   _|_||_|_   _|_||_|_
 "],
     )
     .weight(4)
-    .biomes(REEF | OCEAN),
+    .biomes(REEF | OCEAN)
+    .traits(SHELTER),
     Decor::new(
         "statue-head",
         &[r"
@@ -502,7 +516,8 @@ _|_||_|_   _|_||_|_   _|_||_|_
 "],
     )
     .weight(4)
-    .biomes(REEF | OCEAN | KELP),
+    .biomes(REEF | OCEAN | KELP)
+    .traits(SHELTER),
     Decor::new(
         "amphora-pair",
         &[r"
@@ -520,7 +535,8 @@ _|_||_|_   _|_||_|_   _|_||_|_
     )
     .color('y')
     .weight(5)
-    .biomes(REEF | OCEAN | TANK),
+    .biomes(REEF | OCEAN | TANK)
+    .traits(SHELTER),
     Decor::new(
         "atlantis-skyline",
         &[r"
@@ -546,7 +562,8 @@ _|_||_|_   _|_||_|_   _|_||_|_
     )
     .color('c')
     .weight(3)
-    .biomes(REEF | OCEAN),
+    .biomes(REEF | OCEAN)
+    .traits(SHELTER),
     Decor::new(
         "coral-wreck",
         &[r"
@@ -575,7 +592,8 @@ _|_||_|_   _|_||_|_   _|_||_|_
     )
     .color('y')
     .weight(4)
-    .biomes(REEF),
+    .biomes(REEF)
+    .traits(SHELTER),
     Decor::new(
         "sunken-galleon",
         &[r"
@@ -604,32 +622,38 @@ _|_||_|_   _|_||_|_   _|_||_|_
     )
     .color('y')
     .weight(3)
-    .biomes(OCEAN),
+    .biomes(OCEAN)
+    .traits(SHELTER),
     Decor::new(
         "sunken-plane",
         &[r"
-                                    _/|
-                                  _/  |
-                                _/    |
-        _____________________.-'     _|
- \  _.-'  _   o  o  o  o  o   `-.___/ /
- -|-(_/  |_|  ___________________    /
- /  `-.__________________________`--'
-         /_\          |__|
+                                                  /|
+                                                 / |
+                    ______                      /  |
+                   /     /                     /   |
+                  /     /  ____________________/  __|
+    ___.---------'-----'--'  o o o o o o o o  ___  `-.__\
+  .'   ,--.                                  \  \     _.-'
+ (    | () |        ______________________    \__\__.-'  )
+  `-._ `----'_______/                      \________.-'
+ ~}{~)(~}{)~}{~~~}{)(}    ~(){~}{~)(~}{)(~}{~{
 "],
         &[r"
 
 
 
 
-              C  C  C  C  C
+
+                             c c c c c c c c
 
 
-         kkk          kkkk
+
+ ggggGGgggGggggggggGGg    gGGgggggGGgggGGggggg
 "],
     )
     .weight(3)
-    .biomes(OCEAN),
+    .biomes(OCEAN)
+    .traits(SHELTER),
     Decor::new(
         "cargo-container",
         &[r"
@@ -659,7 +683,8 @@ _|_||_|_   _|_||_|_   _|_||_|_
     )
     .tint("1:rbygc")
     .weight(4)
-    .biomes(OCEAN),
+    .biomes(OCEAN)
+    .traits(SHELTER),
     Decor::new(
         "lighthouse-ruin",
         &[r"
@@ -689,7 +714,8 @@ _|_||_|_   _|_||_|_   _|_||_|_
 "],
     )
     .weight(3)
-    .biomes(OCEAN | REEF | ARCTIC),
+    .biomes(OCEAN | REEF | ARCTIC)
+    .traits(SHELTER),
     Decor::new(
         "rock-pile",
         &[r"
@@ -708,7 +734,8 @@ _|_||_|_   _|_||_|_   _|_||_|_
     )
     .color('k')
     .weight(8)
-    .biomes(KELP | REEF | OCEAN | FRESH),
+    .biomes(KELP | REEF | OCEAN | FRESH)
+    .traits(SHELTER),
     Decor::new(
         "rowboat-wreck",
         &[r"
@@ -724,7 +751,8 @@ _|_||_|_   _|_||_|_   _|_||_|_
     )
     .color('y')
     .weight(4)
-    .biomes(KELP),
+    .biomes(KELP)
+    .traits(SHELTER),
     Decor::new(
         "crab-trap",
         &[r"
@@ -745,7 +773,8 @@ _|_||_|_   _|_||_|_   _|_||_|_
     )
     .color('k')
     .weight(5)
-    .biomes(KELP),
+    .biomes(KELP)
+    .traits(SHELTER),
     Decor::new(
         "lobster-pot",
         &[r"
@@ -767,7 +796,8 @@ kkkkkkkkkkkkkkkkk
     )
     .color('y')
     .weight(5)
-    .biomes(KELP),
+    .biomes(KELP)
+    .traits(SHELTER),
     Decor::new(
         "rock-arch",
         &[r"
@@ -794,7 +824,8 @@ kkkkkkkkkkkkkkkkk
     )
     .color('k')
     .weight(3)
-    .biomes(KELP | REEF),
+    .biomes(KELP | REEF)
+    .traits(SHELTER),
     Decor::new(
         "cave-mouth",
         &[r"
@@ -817,7 +848,8 @@ kkkkkkkkkkkkkkkkk
     )
     .color('k')
     .weight(3)
-    .biomes(KELP | DEEP),
+    .biomes(KELP | DEEP)
+    .traits(SHELTER),
     Decor::new(
         "black-smoker",
         &[
@@ -901,7 +933,8 @@ kkkkkkkkkkkkkkkkk
     .fps(0.05)
     .bubbles(7, 0)
     .weight(7)
-    .biomes(DEEP),
+    .biomes(DEEP)
+    .traits(GLOW),
     Decor::new(
         "whale-skeleton",
         &[r"
@@ -921,7 +954,8 @@ kkkkkkkkkkkkkkkkk
 "],
     )
     .weight(3)
-    .biomes(DEEP),
+    .biomes(DEEP)
+    .traits(SHELTER),
     Decor::new(
         "sunken-submarine",
         &[r"
@@ -942,7 +976,8 @@ kkkkkkkkkkkkkkkkk
     )
     .color('k')
     .weight(3)
-    .biomes(DEEP | OCEAN),
+    .biomes(DEEP | OCEAN)
+    .traits(SHELTER),
     Decor::new(
         "lost-rov",
         &[r"
@@ -963,7 +998,8 @@ kkkkkkkkkkkkkkkkk
     )
     .color('y')
     .weight(4)
-    .biomes(DEEP),
+    .biomes(DEEP)
+    .traits(SHELTER | GLOW),
     Decor::new(
         "deep-cable",
         &[r"
@@ -996,7 +1032,8 @@ kkkkkkkkkkkkkkkkk
     )
     .color('k')
     .weight(5)
-    .biomes(DEEP),
+    .biomes(DEEP)
+    .traits(SHELTER),
     Decor::new(
         "lava-vent",
         &[
@@ -1065,7 +1102,8 @@ kkkkkkkkkkkkkkkkk
     .fps(0.05)
     .bubbles(9, 3)
     .weight(5)
-    .biomes(DEEP),
+    .biomes(DEEP)
+    .traits(GLOW),
     Decor::new(
         "sunken-log",
         &[r"
@@ -1083,7 +1121,8 @@ kkkkkkkkkkkkkkkkk
     )
     .color('y')
     .weight(7)
-    .biomes(FRESH),
+    .biomes(FRESH)
+    .traits(SHELTER),
     Decor::new(
         "old-tire",
         &[r"
@@ -1101,7 +1140,8 @@ kkkkkkkkkkkkkkkkk
     )
     .color('k')
     .weight(6)
-    .biomes(FRESH),
+    .biomes(FRESH)
+    .traits(SHELTER),
     Decor::new(
         "shopping-cart",
         &[r"
@@ -1120,20 +1160,29 @@ kkkkkkkkkkkkkkkkk
 "],
     )
     .weight(4)
-    .biomes(FRESH),
+    .biomes(FRESH)
+    .traits(SHELTER),
     Decor::new(
         "rusty-bicycle",
         &[r"
-         __          _
-        /__\_    ___/_|_
-   .---.  \  `./`    `-.'`.
-  / \|/ \  \  `--+---.  /   \
-  |-(+)-|   `----(  )-'-(+)-|
-  \ /|\ /            \ /|\ /
-   `---'              `---'
+            .==.          _,
+             \_____________\
+            / \     /       \
+ .-~~~-.   /   \   /     .-~~~-.
+/  \|/  \ /     \ /     /  \|/  \
+|--(+)--|--------o      |--(+)--|
+\  /|\  /               \  /|\  /
+ `-~~~-'                 `-~~~-'
 "],
         &[r"
-
+            kkkk          rr
+             rrrrrrrrrrrrrrr
+            r r     r       r
+ kkkkkkk   r   r   r     kkkkkkk
+kkkkkkkkk r     r r     kkkkkkkkk
+kkkkykkkkrrrrrrrrk      kkkkykkkk
+kkkkkkkkk               kkkkkkkkk
+ kkkkkkk                kkkkkkk
 "],
     )
     .color('y')
@@ -1158,7 +1207,8 @@ kkkkkkkkkkkkkkkkk
     )
     .color('k')
     .weight(8)
-    .biomes(FRESH),
+    .biomes(FRESH)
+    .traits(SHELTER),
     Decor::new(
         "sunken-canoe",
         &[r"
@@ -1173,7 +1223,8 @@ kkkkkkkkkkkkkkkkk
     )
     .color('y')
     .weight(5)
-    .biomes(FRESH),
+    .biomes(FRESH)
+    .traits(SHELTER),
     Decor::new(
         "sunken-car",
         &[r"
@@ -1194,7 +1245,8 @@ yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy
 "],
     )
     .weight(4)
-    .biomes(FRESH),
+    .biomes(FRESH)
+    .traits(SHELTER),
     Decor::new(
         "ice-rocks",
         &[r"
@@ -1213,7 +1265,8 @@ yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy
     )
     .color('k')
     .weight(8)
-    .biomes(ARCTIC),
+    .biomes(ARCTIC)
+    .traits(SHELTER),
     Decor::new(
         "ice-arch",
         &[r"
@@ -1237,7 +1290,8 @@ _|##|'??????????????'|##__|_
     )
     .color('c')
     .weight(3)
-    .biomes(ARCTIC),
+    .biomes(ARCTIC)
+    .traits(SHELTER),
     Decor::new(
         "expedition-ship",
         &[r"
@@ -1271,7 +1325,8 @@ _|##|'??????????????'|##__|_
     )
     .color('y')
     .weight(2)
-    .biomes(ARCTIC),
+    .biomes(ARCTIC)
+    .traits(SHELTER),
     Decor::new(
         "frozen-wreck",
         &[r"
@@ -1299,7 +1354,8 @@ _|##|'??????????????'|##__|_
     )
     .color('y')
     .weight(3)
-    .biomes(ARCTIC),
+    .biomes(ARCTIC)
+    .traits(SHELTER),
     Decor::new(
         "pirate-ship-ornament",
         &[r"
@@ -1331,7 +1387,8 @@ _|##|'??????????????'|##__|_
     )
     .color('y')
     .weight(4)
-    .biomes(TANK),
+    .biomes(TANK)
+    .traits(SHELTER),
     Decor::new(
         "diver-with-chest",
         &[
@@ -1480,30 +1537,35 @@ _|##|'??????????????'|##__|_
     )
     .color('y')
     .weight(5)
-    .biomes(TANK),
+    .biomes(TANK)
+    .traits(SHELTER),
     Decor::new(
         "tank-bridge",
         &[r"
-          _.-~~~~~~-._
-     _.-~'|-|-|-|-|-|-`~-._
-   .'_____|_|_|_|_|_|_|____`.
-  |_|?????????????????????|_|
-  | |????.-~~~~~~~~-.?????| |
-  |_|???/????????????\????|_|
- [___]?/??????????????\?[___]
+              _.-~~~~~~~~~~-._
+         _.-~'|-|-|-|-|-|-|-|`~-._
+       .'_____|_|_|_|_|_|_|_|_____`.
+      |_|????????????????????????|_|
+     [___]???.-~~~~~~~~~~~~-.????[___]
+     | |????/                \????| |
+    _|_|???/??????????????????\???|_|_
+   /___\__/????????????????????\__/___\
 "],
         &[r"
-
-          R R R R R R
-          R R R R R R R
-  R R                     R R
-  R R                     R R
-  R R                     R R
+              R RRRRRRRRRRRR R
+         R RR RRRRRRRRRRRRRRR RR R
+         RRRRRRRRRRRRRRRRRRRRRRRRR
+      RRR                        RRR
+     RRRRR    RRRRRRRRRRRRRR     RRRRR
+     R R                          R R
+    RRRR                          RRRR
+    RRR RR                      RR RRR
 "],
     )
     .color('r')
     .weight(4)
-    .biomes(TANK),
+    .biomes(TANK)
+    .traits(SHELTER),
     Decor::new(
         "tank-pagoda",
         &[r"
@@ -1537,7 +1599,8 @@ _|##|'??????????????'|##__|_
     )
     .color('r')
     .weight(4)
-    .biomes(TANK),
+    .biomes(TANK)
+    .traits(SHELTER),
     Decor::new(
         "ceramic-castle",
         &[r"
@@ -1556,7 +1619,8 @@ _|##|'??????????????'|##__|_
 "],
     )
     .weight(4)
-    .biomes(TANK),
+    .biomes(TANK)
+    .traits(SHELTER),
     Decor::new(
         "ruined-tower",
         &[r"
@@ -1575,7 +1639,8 @@ _|##|'??????????????'|##__|_
     )
     .color('k')
     .weight(4)
-    .biomes(TANK | REEF | KELP),
+    .biomes(TANK | REEF | KELP)
+    .traits(SHELTER),
     Decor::new(
         "sand-castle",
         &[r"
@@ -1592,7 +1657,8 @@ _|##|'??????????????'|##__|_
     )
     .color('y')
     .weight(3)
-    .biomes(TANK),
+    .biomes(TANK)
+    .traits(SHELTER),
     Decor::new(
         "wreck-with-flag",
         &[
@@ -1643,7 +1709,8 @@ _|##|'??????????????'|##__|_
     .fps(0.08)
     .bubbles(12, 6)
     .weight(4)
-    .biomes(OCEAN | REEF),
+    .biomes(OCEAN | REEF)
+    .traits(SHELTER),
     Decor::new(
         "sunken-sword",
         &[r"

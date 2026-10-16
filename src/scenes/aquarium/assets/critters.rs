@@ -53,6 +53,7 @@ pub const SPECIES: &[Species] = &[
         ],
     )
     .critter()
+    .traits(STING)
     .tint("1:cCwWmM")
     .color('c')
     .swim(Swim::Drift)
@@ -103,6 +104,7 @@ pub const SPECIES: &[Species] = &[
 "],
     )
     .critter()
+    .traits(STING)
     .tint("1:rRyYmM 2:yYrRmM")
     .color('y')
     .swim(Swim::Drift)
@@ -150,6 +152,7 @@ pub const SPECIES: &[Species] = &[
 "],
     )
     .critter()
+    .traits(STING)
     .tint("1:wWcC")
     .color('c')
     .swim(Swim::Drift)
@@ -197,6 +200,7 @@ pub const SPECIES: &[Species] = &[
 "],
     )
     .critter()
+    .traits(STING)
     .tint("1:bBmMcC 2:bBcB")
     .color('b')
     .swim(Swim::Drift)
@@ -257,6 +261,7 @@ WCCCCW
         ],
     )
     .critter()
+    .traits(GLOW)
     .color('w')
     .swim(Swim::Drift)
     .zone(Zone::Any)
@@ -300,6 +305,7 @@ WCCCCW
 "],
     )
     .critter()
+    .traits(GLOW)
     .tint("1:rRmM")
     .color('r')
     .swim(Swim::Drift)
@@ -329,6 +335,7 @@ WCCCCW
 "],
     )
     .critter()
+    .traits(STING)
     .tint("1:gGcCyY")
     .color('g')
     .swim(Swim::Drift)
@@ -373,6 +380,7 @@ WCCCCW
 "],
     )
     .critter()
+    .traits(STING)
     .tint("1:wWcC")
     .color('w')
     .swim(Swim::Drift)
@@ -413,6 +421,7 @@ WCCCCW
         ],
     )
     .critter()
+    .traits(GLOW | STING)
     .tint("1:cCmMyY")
     .color('c')
     .swim(Swim::Drift)
@@ -442,6 +451,7 @@ WCCCCW
 "],
     )
     .critter()
+    .traits(FILTER)
     .tint("1:cCwW")
     .color('c')
     .swim(Swim::Wave)
@@ -498,6 +508,8 @@ WCCCCW
         ],
     )
     .critter()
+    .traits(PREDATOR | INK | CURIOUS | SHY | NOCTURNAL)
+    .home("rock,cave,amphora,bottle,pot")
     .tint("1:rRyYmM")
     .color('r')
     .swim(Swim::Dart)
@@ -546,6 +558,8 @@ y  ByyyB  y
         ],
     )
     .critter()
+    .traits(DEFENDED | SHY | NOCTURNAL)
+    .home("rock,cave,amphora,bottle,pot")
     .color('y')
     .swim(Swim::Hover)
     .zone(Zone::Any)
@@ -609,6 +623,8 @@ y  ByyyB  y
         ],
     )
     .critter()
+    .traits(SHY | CURIOUS)
+    .home("rock,cave,pot")
     .tint("1:mMrRwW 4:wW")
     .color('m')
     .swim(Swim::Hover)
@@ -657,6 +673,7 @@ y  ByyyB  y
         ],
     )
     .critter()
+    .traits(GLOW | SHY | NOCTURNAL)
     .tint("1:rRkmM")
     .color('r')
     .swim(Swim::Hover)
@@ -691,6 +708,7 @@ y  ByyyB  y
 "],
     )
     .critter()
+    .traits(PREDATOR | INK | NOCTURNAL)
     .tint("1:wWmMcC 2:wmyr")
     .color('w')
     .swim(Swim::Dart)
@@ -721,6 +739,7 @@ BCW BBBB
 "],
     )
     .critter()
+    .traits(GLOW | NOCTURNAL)
     .color('B')
     .swim(Swim::Dart)
     .zone(Zone::Any)
@@ -761,6 +780,8 @@ BCW BBBB
         ],
     )
     .critter()
+    .traits(PREDATOR | INK | CURIOUS)
+    .home("rock,cave,amphora")
     .tint("1:yYmMwr 2:yYwW 4:WG")
     .color('y')
     .swim(Swim::Hover)
@@ -813,6 +834,7 @@ BCW BBBB
         ],
     )
     .critter()
+    .traits(DEFENDED | NOCTURNAL | SCAVENGER)
     .tint("1:yYwW 2:wWyY")
     .color('y')
     .swim(Swim::Hover)
@@ -869,6 +891,8 @@ BCW BBBB
         ],
     )
     .critter()
+    .traits(SHY)
+    .home("grass,eelgrass")
     .tint("1:yYrRmM 4:wW")
     .color('y')
     .swim(Swim::Hover)
@@ -914,6 +938,8 @@ BCW BBBB
         ],
     )
     .critter()
+    .traits(SHY)
+    .home("kelp,wrack")
     .tint("1:yYgG 2:gGyY 4:wW")
     .color('g')
     .swim(Swim::Hover)
@@ -954,6 +980,8 @@ BCW BBBB
         ],
     )
     .critter()
+    .traits(SHY)
+    .home("kelp,wrack")
     .tint("1:yYrR 2:yYgG 4:wW")
     .color('y')
     .swim(Swim::Hover)
@@ -994,6 +1022,8 @@ BCW BBBB
         ],
     )
     .critter()
+    .traits(CLEANER | SHY)
+    .home("anemone,coral")
     .tint("1:wWrR 4:kW")
     .color('w')
     .swim(Swim::Dart)
@@ -1016,6 +1046,7 @@ BCW BBBB
 "],
     )
     .critter()
+    .traits(FILTER)
     .tint("1:rRmwy")
     .color('r')
     .swim(Swim::Wave)
@@ -1057,6 +1088,7 @@ w  wRw  wW
         ],
     )
     .critter()
+    .traits(PREDATOR)
     .color('w')
     .swim(Swim::Drift)
     .zone(Zone::Any)
@@ -1088,6 +1120,7 @@ w  wRw  wW
         ],
     )
     .critter()
+    .traits(FILTER)
     .tint("1:cCmMbB")
     .color('c')
     .swim(Swim::Drift)
@@ -1124,6 +1157,7 @@ Y111111111111111WY
 "],
     )
     .critter()
+    .traits(DEFENDED | NOCTURNAL)
     .tint("1:rRmM")
     .color('r')
     .swim(Swim::Wave)
@@ -1172,6 +1206,7 @@ Y111111111111111WY
         ],
     )
     .critter()
+    .traits(DEFENDED | GRAZER)
     .tint("1:yYrR 2:yYgG 4:W")
     .color('y')
     .swim(Swim::Wave)
@@ -1216,6 +1251,8 @@ Y111111111111111WY
         ],
     )
     .critter()
+    .traits(DEFENDED | GRAZER | SCAVENGER)
+    .home("log,lily")
     .tint("1:gGyY 4:W")
     .color('g')
     .swim(Swim::Wave)
@@ -1248,6 +1285,7 @@ wwbww     wwbww     wwbwwWwR
         ],
     )
     .critter()
+    .traits(STING | PREDATOR | NOCTURNAL)
     .color('w')
     .swim(Swim::Wave)
     .zone(Zone::Any)
@@ -1258,43 +1296,52 @@ wwbww     wwbww     wwbwwWwR
     Species::new(
         "harbor-seal",
         &[
-            r"
-                _.-.
-         _.----'  o `.
-   _.--''   . .  .   `>=
- ,'  . .  .   .  _..--'
-(_.-.__________.-' \\
-   `-'  `-'
-",
-            r"
-                _.-.
-         _.----'  o `.
-   _.--''   . .  .   `>=
- ,'  . .  .   .  _..--'
-(_.-.__________.-'  \\
-   `-'   `-'
-",
+            r#"
+                _.--._
+          _.---'' o   `.
+     _.--''  .  .  .   `>=
+  ,-'  . .   .   .   _.-'=
+ /  .   .  .   .  .-'
+(__ _.-----..____.-' \ \_
+  \_`-.__  `--.   ) )`-'
+      `-'`--'  `-'
+"#,
+            r#"
+                _.--._
+          _.---'' o   `.
+     _.--''  .  .  .   `>=
+  ,-'  . .   .   .   _.-'=
+ /  .   .  .   .  .-'
+(__ _.-----..____.-'
+  \_`-.__  `--.  \ \_\
+      `-'`-.__`-.-'`-'
+"#,
         ],
         &[
-            r"
-                1111
-         1111111  4 11
-   111111   1 1  1   11W
- 11  1 1  1   1  111111
-111111111111111111 11
-   111  111
-",
-            r"
-                1111
-         1111111  4 11
-   111111   1 1  1   11W
- 11  1 1  1   1  111111
-111111111111111111  11
-   111   111
-",
+            r#"
+                1k11k1    
+          1k11111 4   1k  
+     1k1111  k  k  k   11W
+  111  k k   k   k   1k11W
+ 1  k   k  k   k  k11     
+111 1k11111kk1111k11 1 11 
+  1111k11  111k   1 1111  
+      1111111  111        
+"#,
+            r#"
+                1k11k1    
+          1k11111 4   1k  
+     1k1111  k  k  k   11W
+  111  k k   k   k   1k11W
+ 1  k   k  k   k  k11     
+111 1k11111kk1111k11      
+  1111k11  111k  1 111    
+      11111k1111k11111    
+"#,
         ],
     )
     .critter()
+    .traits(PREDATOR | CURIOUS)
     .tint("1:wyKc 4:W")
     .color('w')
     .swim(Swim::Wave)
@@ -1306,51 +1353,60 @@ wwbww     wwbww     wwbwwWwR
     Species::new(
         "california-sea-lion",
         &[
-            r"
-              ,-.
-             / o `.
-            |  __ >=
-        _.-' `-.-'
-  __.--'       /
- /   .       .'
-<_.--.____.-'  \\
-   `-'  `-'
-",
-            r"
-              ,-.
-             / o `.
-            |  __ >=
-        _.-' `-.-'
-  __.--'       /
- /   .       .'
-<_.--.____.-'   \\
-   `-' `-'
-",
+            r#"
+                     _.-.
+                    / o `.
+                   |  __  >==
+                   (  `-' /
+               _.--'`.   (
+          _.--' .   . `-._)
+ .-.__.--'  .   .    .  /
+(   ___.--.____.-'`-.  / \
+ `-'    `--.   ) )  `-'\ \
+            `-'`'
+"#,
+            r#"
+                     _.-.
+                    / o `.
+                   |  __  >==
+                   (  `-' /
+               _.--'`.   (
+          _.--' .   . `-._)
+ .-.__.--'  .   .    .  /
+(   ___.--.____.-'`-.  /
+ `-'    `--.  \ \ )  `-'
+            `-'`-'
+"#,
         ],
         &[
-            r"
-              111
-             1 4 11
-            1  11 1W
-        1111 11111
-  111111       1
- 1   1       11
-1111111111111  11
-   111  111
-",
-            r"
-              111
-             1 4 11
-            1  11 1W
-        1111 11111
-  111111       1
- 1   1       11
-1111111111111   11
-   111 111
-",
+            r#"
+                     1k1k    
+                    1 4 1k   
+                   1  11  1WW
+                   1  111 1  
+               1k1111k   1   
+          1k111 k   k 11k11  
+ k1k11k111  k   k    k  1    
+1   111k11k1111k1111k  1 1   
+ 111    111k   1 1  1111 1   
+            11111            
+"#,
+            r#"
+                     1k1k    
+                    1 4 1k   
+                   1  11  1WW
+                   1  111 1  
+               1k1111k   1   
+          1k111 k   k 11k11  
+ k1k11k111  k   k    k  1    
+1   111k11k1111k1111k  1     
+ 111    111k  1 1 1  111     
+            111111           
+"#,
         ],
     )
     .critter()
+    .traits(PREDATOR | CURIOUS)
     .tint("1:ykwy 4:W")
     .color('y')
     .swim(Swim::Dart)
@@ -1362,35 +1418,52 @@ wwbww     wwbww     wwbwwWwR
     Species::new(
         "emperor-penguin",
         &[
-            r"
-        __..--.__
-   _.--'' Y   o  `>
-<=' `-.__________.'
-      `-._  /_/
-",
-            r"
-        __..--.__
-   _.--'' Y   o  `>
-<=' `-.__________.'
-      `-._ \_\
-",
+            r#"
+                  ,-"'"-.
+            _.--'#### o  `.
+      _.--'############  `>>
+  _.-'################:::.-'
+==-.#################::::'
+  `-._................-'
+      `-.........._.-'
+         `--'-'-\ \
+"#,
+            r#"
+                  ,-"'"-.
+            _.--'#### o  `.
+      _.--'############  `>>
+  _.-'################:::.-'
+==-.#################::::'
+  `-._................-'
+      `-.........._.-'
+         `--'-'-/ /
+"#,
         ],
         &[
-            r"
-        wwwwKKwww
-   wwKKKK Y   W  wY
-KKW wWwwwwwwwwwwwwW
-      wWww  WwW
-",
-            r"
-        wwwwKKwww
-   wwKKKK Y   W  wY
-KKW wWwwwwwwwwwwwwW
-      wWww WwW
-",
+            r#"
+                  kkkkkkk   
+            kkkkkkkkk 4  kk 
+      kkkkkkkkkkkkkkkkk  kyy
+  kkkkkkkkkkkkkkkkkkkkYYYkkk
+yykkkkkkkkkkkkkkkkkkkYYYYk  
+  kkkkWWWWWWWWWWWWWWWkkk    
+      kkkWWWWWWWWWkkkk      
+         kkkkkkkk k         
+"#,
+            r#"
+                  kkkkkkk   
+            kkkkkkkkk 4  kk 
+      kkkkkkkkkkkkkkkkk  kyy
+  kkkkkkkkkkkkkkkkkkkkYYYkkk
+yykkkkkkkkkkkkkkkkkkkYYYYk  
+  kkkkWWWWWWWWWWWWWWWkkk    
+      kkkWWWWWWWWWkkkk      
+         kkkkkkkk k         
+"#,
         ],
     )
     .critter()
+    .traits(PREDATOR)
     .color('K')
     .swim(Swim::Dart)
     .zone(Zone::Any)
@@ -1402,35 +1475,49 @@ KKW wWwwwwwwwwwwwwW
     Species::new(
         "sea-otter",
         &[
-            r"
-         ,-.
-   ..---' o )_
- ,'  \\_//  ~.-'
-(__.-'~~~'-..'
-",
-            r"
-         ,-.
-   ..---' o )_
- ,'  \\_//  ~.-'
- (_.-'~~~'-.'
-",
+            r#"
+                   .-""-.
+                .-'  o   `.
+    _.---._   .'  .-.  `>=
+ .-'  . .  `-/   (   )  _.'
+(  ___   .  . `-._`-' .'
+ `-'  `--.______.--'`-'
+ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~
+"#,
+            r#"
+                   .-""-.
+                .-'  o   `.
+    _.---._   .'  .-.  `>=
+ .-'  . .  `-/   (   )  _.'
+(  ___   .  . `-._`-' .'
+ `-'  `--.______.--'`-'
+  ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~
+"#,
         ],
         &[
-            r"
-         111
-   111111 4 11
- 11  11111  W111
-111111WWW11111
-",
-            r"
-         111
-   111111 4 11
- 11  11111  W111
- 11111WWW1111
-",
+            r#"
+                   k1111k  
+                k11  4   1k
+    1k111k1   k1  k1k  11W 
+ k11  k k  111   1   1  1k1
+1  111   k  k 11k1111 k1   
+ 111  111k111111k111111    
+ c c c c c c c c c c c c c 
+"#,
+            r#"
+                   k1111k  
+                k11  4   1k
+    1k111k1   k1  k1k  11W 
+ k11  k k  111   1   1  1k1
+1  111   k  k 11k1111 k1   
+ 111  111k111111k111111    
+  c c c c c c c c c c c c c
+"#,
         ],
     )
     .critter()
+    .traits(PREDATOR | CURIOUS)
+    .home("kelp")
     .tint("1:yykw 4:kW")
     .color('y')
     .swim(Swim::Wave)
@@ -1442,43 +1529,52 @@ KKW wWwwwwwwwwwwwwW
     Species::new(
         "manatee",
         &[
-            r"
-              _.---._
- .--.    _.--'       '-.__
-(    )--'    ,-.         o)>
- `--'`-.__  (   )  __..-'''
-         ``-`-.-'.'
-              `-'
-",
-            r"
-              _.---._
- .--.    _.--'       '-.__
-(    )--'    ,-.         o)>
- `--'`-.__  (   )  __..-'''
-         ``-`-.-'.'
-             `-'
-",
+            r#"
+                     _.--._
+               __.--'  o  `-.
+     _..---'''''            `.
+ .-._.'   .   ..   .  ___  )>
+/   `   .   .    .  (   )_.'
+(  _  `-.__ .   . _.-.`-'
+ `-' `-.   ``---''` .  \ \
+     `-.__)  `-.__.'   `-'
+"#,
+            r#"
+                     _.--._
+               __.--'  o  `-.
+     _..---'''''            `.
+ .-._.'   .   ..   .  ___  )>
+/   `   .   .    .  (   )_.'
+(  _  `-.__ .   . _.-.`-'
+ `-' `-.   ``---''` .
+     `-.__)  `-.__.'`-.`-.
+"#,
         ],
         &[
-            r"
-              1111111
- 1111    11111       11111
-1    1111    111         411
- 111111111  1   1  11111111
-         1111111111
-              111
-",
-            r"
-              1111111
- 1111    11111       11111
-1    1111    111         411
- 111111111  1   1  11111111
-         1111111111
-             111
-",
+            r#"
+                     1k11k1   
+               11k111  4  11k 
+     1kk11111111            1k
+ k1k1k1   k   kk   k  111  11 
+1   1   k   k    k  1   11k1  
+1  1  11k11 k   k 1k1k111     
+ 111 11k   11111111 k  1 1    
+     11k111  11k11k1   111    
+"#,
+            r#"
+                     1k11k1   
+               11k111  4  11k 
+     1kk11111111            1k
+ k1k1k1   k   kk   k  111  11 
+1   1   k   k    k  1   11k1  
+1  1  11k11 k   k 1k1k111     
+ 111 11k   11111111 k         
+     11k111  11k11k111k11k    
+"#,
         ],
     )
     .critter()
+    .traits(GRAZER | CURIOUS)
     .tint("1:wKyc 4:kW")
     .color('w')
     .swim(Swim::Wave)
@@ -1490,33 +1586,52 @@ KKW wWwwwwwwwwwwwwW
     Species::new(
         "dugong",
         &[
-            r"
-               _.--._
-     _.--.__.-'      '-._
-\\  /                    \
-((=(   __     ,-.    o   ))
-  //  `-'`-.__`-'  __.-'''
-             `-..-'
-",
-            r"
-               _.--._
-     _.--.__.-'      '-._
-\\  /                    \
-((=(   __     ,-.    o   ))
-  //  `-'`-.__`-'  __.-'''
-             `-..-'
-",
+            r#"
+                  _.--._
+           __..--'  o   `-.
+   _..---''''             `.
+\\ .-'  .   .   .   ___  `.
+ ))   .   .   .   (   ) _.'>:
+// `-.__  .   .  _.-'`-'_.'
+   `--..______..--' `-. \
+        `-.__      _.-`.__)
+"#,
+            r#"
+                  _.--._
+           __..--'  o   `-.
+   _..---''''             `.
+// .-'  .   .   .   ___  `.
+ ))   .   .   .   (   ) _.'>:
+\\ `-.__  .   .  _.-'`-'_.'
+   `--..______..--' `-.
+        `-.__      _.-`.__)
+"#,
         ],
-        &[r"
-               111111
-     1111111111      1111
-11  1                    1
-1111   11     111    4   11
-  11  11111111111  1111111
-             111111
-"],
+        &[
+            r#"
+                  1k11k1     
+           11kk111  4   11k  
+   1kk1111111             1k 
+11 k11  k   k   k   111  1k  
+ 11   k   k   k   1   1 1k111
+11 11k11  k   k  1k111111k1  
+   111kk111111kk111 11k 1    
+        11k11      1k11k111  
+"#,
+            r#"
+                  1k11k1     
+           11kk111  4   11k  
+   1kk1111111             1k 
+11 k11  k   k   k   111  1k  
+ 11   k   k   k   1   1 1k111
+11 11k11  k   k  1k111111k1  
+   111kk111111kk111 11k      
+        11k11      1k11k111  
+"#,
+        ],
     )
     .critter()
+    .traits(GRAZER)
     .tint("1:wKyc 4:kW")
     .color('w')
     .swim(Swim::Wave)
@@ -1528,39 +1643,44 @@ KKW wWwwwwwwwwwwwwW
     Species::new(
         "harbour-porpoise",
         &[
-            r"
-         _.-.
-     _.-'    '-.___
-\  .'  .       o   `>
- >-._      __..---'
-/    `----'
-",
-            r"
-         _.-.
-     _.-'    '-.___
- \.'  .        o   `>
---'`._     __..---'
-  /   `----'
-",
+            r#"
+             /\
+            /  \
+       _.--'    `--.__
+ _..--'            o  `-.
+<-.______                 `>
+  `-.__  `--..____..--'--''
+"#,
+            r#"
+             /\
+            /  \
+       _.--'    `--.__
+ _..--'            o  `-.
+<-.______                 `>
+  `-.__  `--..____..--'--''
+"#,
         ],
         &[
-            r"
-         1111
-     1111    111111
-1  11  1       4   11
- 1111      11111111
-1    111111
-",
-            r"
-         1111
-     1111    111111
- 111  1        4   11
-111111     11111111
-  1   111111
-",
+            r#"
+             11             
+            1  1            
+       1k111    111k11      
+ 1kk111            4  11k   
+11k111111                 11
+  11k11  111kk1111kk1111111 
+"#,
+            r#"
+             11             
+            1  1            
+       1k111    111k11      
+ 1kk111            4  11k   
+11k111111                 11
+  11k11  111kk1111kk1111111 
+"#,
         ],
     )
     .critter()
+    .traits(PREDATOR | CURIOUS)
     .tint("1:wKbc 4:W")
     .color('w')
     .swim(Swim::Wave)
@@ -1573,39 +1693,48 @@ KKW wWwwwwwwwwwwwwW
     Species::new(
         "beluga-calf",
         &[
-            r"
-         _.--.._
-    _.-''       '.
-\,.'  .    o      \
-/`--._          ,-'
-  /   `--.____.-'
-",
-            r"
-         _.--.._
-    _.-''       '.
- \.'  .    o      \
---'`-._         ,-'
-   /  `--.____.-'
-",
+            r#"
+                   _..-._
+               _.-'      `-.
+        __..-''   o        `.
+  _..--''                ,-'>
+\\ `--..___       _..---'
+ `\_  \  `-._  _.-'
+   `-' `-.__.-'
+"#,
+            r#"
+                   _..-._
+               _.-'      `-.
+        __..-''   o        `.
+  _..--''                ,-'>
+// `--..___       _..---'
+ /'_  \  `-._  _.-'
+ `-'`-.__.-'
+"#,
         ],
         &[
-            r"
-         WWWWWWW
-    WWWWW       WW
-WWWW  W    k      W
-WWWWWW          WWW
-  W   WWWWWWWWWWW
-",
-            r"
-         WWWWWWW
-    WWWWW       WW
- WWW  W    k      W
-WWWWWWW         WWW
-   W  WWWWWWWWWWW
-",
+            r#"
+                   111111    
+               1111      111 
+        1111111   4        11
+  1111111                1111
+11 11111111       1111111    
+ 111  1  1111  1111          
+   111 11111111              
+"#,
+            r#"
+                   111111    
+               1111      111 
+        1111111   4        11
+  1111111                1111
+11 11111111       1111111    
+ 111  1  1111  1111          
+ 11111111111                 
+"#,
         ],
     )
     .critter()
+    .traits(CURIOUS)
     .color('W')
     .swim(Swim::Wave)
     .zone(Zone::Any)
@@ -1617,43 +1746,56 @@ WWWWWWW         WWW
     Species::new(
         "walrus",
         &[
-            r"
-            _.--._
-       _.--'  o   '.
-    .-'     ,-.__.-.\
- _.'       ( ,,,,, )||
-(___.--'''`--._'-'  ||
-  `-'  `-.
-",
-            r"
-            _.--._
-       _.--'  o   '.
-    .-'     ,-.__.-.\
- _.'       ( ,,,,, )||
-(___.--'''`--._'-'  ||
-   `-' `-.
-",
+            r#"
+                _.--._
+          _.---'  o   `-.
+      _.-'    ,.,.,,    `.
+   .-'   .   (,,,,,,,)    |
+ .'    .  .    ||   ||    |
+(   .       .  ||   ||_.-'
+ `-._   .  _.-'`---'
+    `-.___.-'   \ \
+       `-'-.__   `-'
+"#,
+            r#"
+                _.--._
+          _.---'  o   `-.
+      _.-'    ,.,.,,    `.
+   .-'   .   (,,,,,,,)    |
+ .'    .  .    ||   ||    |
+(   .       .  ||   ||_.-'
+ `-._   .  _.-'`---'
+    `-.___.-'    \ \
+       `-'-.__  `-'`-'
+"#,
         ],
         &[
-            r"
-            111111
-       11111  4   11
-    111     w11111111
- 111       1 wwwww 1WW
-111111111111111111  WW
-  111  111
-",
-            r"
-            111111
-       11111  4   11
-    111     w11111111
- 111       1 wwwww 1WW
-111111111111111111  WW
-   111 111
-",
+            r#"
+                1k11k1     
+          1k1111  4   11k  
+      1k11    ykykyy    1k 
+   k11   k   1yyyyyyy1    W
+ k1    k  k    WW   WW    W
+1   k       k  WW   WW1k11 
+ 11k1   k  1k1111111       
+    11k111k11   1 1        
+       1111k11   111       
+"#,
+            r#"
+                1k11k1     
+          1k1111  4   11k  
+      1k11    ykykyy    1k 
+   k11   k   1yyyyyyy1    W
+ k1    k  k    WW   WW    W
+1   k       k  WW   WW1k11 
+ 11k1   k  1k1111111       
+    11k111k11    1 1       
+       1111k11  111111     
+"#,
         ],
     )
     .critter()
+    .traits(DEFENDED | CURIOUS)
     .tint("1:yrwy 4:kW")
     .color('y')
     .swim(Swim::Wave)
@@ -1702,6 +1844,8 @@ WWWWWWW         WWW
         ],
     )
     .critter()
+    .traits(PREDATOR | NOCTURNAL)
+    .home("hornwort,vallisneria,cabomba")
     .tint("1:wWmMyY")
     .color('w')
     .swim(Swim::Wave)
@@ -1746,6 +1890,8 @@ WWWWWWW         WWW
         ],
     )
     .critter()
+    .traits(PREDATOR | SHY)
+    .home("lily,pondweed")
     .tint("1:gGyg 4:kW")
     .color('g')
     .swim(Swim::Dart)
@@ -1757,39 +1903,56 @@ WWWWWWW         WWW
     Species::new(
         "river-otter",
         &[
-            r"
-              ,--.
-   __.-----.-' o \
- ,'  ...___       >=
-(__.---'   `--..-'
-        .'
-",
-            r"
-              ,--.
-   __.-----.-' o \
- ,'  ...___       >=
-(__.---'   `--..-'
-         `.
-",
+            r#"
+                   _.-.
+         __.------'o  `.
+  _..---'  . . . .   ,-'>=
+.'  . .  .   .   .  /
+\_ .  .  .  .  __.-'\ \
+  `-.___..---''   )  ) )
+     /  /    `-.-'`-'-'
+    (_.'`-._ ~~~
+        `--'  ~
+"#,
+            r#"
+                   _.-.
+         __.------'o  `.
+  _..---'  . . . .   ,-'>=
+.'  . .  .   .   .  /
+\_ .  .  .  .  __.-'
+  `-.___..---''  \ \
+     /  /    `-.-'`-'
+    (_.'`-.__  ~~~
+        `--'     ~
+"#,
         ],
         &[
-            r"
-              1111
-   11111111111 4 1
- 11  111111       1W
-11111111   1111111
-        11
-",
-            r"
-              1111
-   11111111111 4 1
- 11  111111       1W
-11111111   1111111
-         11
-",
+            r#"
+                   1k1k   
+         11k11111114  1k  
+  1kk1111  k k k k   1111W
+k1  k k  k   k   k  1     
+11 k  k  k  k  11k111 1   
+  11k111kk11111   1  1 1  
+     1  1    11k1111111   
+    11k111k1 ccc          
+        1111  c           
+"#,
+            r#"
+                   1k1k   
+         11k11111114  1k  
+  1kk1111  k k k k   1111W
+k1  k k  k   k   k  1     
+11 k  k  k  k  11k11      
+  11k111kk11111  1 1      
+     1  1    11k11111     
+    11k111k11  ccc        
+        1111     c        
+"#,
         ],
     )
     .critter()
+    .traits(PREDATOR | CURIOUS)
     .tint("1:yyrw 4:kW")
     .color('y')
     .swim(Swim::Wave)
@@ -1801,35 +1964,49 @@ WWWWWWW         WWW
     Species::new(
         "platypus",
         &[
-            r"
-           _.-.
- .-----.__/  o '=====-.
-(~~~~~~~~~~~~~~~~~~~~=_)
- `-.______.-'`-' `-'
-",
-            r"
-           _.-.
- .-----.__/  o '=====-.
-(~~~~~~~~~~~~~~~~~~~~=_)
- `-.______.-' `-'`-'
-",
+            r#"
+                    _.--.
+         _.---.___.'  o `.__
+  _.--.--'  . .  .    _____)
+ .'   .  . . . . .    `----'
+(  ~ ~ ~ ~ ~ ~ ~ ~ ~ _.-' \
+ `-.__.-._.-'''-.__.-' `-'`-'
+       `-.__.-'
+"#,
+            r#"
+                    _.--.
+         _.---.___.'  o `.__
+  _.--.--'  . .  .    _____)
+ .'   .  . . . . .    `----'
+(  ~ ~ ~ ~ ~ ~ ~ ~ ~ _.-'
+ `-.__.-._.-'''-.__.-' \ \
+       `-.__.-'
+"#,
         ],
         &[
-            r"
-           1111
- 1111111111  4 1yyyyy11
-111111111111111111111y11
- 111111111111111 111
-",
-            r"
-           1111
- 1111111111  4 1yyyyy11
-111111111111111111111y11
- 111111111111 111111
-",
+            r#"
+                    1k11k    
+         1k111k111k1  4 1k11 
+  1k11k111  k k  k    111111 
+ k1   k  k k k k k    111111 
+1  k k k k k k k k k 1k11 1  
+ 11k11k1k1k11111k11k11 111111
+       11k11k11              
+"#,
+            r#"
+                    1k11k    
+         1k111k111k1  4 1k11 
+  1k11k111  k k  k    111111 
+ k1   k  k k k k k    111111 
+1  k k k k k k k k k 1k11    
+ 11k11k1k1k11111k11k11 1 1   
+       11k11k11              
+"#,
         ],
     )
     .critter()
+    .traits(PREDATOR | NOCTURNAL | SHY)
+    .home("log")
     .tint("1:yykw 4:kW")
     .color('y')
     .swim(Swim::Wave)
@@ -1862,6 +2039,7 @@ kkkkkkkkkkk
 "],
     )
     .critter()
+    .traits(PREDATOR)
     .color('y')
     .swim(Swim::Dart)
     .zone(Zone::Any)
@@ -1893,6 +2071,8 @@ kkkkkkkkkkk
 "],
     )
     .critter()
+    .traits(SHY)
+    .home("sea-whip,coral")
     .tint("1:mMyYwr")
     .color('m')
     .swim(Swim::Hover)
@@ -1937,6 +2117,7 @@ kkkkkkkkkkk
 "],
     )
     .critter()
+    .traits(STING)
     .tint("1:yYrRmM 2:yYrR")
     .color('y')
     .swim(Swim::Drift)
@@ -1975,6 +2156,7 @@ kkkkkkkkkkk
 "],
     )
     .critter()
+    .traits(GLOW)
     .tint("1:cwCW")
     .color('c')
     .swim(Swim::Drift)
@@ -1998,6 +2180,8 @@ kkkkkkkkkkk
 "],
     )
     .critter()
+    .traits(SHY)
+    .home("lily,pondweed,hornwort")
     .tint("1:kKgy")
     .color('k')
     .swim(Swim::Wave)
@@ -2031,6 +2215,8 @@ kkkkkkkkkkk
 "],
     )
     .critter()
+    .traits(DEFENDED | SHY)
+    .home("log,hornwort")
     .tint("1:gyGY")
     .color('g')
     .swim(Swim::Wave)
@@ -2042,35 +2228,61 @@ kkkkkkkkkkk
     Species::new(
         "beaver",
         &[
-            r"
-         ,-.
-  _..---' o `>
- ,'  .   .  ,'
-(#####=--..'
-",
-            r"
-         ,-.
-  _..---' o `>
- ,'  .   .  ,'
- (####=--..'
-",
+            r#"
+               _.-.
+         _..--' o `.
+     _.-'  .   .   `>
+  .-'  . .   .   .  |
+ /  .   .  .   .  _.'
+(  .  .    . _..-'(
+ `-.__   _.-'  ^^ `-'
+######`-'
+########\
+ ######/
+"#,
+            r#"
+               _.-.
+         _..--' o `.
+     _.-'  .   .   `>
+  .-'  . .   .   .  |
+ /  .   .  .   .  _.'
+(  .  .    . _..-'(
+ `-.__   _.-'  ^^ `-'
+######`-'
+ #######\
+  #####/
+"#,
         ],
         &[
-            r"
-         111
-  1111111 4 1W
- 11  1   1  11
-1kkkkk111111
-",
-            r"
-         111
-  1111111 4 1W
- 11  1   1  11
- 1kkkk111111
-",
+            r#"
+               1k1k  
+         1kk111 4 1k 
+     1k11  k   k   11
+  k11  k k   k   k  1
+ 1  k   k  k   k  1k1
+1  k  k    k 1kk111  
+ 11k11   1k11  WW 111
+kkkkkk111            
+kkkkkkkk1            
+ kkkkkk1             
+"#,
+            r#"
+               1k1k  
+         1kk111 4 1k 
+     1k11  k   k   11
+  k11  k k   k   k  1
+ 1  k   k  k   k  1k1
+1  k  k    k 1kk111  
+ 11k11   1k11  WW 111
+kkkkkk111            
+ kkkkkkk1            
+  kkkkk1             
+"#,
         ],
     )
     .critter()
+    .traits(GRAZER | CURIOUS)
+    .home("log")
     .tint("1:yyrw 4:W")
     .color('y')
     .swim(Swim::Wave)
@@ -2082,24 +2294,48 @@ kkkkkkkkkkk
     Species::new(
         "adelie-penguin",
         &[
-            r"
-   _.-.
-<='  o'>
-  `-._/
-",
-            r"
-   _.-.
-<='  o'>
-  `-._\
-",
+            r#"
+         _.-"-.
+     _.-'### o `.
+  _.-'########  `>>
+==-.#########.--.'
+  `-..........-'
+    `-...._.-'
+      `-'-\ \
+"#,
+            r#"
+         _.-"-.
+     _.-'### o `.
+  _.-'########  `>>
+==-.#########.--.'
+  `-..........-'
+    `-...._.-'
+      `-'-/ /
+"#,
         ],
-        &[r"
-   wKKK
-KKK  WKR
-  wKKwK
-"],
+        &[
+            r#"
+         kkkkkk    
+     kkkkkkk 4 kk  
+  kkkkkkkkkkkk  kyy
+yykkkkkkkkkkkkkkkk 
+  kkkWWWWWWWWkkk   
+    kkkWWWkkkk     
+      kkkkk k      
+"#,
+            r#"
+         kkkkkk    
+     kkkkkkk 4 kk  
+  kkkkkkkkkkkk  kyy
+yykkkkkkkkkkkkkkkk 
+  kkkWWWWWWWWkkk   
+    kkkWWWkkkk     
+      kkkkk k      
+"#,
+        ],
     )
     .critter()
+    .traits(PREDATOR)
     .color('K')
     .swim(Swim::Dart)
     .zone(Zone::Any)
@@ -2164,6 +2400,7 @@ KKK  WKR
         ],
     )
     .critter()
+    .traits(GRAZER | DEFENDED | CURIOUS)
     .tint("1:gGyY 2:gGyY 4:W")
     .color('g')
     .swim(Swim::Wave)
@@ -2212,6 +2449,7 @@ KKK  WKR
         ],
     )
     .critter()
+    .traits(DEFENDED)
     .tint("1:kwbk 2:wWcb 4:W")
     .color('w')
     .swim(Swim::Wave)

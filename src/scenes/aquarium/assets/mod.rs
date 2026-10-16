@@ -31,6 +31,7 @@ mod ocean;
 mod oddballs;
 mod plants;
 mod reef;
+mod season;
 mod visitors;
 
 use super::art;
@@ -73,6 +74,91 @@ pub fn biome_names(b: Biomes) -> String {
         .collect::<Vec<_>>()
         .join(",")
 }
+
+/// How a thing behaves around the others, as a set of bits. Which bits make
+/// sense depends on what it is: see each one.
+pub type Traits = u32;
+/// Creatures, visitors: hunts creatures much smaller than itself.
+pub const PREDATOR: Traits = 1 << 0;
+/// Creatures: nibbles plants, corals and algae.
+pub const GRAZER: Traits = 1 << 1;
+/// Creatures: keeps company with big fish (cleaner wrasse, remora, pilot fish).
+pub const CLEANER: Traits = 1 << 2;
+/// Creatures: hides in plants and props when a predator comes.
+pub const SHY: Traits = 1 << 3;
+/// Creatures: out at night, rare by day.
+pub const NOCTURNAL: Traits = 1 << 4;
+/// Creatures, visitors: bioluminescent; lights up in the dark.
+pub const GLOW: Traits = 1 << 5;
+/// Creatures, plants: whatever touches it gets stung (jellyfish, lionfish,
+/// fire coral, anemones; a creature is never stung by its own `home`).
+pub const STING: Traits = 1 << 6;
+/// Creatures: predators leave it alone (spines, armor, poison, a hard shell).
+pub const DEFENDED: Traits = 1 << 7;
+/// Creatures: squirts a cloud of ink when it flees (octopus, squid, cuttlefish).
+pub const INK: Traits = 1 << 8;
+/// Creatures: shows its `alt` shape when threatened (a pufferfish inflates).
+pub const PUFF: Traits = 1 << 9;
+/// Creatures, visitors: eats scraps and food that sink to the floor.
+pub const SCAVENGER: Traits = 1 << 10;
+/// Creatures, visitors: strains plankton from the water.
+pub const FILTER: Traits = 1 << 11;
+/// Creatures: comes over to look at divers, subs and other lures.
+pub const CURIOUS: Traits = 1 << 12;
+/// Creatures, visitors: very rare; only shows up in a sighting.
+pub const LEGENDARY: Traits = 1 << 13;
+/// Visitors: small creatures flee from it.
+pub const SCARY: Traits = 1 << 14;
+/// Visitors (sky): plunges into the water to catch a fish near the surface.
+pub const PLUNGE: Traits = 1 << 15;
+/// Visitors: curious creatures come over to look (divers, subs, lights).
+pub const LURE: Traits = 1 << 16;
+/// Visitors: drags a net that catches fish.
+pub const NET: Traits = 1 << 17;
+/// Visitors: lowers a fishing line.
+pub const FISHING: Traits = 1 << 18;
+/// Plants, props: shy creatures hide in it.
+pub const SHELTER: Traits = 1 << 19;
+
+pub const TRAITS: [(&str, Traits); 20] = [
+    ("predator", PREDATOR),
+    ("grazer", GRAZER),
+    ("cleaner", CLEANER),
+    ("shy", SHY),
+    ("nocturnal", NOCTURNAL),
+    ("glow", GLOW),
+    ("sting", STING),
+    ("defended", DEFENDED),
+    ("ink", INK),
+    ("puff", PUFF),
+    ("scavenger", SCAVENGER),
+    ("filter", FILTER),
+    ("curious", CURIOUS),
+    ("legendary", LEGENDARY),
+    ("scary", SCARY),
+    ("plunge", PLUNGE),
+    ("lure", LURE),
+    ("net", NET),
+    ("fishing", FISHING),
+    ("shelter", SHELTER),
+];
+
+/// Names of the traits in a set, space separated.
+pub fn trait_names(t: Traits) -> String {
+    TRAITS
+        .iter()
+        .filter(|(_, bit)| t & bit != 0)
+        .map(|(n, _)| *n)
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+/// When a thing appears, beyond the usual: some only come in their season.
+pub type Season = u8;
+/// Any day of the year.
+pub const ALWAYS: Season = 0;
+/// Día de Muertos (around November 1st and 2nd).
+pub const MUERTOS: Season = 1;
 
 /// Which band of the water a creature keeps to.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -134,6 +220,15 @@ pub struct Species {
     pub biomes: Biomes,
     /// Fish blow bubbles and can be eaten by the shark or caught on the hook.
     pub fish: bool,
+    pub traits: Traits,
+    /// Where it likes to stay: comma separated pieces of plant or prop names
+    /// (`"anemone"` matches every anemone). Empty for none.
+    pub home: &'static str,
+    /// The shape it takes when threatened (with `PUFF`), facing right, and its
+    /// masks; mirrored for facing left.
+    pub alt: &'static [&'static str],
+    pub alt_mask: &'static [&'static str],
+    pub season: Season,
 }
 
 impl Species {
@@ -158,6 +253,11 @@ impl Species {
             weight: 5,
             biomes: 0,
             fish: true,
+            traits: 0,
+            home: "",
+            alt: &[],
+            alt_mask: &[],
+            season: ALWAYS,
         }
     }
     pub const fn left(
@@ -210,6 +310,27 @@ impl Species {
         self.fish = false;
         self
     }
+    pub const fn traits(mut self, t: Traits) -> Species {
+        self.traits = t;
+        self
+    }
+    pub const fn home(mut self, h: &'static str) -> Species {
+        self.home = h;
+        self
+    }
+    pub const fn alt(
+        mut self,
+        art: &'static [&'static str],
+        mask: &'static [&'static str],
+    ) -> Species {
+        self.alt = art;
+        self.alt_mask = mask;
+        self
+    }
+    pub const fn season(mut self, s: Season) -> Species {
+        self.season = s;
+        self
+    }
 }
 
 /// How a plant is drawn.
@@ -242,6 +363,8 @@ pub struct Plant {
     pub fps: f32,
     pub weight: u8,
     pub biomes: Biomes,
+    pub traits: Traits,
+    pub season: Season,
 }
 
 impl Plant {
@@ -258,6 +381,8 @@ impl Plant {
             fps: 0.25,
             weight: 5,
             biomes: 0,
+            traits: 0,
+            season: ALWAYS,
         }
     }
     pub const fn stalk(
@@ -275,6 +400,8 @@ impl Plant {
             fps: 0.25,
             weight: 5,
             biomes: 0,
+            traits: 0,
+            season: ALWAYS,
         }
     }
     pub const fn tint(mut self, t: &'static str) -> Plant {
@@ -297,6 +424,14 @@ impl Plant {
         self.biomes = b;
         self
     }
+    pub const fn traits(mut self, t: Traits) -> Plant {
+        self.traits = t;
+        self
+    }
+    pub const fn season(mut self, s: Season) -> Plant {
+        self.season = s;
+        self
+    }
 }
 
 /// A prop that sits on the sea floor: wrecks, ruins, chests, rocks.
@@ -313,6 +448,8 @@ pub struct Decor {
     pub bubbles: Option<(i8, i8)>,
     pub weight: u8,
     pub biomes: Biomes,
+    pub traits: Traits,
+    pub season: Season,
 }
 
 impl Decor {
@@ -331,6 +468,8 @@ impl Decor {
             bubbles: None,
             weight: 5,
             biomes: 0,
+            traits: 0,
+            season: ALWAYS,
         }
     }
     pub const fn tint(mut self, t: &'static str) -> Decor {
@@ -355,6 +494,14 @@ impl Decor {
     }
     pub const fn biomes(mut self, b: Biomes) -> Decor {
         self.biomes = b;
+        self
+    }
+    pub const fn traits(mut self, t: Traits) -> Decor {
+        self.traits = t;
+        self
+    }
+    pub const fn season(mut self, s: Season) -> Decor {
+        self.season = s;
         self
     }
 }
@@ -393,6 +540,8 @@ pub struct Visitor {
     pub fps: f32,
     pub weight: u8,
     pub biomes: Biomes,
+    pub traits: Traits,
+    pub season: Season,
 }
 
 impl Visitor {
@@ -415,6 +564,8 @@ impl Visitor {
             fps: 0.0,
             weight: 5,
             biomes: 0,
+            traits: 0,
+            season: ALWAYS,
         }
     }
     pub const fn left(
@@ -449,6 +600,14 @@ impl Visitor {
     }
     pub const fn biomes(mut self, b: Biomes) -> Visitor {
         self.biomes = b;
+        self
+    }
+    pub const fn traits(mut self, t: Traits) -> Visitor {
+        self.traits = t;
+        self
+    }
+    pub const fn season(mut self, s: Season) -> Visitor {
+        self.season = s;
         self
     }
 }
@@ -536,21 +695,22 @@ pub fn species() -> impl Iterator<Item = &'static Species> {
         oddballs::SPECIES,
         critters::SPECIES,
         floor::SPECIES,
+        season::SPECIES,
     ]
     .into_iter()
     .flatten()
 }
 
 pub fn plants() -> impl Iterator<Item = &'static Plant> {
-    plants::PLANTS.iter()
+    plants::PLANTS.iter().chain(season::PLANTS)
 }
 
 pub fn decor() -> impl Iterator<Item = &'static Decor> {
-    decor::DECOR.iter()
+    decor::DECOR.iter().chain(season::DECOR)
 }
 
 pub fn visitors() -> impl Iterator<Item = &'static Visitor> {
-    visitors::VISITORS.iter()
+    visitors::VISITORS.iter().chain(season::VISITORS)
 }
 
 /// Mask digit choices, parsed from a `tint` string.
@@ -652,10 +812,15 @@ pub fn gallery(filter: &str, color: bool) -> String {
             .map(|f| frame_sprite(s.art, s.mask, f))
             .collect();
         sprites.extend((0..l.len()).map(|f| frame_sprite(&l, &lm, f)));
-        let note = format!(
+        sprites.extend((0..s.alt.len()).map(|f| frame_sprite(s.alt, s.alt_mask, f)));
+        let mut note = format!(
             "{:?} {:?} speed {}-{} school {}-{} weight {}",
             s.swim, s.zone, s.speed.0, s.speed.1, s.school.0, s.school.1, s.weight
         );
+        extra_note(&mut note, s.traits, s.season);
+        if !s.home.is_empty() {
+            note.push_str(&format!(" home {}", s.home));
+        }
         let item = Item::new(s.name, s.biomes, note, sprites, s.color, s.tint);
         if s.fish {
             fish.push(item);
@@ -677,14 +842,9 @@ pub fn gallery(filter: &str, color: bool) -> String {
                     .map(|f| Sprite::new(&[f], &[], false, '?'))
                     .collect(),
             };
-            Item::new(
-                p.name,
-                p.biomes,
-                format!("weight {}", p.weight),
-                sprites,
-                p.color,
-                p.tint,
-            )
+            let mut note = format!("weight {}", p.weight);
+            extra_note(&mut note, p.traits, p.season);
+            Item::new(p.name, p.biomes, note, sprites, p.color, p.tint)
         })
         .collect();
     section("plants", plants);
@@ -694,10 +854,11 @@ pub fn gallery(filter: &str, color: bool) -> String {
             let sprites = (0..d.art.len())
                 .map(|f| frame_sprite(d.art, d.mask, f))
                 .collect();
-            let note = match d.bubbles {
+            let mut note = match d.bubbles {
                 Some((x, y)) => format!("bubbles at {x},{y}"),
                 None => String::new(),
             };
+            extra_note(&mut note, d.traits, d.season);
             Item::new(d.name, d.biomes, note, sprites, d.color, d.tint)
         })
         .collect();
@@ -710,12 +871,23 @@ pub fn gallery(filter: &str, color: bool) -> String {
                 .map(|f| frame_sprite(v.art, v.mask, f))
                 .collect();
             sprites.extend((0..l.len()).map(|f| frame_sprite(&l, &lm, f)));
-            let note = format!("{:?} speed {}-{}", v.lane, v.speed.0, v.speed.1);
+            let mut note = format!("{:?} speed {}-{}", v.lane, v.speed.0, v.speed.1);
+            extra_note(&mut note, v.traits, v.season);
             Item::new(v.name, v.biomes, note, sprites, v.color, v.tint)
         })
         .collect();
     section("visitors", visitors);
     out
+}
+
+/// Adds traits and the season, if any, to a gallery note.
+fn extra_note(note: &mut String, traits: Traits, season: Season) {
+    if traits != 0 {
+        note.push_str(&format!(" [{}]", trait_names(traits)));
+    }
+    if season == MUERTOS {
+        note.push_str(" (muertos)");
+    }
 }
 
 struct Item {
@@ -1024,6 +1196,86 @@ mod tests {
                 v.biomes & DEEP == 0 || matches!(v.lane, Lane::Deep | Lane::Floor),
                 "{who}: the deep sea has no surface or sky"
             );
+        }
+    }
+
+    #[test]
+    fn traits_make_sense() {
+        const CREATURE: Traits = PREDATOR
+            | GRAZER
+            | CLEANER
+            | SHY
+            | NOCTURNAL
+            | GLOW
+            | STING
+            | DEFENDED
+            | INK
+            | PUFF
+            | SCAVENGER
+            | FILTER
+            | CURIOUS
+            | LEGENDARY;
+        const VISITOR: Traits = PREDATOR
+            | GLOW
+            | SCAVENGER
+            | FILTER
+            | LEGENDARY
+            | SCARY
+            | PLUNGE
+            | LURE
+            | NET
+            | FISHING;
+        let homes: Vec<&str> = plants()
+            .map(|p| p.name)
+            .chain(decor().map(|d| d.name))
+            .chain(["seaweed", "castle"])
+            .collect();
+        for s in species() {
+            let who = format!("species {}", s.name);
+            assert_eq!(
+                s.traits & !CREATURE,
+                0,
+                "{who}: traits for visitors or props"
+            );
+            assert!(s.season <= MUERTOS, "{who}: season");
+            assert_eq!(
+                s.traits & PUFF != 0,
+                !s.alt.is_empty(),
+                "{who}: puff and only puff needs an alt shape"
+            );
+            if !s.alt.is_empty() {
+                check_shape(&format!("{who} (alt)"), s.alt, s.alt_mask, 30, 10);
+            }
+            for piece in s.home.split(',').filter(|_| !s.home.is_empty()) {
+                let piece = piece.trim();
+                assert!(
+                    !piece.is_empty() && homes.iter().any(|n| n.contains(piece)),
+                    "{who}: no plant or prop is called anything like '{piece}'"
+                );
+            }
+        }
+        for v in visitors() {
+            let who = format!("visitor {}", v.name);
+            assert_eq!(
+                v.traits & !VISITOR,
+                0,
+                "{who}: traits for creatures or props"
+            );
+            assert!(v.season <= MUERTOS, "{who}: season");
+            assert!(
+                v.traits & PLUNGE == 0 || v.lane == Lane::Sky,
+                "{who}: only birds plunge"
+            );
+        }
+        for p in plants() {
+            let who = format!("plant {}", p.name);
+            assert_eq!(p.traits & !(STING | SHELTER | GLOW), 0, "{who}: traits");
+            assert!(p.season <= MUERTOS, "{who}: season");
+        }
+        for d in decor() {
+            let who = format!("decor {}", d.name);
+            assert_eq!(d.traits & !(SHELTER | GLOW), 0, "{who}: traits");
+            assert!(d.season <= MUERTOS, "{who}: season");
         }
     }
 

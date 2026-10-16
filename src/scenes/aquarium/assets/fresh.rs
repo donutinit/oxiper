@@ -21,6 +21,7 @@ pub const SPECIES: &[Species] = &[
     .swim(Swim::Wave)
     .speed(0.3, 1.0)
     .weight(8)
+    .traits(SCAVENGER | CURIOUS)
     .biomes(TANK | FRESH),
     Species::new(
         "comet-goldfish",
@@ -40,6 +41,7 @@ pub const SPECIES: &[Species] = &[
     .swim(Swim::Wave)
     .speed(0.6, 1.5)
     .weight(6)
+    .traits(SCAVENGER | CURIOUS)
     .biomes(TANK | FRESH),
     Species::new(
         "fantail-goldfish",
@@ -70,6 +72,7 @@ pub const SPECIES: &[Species] = &[
     .swim(Swim::Wave)
     .speed(0.25, 0.8)
     .weight(6)
+    .traits(SCAVENGER)
     .biomes(TANK | FRESH),
     Species::new(
         "oranda-goldfish",
@@ -93,6 +96,7 @@ pub const SPECIES: &[Species] = &[
     .swim(Swim::Wave)
     .speed(0.25, 0.7)
     .weight(5)
+    .traits(SCAVENGER)
     .biomes(TANK | FRESH),
     Species::new(
         "ranchu",
@@ -114,6 +118,7 @@ pub const SPECIES: &[Species] = &[
     .swim(Swim::Wave)
     .speed(0.25, 0.7)
     .weight(3)
+    .traits(SCAVENGER)
     .biomes(TANK | FRESH),
     Species::new(
         "bubble-eye-goldfish",
@@ -135,6 +140,7 @@ pub const SPECIES: &[Species] = &[
     .swim(Swim::Hover)
     .speed(0.25, 0.6)
     .weight(3)
+    .traits(SCAVENGER)
     .biomes(TANK | FRESH),
     Species::new(
         "black-moor",
@@ -165,6 +171,7 @@ pub const SPECIES: &[Species] = &[
     .swim(Swim::Wave)
     .speed(0.25, 0.7)
     .weight(4)
+    .traits(SCAVENGER)
     .biomes(TANK | FRESH),
     Species::new(
         "kohaku-koi",
@@ -188,6 +195,7 @@ pub const SPECIES: &[Species] = &[
     .swim(Swim::Wave)
     .speed(0.3, 0.9)
     .weight(5)
+    .traits(SCAVENGER | CURIOUS)
     .biomes(TANK | FRESH),
     Species::new(
         "showa-koi",
@@ -211,6 +219,7 @@ pub const SPECIES: &[Species] = &[
     .swim(Swim::Wave)
     .speed(0.3, 0.9)
     .weight(4)
+    .traits(SCAVENGER | CURIOUS)
     .biomes(TANK | FRESH),
     Species::new(
         "veiltail-betta",
@@ -244,6 +253,24 @@ pub const SPECIES: &[Species] = &[
     .swim(Swim::Hover)
     .speed(0.25, 0.7)
     .weight(5)
+    .traits(PUFF)
+    .alt(
+        &[r"
+    \ \ \ _.---.
+ \\\\\\\\.'     '.
+))))))))) ( o ) )>
+ /////////'. ___.'
+   ////////
+"],
+        &[r"
+    2 2 2 111111
+ 22222222211111111
+222222222 11411111
+ 22222222211111111
+   22222221
+"],
+    )
+    .home("lily")
     .biomes(TANK | FRESH),
     Species::new(
         "halfmoon-betta",
@@ -277,6 +304,24 @@ pub const SPECIES: &[Species] = &[
     .swim(Swim::Hover)
     .speed(0.25, 0.7)
     .weight(5)
+    .traits(PUFF)
+    .alt(
+        &[r"
+  \  |  /   .-.
+ \ \ \|/ / .-'   '.
+(((((  ))) (  o   )>
+ / / /|\ \ '-.__.'
+  /  | |  \
+"],
+        &[r"
+  2  2  2   111
+ 2 2 222 2 11111111
+22222  222 111411111
+ 2 2 222 2 1111111
+  2  2 2  1
+"],
+    )
+    .home("lily")
     .biomes(TANK | FRESH),
     Species::new(
         "guppy",
@@ -297,6 +342,7 @@ pub const SPECIES: &[Species] = &[
     .speed(0.4, 1.2)
     .school(3, 8)
     .weight(8)
+    .traits(SHY)
     .biomes(TANK | FRESH),
     Species::new(
         "endlers-livebearer",
@@ -313,6 +359,7 @@ pub const SPECIES: &[Species] = &[
     .speed(0.4, 1.3)
     .school(3, 8)
     .weight(5)
+    .traits(SHY)
     .biomes(TANK | FRESH),
     Species::new(
         "molly",
@@ -334,6 +381,7 @@ pub const SPECIES: &[Species] = &[
     .swim(Swim::Wave)
     .speed(0.3, 1.0)
     .weight(5)
+    .traits(GRAZER | SHY)
     .biomes(TANK | FRESH),
     Species::new(
         "platy",
@@ -354,6 +402,7 @@ pub const SPECIES: &[Species] = &[
     .speed(0.35, 1.0)
     .school(2, 6)
     .weight(7)
+    .traits(SHY)
     .biomes(TANK | FRESH),
     Species::new(
         "swordtail",
@@ -374,6 +423,7 @@ pub const SPECIES: &[Species] = &[
     .speed(0.4, 1.2)
     .school(1, 4)
     .weight(5)
+    .traits(SHY)
     .biomes(TANK | FRESH),
     Species::new(
         "neon-tetra",
@@ -390,6 +440,7 @@ rr1R4
     .speed(0.5, 1.4)
     .school(5, 12)
     .weight(8)
+    .traits(SHY)
     .biomes(TANK | FRESH),
     Species::new(
         "cardinal-tetra",
@@ -405,6 +456,7 @@ rrCRR4
     .speed(0.5, 1.4)
     .school(5, 12)
     .weight(6)
+    .traits(SHY)
     .biomes(TANK | FRESH),
     Species::new(
         "black-skirt-tetra",
@@ -441,6 +493,7 @@ wK11114R
     .speed(0.5, 1.2)
     .school(6, 12)
     .weight(6)
+    .traits(SHY)
     .biomes(TANK | FRESH),
     Species::new(
         "zebra-danio",
@@ -477,6 +530,7 @@ wK11114R
     .speed(0.4, 1.0)
     .school(5, 10)
     .weight(6)
+    .traits(SHY)
     .biomes(TANK | FRESH),
     Species::new(
         "cherry-barb",
@@ -497,6 +551,7 @@ wK11114R
     .speed(0.4, 1.1)
     .school(3, 8)
     .weight(6)
+    .traits(SHY)
     .biomes(TANK | FRESH),
     Species::new(
         "tiger-barb",
@@ -533,6 +588,7 @@ wK11114R
     .speed(0.4, 1.1)
     .school(5, 12)
     .weight(5)
+    .traits(SHY)
     .biomes(TANK | FRESH),
     Species::new(
         "freshwater-angelfish",
@@ -565,6 +621,8 @@ wK11114R
     .speed(0.25, 0.7)
     .school(1, 3)
     .weight(6)
+    .traits(PREDATOR)
+    .home("amazon,vallisneria")
     .biomes(TANK | FRESH),
     Species::new(
         "discus",
@@ -592,6 +650,8 @@ wK11114R
     .swim(Swim::Hover)
     .speed(0.25, 0.6)
     .weight(4)
+    .traits(SHY)
+    .home("log")
     .biomes(TANK | FRESH),
     Species::new(
         "oscar",
@@ -615,6 +675,7 @@ wK11114R
     .swim(Swim::Cruise)
     .speed(0.25, 0.9)
     .weight(4)
+    .traits(PREDATOR | CURIOUS)
     .biomes(TANK | FRESH),
     Species::new(
         "convict-cichlid",
@@ -634,6 +695,7 @@ wK11114R
     .swim(Swim::Wave)
     .speed(0.3, 0.9)
     .weight(5)
+    .home("rock,log")
     .biomes(TANK | FRESH),
     Species::new(
         "electric-yellow-cichlid",
@@ -653,6 +715,8 @@ YYYYYYYYY
     .speed(0.3, 1.0)
     .school(1, 3)
     .weight(5)
+    .traits(GRAZER)
+    .home("rock")
     .biomes(TANK | FRESH),
     Species::new(
         "german-blue-ram",
@@ -674,6 +738,8 @@ YYYYYYYYY
     .swim(Swim::Hover)
     .speed(0.25, 0.6)
     .weight(3)
+    .traits(SHY)
+    .home("log")
     .biomes(TANK | FRESH),
     Species::new(
         "electric-blue-acara",
@@ -694,6 +760,7 @@ BBBBBBBBB
     .swim(Swim::Wave)
     .speed(0.3, 0.9)
     .weight(4)
+    .traits(CURIOUS)
     .biomes(TANK | FRESH),
     Species::new(
         "flowerhorn",
@@ -719,6 +786,7 @@ BBBBBBBBB
     .swim(Swim::Hover)
     .speed(0.25, 0.7)
     .weight(3)
+    .traits(PREDATOR | CURIOUS)
     .biomes(TANK | FRESH),
     Species::new(
         "tilapia",
@@ -740,6 +808,7 @@ BBBBBBBBB
     .swim(Swim::Cruise)
     .speed(0.3, 1.0)
     .weight(5)
+    .traits(GRAZER)
     .biomes(FRESH),
     Species::new(
         "dwarf-gourami",
@@ -761,6 +830,7 @@ BBBBBBBBB
     .swim(Swim::Hover)
     .speed(0.25, 0.7)
     .weight(5)
+    .traits(SHY)
     .biomes(TANK | FRESH),
     Species::new(
         "pearl-gourami",
@@ -782,6 +852,8 @@ BBBBBBBBB
     .swim(Swim::Hover)
     .speed(0.25, 0.7)
     .weight(4)
+    .traits(SHY)
+    .home("lily")
     .biomes(TANK | FRESH),
     Species::new(
         "kuhli-loach",
@@ -803,6 +875,8 @@ yKyKyKyKyKyKyK4y
     .speed(0.25, 0.8)
     .school(2, 5)
     .weight(5)
+    .traits(SHY | NOCTURNAL | SCAVENGER)
+    .home("log")
     .biomes(TANK | FRESH),
     Species::new(
         "clown-loach",
@@ -823,6 +897,8 @@ yKyKyKyKyKyKyK4y
     .speed(0.3, 0.9)
     .school(2, 4)
     .weight(5)
+    .traits(SCAVENGER | NOCTURNAL)
+    .home("log")
     .biomes(TANK | FRESH),
     Species::new(
         "silver-arowana",
@@ -846,6 +922,7 @@ yKyKyKyKyKyKyK4y
     .swim(Swim::Cruise)
     .speed(0.4, 1.2)
     .weight(3)
+    .traits(PREDATOR | CURIOUS)
     .biomes(TANK | FRESH),
     Species::new(
         "red-bellied-piranha",
@@ -868,6 +945,7 @@ RRRRRRRRRRRRRWWWW1
     .speed(0.4, 1.6)
     .school(1, 5)
     .weight(4)
+    .traits(PREDATOR | SCAVENGER)
     .biomes(TANK | FRESH),
     Species::new(
         "pacu",
@@ -891,6 +969,7 @@ RRRRRRRRRRRRRWWWW1
     .swim(Swim::Cruise)
     .speed(0.25, 0.9)
     .weight(3)
+    .traits(GRAZER)
     .biomes(TANK | FRESH),
     Species::new(
         "rainbow-trout",
@@ -933,6 +1012,7 @@ RRRRRRRRRRRRRWWWW1
     .swim(Swim::Cruise)
     .speed(0.5, 1.5)
     .weight(5)
+    .traits(PREDATOR)
     .biomes(FRESH),
     Species::new(
         "atlantic-salmon",
@@ -1002,6 +1082,7 @@ RRRRRRRRRRRRRWWWW1
     .swim(Swim::Wave)
     .speed(0.3, 0.9)
     .weight(5)
+    .traits(SCAVENGER | GRAZER)
     .biomes(FRESH),
     Species::new(
         "channel-catfish",
@@ -1023,6 +1104,8 @@ w111111K1K11K111411www
     .swim(Swim::Cruise)
     .speed(0.3, 0.9)
     .weight(5)
+    .traits(SCAVENGER | NOCTURNAL)
+    .home("log,boulder")
     .biomes(FRESH),
     Species::new(
         "northern-pike",
@@ -1044,6 +1127,7 @@ w111111K1K11K111411www
     .swim(Swim::Dart)
     .speed(0.3, 2.0)
     .weight(3)
+    .traits(PREDATOR)
     .biomes(FRESH),
     Species::new(
         "largemouth-bass",
@@ -1065,6 +1149,7 @@ w111111K1K11K111411www
     .swim(Swim::Wave)
     .speed(0.3, 1.1)
     .weight(5)
+    .traits(PREDATOR)
     .biomes(FRESH),
     Species::new(
         "bluegill",
@@ -1087,6 +1172,8 @@ w111111K1K11K111411www
     .speed(0.3, 0.9)
     .school(1, 3)
     .weight(6)
+    .traits(CURIOUS)
+    .home("lily")
     .biomes(FRESH),
     Species::new(
         "yellow-perch",
@@ -1130,6 +1217,7 @@ w111111K1K11K111411www
     .swim(Swim::Cruise)
     .speed(0.3, 1.0)
     .weight(4)
+    .traits(PREDATOR | NOCTURNAL)
     .biomes(FRESH),
     Species::new(
         "lake-sturgeon",
@@ -1151,6 +1239,7 @@ w111111K1K11K111411www
     .swim(Swim::Cruise)
     .speed(0.25, 0.7)
     .weight(2)
+    .traits(SCAVENGER | DEFENDED)
     .biomes(FRESH),
     Species::new(
         "longnose-gar",
@@ -1170,6 +1259,7 @@ w111111K1K11K111411www
     .swim(Swim::Cruise)
     .speed(0.3, 1.2)
     .weight(3)
+    .traits(PREDATOR | DEFENDED)
     .biomes(FRESH),
     Species::new(
         "paddlefish",
@@ -1193,6 +1283,7 @@ w111111K1K11K111411www
     .swim(Swim::Cruise)
     .speed(0.3, 0.9)
     .weight(2)
+    .traits(FILTER)
     .biomes(FRESH),
     Species::new(
         "elephantnose-fish",
@@ -1214,6 +1305,8 @@ w111111K1K11K111411www
     .swim(Swim::Hover)
     .speed(0.25, 0.7)
     .weight(3)
+    .traits(SHY | NOCTURNAL)
+    .home("log")
     .biomes(TANK | FRESH),
     Species::new(
         "glass-catfish",
@@ -1233,6 +1326,8 @@ CCCCcccccCC4C
     .speed(0.25, 0.7)
     .school(4, 8)
     .weight(4)
+    .traits(SHY)
+    .home("vallisneria")
     .biomes(TANK | FRESH),
     Species::new(
         "archerfish",
@@ -1258,6 +1353,7 @@ CCCCcccccCC4C
     .swim(Swim::Hover)
     .speed(0.25, 0.8)
     .weight(3)
+    .traits(PREDATOR)
     .biomes(TANK | FRESH),
     Species::new(
         "killifish",
@@ -1278,6 +1374,7 @@ CCCCcccccCC4C
     .speed(0.3, 1.0)
     .school(2, 5)
     .weight(4)
+    .traits(SHY)
     .biomes(TANK | FRESH),
     Species::new(
         "bichir",
@@ -1297,5 +1394,6 @@ CCCCcccccCC4C
     .swim(Swim::Wave)
     .speed(0.25, 0.7)
     .weight(3)
+    .traits(PREDATOR | NOCTURNAL)
     .biomes(TANK | FRESH),
 ];

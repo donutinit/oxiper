@@ -16,11 +16,18 @@
 //! beyond asciiquarium with the cast in `assets` (brought to life in
 //! `biome.rs`): hundreds of species that swim in schools, bob, dart and crawl,
 //! plants, corals, props and passers-by, a sandy floor, and a sea that moves
-//! from one place to another every few minutes.
+//! from one place to another every few minutes. There, everything also
+//! reacts to everything else (`ecology.rs`, `encounters.rs`), light, current
+//! and weather change (`environment.rs`), and now and then something special
+//! happens (`events.rs`).
 
 mod art;
 pub mod assets;
 mod biome;
+mod ecology;
+mod encounters;
+mod environment;
+mod events;
 mod library;
 mod sprite;
 
@@ -94,6 +101,43 @@ pub const INFO: SceneInfo = SceneInfo {
             help: "Marine snow drifting down in the deep sea",
         },
         Opt {
+            key: "interactions",
+            default: Val::B(true),
+            help: "Everything reacts to everything: predators hunt, prey flees or hides, birds dive, \
+                   nets and lines catch fish, cleaners ride along (not in classic)",
+        },
+        Opt {
+            key: "day_length",
+            default: Val::F(900.0),
+            help: "Seconds for a whole day and night; 0 is always day (not in classic)",
+        },
+        Opt {
+            key: "depth",
+            default: Val::F(0.3),
+            help: "Share of creatures swimming far back, dim and behind the plants",
+        },
+        Opt {
+            key: "current",
+            default: Val::F(1.0),
+            help: "Strength of the current that sways plants and carries bubbles; 0 is still water",
+        },
+        Opt {
+            key: "weather",
+            default: Val::B(true),
+            help: "Storms now and then: wind, rain and lightning over the water",
+        },
+        Opt {
+            key: "events",
+            default: Val::F(1.0),
+            help: "How often something special happens (feeding time, a bait ball, \
+                   a rare sighting...); 0 never",
+        },
+        Opt {
+            key: "season",
+            default: Val::S("auto"),
+            help: "auto (by the date), none, or muertos (Día de Muertos)",
+        },
+        Opt {
             key: "castle",
             default: Val::B(true),
             help: "Show the castle (in classic and in the tank)",
@@ -139,6 +183,8 @@ const Z_FISH_START: i32 = 3;
 const Z_FISH_END: i32 = 20;
 const Z_SEAWEED: i32 = 21;
 const Z_CASTLE: i32 = 22;
+/// The far layer (beyond classic): behind the plants and the props.
+const Z_FAR: i32 = 24;
 const Z_WATER_LINE: [i32; 4] = [8, 6, 4, 2];
 const Z_WATER_GAP: [i32; 4] = [9, 7, 5, 3];
 
@@ -190,6 +236,8 @@ const SP_SEAWEED: u16 = 39; // heights 3 to 6
 const SP_COUNT: usize = 43;
 /// Water lines are drawn by tiling, not from a sprite.
 const SP_NONE: u16 = u16::MAX;
+/// `Ent::who` of something that is not from the library.
+const NOBODY: u16 = u16::MAX;
 
 /// Everything the aquarium can show, by group, with the biomes each belongs
 /// to: the names the `species`, `plants`, `decor` and `visitors` options take.
@@ -295,6 +343,10 @@ enum Kind {
     /// A creature that is not a fish: no bubbles, no collisions.
     Critter,
     Bubble,
+    /// Something to eat drifting or sinking (beyond classic); `who` is a [`biome::Food`].
+    Food,
+    /// A cloud of ink (beyond classic).
+    Ink,
     Splat,
     Shark,
     Teeth,
@@ -324,6 +376,17 @@ enum Motion {
         omega: f32,
         phase: f32,
         timer: f32,
+    },
+    /// Round and round an ellipse centered on (`cx`, `cy`), radii `rx` and
+    /// `ry`, at `omega` radians a second, facing the way it goes (a bait
+    /// ball, a clownfish around its anemone).
+    Orbit {
+        cx: f32,
+        cy: f32,
+        rx: f32,
+        ry: f32,
+        omega: f32,
+        phase: f32,
     },
 }
 
@@ -381,6 +444,23 @@ struct Ent {
     seen: bool,
     /// Where a prop blows bubbles from, relative to its corner.
     emit: Option<(i8, i8)>,
+    /// What it is in the library (beyond classic): a species, plant, prop or
+    /// visitor index, by `kind`, or `NOBODY`.
+    who: u16,
+    /// Its `assets` traits.
+    traits: assets::Traits,
+    /// The cells it covers, to compare sizes.
+    size: u16,
+    /// Its own cruising speed in cells per second (creatures).
+    speed: f32,
+    /// 0 swims with everyone else; 1 is far back, out of reach.
+    layer: u8,
+    /// What a creature is up to (`ecology.rs`).
+    act: ecology::Act,
+    /// What a visitor, plant or prop is up to (`encounters.rs`).
+    task: encounters::Task,
+    /// The event it belongs to, if any (`events.rs`); 0 for none.
+    tag: u32,
 }
 
 impl Ent {
@@ -414,6 +494,14 @@ impl Ent {
             reaped: false,
             seen: true,
             emit: None,
+            who: NOBODY,
+            traits: 0,
+            size: 1,
+            speed: 0.0,
+            layer: 0,
+            act: ecology::Act::default(),
+            task: encounters::Task::default(),
+            tag: 0,
         }
     }
 
@@ -882,6 +970,10 @@ impl Aquarium {
     fn step(&mut self, dt: f32) {
         self.time += dt;
         self.world_clock(dt);
+        if self.world.is_some() {
+            self.environment(dt);
+            self.events(dt);
+        }
         let (sw, sh) = (self.w as f32, self.h as f32);
         // `int(rand(100)) > 97` once per original frame.
         let bubble_p = if self.bubbles {
@@ -897,7 +989,11 @@ impl Aquarium {
             }
             e.ttl -= dt;
             let offscreen = e.x >= sw || e.y >= sh || e.x < -e.w || e.y < -e.h;
-            if e.ttl <= 0.0 || (e.die_offscreen && offscreen && e.seen) {
+            let time_up = e.ttl <= 0.0
+                && (!matches!(e.kind, Kind::Fish | Kind::Critter)
+                    || self.world.is_none()
+                    || self.time_is_up(&mut e, offscreen));
+            if time_up || (e.die_offscreen && offscreen && e.seen) {
                 self.ents[i].dead = true;
                 continue;
             }
@@ -916,7 +1012,14 @@ impl Aquarium {
                     }
                     e.x += e.vx * dt;
                     e.y += e.vy * dt;
+                    // Food settles on the floor.
+                    if e.kind == Kind::Food && e.y > sh - 1.0 {
+                        e.y = sh - 1.0;
+                        e.vx = 0.0;
+                        e.vy = 0.0;
+                    }
                 }
+                Motion::Orbit { .. } => self.orbit(&mut e, dt),
                 Motion::Path { phase } => {
                     let next = phase + TICK * dt;
                     e.x += e.vx * dt;
@@ -948,6 +1051,10 @@ impl Aquarium {
                 e.frame = (e.frame + e.fps * dt).rem_euclid(frames);
             }
             self.ents[i] = e;
+        }
+        if self.world.is_some() {
+            self.ecology(dt);
+            self.encounters(dt);
         }
         self.collide();
         self.reap();
@@ -1047,14 +1154,14 @@ impl Aquarium {
         let y0 = e.y.floor().clamp(-1e6, 1e6) as i32;
         if let Kind::Water(i) = e.kind {
             let row = art::WATER[i as usize].as_bytes();
-            let (col, attr) = self.water[i as usize];
+            let (col, attr) = self.water_pen(i as usize);
             let shift = if self.waves {
                 // Neighboring rows drift in opposite directions.
                 let v = [0.0, 1.2, -0.9, 0.6][i as usize];
                 (self.time * v).floor() as i64
             } else {
                 0
-            };
+            } + self.storm_shift(i as usize);
             for x in 0..self.w {
                 let ch = row[(x as i64 - shift).rem_euclid(row.len() as i64) as usize] as char;
                 if ch == ' ' {
@@ -1072,13 +1179,14 @@ impl Aquarium {
         if x0 >= self.w || y0 >= self.h || x0 + s.w <= 0 || y0 + s.h <= 0 {
             return;
         }
+        let pens = self.pen_table(e);
         for cell in s.frame(e.frame as usize) {
             let (x, y) = (x0 + cell.dx as i32, y0 + cell.dy as i32);
             if cell.ch == ' ' {
                 // Opaque but invisible: erase what is behind, keep the terminal background.
                 c.set_attr(x, y, ' ', Color::Reset, 0);
             } else {
-                let (col, attr) = self.pens[e.pen(cell.code) as usize];
+                let (col, attr) = pens[e.pen(cell.code) as usize];
                 c.set_attr(x, y, cell.ch, col, attr);
             }
         }
@@ -1173,6 +1281,7 @@ impl Scene for Aquarium {
         if th.native {
             self.pens = classic_pens();
             self.water = [(Color::Ansi(C), 0); 4];
+            self.retheme_world(ctx);
             return;
         }
         let grad: Gradient = ctx.ramp(&[]);
@@ -1203,6 +1312,7 @@ impl Scene for Aquarium {
         for (i, slot) in self.water.iter_mut().enumerate() {
             *slot = (grad.at(0.55 - 0.08 * i as f32), 0);
         }
+        self.retheme_world(ctx);
     }
 
     fn update(&mut self, _ctx: &Ctx, dt: f32) {
@@ -1227,6 +1337,10 @@ impl Scene for Aquarium {
     }
 
     fn draw(&mut self, _ctx: &Ctx, c: &mut Canvas) {
+        if self.world.is_some() {
+            self.prepare_draw();
+            self.draw_sky(c);
+        }
         self.draw_backdrop(c);
         let ents = &self.ents;
         self.order.clear();
@@ -1235,6 +1349,10 @@ impl Scene for Aquarium {
             .sort_unstable_by_key(|&i| (Reverse(ents[i as usize].z), ents[i as usize].id));
         for &i in &self.order {
             self.draw_ent(&self.ents[i as usize], c);
+        }
+        if self.world.is_some() {
+            self.draw_env_overlay(c);
+            self.draw_event_overlay(c);
         }
     }
 }
