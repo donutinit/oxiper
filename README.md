@@ -15,14 +15,15 @@ plus eight more scenes. One small binary. Nearly no CPU. Your terminal's transpa
 ![Scenes](https://img.shields.io/badge/scenes-13-22c55e)
 ![Themes](https://img.shields.io/badge/themes-23_+_yours-a855f7)
 
-[Gallery](#-gallery) ·
-[Install](#-install) ·
-[Usage](#-usage) ·
-[Screensaver](#-screensaver-mode) ·
-[Customize](#-make-it-yours) ·
-[Transparency](#-transparency) ·
-[Performance](#-performance) ·
-[Scene options](#-scene-options)
+[Gallery](#gallery) ·
+[Install](#install) ·
+[Usage](#usage) ·
+[Screensaver](#screensaver-mode) ·
+[Customize](#make-it-yours) ·
+[Aquarium](#the-aquarium) ·
+[Transparency](#transparency) ·
+[Performance](#performance) ·
+[Scene options](#scene-options)
 
 </div>
 
@@ -33,7 +34,8 @@ plus eight more scenes. One small binary. Nearly no CPU. Your terminal's transpa
 - **The classics, for real.** The bonsai is cbonsai's growth engine, call for call. It even uses
   glibc's `rand()`, so `-o bonsai.seed=42` grows *exactly* the tree `cbonsai -s 42` grows. The aquarium
   carries all 95 sprites of asciiquarium, verified glyph by glyph against Term::Animation, with
-  sharks that eat fish and hooks that catch them. The rain is neo's droplet model, falling at
+  sharks that eat fish and hooks that catch them, and then grows into seven biomes with
+  **277 kinds of fish** and hundreds more creatures, plants, props and passers-by. The rain is neo's droplet model, falling at
   neo's real speed. Nyan Cat flies with the original twelve frames.
 - **One binary, thirteen scenes.** Mix them into a playlist and give each one its own theme, pace and
   time on screen.
@@ -55,7 +57,7 @@ plus eight more scenes. One small binary. Nearly no CPU. Your terminal's transpa
 <table>
 <tr>
 <td align="center" width="50%"><img src="assets/bonsai.gif" alt="bonsai"><br><b>bonsai</b> · after <a href="https://gitlab.com/jallbrit/cbonsai">cbonsai</a><br><sub><code>oxiper -s bonsai</code></sub></td>
-<td align="center" width="50%"><img src="assets/aquarium.gif" alt="aquarium"><br><b>aquarium</b> · after <a href="https://robobunny.com/projects/asciiquarium/html/">asciiquarium</a><br><sub><code>oxiper -s aquarium</code></sub></td>
+<td align="center" width="50%"><img src="assets/aquarium.gif" alt="aquarium"><br><b>aquarium</b> · after <a href="https://robobunny.com/projects/asciiquarium/html/">asciiquarium</a><br><sub><code>oxiper -s aquarium -o aquarium.biome=reef</code></sub></td>
 </tr>
 <tr>
 <td align="center"><img src="assets/neo.gif" alt="neo"><br><b>neo</b> · after <a href="https://github.com/st3w/neo">neo</a><br><sub><code>oxiper -s neo</code></sub></td>
@@ -230,6 +232,39 @@ terminal's own ANSI palette, exactly like the originals). The rest:
 
 `oxiper list themes` shows swatches. Press <kbd>↑</kbd>/<kbd>↓</kbd> while it runs to flip through them.
 
+## The aquarium
+
+`biome = "classic"` is asciiquarium, exactly. Every other setting goes further, in asciiquarium's
+own drawing style: seven biomes with **277 fish**, 90 other creatures, 82 plants and corals,
+64 props and 67 passers-by.
+
+<p align="center"><img src="assets/biomes.png" alt="The aquarium in each biome: classic, reef, ocean, kelp, deep, fresh, arctic and tank" width="840"></p>
+
+- **Seven places.** Coral reef, open ocean, kelp forest, the deep sea, rivers and lakes, polar seas
+  and a home tank, each with its own fish, plants, floor props and visitors. The deep sea has no
+  surface: marine snow drifts down instead, and anglerfish light their lures.
+- **Alive in different ways.** Fish swim in schools that keep formation. Others cruise straight,
+  rise and sink, dart in bursts, drift like jellyfish or hover like seahorses, and crabs, lobsters,
+  starfish and snails walk the sand, stopping now and then.
+- **Never the same twice.** Each creature takes its colors from its species' palette, so no two
+  clownfish match. The sea starts in a random biome and moves on every five minutes. The floor
+  changes at once, and the creatures already swimming finish their crossing.
+- **asciiquarium's cast stays.** The shark still eats fish and the hook still catches them. The
+  ship, whale, sea monster, ducks, swan and dolphins pass by alongside submarines, divers, orcas,
+  pirate ships, seagulls and the occasional UFO.
+
+```toml
+[scenes.aquarium]
+biome = "reef,kelp,deep"           # move between these; "mixed" puts everything together
+biome_time = 600                   # seconds in each place
+species = "-krill-swarm"           # leave some out, or name the only ones you want
+decor = "sunken-galleon,treasure-chest"
+visitors = "-ufo"
+```
+
+`oxiper list species` names every fish, critter, plant, prop and visitor, and the biomes each one
+belongs to.
+
 ## Transparency
 
 Most terminal toys paint every cell black, which turns a blurred, translucent terminal into a
@@ -266,7 +301,7 @@ CPU and memory against the originals, each in a 120×40 tmux pane for 15 s
 | scene | original | oxiper |
 |---|---|---|
 | bonsai (live, infinite) | cbonsai: 0.1 % · 3.3 MB | **0.07 %** · 3.9 MB |
-| aquarium | asciiquarium: 2.5 % · 12.4 MB | **0.9 %** · 4.1 MB |
+| aquarium | asciiquarium: 2.5 % · 12.4 MB | **0.6 %** · 6.4 MB |
 | neo | neo: 2.3 % · 5.6 MB | **1.3 %** · 3.9 MB |
 | nyancat | nyancat: 0.3 % · 1.9 MB | **0.27 %** · 4.1 MB |
 
@@ -275,7 +310,7 @@ Per-frame cost of every scene at 200×60 (`oxiper bench`, release build):
 | scene | simulate + draw (µs) | diff + encode (µs) | bytes / frame | cells changed |
 |---|--:|--:|--:|--:|
 | bonsai | 6 | 77 | 24 | 0.0% |
-| aquarium | 15 | 86 | 1809 | 1.8% |
+| aquarium | 28 | 93 | 2241 | 2.7% |
 | neo | 67 | 131 | 4394 | 1.7% |
 | nyancat | 62 | 107 | 1897 | 2.4% |
 | fire | 137 | 421 | 159432 | 48.7% |
@@ -319,16 +354,25 @@ Aliases: `cbonsai`
 </details>
 
 <details>
-<summary><b>aquarium</b> — fish, sharks, whales and ships, after asciiquarium</summary>
+<summary><b>aquarium</b> — asciiquarium, and then some: hundreds of species in seven biomes</summary>
 
 Aliases: `asciiquarium`, `fish`
 
 | option | default | |
 |---|---|---|
 | `fish` | `1.0` | Fish density; 1 is the original's one fish per 350 cells of water |
-| `seaweed` | `1.0` | Seaweed density; 1 is the original's one plant per 15 columns |
-| `castle` | `true` | Show the castle |
-| `random_objects` | `true` | Send ships, whales, sharks, monsters, ducks, dolphins... one at a time |
+| `seaweed` | `1.0` | Plant density; 1 is the original's one seaweed per 15 columns |
+| `biome` | `"random"` | random, mixed (all at once), classic (exactly asciiquarium), or some of reef, ocean, kelp, deep, fresh, arctic, tank, comma separated |
+| `biome_time` | `300.0` | Seconds before the sea moves on to another biome; 0 stays |
+| `species` | `""` | Only these species, anywhere (comma separated; -name leaves one out). `oxiper list species` names them |
+| `plants` | `""` | Only these plants (comma separated; -name leaves one out) |
+| `decor` | `"auto"` | Props on the floor: auto (the biome's), none, or names (comma separated; -name leaves one out) |
+| `visitors` | `""` | Only these passers-by (comma separated; -name leaves one out) |
+| `schools` | `true` | Schooling fish swim in groups |
+| `floor` | `true` | Sand and pebbles along the bottom (not in classic) |
+| `snow` | `true` | Marine snow drifting down in the deep sea |
+| `castle` | `true` | Show the castle (in classic and in the tank) |
+| `random_objects` | `true` | Send ships, whales, sharks, divers, submarines, birds... one at a time |
 | `bubbles` | `true` | Fish blow bubbles |
 | `speed` | `1.0` | Pace relative to the original |
 | `smooth` | `true` | Move continuously; false steps at the original 10 frames per second |
@@ -540,6 +584,7 @@ Aliases: `flow`
 oxiper record demo.cast -s aquarium --size 100x30 --seconds 10   # asciicast; play with asciinema
 oxiper snap -s bonsai --size 80x24 --at 20 [--ansi]             # one frame, as text
 oxiper bench --size 200x60                                       # µs per frame for every scene
+oxiper list species                                              # everything the aquarium can show
 oxiper completions zsh > ~/.zfunc/_oxiper                        # bash, zsh, fish, elvish, powershell
 ```
 

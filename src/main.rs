@@ -71,7 +71,7 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Cmd {
-    /// List scenes, themes, or a scene's options
+    /// List scenes, themes, a scene's options, or the aquarium's species
     List {
         #[arg(value_enum, default_value = "scenes")]
         what: ListWhat,
@@ -126,6 +126,15 @@ enum Cmd {
     /// Print the scene option reference as Markdown (for the README)
     #[command(hide = true)]
     Docs,
+    /// Show the aquarium's art: everything, a biome, or names containing FILTER
+    #[command(hide = true)]
+    Gallery {
+        #[arg(default_value = "")]
+        filter: String,
+        /// Keep colors (ANSI escapes)
+        #[arg(long)]
+        ansi: bool,
+    },
     #[command(hide = true)]
     IdleWatch {
         #[arg(long)]
@@ -142,6 +151,8 @@ enum ListWhat {
     Scenes,
     Themes,
     Options,
+    /// The aquarium's species, plants, decor and visitors
+    Species,
 }
 
 #[derive(Subcommand)]
@@ -478,6 +489,28 @@ fn real_main() -> Result<(), String> {
             }
             Ok(())
         }
+        Some(Cmd::List {
+            what: ListWhat::Species,
+            ..
+        }) => {
+            use scenes::aquarium::assets::biome_names;
+            let mut stdout = Styled::new(&mut stdout);
+            for (title, rows) in scenes::aquarium::roster() {
+                writeln!(stdout, "\x1b[1m{title}\x1b[0m ({})", rows.len()).map_err(io)?;
+                for (name, b) in rows {
+                    writeln!(stdout, "  {name:<26} \x1b[2m{}\x1b[0m", biome_names(b))
+                        .map_err(io)?;
+                }
+                writeln!(stdout).map_err(io)?;
+            }
+            Ok(())
+        }
+        Some(Cmd::Gallery { filter, ansi }) => write!(
+            stdout,
+            "{}",
+            scenes::aquarium::assets::gallery(&filter, ansi)
+        )
+        .map_err(io),
         Some(Cmd::Docs) => {
             let md = |s: &str| s.replace('|', "\\|");
             for info in scenes::ALL {

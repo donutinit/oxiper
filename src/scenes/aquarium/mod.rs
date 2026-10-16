@@ -11,12 +11,20 @@
 //! asciiquarium draws a frame every tenth of a second. Those per-frame amounts
 //! are turned into per-second rates here (see [`TICK`]), so the pace is the
 //! original's at any frame rate, just smoother.
+//!
+//! With `biome = "classic"` that is all there is. Every other biome goes
+//! beyond asciiquarium with the cast in `assets` (brought to life in
+//! `biome.rs`): hundreds of species that swim in schools, bob, dart and crawl,
+//! plants, corals, props and passers-by, a sandy floor, and a sea that moves
+//! from one place to another every few minutes.
 
 mod art;
+pub mod assets;
+mod biome;
+mod library;
 mod sprite;
 
 use std::cmp::Reverse;
-use std::sync::OnceLock;
 
 use crate::color::{self, Color, Gradient};
 use crate::render::{BOLD, Canvas};
@@ -26,7 +34,7 @@ use sprite::{DEFAULT, DIGIT, Sprite};
 pub const INFO: SceneInfo = SceneInfo {
     name: "aquarium",
     aliases: &["asciiquarium", "fish"],
-    about: "fish, sharks, whales and ships, after asciiquarium",
+    about: "asciiquarium, and then some: hundreds of species in seven biomes",
     options: &[
         Opt {
             key: "fish",
@@ -36,17 +44,64 @@ pub const INFO: SceneInfo = SceneInfo {
         Opt {
             key: "seaweed",
             default: Val::F(1.0),
-            help: "Seaweed density; 1 is the original's one plant per 15 columns",
+            help: "Plant density; 1 is the original's one seaweed per 15 columns",
+        },
+        Opt {
+            key: "biome",
+            default: Val::S("random"),
+            help: "random, mixed (all at once), classic (exactly asciiquarium), or some of \
+                   reef, ocean, kelp, deep, fresh, arctic, tank, comma separated",
+        },
+        Opt {
+            key: "biome_time",
+            default: Val::F(300.0),
+            help: "Seconds before the sea moves on to another biome; 0 stays",
+        },
+        Opt {
+            key: "species",
+            default: Val::S(""),
+            help: "Only these species, anywhere (comma separated; -name leaves one out). \
+                   `oxiper list species` names them",
+        },
+        Opt {
+            key: "plants",
+            default: Val::S(""),
+            help: "Only these plants (comma separated; -name leaves one out)",
+        },
+        Opt {
+            key: "decor",
+            default: Val::S("auto"),
+            help: "Props on the floor: auto (the biome's), none, or names (comma separated; -name leaves one out)",
+        },
+        Opt {
+            key: "visitors",
+            default: Val::S(""),
+            help: "Only these passers-by (comma separated; -name leaves one out)",
+        },
+        Opt {
+            key: "schools",
+            default: Val::B(true),
+            help: "Schooling fish swim in groups",
+        },
+        Opt {
+            key: "floor",
+            default: Val::B(true),
+            help: "Sand and pebbles along the bottom (not in classic)",
+        },
+        Opt {
+            key: "snow",
+            default: Val::B(true),
+            help: "Marine snow drifting down in the deep sea",
         },
         Opt {
             key: "castle",
             default: Val::B(true),
-            help: "Show the castle",
+            help: "Show the castle (in classic and in the tank)",
         },
         Opt {
             key: "random_objects",
             default: Val::B(true),
-            help: "Send ships, whales, sharks, monsters, ducks, dolphins... one at a time",
+            help: "Send ships, whales, sharks, divers, submarines, birds... one at a time",
         },
         Opt {
             key: "bubbles",
@@ -74,7 +129,7 @@ pub const INFO: SceneInfo = SceneInfo {
 
 /// Frames per second of the original: asciiquarium calls `halfdelay(1)`, so
 /// each frame waits a tenth of a second for a key before animating.
-const TICK: f32 = 10.0;
+pub(crate) const TICK: f32 = 10.0;
 /// Longest simulation step, so fast things never tunnel through each other.
 const MAX_STEP: f32 = 0.05;
 
@@ -136,9 +191,38 @@ const SP_COUNT: usize = 43;
 /// Water lines are drawn by tiling, not from a sprite.
 const SP_NONE: u16 = u16::MAX;
 
+/// Everything the aquarium can show, by group, with the biomes each belongs
+/// to: the names the `species`, `plants`, `decor` and `visitors` options take.
+pub fn roster() -> Vec<(&'static str, Vec<(&'static str, assets::Biomes)>)> {
+    let lib = library::library();
+    let species = |fish: bool| {
+        assets::species()
+            .filter(|s| s.fish == fish)
+            .map(|s| (s.name, s.biomes))
+            .collect()
+    };
+    let visitors = biome::CLASSIC_VISITORS
+        .iter()
+        .map(|&(n, b, _)| (n, b))
+        .chain(assets::visitors().map(|v| (v.name, v.biomes)))
+        .collect();
+    vec![
+        ("fish", species(true)),
+        ("critters", species(false)),
+        (
+            "plants",
+            lib.plants.iter().map(|p| (p.name, p.biomes)).collect(),
+        ),
+        (
+            "decor",
+            lib.decor.iter().map(|d| (d.name, d.biomes)).collect(),
+        ),
+        ("visitors", visitors),
+    ]
+}
+
 fn sprites() -> &'static [Sprite] {
-    static SPRITES: OnceLock<Vec<Sprite>> = OnceLock::new();
-    SPRITES.get_or_init(build_sprites)
+    &library::library().sprites
 }
 
 fn build_sprites() -> Vec<Sprite> {
@@ -203,8 +287,13 @@ fn build_sprites() -> Vec<Sprite> {
 enum Kind {
     Water(u8),
     Castle,
+    /// Plants of every kind.
     Seaweed,
+    /// A prop on the floor (beyond classic).
+    Decor,
     Fish,
+    /// A creature that is not a fish: no bubbles, no collisions.
+    Critter,
     Bubble,
     Splat,
     Shark,
@@ -225,6 +314,17 @@ enum Motion {
     Path { phase: f32 },
     /// asciiquarium's `fishhook_cb`: sink to 3/4 of the screen, or reel in once hooked.
     Hook { hooked: bool },
+    /// A creature beyond classic: forward at `vx` (paced by its style),
+    /// bobbing `amp` rows around `base`. `timer` paces a crawler: walking
+    /// while positive, resting while negative.
+    Swim {
+        style: assets::Swim,
+        base: f32,
+        amp: f32,
+        omega: f32,
+        phase: f32,
+        timer: f32,
+    },
 }
 
 /// What happens when an entity dies (its `death_cb`).
@@ -243,6 +343,8 @@ enum Death {
     Hook,
     /// The lead dolphin lets the other two die offscreen.
     DolphinLead,
+    /// One of a group (a school, or a loner) is gone; the last one is replaced.
+    Group(u32),
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -274,6 +376,11 @@ struct Ent {
     motion: Motion,
     dead: bool,
     reaped: bool,
+    /// Has been on screen. Things that start out of sight (the back of a
+    /// school) only die offscreen after they have been seen.
+    seen: bool,
+    /// Where a prop blows bubbles from, relative to its corner.
+    emit: Option<(i8, i8)>,
 }
 
 impl Ent {
@@ -305,6 +412,8 @@ impl Ent {
             motion: Motion::Linear,
             dead: false,
             reaped: false,
+            seen: true,
+            emit: None,
         }
     }
 
@@ -401,6 +510,8 @@ struct Aquarium {
     waves: bool,
     pens: [(Color, u8); 16],
     water: [(Color, u8); 4],
+    /// Everything beyond classic; `None` is asciiquarium exactly.
+    world: Option<biome::World>,
 }
 
 impl Aquarium {
@@ -434,6 +545,7 @@ impl Aquarium {
             waves: o.b("waves"),
             pens: classic_pens(),
             water: [(Color::Ansi(C), 0); 4],
+            world: biome::World::from_opts(o),
         }
     }
 
@@ -471,6 +583,10 @@ impl Aquarium {
     /// What asciiquarium does at start and after every resize.
     fn rebuild(&mut self) {
         self.ents.clear();
+        if self.world.is_some() {
+            self.rebuild_world();
+            return;
+        }
         self.add_environment();
         if self.castle {
             self.add_castle();
@@ -570,8 +686,12 @@ impl Aquarium {
     fn add_bubble(&mut self, fish: &Ent) {
         let x = fish.x + if fish.vx > 0.0 { fish.w } else { 0.0 };
         let y = fish.y + (fish.h / 2.0).floor();
+        self.add_bubble_at(x, y, fish.z - 1);
+    }
+
+    fn add_bubble_at(&mut self, x: f32, y: f32, z: i32) {
         self.spawn(
-            Ent::new(Kind::Bubble, SP_BUBBLE, x, y, fish.z - 1, C + BRIGHT)
+            Ent::new(Kind::Bubble, SP_BUBBLE, x, y, z, C + BRIGHT)
                 .per_frame(0.0, -1.0, 0.1)
                 .physical(1)
                 .die_offscreen(),
@@ -588,6 +708,10 @@ impl Aquarium {
 
     fn random_object(&mut self) {
         if !self.random_objects {
+            return;
+        }
+        if self.world.is_some() {
+            self.world_visitor();
             return;
         }
         let mut pick = self.rand_int(9.0) as u32;
@@ -757,6 +881,7 @@ impl Aquarium {
     /// collisions, then deaths and their callbacks.
     fn step(&mut self, dt: f32) {
         self.time += dt;
+        self.world_clock(dt);
         let (sw, sh) = (self.w as f32, self.h as f32);
         // `int(rand(100)) > 97` once per original frame.
         let bubble_p = if self.bubbles {
@@ -772,10 +897,18 @@ impl Aquarium {
             }
             e.ttl -= dt;
             let offscreen = e.x >= sw || e.y >= sh || e.x < -e.w || e.y < -e.h;
-            if e.ttl <= 0.0 || (e.die_offscreen && offscreen) {
+            if e.ttl <= 0.0 || (e.die_offscreen && offscreen && e.seen) {
                 self.ents[i].dead = true;
                 continue;
             }
+            e.seen |= !offscreen;
+            if let Some((dx, dy)) = e.emit
+                && bubble_p > 0.0
+                && self.rng.f32() < bubble_p * 1.5
+            {
+                self.add_bubble_at(e.x + dx as f32, e.y + dy as f32, e.z - 1);
+            }
+            let mut animate = true;
             match e.motion {
                 Motion::Linear => {
                     if e.kind == Kind::Fish && bubble_p > 0.0 && self.rng.f32() < bubble_p {
@@ -792,6 +925,12 @@ impl Aquarium {
                         phase: next.rem_euclid(36.0),
                     };
                 }
+                Motion::Swim { .. } => {
+                    if e.kind == Kind::Fish && bubble_p > 0.0 && self.rng.f32() < bubble_p {
+                        self.add_bubble(&e);
+                    }
+                    animate = self.swim(&mut e, dt);
+                }
                 Motion::Hook { hooked: true } => e.y -= TICK * dt,
                 Motion::Hook { hooked: false } => {
                     // One row per frame until the bottom reaches 3/4 of the screen.
@@ -801,7 +940,7 @@ impl Aquarium {
                     }
                 }
             }
-            if e.fps != 0.0 {
+            if e.fps != 0.0 && animate {
                 let frames = sprites()
                     .get(e.spr as usize)
                     .map_or(1, |s| s.frame_count())
@@ -867,7 +1006,9 @@ impl Aquarium {
                 match e.death {
                     Death::None => {}
                     Death::Fish => self.add_fish(),
+                    Death::Seaweed if self.world.is_some() => self.add_plant(),
                     Death::Seaweed => self.add_seaweed(),
+                    Death::Group(g) => self.group_gone(g),
                     Death::Random => self.random_object(),
                     Death::Shark => {
                         self.kill_kinds(&[Kind::Teeth]);
@@ -1086,6 +1227,7 @@ impl Scene for Aquarium {
     }
 
     fn draw(&mut self, _ctx: &Ctx, c: &mut Canvas) {
+        self.draw_backdrop(c);
         let ents = &self.ents;
         self.order.clear();
         self.order.extend(0..ents.len() as u32);
@@ -1124,8 +1266,8 @@ mod tests {
             (SP_BUBBLE, 1, 1, 5),
             (SP_SEAWEED + 3, 2, 6, 2),
         ];
+        assert_eq!(build_sprites().len(), SP_COUNT);
         let s = sprites();
-        assert_eq!(s.len(), SP_COUNT);
         for &(i, w, h, f) in expect {
             let sp = &s[i as usize];
             assert_eq!((sp.w, sp.h, sp.frame_count()), (w, h, f), "sprite {i}");
@@ -1134,7 +1276,9 @@ mod tests {
 
     fn with_scene(f: impl FnOnce(&Ctx, &mut Aquarium)) {
         let theme = crate::theme::Theme::classic();
-        let opts = crate::scene::Opts::new(INFO.options, toml::Table::new());
+        let mut t = toml::Table::new();
+        t.insert("biome".into(), "classic".into());
+        let opts = crate::scene::Opts::new(INFO.options, t);
         let ctx = Ctx {
             theme: &theme,
             opts: &opts,

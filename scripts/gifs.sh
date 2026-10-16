@@ -18,7 +18,7 @@ trap 'rm -rf "$TMP"' EXIT
 # name | seconds | skip | size | fps | oxiper flags
 SHOTS=(
   "bonsai|10|0|80x24|24|-s bonsai --seed 21 -o bonsai.step=0.012"
-  "aquarium|10|20|80x24|24|-s aquarium --seed 11"
+  "aquarium|10|20|80x24|24|-s aquarium --seed 11 -o aquarium.biome=reef"
   "neo|8|3|80x24|24|-s neo --seed 4"
   "nyancat|6|0|80x24|24|-s nyancat --seed 1 -o nyancat.scale=1"
   "fire|6|3|80x24|15|-s fire --seed 2"
@@ -56,5 +56,19 @@ if [[ $# -eq 0 || $want == *" themes "* ]]; then
   done
   (cd "$TMP" && montage -label '%t' "${@/%/.png}" -tile 3x2 -geometry +6+6 -background "#$BG" \
     -fill '#8b949e' -font DejaVu-Sans-Mono -pointsize 16 "$OLDPWD/assets/themes.png")
+fi
+# The biome sampler: the aquarium frozen in each of its places (needs ImageMagick).
+if [[ $# -eq 0 || $want == *" biomes "* ]]; then
+  echo "• biomes"
+  set -- classic reef ocean kelp deep fresh arctic tank
+  for b in "$@"; do
+    $OX record "$TMP/b-$b.cast" -s aquarium --size 72x22 --seconds 0.5 --skip 25 --fps 4 --seed 3 \
+      -o aquarium.biome=$b -o bg_hint=#$BG 2>/dev/null
+    "$AGG" --theme "$THEME" --font-family "$FONTS" --font-size 14 --last-frame-duration 1 \
+      "$TMP/b-$b.cast" "$TMP/b-$b.gif" >/dev/null 2>&1
+    ffmpeg -loglevel error -y -i "$TMP/b-$b.gif" -vframes 1 "$TMP/$b.png"
+  done
+  (cd "$TMP" && montage -label '%t' "${@/%/.png}" -tile 2x4 -geometry +6+6 -background "#$BG" \
+    -fill '#8b949e' -font DejaVu-Sans-Mono -pointsize 16 "$OLDPWD/assets/biomes.png")
 fi
 ls -la assets/

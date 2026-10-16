@@ -155,6 +155,63 @@ impl Sprite {
     }
 }
 
+/// The mirror image of a character, for flipping a creature to face the other way.
+pub fn mirror_char(c: char) -> char {
+    match c {
+        '(' => ')',
+        ')' => '(',
+        '[' => ']',
+        ']' => '[',
+        '{' => '}',
+        '}' => '{',
+        '<' => '>',
+        '>' => '<',
+        '/' => '\\',
+        '\\' => '/',
+        // A backtick and a quote lean opposite ways: `-. mirrors to .-'
+        '`' => '\'',
+        '\'' => '`',
+        c => c,
+    }
+}
+
+/// Flips right-facing frames (and their masks) to face left. Every line is
+/// padded to the widest line of any frame and reversed, so the frames stay
+/// aligned with each other. What were trailing blanks lead the line now, and
+/// `auto_trans` keeps them transparent; what were leading blanks trail it and
+/// are dropped, so they stay undrawn.
+pub fn mirror<S: AsRef<str>>(frames: &[S], masks: &[S]) -> (Vec<String>, Vec<String>) {
+    let body = |s: &str| -> Vec<Vec<char>> {
+        let s = s.strip_prefix('\n').unwrap_or(s);
+        perl_lines(s).iter().map(|l| l.chars().collect()).collect()
+    };
+    let w = frames
+        .iter()
+        .flat_map(|f| body(f.as_ref()))
+        .map(|l| l.len())
+        .max()
+        .unwrap_or(0);
+    let flip = |s: &str, swap: bool| -> String {
+        let mut out = String::from("\n");
+        for mut line in body(s) {
+            line.resize(w.max(line.len()), ' ');
+            line.reverse();
+            let end = line.iter().rposition(|&c| c != ' ').map_or(0, |i| i + 1);
+            out.extend(
+                line[..end]
+                    .iter()
+                    .map(|&c| if swap { mirror_char(c) } else { c }),
+            );
+            out.push('\n');
+        }
+        out
+    };
+    (
+        frames.iter().map(|f| flip(f.as_ref(), true)).collect(),
+        masks.iter().map(|m| flip(m.as_ref(), false)).collect(),
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -178,5 +235,18 @@ mod tests {
         let s = Sprite::new(&["\nabcd\n"], &["\nR1 \n"], false, '?');
         let codes: Vec<u8> = s.frame(0).iter().map(|c| c.code).collect();
         assert_eq!(codes, vec![9, DIGIT + 1, DEFAULT, DEFAULT]);
+    }
+
+    #[test]
+    fn mirror_flips_and_keeps_alignment() {
+        // asciiquarium's small fish facing right, and its hand-drawn left twin.
+        let (l, m) = mirror(
+            &["\n    \\\n\\ /--\\\n>=  (o>\n/ \\__/\n    /\n"],
+            &["\n    2\n6 1111\n66  745\n6 1111\n    3\n"],
+        );
+        assert_eq!(l[0], "\n  /\n /--\\ /\n<o)  =<\n \\__/ \\\n  \\\n");
+        assert_eq!(m[0], "\n  2\n 1111 6\n547  66\n 1111 6\n  3\n");
+        let a = Sprite::new(&l, &[m[0].as_str()], true, '?');
+        assert_eq!((a.w, a.h), (7, 5));
     }
 }
