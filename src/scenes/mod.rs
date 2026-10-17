@@ -18,6 +18,7 @@ pub mod orrery;
 pub mod particles;
 pub mod pipes;
 pub mod rain;
+pub mod shark;
 pub mod waveform;
 
 /// Every scene, in the order `all` plays them.
@@ -27,6 +28,7 @@ pub const ALL: &[&SceneInfo] = &[
     &neo::INFO,
     &nyancat::INFO,
     &dog::INFO,
+    &shark::INFO,
     &fire::INFO,
     &fireworks::INFO,
     &constellation::INFO,
