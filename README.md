@@ -7,12 +7,12 @@
 ### Animated terminal wallpapers, oxidized.
 
 **cbonsai · asciiquarium · neo · nyancat · aafire**, ported faithfully to Rust,<br>
-plus eight more scenes. One small binary. Nearly no CPU. Your terminal's transparency stays intact.
+plus thirteen more scenes. One small binary. Nearly no CPU. Your terminal's transparency stays intact.
 
 [![CI](https://github.com/donutinit/oxiper/actions/workflows/ci.yml/badge.svg)](https://github.com/donutinit/oxiper/actions/workflows/ci.yml)
 [![License: GPL-3.0-only](https://img.shields.io/badge/license-GPL--3.0--only-3b82f6)](LICENSE)
 [![Rust 2024](https://img.shields.io/badge/rust-2024_edition-f74c00?logo=rust&logoColor=white)](https://www.rust-lang.org)
-![Scenes](https://img.shields.io/badge/scenes-13-22c55e)
+![Scenes](https://img.shields.io/badge/scenes-18-22c55e)
 ![Themes](https://img.shields.io/badge/themes-23_+_yours-a855f7)
 
 [Gallery](#gallery) ·
@@ -38,7 +38,7 @@ plus eight more scenes. One small binary. Nearly no CPU. Your terminal's transpa
   **281 kinds of fish** and hundreds more creatures, plants, props and passers-by, drawn by hand
   in Unicode and all reacting to each other. The rain is neo's droplet model, falling at neo's real
   speed. Nyan Cat flies with the original twelve frames.
-- **One binary, seventeen scenes.** Mix them into a playlist and give each one its own theme, pace and
+- **One binary, eighteen scenes.** Mix them into a playlist and give each one its own theme, pace and
   time on screen. And now and then, when you least expect it, a train or a duck goes by.
 - **Transparency first.** oxiper never paints a background it doesn't have to, so blurred or
   translucent terminals stay see-through. It even asks your terminal what its background looks like,
@@ -81,16 +81,19 @@ plus eight more scenes. One small binary. Nearly no CPU. Your terminal's transpa
 <td align="center"><img src="assets/orrery.gif" alt="orrery"><br><b>orrery</b> · Kepler orbits, moons, rings<br><sub><code>oxiper -s orrery</code></sub></td>
 </tr>
 <tr>
-<td align="center"><img src="assets/particles.gif" alt="particles"><br><b>particles</b> · a flow field, or fireworks<br><sub><code>oxiper -s particles -t rosepine</code></sub></td>
 <td align="center"><img src="assets/dog.gif" alt="dog"><br><b>dog</b> · after <a href="https://github.com/SantiagoSchez/tanim">tanim</a><br><sub><code>oxiper -s dog</code></sub></td>
+<td align="center"><img src="assets/shark.gif" alt="shark"><br><b>shark</b> · four species, day and night<br><sub><code>oxiper -s shark</code></sub></td>
 </tr>
 <tr>
 <td align="center"><img src="assets/fireworks.gif" alt="fireworks"><br><b>fireworks</b> · after <a href="https://github.com/SantiagoSchez/tanim">tanim</a><br><sub><code>oxiper -s fireworks</code></sub></td>
 <td align="center"><img src="assets/metaballs.gif" alt="metaballs"><br><b>metaballs</b> · after <a href="https://github.com/SantiagoSchez/tanim">tanim</a><br><sub><code>oxiper -s metaballs -t synthwave</code></sub></td>
 </tr>
 <tr>
+<td align="center"><img src="assets/particles.gif" alt="particles"><br><b>particles</b> · a flow field, or fireworks<br><sub><code>oxiper -s particles -t rosepine</code></sub></td>
 <td align="center"><img src="assets/hollywood.gif" alt="hollywood"><br><b>hollywood</b> · after <a href="https://github.com/dustinkirkland/hollywood">hollywood</a><br><sub><code>oxiper -s hollywood</code></sub></td>
-<td align="center"><img src="assets/themes.png" alt="the same scene in six themes"><br><b>23 themes</b> · or follow your terminal's palette<br><sub><code>oxiper list themes</code></sub></td>
+</tr>
+<tr>
+<td align="center" colspan="2"><img src="assets/themes.png" alt="the same scene in six themes" width="50%"><br><b>23 themes</b> · or follow your terminal's palette<br><sub><code>oxiper list themes</code></sub></td>
 </tr>
 </table>
 
@@ -376,6 +379,7 @@ Per-frame cost of every scene at 200×60 (`oxiper bench`, release build):
 | neo | 56 | 125 | 4154 | 1.6% |
 | nyancat | 62 | 112 | 1942 | 2.4% |
 | dog | 415 | 330 | 22318 | 8.3% |
+| shark | 431 | 426 | 54179 | 17.8% |
 | fire | 137 | 428 | 159136 | 48.6% |
 | fireworks | 188 | 117 | 8712 | 2.8% |
 | constellation | 155 | 144 | 20705 | 7.8% |
@@ -507,6 +511,23 @@ Aliases: `meadow`
 | `zoom` | `2` | How close the camera is to the dog, 0 (whole meadow) to 6 |
 | `butterflies` | `true` | Let butterflies pass by by day for the dog to chase |
 | `sky` | `true` | Paint the sky; off leaves it see-through above the hills |
+
+</details>
+
+<details>
+<summary><b>shark</b> — a shark patrols the open sea, hunting through the day and night</summary>
+
+Aliases: `sharks`
+
+| option | default | |
+|---|---|---|
+| `speed` | `1.0` | Pace of the shark, the fish and the sea (the day keeps real time) |
+| `day` | `180` | Real seconds for a full day, from dawn through night to dawn (10-86400) |
+| `zoom` | `2` | How close the camera is to the shark, 0 (the whole sea) to 6 |
+| `kind` | `"great-white"` | great-white, hammerhead, tiger, whale-shark, or random |
+| `fish` | `1.0` | How many fish swim in schools; 0 for none |
+| `rays` | `true` | Shafts of light from the surface and caustics on the sand |
+| `water` | `true` | Paint the water; off leaves it see-through around the sea life |
 
 </details>
 

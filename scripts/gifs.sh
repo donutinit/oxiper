@@ -31,6 +31,7 @@ SHOTS=(
   "orrery|10|2|80x24|24|-s orrery --seed 3"
   "particles|6|3|80x24|15|-s particles --seed 7 -t rosepine"
   "dog|8|0|80x24|15|-s dog --seed 2"
+  "shark|8|0|80x24|12|-s shark --seed 3"
   "fireworks|10|3|80x24|24|-s fireworks --seed 4"
   "metaballs|4|0|80x24|10|-s metaballs --seed 3 -t synthwave"
   "hollywood|10|4|80x24|15|-s hollywood --seed 3"
