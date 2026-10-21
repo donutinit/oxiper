@@ -1,6 +1,6 @@
 [package]
 name = "oxiper"
-version = "0.5.0"
+version = "0.6.0"
 edition = "2024"
 description = "Animated terminal wallpapers, oxidized: bonsai, matrix rain, fire, nyan cat, an aquarium and more"
 license = "GPL-3.0-only"
