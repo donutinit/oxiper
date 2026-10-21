@@ -2,6 +2,7 @@ mod app;
 mod color;
 mod config;
 mod eggs;
+mod fiesta;
 mod headless;
 mod render;
 mod scene;

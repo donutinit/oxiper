@@ -634,6 +634,7 @@ mod tests {
                     opts: &opts,
                     bg: theme.bg,
                     seed: 5,
+                    fiesta: crate::fiesta::Fiesta::NONE,
                 };
                 let mut s = (INFO.make)(&ctx);
                 let sizes = [(80, 24), (1, 1), (2, 3), (7, 2), (500, 150), (3, 40)];
@@ -663,6 +664,7 @@ mod tests {
             opts: &opts,
             bg: Color::Reset,
             seed: 1,
+            fiesta: crate::fiesta::Fiesta::NONE,
         };
         let mut f = Fire::new(&ctx);
         f.resize(&ctx, 40, 12);

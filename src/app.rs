@@ -8,6 +8,7 @@ use std::time::{Duration, Instant};
 use crate::color::{Color, ColorMode};
 use crate::config::{Background, Config, Override};
 use crate::eggs::{self, Eggs};
+use crate::fiesta::{Fiesta, Overlay};
 use crate::render::{BOLD, Canvas, DIM, Renderer};
 use crate::scene::{Ctx, Opts, Scene, SceneInfo};
 use crate::scenes;
@@ -89,7 +90,15 @@ pub struct Player {
     forced_theme: Option<String>,
     /// The easter egg now playing, if any (see `crate::eggs`).
     eggs: Eggs,
+    /// The holiday on (see `crate::fiesta`), what it puts over every scene,
+    /// and real seconds since the date was last looked at.
+    fiesta: Fiesta,
+    overlay: Overlay,
+    fiesta_age: f64,
 }
+
+/// Real seconds between looks at the date, so a holiday starts at midnight.
+const FIESTA_CHECK: f64 = 60.0;
 
 impl Player {
     pub fn new(cfg: Config, tc: TermColors, w: u16, h: u16) -> Result<Player, String> {
@@ -109,11 +118,19 @@ impl Player {
         let seed = rng.u64(..);
         let opts = Opts::new(info.options, cfg.scene_table(info.name));
         let bg = Player::bg_for(&cfg, &theme, &tc);
-        let scene = Player::make(info, &theme, &opts, bg, seed, w, h);
+        let fiesta = cfg.fiestas.resolve();
+        let ctx = Ctx {
+            theme: &theme,
+            opts: &opts,
+            bg,
+            seed,
+            fiesta,
+        };
+        let scene = Player::make(info, &ctx, w, h);
         let mut eggs = Eggs::new(w, h);
         // A forced rate (for testing) plays an egg even in `snap` and `record`.
         if cfg.egg_rate >= eggs::FORCE_RATE {
-            eggs.start(&cfg.eggs);
+            eggs.start(&cfg.eggs, fiesta);
         }
         Ok(Player {
             cfg,
@@ -132,6 +149,9 @@ impl Player {
             elapsed: 0.0,
             forced_theme: None,
             eggs,
+            fiesta,
+            overlay: Overlay::new(w, h),
+            fiesta_age: 0.0,
         })
     }
 
@@ -178,39 +198,24 @@ impl Player {
         }
     }
 
-    fn make(
-        info: &SceneInfo,
-        theme: &Theme,
-        opts: &Opts,
-        bg: Color,
-        seed: u64,
-        w: u16,
-        h: u16,
-    ) -> Box<dyn Scene> {
-        let ctx = Ctx {
-            theme,
-            opts,
-            bg,
-            seed,
-        };
-        let mut s = (info.make)(&ctx);
-        s.resize(&ctx, w, h);
-        s.retheme(&ctx);
+    fn make(info: &SceneInfo, ctx: &Ctx, w: u16, h: u16) -> Box<dyn Scene> {
+        let mut s = (info.make)(ctx);
+        s.resize(ctx, w, h);
+        s.retheme(ctx);
         s
     }
 
     fn rebuild(&mut self) {
         self.apply_scene_theme();
         self.opts = Opts::new(self.info.options, self.cfg.scene_table(self.info.name));
-        self.scene = Player::make(
-            self.info,
-            &self.theme,
-            &self.opts,
-            self.bg,
-            self.seed,
-            self.w,
-            self.h,
-        );
+        let ctx = Ctx {
+            theme: &self.theme,
+            opts: &self.opts,
+            bg: self.bg,
+            seed: self.seed,
+            fiesta: self.fiesta,
+        };
+        self.scene = Player::make(self.info, &ctx, self.w, self.h);
         self.elapsed = 0.0;
     }
 
@@ -220,24 +225,48 @@ impl Player {
             opts: &self.opts,
             bg: self.bg,
             seed: self.seed,
+            fiesta: self.fiesta,
         };
         // Scene time for motion, wall-clock time for the scene's clocks.
         self.scene.tick(&ctx, dt * self.speed(), dt);
+        self.overlay.update(dt, self.fiesta);
         self.eggs.update(dt);
         if self.cfg.egg_rate >= eggs::FORCE_RATE {
-            self.eggs.start(&self.cfg.eggs);
+            self.eggs.start(&self.cfg.eggs, self.fiesta);
         }
+        self.fiesta_age += dt as f64;
+        if self.fiesta_age >= FIESTA_CHECK {
+            self.fiesta_age = 0.0;
+            self.set_fiesta(self.cfg.fiestas.resolve());
+        }
+    }
+
+    /// Dresses the scene for a holiday (or for none) if it changed.
+    fn set_fiesta(&mut self, fiesta: Fiesta) {
+        if fiesta == self.fiesta {
+            return;
+        }
+        self.fiesta = fiesta;
+        let ctx = Ctx {
+            theme: &self.theme,
+            opts: &self.opts,
+            bg: self.bg,
+            seed: self.seed,
+            fiesta: self.fiesta,
+        };
+        self.scene.retheme(&ctx);
     }
 
     /// Rolls for an easter egg after `dt` real seconds (the interactive loop
     /// only: `snap`, `record` and `bench` stay reproducible).
     pub fn roll_egg(&mut self, dt: f64, allow: bool) {
-        self.eggs.roll(&self.cfg.eggs, self.cfg.egg_rate, dt, allow);
+        self.eggs
+            .roll(&self.cfg.eggs, self.cfg.egg_rate, dt, allow, self.fiesta);
     }
 
     /// Plays an easter egg now (the hidden `E` key).
     pub fn start_egg(&mut self) {
-        self.eggs.start(&self.cfg.eggs);
+        self.eggs.start(&self.cfg.eggs, self.fiesta);
     }
 
     pub fn draw(&mut self, c: &mut Canvas) {
@@ -246,14 +275,16 @@ impl Player {
             opts: &self.opts,
             bg: self.bg,
             seed: self.seed,
+            fiesta: self.fiesta,
         };
         self.scene.draw(&ctx, c);
+        self.overlay.draw(c, &self.theme, self.fiesta);
         self.eggs.draw(c, &self.theme);
     }
 
     /// Real seconds until the scene's picture changes (see `Scene::next_change`).
     pub fn next_change(&self) -> f64 {
-        if self.eggs.active() {
+        if self.eggs.active() || self.fiesta.on() {
             return 0.0;
         }
         let speed = self.speed() as f64;
@@ -264,11 +295,13 @@ impl Player {
         self.w = w;
         self.h = h;
         self.eggs.resize(w, h);
+        self.overlay.resize(w, h);
         let ctx = Ctx {
             theme: &self.theme,
             opts: &self.opts,
             bg: self.bg,
             seed: self.seed,
+            fiesta: self.fiesta,
         };
         self.scene.resize(&ctx, w, h);
     }
@@ -322,6 +355,7 @@ impl Player {
             opts: &self.opts,
             bg: self.bg,
             seed: self.seed,
+            fiesta: self.fiesta,
         };
         self.scene.retheme(&ctx);
     }
@@ -354,6 +388,8 @@ impl Player {
         let same_opts = cfg.scene_table(self.info.name) == self.cfg.scene_table(self.info.name);
         let same_bg = cfg.background == self.cfg.background;
         self.cfg = cfg;
+        // Re-dressed below, with the theme.
+        self.fiesta = self.cfg.fiestas.resolve();
         if !same_list {
             self.order = (0..self.cfg.scenes.len()).collect();
             if self.cfg.shuffle {
@@ -373,6 +409,7 @@ impl Player {
                 opts: &self.opts,
                 bg: self.bg,
                 seed: self.seed,
+                fiesta: self.fiesta,
             };
             self.scene.retheme(&ctx);
         }

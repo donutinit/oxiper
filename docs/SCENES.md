@@ -73,6 +73,18 @@ Sub-cell layers (allocate once in `resize`, `clear()` each frame, `blit` onto th
 Under `classic` a scene should look like the program it pays homage to.
 Under every other theme it should look good using only theme colors.
 
+## Holidays
+
+`ctx.fiesta` says which Mexican holiday is on today (`fiesta.kind`) and how
+far it has come (`fiesta.level`, 0 to 1), following the local date or the
+`fiestas` setting (`-o fiestas=muertos`, or `muertos@10-31` for one of its
+days). Scenes dress up for it: read it in `retheme`, which runs again when
+the holiday changes (at midnight, or on a config reload), or while drawing.
+On an ordinary day (`Fiesta::NONE`) a scene must look and behave exactly as
+it always has, down to the same random numbers for the same seed. The app
+draws what every scene shares on top: the holiday's overlay
+(`crate::fiesta::Overlay`) and its visitors (eggs with `fiesta` set).
+
 ## Rules
 
 - Never panic: any size from 1×1 to 500×150, any `dt` (the stress test passes

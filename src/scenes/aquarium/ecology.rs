@@ -1959,6 +1959,7 @@ mod tests {
             opts: &opts,
             bg: Color::Reset,
             seed: 9,
+            fiesta: crate::fiesta::Fiesta::NONE,
         };
         let mut aq = Aquarium::new(&ctx);
         aq.retheme(&ctx);
@@ -2493,6 +2494,7 @@ mod tests {
                 opts: &opts,
                 bg: Color::Reset,
                 seed: 21,
+                fiesta: crate::fiesta::Fiesta::NONE,
             };
             let mut aq = Aquarium::new(&ctx);
             aq.retheme(&ctx);

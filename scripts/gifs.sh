@@ -47,7 +47,7 @@ for shot in "${SHOTS[@]}"; do
   [[ $# -gt 0 && $want != *" $name "* ]] && continue
   echo "• $name"
   # shellcheck disable=SC2086
-  $OX record "$TMP/$name.cast" --size "$size" --seconds "$secs" --skip "$skip" --fps "$fps" -o bg_hint=#$BG $flags 2>/dev/null
+  $OX record "$TMP/$name.cast" --size "$size" --seconds "$secs" --skip "$skip" --fps "$fps" -o bg_hint=#$BG -o fiestas=none $flags 2>/dev/null
   "$AGG" --theme "$THEME" --font-family "$FONTS" --font-size 14 --fps-cap "$fps" \
     --last-frame-duration 0 "$TMP/$name.cast" "assets/$name.gif" >/dev/null 2>&1
 done

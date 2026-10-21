@@ -10,6 +10,7 @@
 
 use super::{Egg, Info};
 use crate::color::{self, Color};
+use crate::fiesta::Kind;
 use crate::render::{Canvas, Cell};
 use crate::scenes::nyancat::frames::{FRAME_HEIGHT, FRAME_WIDTH, FRAMES};
 use crate::scenes::nyancat::{PALETTE, RAINBOW_CHARS, sample, strip_stars, theme_rainbow};
@@ -18,6 +19,7 @@ use crate::theme::Theme;
 pub const INFO: Info = Info {
     name: "nyancat",
     start,
+    fiesta: Kind::None,
 };
 
 /// nyancat's 90 ms per frame.

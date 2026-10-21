@@ -472,6 +472,7 @@ mod tests {
                 opts: &o,
                 bg,
                 seed: 11,
+                fiesta: crate::fiesta::Fiesta::NONE,
             };
             let mut s = (INFO.make)(&ctx);
             for &(w, h) in &[(1u16, 1u16), (2, 3), (500, 150), (3, 1), (1, 40), (37, 11)] {

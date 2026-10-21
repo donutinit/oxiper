@@ -20,7 +20,11 @@ use super::{Egg, Info};
 use crate::render::{Canvas, Cell};
 use crate::theme::Theme;
 
-pub const INFO: Info = Info { name: "sl", start };
+pub const INFO: Info = Info {
+    name: "sl",
+    start,
+    fiesta: crate::fiesta::Kind::None,
+};
 
 fn start(w: u16, _h: u16, rng: &mut fastrand::Rng) -> Box<dyn Egg> {
     let kind = match rng.u8(0..100) {

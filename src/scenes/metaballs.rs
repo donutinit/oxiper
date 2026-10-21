@@ -479,6 +479,7 @@ mod tests {
             opts,
             bg,
             seed: 3,
+            fiesta: crate::fiesta::Fiesta::NONE,
         }
     }
 

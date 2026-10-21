@@ -330,6 +330,7 @@ mod tests {
             opts,
             bg: Color::Reset,
             seed: 3,
+            fiesta: crate::fiesta::Fiesta::NONE,
         }
     }
 

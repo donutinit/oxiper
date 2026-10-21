@@ -1150,6 +1150,7 @@ mod tests {
             opts: &opts,
             bg: Color::Reset,
             seed: 1,
+            fiesta: crate::fiesta::Fiesta::NONE,
         };
         let mut b = Bonsai::new(&ctx);
         b.resize(&ctx, w, h);
@@ -1224,6 +1225,7 @@ mod tests {
             opts: &opts,
             bg: Color::Reset,
             seed: 1,
+            fiesta: crate::fiesta::Fiesta::NONE,
         };
         b = Bonsai::new(&ctx);
         b.resize(&ctx, 60, 24);
@@ -1248,6 +1250,7 @@ mod tests {
             opts: &opts,
             bg: Color::Reset,
             seed: 1,
+            fiesta: crate::fiesta::Fiesta::NONE,
         };
         let mut b = Bonsai::new(&ctx);
         b.resize(&ctx, 60, 24);
@@ -1274,6 +1277,7 @@ mod tests {
             opts: &opts,
             bg: Color::Reset,
             seed: 1,
+            fiesta: crate::fiesta::Fiesta::NONE,
         };
         b.resize(&ctx, 80, 30);
         b.resize(&ctx, 60, 24);

@@ -1227,6 +1227,7 @@ mod tests {
                     opts: &opts,
                     bg: Color::Rgb(10, 10, 20),
                     seed: 3 + i as u64,
+                    fiesta: crate::fiesta::Fiesta::NONE,
                 };
                 let mut s = (INFO.make)(&ctx);
                 for &(w, h) in &[(1u16, 1u16), (2, 3), (3, 1), (1, 40), (500, 150), (80, 24)] {

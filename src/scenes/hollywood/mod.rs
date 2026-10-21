@@ -803,6 +803,7 @@ mod tests {
             opts: &o,
             bg: Color::Reset,
             seed: 11,
+            fiesta: crate::fiesta::Fiesta::NONE,
         };
         (Hollywood::new(&ctx), o)
     }
@@ -814,6 +815,7 @@ mod tests {
             opts: o,
             bg: Color::Reset,
             seed: 11,
+            fiesta: crate::fiesta::Fiesta::NONE,
         };
         f(&ctx)
     }

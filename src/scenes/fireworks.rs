@@ -918,6 +918,7 @@ mod tests {
             opts: &o,
             bg: Color::Reset,
             seed: 3,
+            fiesta: crate::fiesta::Fiesta::NONE,
         };
         let mut f = Fireworks::new(&ctx);
         f.resize(&ctx, 80, 24);
@@ -942,6 +943,7 @@ mod tests {
                     opts: &o,
                     bg: Color::Reset,
                     seed: 3,
+                    fiesta: crate::fiesta::Fiesta::NONE,
                 };
                 for (w, h) in [(80, 24), (1, 1), (2, 3), (7, 2), (300, 90)] {
                     f.resize(&ctx, w, h);
@@ -968,6 +970,7 @@ mod tests {
             opts: &o,
             bg: Color::Reset,
             seed: 3,
+            fiesta: crate::fiesta::Fiesta::NONE,
         };
         let mut c = Canvas::new(80, 24, Color::Reset);
         f.draw(&ctx, &mut c);
@@ -993,6 +996,7 @@ mod tests {
             opts: &o,
             bg: Color::Reset,
             seed: 3,
+            fiesta: crate::fiesta::Fiesta::NONE,
         };
         let mut c = Canvas::new(80, 24, Color::Reset);
         f.draw(&ctx, &mut c);
@@ -1010,6 +1014,7 @@ mod tests {
             opts: &o,
             bg: Color::Reset,
             seed: 3,
+            fiesta: crate::fiesta::Fiesta::NONE,
         };
         let mut peak = 0;
         for _ in 0..900 {

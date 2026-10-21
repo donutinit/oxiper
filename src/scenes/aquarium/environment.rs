@@ -685,6 +685,7 @@ mod tests {
             opts: &opts,
             bg,
             seed: 9,
+            fiesta: crate::fiesta::Fiesta::NONE,
         };
         let mut a = Aquarium::new(&ctx);
         a.retheme(&ctx);

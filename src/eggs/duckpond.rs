@@ -10,12 +10,14 @@
 
 use super::{Egg, Info};
 use crate::color::Color;
+use crate::fiesta::Kind;
 use crate::render::{Canvas, Cell};
 use crate::theme::Theme;
 
 pub const INFO: Info = Info {
     name: "duckpond",
     start,
+    fiesta: Kind::None,
 };
 
 fn start(w: u16, _h: u16, _rng: &mut fastrand::Rng) -> Box<dyn Egg> {

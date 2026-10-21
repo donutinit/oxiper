@@ -36,6 +36,8 @@ pub struct Config {
     pub eggs: Vec<&'static crate::eggs::Info>,
     /// Average eggs per hour of real playing time.
     pub egg_rate: f64,
+    /// Which Mexican holiday the scenes dress up for (see `crate::fiesta`).
+    pub fiestas: crate::fiesta::Setting,
     pub idle: u64,
     /// The merged table, for scene options and user themes.
     pub raw: toml::Table,
@@ -125,6 +127,11 @@ pub const GLOBAL: &[Opt] = &[
         key: "egg_rate",
         default: Val::F(1.2),
         help: "Average easter eggs per hour of playing time (0 = never; never in the first minute)",
+    },
+    Opt {
+        key: "fiestas",
+        default: Val::S("auto"),
+        help: "Mexican holidays the scenes dress up for: auto (by the local date), none, or one to force: muertos, or muertos@MM-DD for one of its days",
     },
 ];
 
@@ -411,6 +418,11 @@ impl Config {
         }
 
         let eggs = crate::eggs::parse(&string("eggs", &mut warnings), &mut warnings);
+        let fiestas = crate::fiesta::Setting::parse(&string("fiestas", &mut warnings))
+            .unwrap_or_else(|e| {
+                warnings.push(e);
+                crate::fiesta::Setting::Auto
+            });
         Ok(Config {
             scenes: list,
             duration: num("duration", &mut warnings).max(0.0),
@@ -428,6 +440,7 @@ impl Config {
             exit_on_mouse: boolean("exit_on_mouse", &mut warnings),
             eggs,
             egg_rate: num("egg_rate", &mut warnings).max(0.0),
+            fiestas,
             idle,
             raw,
             path,

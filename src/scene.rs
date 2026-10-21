@@ -1,6 +1,7 @@
 //! The interface every scene implements, and its typed options.
 
 use crate::color::{Color, Gradient};
+use crate::fiesta::Fiesta;
 use crate::render::Canvas;
 use crate::theme::Theme;
 
@@ -15,6 +16,10 @@ pub struct Ctx<'a> {
     pub bg: Color,
     /// Seed for the scene's RNG, so `record` and `bench` are reproducible.
     pub seed: u64,
+    /// The Mexican holiday on today, if any (see `crate::fiesta`). Scenes
+    /// dress up for it; `retheme` runs again whenever it changes.
+    #[allow(dead_code)] // scene API (docs/SCENES.md)
+    pub fiesta: Fiesta,
 }
 
 impl Ctx<'_> {
