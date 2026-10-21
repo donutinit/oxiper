@@ -14,8 +14,21 @@
 //! ticks at neo's default 60 fps, so it moves exactly like neo (including the
 //! way neo's rounding makes droplets crawl about twice the nominal speed) at
 //! any frame rate oxiper uses.
+//!
+//! On Día de Muertos the rain falls in cempasúchil, with droplets in rosa
+//! mexicano (through terciopelo, golden-headed) joining in as the holiday
+//! comes. Words are hidden in it and light up as it falls: the letters
+//! drop down their columns and land in place, DÍA DE MUERTOS, CEMPASÚCHIL,
+//! MICTLÁN, the names on an ofrenda, a word for the day. Now and then a
+//! calavera de azúcar is painted by the rain, out of its own heaviest
+//! glyphs: bone, flower eyes in cempasúchil or rosa with golden hearts,
+//! turquesa icing, a smile of teeth. Under other themes the rain takes the
+//! accents nearest in hue to those colors. It all draws from its own RNG on
+//! top of the screen neo keeps, so the rain falls exactly as it does on any
+//! other day.
 
 use crate::color::{self, Color};
+use crate::fiesta::Kind;
 use crate::render::{BOLD, Canvas};
 use crate::scene::{Ctx, Opt, Scene, SceneInfo, Val};
 
@@ -122,12 +135,15 @@ struct Glyph {
     ch: char,
     pair: u8,
     bold: bool,
+    /// Which palette: 0 the scene's, 1 Día de Muertos' second one.
+    hue: u8,
 }
 
 const BLANK: Glyph = Glyph {
     ch: ' ',
     pair: 0,
     bold: false,
+    hue: 0,
 };
 
 #[derive(Clone, Copy, Default)]
@@ -155,6 +171,8 @@ struct Droplet {
     head_stop: Option<u64>,
     /// Seconds to stay put once the head stops.
     linger: f64,
+    /// The palette it falls in (see `Glyph::hue`).
+    hue: u8,
 }
 
 #[derive(Clone, Copy)]
@@ -230,6 +248,7 @@ struct Neo {
     next_glitch: f64,
     force_draw_everything: bool,
     rng: fastrand::Rng,
+    muertos: Muertos,
 }
 
 impl Neo {
@@ -298,6 +317,7 @@ impl Neo {
             next_glitch: 0.0,
             force_draw_everything: false,
             rng,
+            muertos: Muertos::new(ctx.seed, finite(o.f("speed"), 8.0), &chars),
         }
     }
 
@@ -459,6 +479,7 @@ impl Neo {
             let (lo, hi) = self.linger_ms;
             linger = self.rng.u32(lo..=hi) as f64 / 1000.0;
         }
+        let hue = self.muertos.hue();
         self.droplets[idx] = Droplet {
             alive: true,
             head_crawling: true,
@@ -475,6 +496,7 @@ impl Neo {
             last: self.tick,
             head_stop: None,
             linger,
+            hue,
         };
     }
 
@@ -583,6 +605,7 @@ impl Neo {
                 ch: val,
                 pair,
                 bold,
+                hue: d.hue,
             };
         }
         self.droplets[i].head_cur = d.head_put;
@@ -700,6 +723,7 @@ impl Neo {
                     ch: m.val,
                     pair,
                     bold,
+                    hue: 0,
                 };
             }
         }
@@ -711,11 +735,16 @@ impl Scene for Neo {
         self.cols = w.max(1) as usize;
         self.lines = h.max(1) as usize;
         self.reset();
+        self.muertos.figs.clear();
     }
 
     fn retheme(&mut self, ctx: &Ctx) {
         let (pairs, native) = resolve_colors(ctx, &self.colors);
         self.pairs = pairs;
+        let auto = matches!(self.colors.trim(), "" | "auto");
+        if let Some(pairs) = self.muertos.retheme(ctx, auto, native) {
+            self.pairs = pairs;
+        }
         self.shading = self.shading_opt.unwrap_or(if native {
             Shading::Random
         } else {
@@ -738,17 +767,37 @@ impl Scene for Neo {
         }
     }
 
-    fn draw(&mut self, _ctx: &Ctx, c: &mut Canvas) {
+    fn tick(&mut self, ctx: &Ctx, dt: f32, real: f32) {
+        self.update(ctx, dt);
+        if self.muertos.on {
+            let head = self.num_pairs() as u8;
+            let (w, h) = (self.cols, self.lines);
+            self.muertos.tick(dt, real, &self.screen, w, h, head);
+        }
+    }
+
+    fn draw(&mut self, ctx: &Ctx, c: &mut Canvas) {
         let n = self.num_pairs();
+        // Día de Muertos' second palette, when the rain has one.
+        let alt = &self.muertos.alt;
+        let alt = if alt.len() == self.pairs.len() {
+            alt
+        } else {
+            &self.pairs
+        };
         for (y, row) in self.screen.chunks_exact(self.cols).enumerate() {
             for (x, g) in row.iter().enumerate() {
                 if g.pair == 0 || g.ch == ' ' {
                     continue;
                 }
-                let fg = self.pairs[(g.pair as usize).min(n)];
+                let pairs = if g.hue == 0 { &self.pairs } else { alt };
+                let fg = pairs[(g.pair as usize).min(n)];
                 let attr = if g.bold { BOLD } else { 0 };
                 c.set_attr(x as i32, y as i32, g.ch, fg, attr);
             }
+        }
+        if self.muertos.on {
+            self.muertos.draw(ctx, c, &self.char_pool);
         }
     }
 }
@@ -1118,7 +1167,6 @@ fn neo_scheme(name: &str) -> Option<Vec<Color>> {
 /// The pair table for the `colors` option, and whether it is one of neo's own
 /// palettes (which neo shades randomly) rather than a smooth ramp.
 fn resolve_colors(ctx: &Ctx, colors: &str) -> (Vec<Color>, bool) {
-    const WHITE: Color = Color::Rgb(255, 255, 255);
     let s = colors.trim().to_ascii_lowercase();
     if let Some(p) = neo_scheme(&s) {
         return (p, true);
@@ -1166,9 +1214,676 @@ fn resolve_colors(ctx: &Ctx, colors: &str) -> (Vec<Color>, bool) {
     (pairs, false)
 }
 
+// ---------------------------------------------------------------------------
+// Día de Muertos
+
+/// Mixed into the seed for the holiday's own random numbers, so the rain
+/// itself falls exactly as it does on any other day.
+const MUERTOS_SEED: u64 = 0x000D_1ADE_0001_1102;
+/// At most this many words and calaveras hidden in the rain at once.
+const MAX_FIGS: usize = 6;
+/// Cells per figure (the biggest calavera; words are shorter).
+const SLAB: usize = 25 * 14;
+/// Seconds a figure takes to dim and crumble back into the rain.
+const FADE: f64 = 2.0;
+
+/// Words the rain carries.
+const WORDS: &[&str] = &[
+    "DÍA DE MUERTOS",
+    "CEMPASÚCHIL",
+    "MICTLÁN",
+    "OFRENDA",
+    "CALAVERITA",
+    "LA CATRINA",
+    "PAN DE MUERTO",
+    "PAPEL PICADO",
+    "VELADORAS",
+    "COPAL",
+    "ALEBRIJE",
+    "XOLOITZCUINTLE",
+    "TERCIOPELO",
+    "JANITZIO",
+    "MONARCAS",
+    "BIENVENIDOS A CASA",
+    "AQUÍ LOS RECORDAMOS",
+];
+
+/// Names written on an ofrenda.
+const NAMES: &[&str] = &[
+    "ABUELITA LUPE",
+    "DON CHUY",
+    "TÍA CHOLE",
+    "ABUELO NACHO",
+    "DOÑA ROSARIO",
+    "TÍO BETO",
+    "MAMÁ TOÑA",
+    "PAPÁ GOYO",
+    "MADRINA LUCHA",
+    "PRIMO PEPE",
+    "DOÑA CUCA",
+    "TATA CHENTE",
+];
+
+/// The words of the day, by `fiesta.level`.
+fn day_word(level: f32) -> Option<&'static str> {
+    Some(match (level * 100.0).round() as u32 {
+        45 => "ÁNIMAS SOLAS",
+        50 => "HASTA EL AÑO QUE ENTRA",
+        60 => "ANGELITOS",
+        80 => "TODOS SANTOS",
+        100 => "FIELES DIFUNTOS",
+        _ => return None,
+    })
+}
+
+/// Calaveras de azúcar the rain paints, small to big: `#` bone, `o` the
+/// petals of the flower eyes, `*` their hearts, `i` icing, `.` a hole.
+const SKULLS: &[&[&str]] = &[
+    &[
+        "   #######   ",
+        " ####iii#### ",
+        "#ooo##i##ooo#",
+        "o.*.o###o.*.o",
+        "#ooo##.##ooo#",
+        " ####...#### ",
+        "  #.#.#.#.#  ",
+        "   #######   ",
+    ],
+    &[
+        "     #########     ",
+        "   #############   ",
+        "  ######iii######  ",
+        " #######i*i####### ",
+        "###ooooo###ooooo###",
+        "##oo...oo#oo...oo##",
+        "##oo.*.oo#oo.*.oo##",
+        " ##ooooo#.#ooooo## ",
+        "  ######...######  ",
+        "   #.#.#.#.#.#.#   ",
+        "    ###########    ",
+    ],
+    &[
+        "        #########        ",
+        "     ###############     ",
+        "   #######iiiii#######   ",
+        "  ########i*i*i########  ",
+        " ##########iii########## ",
+        " ###ooooooo###ooooooo### ",
+        "###oo.....oo#oo.....oo###",
+        "###oo..*..oo#oo..*..oo###",
+        "###oo.....oo#oo.....oo###",
+        " ###ooooooo#.#ooooooo### ",
+        "  #########...#########  ",
+        "   ##.#.#.#.#.#.#.#.##   ",
+        "    #################    ",
+        "       ###########       ",
+    ],
+];
+
+#[derive(Clone, Copy)]
+enum Shape {
+    /// A word, and whether it is a name (names glow like candlelight, words
+    /// like marigolds).
+    Word(&'static str, bool),
+    /// A calavera (an index into `SKULLS`), with rosa mexicano eyes rather
+    /// than cempasúchil ones.
+    Skull(usize, bool),
+}
+
+impl Shape {
+    fn size(self) -> (usize, usize) {
+        match self {
+            Shape::Word(s, _) => (s.chars().count(), 1),
+            Shape::Skull(i, _) => (SKULLS[i][0].len(), SKULLS[i].len()),
+        }
+    }
+
+    /// Is (dx, dy) part of the figure?
+    fn has(self, dx: usize, dy: usize) -> bool {
+        match self {
+            Shape::Word(s, _) => s.chars().nth(dx).is_some_and(|c| c != ' '),
+            Shape::Skull(i, _) => SKULLS[i][dy].as_bytes()[dx] != b' ',
+        }
+    }
+}
+
+/// A word or a calavera hidden in the rain. The rain lights it up: a word's
+/// letters fall down their columns like droplet heads and land in place; a
+/// calavera is painted column by column, top-down, by droplets of its own
+/// (and by any real one that gets there first).
+#[derive(Clone, Copy)]
+struct Figure {
+    shape: Shape,
+    /// Its cells' times live at `slot * SLAB` in `Muertos::touched` and `head`.
+    slot: usize,
+    x: usize,
+    y: usize,
+    w: usize,
+    h: usize,
+    /// When it was hidden and how long it stays (real seconds).
+    born: f64,
+    life: f64,
+    /// When the rain starts lighting it up (scene seconds).
+    start: f64,
+    /// How many rows a word's letters fall before they land.
+    fall: f32,
+    /// Picks when each column lights up, the glyphs a calavera is made of
+    /// and the order its cells crumble.
+    salt: u32,
+}
+
+impl Figure {
+    /// Scene seconds after `start` that the rain sets off down column `dx`.
+    fn delay(&self, dx: usize) -> f64 {
+        let spread = match self.shape {
+            Shape::Word(..) => 1.2,
+            Shape::Skull(..) => 1.8,
+        };
+        (spread * hash01(self.salt, dx)) as f64
+    }
+
+    /// Scene seconds after `start` that the rain reaches (dx, dy), falling
+    /// `speed` rows a second.
+    fn reach(&self, dx: usize, dy: usize, speed: f32) -> f64 {
+        let rows = match self.shape {
+            Shape::Word(..) => self.fall,
+            Shape::Skull(..) => dy as f32,
+        };
+        self.delay(dx) + (rows / speed) as f64
+    }
+}
+
+/// A number in 0..1 from a salt and an index.
+fn hash01(salt: u32, i: usize) -> f32 {
+    let mut h = salt ^ (i as u32).wrapping_mul(0x9E37_79B9);
+    h ^= h >> 16;
+    h = h.wrapping_mul(0x85EB_CA6B);
+    h ^= h >> 13;
+    (h >> 8) as f32 / (1 << 24) as f32
+}
+
+/// What Día de Muertos adds to the rain: a second palette, and the figures.
+struct Muertos {
+    on: bool,
+    level: f32,
+    /// Seeded apart from the rain's own.
+    rng: fastrand::Rng,
+    /// How fast the rain falls, in rows a second (neo's droplets crawl about
+    /// twice their nominal speed).
+    speed: f32,
+    /// The heaviest of the rain's characters, that calaveras are made of.
+    dense: Vec<char>,
+    /// The rosa mexicano palette some droplets fall in (as long as the
+    /// scene's pair table), or empty when the rain keeps the user's colors.
+    alt: Vec<Color>,
+    word: Color,
+    name: Color,
+    bone: Color,
+    petals: [Color; 2],
+    heart: Color,
+    icing: Color,
+    flash: Color,
+    figs: Vec<Figure>,
+    /// For each figure slot and cell, when the rain lit it up (negative: not
+    /// yet), and when a droplet's head last went through it (scene seconds).
+    touched: Vec<f64>,
+    head: Vec<f64>,
+    /// Real seconds, for how long things stay.
+    clock: f64,
+    /// Scene seconds, for how things move.
+    motion: f64,
+    next_word: f64,
+    next_skull: f64,
+}
+
+impl Muertos {
+    fn new(seed: u64, chars_per_sec: f32, chars: &[char]) -> Muertos {
+        const DENSE: &str = "#@%&$8096BWMQGDNHKRX";
+        let mut dense: Vec<char> = DENSE.chars().filter(|c| chars.contains(c)).collect();
+        if dense.is_empty() {
+            dense = chars.to_vec();
+        }
+        if dense.is_empty() {
+            dense.push('#');
+        }
+        Muertos {
+            on: false,
+            level: 0.0,
+            rng: fastrand::Rng::with_seed(seed ^ MUERTOS_SEED),
+            speed: (2.0 * chars_per_sec).clamp(4.0, 60.0),
+            dense,
+            alt: Vec::new(),
+            word: Color::Reset,
+            name: Color::Reset,
+            bone: Color::Reset,
+            petals: [Color::Reset; 2],
+            heart: Color::Reset,
+            icing: Color::Reset,
+            flash: Color::Reset,
+            figs: Vec::with_capacity(MAX_FIGS),
+            touched: vec![-1.0; MAX_FIGS * SLAB],
+            head: vec![-1.0; MAX_FIGS * SLAB],
+            clock: 0.0,
+            motion: 0.0,
+            next_word: 0.0,
+            next_skull: 0.0,
+        }
+    }
+
+    /// Dresses up for the holiday (or not). Returns the rain's own palette
+    /// when it changes too: cempasúchil under `classic`, the theme accent
+    /// nearest to it otherwise, unless the user picked the colors.
+    fn retheme(&mut self, ctx: &Ctx, auto: bool, native: bool) -> Option<Vec<Color>> {
+        let was = self.on;
+        self.on = ctx.fiesta.is(Kind::Muertos);
+        self.level = ctx.fiesta.level.clamp(0.0, 1.0);
+        self.alt.clear();
+        if !self.on {
+            self.figs.clear();
+            return None;
+        }
+        if !was {
+            self.figs.clear();
+            self.next_word = self.clock + 0.3;
+            self.next_skull = self.clock + 1.2;
+        }
+        let theme = ctx.theme;
+        // Under other themes, the accents nearest in hue to the holiday's colors.
+        let cempa = nearest(theme, CEMPASUCHIL, None);
+        let rosa = nearest(theme, ROSA, Some(cempa));
+        let gold = nearest(theme, AMARILLO, None);
+        if theme.native {
+            self.word = Color::Rgb(255, 216, 64);
+            self.name = HUESO;
+            self.bone = HUESO;
+            self.petals = [CEMPASUCHIL, ROSA];
+            self.heart = AMARILLO;
+            self.icing = TURQUESA;
+            self.flash = Color::Rgb(255, 250, 236);
+        } else {
+            self.word = gold;
+            self.name = theme.fg;
+            self.bone = theme.fg.lerp(WHITE, 0.3);
+            self.petals = [cempa, rosa];
+            self.heart = gold;
+            self.icing = nearest(theme, TURQUESA, None);
+            self.flash = theme.fg.lerp(WHITE, 0.8);
+        }
+        if !auto {
+            return None;
+        }
+        let (main, alt) = if native {
+            let table = |t: &[(u8, u8, u8)]| {
+                std::iter::once(Color::Reset)
+                    .chain(t.iter().map(|&(r, g, b)| Color::Rgb(r, g, b)))
+                    .collect()
+            };
+            (table(CEMPASUCHIL_RAIN), table(ROSA_RAIN))
+        } else {
+            (
+                accent_pairs(ctx, cempa, gold.lerp(WHITE, 0.6)),
+                accent_pairs(ctx, rosa, gold.lerp(WHITE, 0.2)),
+            )
+        };
+        self.alt = alt;
+        Some(main)
+    }
+
+    /// The palette of a new droplet: more fall in rosa mexicano as the holiday comes.
+    fn hue(&mut self) -> u8 {
+        if self.alt.is_empty() {
+            return 0;
+        }
+        (self.rng.f32() < 0.2 + 0.25 * self.level) as u8
+    }
+
+    /// Lights up what the rain reaches, retires old figures and hides new ones.
+    fn tick(&mut self, dt: f32, real: f32, screen: &[Glyph], cols: usize, lines: usize, head: u8) {
+        if dt > 0.0 {
+            self.motion += (dt as f64).min(60.0);
+        }
+        if real > 0.0 {
+            self.clock += (real as f64).min(60.0);
+        }
+        let (now, t) = (self.clock, self.motion);
+        self.figs.retain(|f| now < f.born + f.life);
+        for f in &self.figs {
+            for dy in 0..f.h {
+                for dx in 0..f.w {
+                    let (x, y) = (f.x + dx, f.y + dy);
+                    if x >= cols || y >= lines || !f.shape.has(dx, dy) {
+                        continue;
+                    }
+                    let k = f.slot * SLAB + dy * f.w + dx;
+                    let g = screen[y * cols + x];
+                    let rain = g.pair != 0 && g.ch != ' ';
+                    if self.touched[k] < 0.0 {
+                        let reach = f.start + f.reach(dx, dy, self.speed);
+                        if t >= reach {
+                            self.touched[k] = reach;
+                        } else if rain && matches!(f.shape, Shape::Skull(..)) {
+                            self.touched[k] = t;
+                        }
+                    }
+                    if rain && g.pair == head {
+                        self.head[k] = t;
+                    }
+                }
+            }
+        }
+        let l = self.level as f64;
+        if now >= self.next_word {
+            self.next_word = now + self.rng.f64() * 2.5 + 2.5 / (0.5 + l);
+            self.spawn(false, cols, lines);
+        }
+        if now >= self.next_skull {
+            self.next_skull = now + (9.0 + self.rng.f64() * 5.0) / (0.4 + 0.6 * l);
+            self.spawn(true, cols, lines);
+        }
+    }
+
+    /// Hides a new word or calavera somewhere free in the rain, if it fits.
+    fn spawn(&mut self, skull: bool, cols: usize, lines: usize) {
+        let area = (cols * lines) as f32;
+        let cap = ((2.0 + self.level * area / 1800.0) as usize).clamp(1, MAX_FIGS);
+        let skulls = self
+            .figs
+            .iter()
+            .filter(|f| matches!(f.shape, Shape::Skull(..)))
+            .count();
+        let max_skulls = if self.level >= 0.8 && area >= 8000.0 {
+            2
+        } else {
+            1
+        };
+        if self.figs.len() >= cap || (skull && skulls >= max_skulls) {
+            return;
+        }
+        let Some(slot) = (0..MAX_FIGS).find(|&s| self.figs.iter().all(|f| f.slot != s)) else {
+            return;
+        };
+        let shape = if skull {
+            let i = if lines >= 44 && cols >= 100 {
+                2
+            } else if lines >= 24 && cols >= 40 {
+                1
+            } else {
+                0
+            };
+            Shape::Skull(i, self.rng.bool())
+        } else {
+            let r = self.rng.f32();
+            match day_word(self.level) {
+                Some(w) if r < 0.15 => Shape::Word(w, false),
+                _ if r < 0.5 => Shape::Word(NAMES[self.rng.usize(0..NAMES.len())], true),
+                _ => Shape::Word(WORDS[self.rng.usize(0..WORDS.len())], false),
+            }
+        };
+        let (w, h) = shape.size();
+        // Keep clear of the papel picado strung across the top.
+        let top = match lines {
+            0..18 => 0,
+            _ if self.level >= 0.8 => 6,
+            _ => 4,
+        };
+        // A word keeps a free cell at each end.
+        let pad = matches!(shape, Shape::Word(..)) as usize;
+        if w + 2 * pad > cols || h + top > lines {
+            return;
+        }
+        for _ in 0..12 {
+            let x = self.rng.usize(pad..=cols - w - pad);
+            let y = self.rng.usize(top..=lines - h);
+            let clear = self
+                .figs
+                .iter()
+                .all(|f| x + w + 2 <= f.x || f.x + f.w + 2 <= x || y + h < f.y || f.y + f.h < y);
+            if !clear {
+                continue;
+            }
+            let cells = slot * SLAB..slot * SLAB + w * h;
+            self.touched[cells.clone()].fill(-1.0);
+            self.head[cells].fill(-1.0);
+            let life = if skull { 11.0 } else { 8.0 } + self.rng.f64() * 2.0;
+            self.figs.push(Figure {
+                shape,
+                slot,
+                x,
+                y,
+                w,
+                h,
+                born: self.clock,
+                life,
+                start: self.motion,
+                fall: (y as f32).min(10.0),
+                salt: self.rng.u32(..),
+            });
+            return;
+        }
+    }
+
+    fn draw(&self, ctx: &Ctx, c: &mut Canvas, pool: &[char]) {
+        for f in &self.figs {
+            // At the end, cells dim and crumble back into the rain one by one.
+            let out = ((self.clock - (f.born + f.life - FADE)) / FADE).clamp(0.0, 1.0) as f32;
+            let base = f.slot * SLAB;
+            let (fx, fy) = (f.x as i32, f.y as i32);
+            match f.shape {
+                Shape::Word(word, name) => {
+                    let color = if name { self.name } else { self.word };
+                    let mut prev = false;
+                    for (dx, ch) in word.chars().enumerate() {
+                        let x = fx + dx as i32;
+                        if ch == ' ' {
+                            // Clear between words once the letter before has landed.
+                            if prev {
+                                c.set(x, fy, ' ', Color::Reset);
+                            }
+                            continue;
+                        }
+                        if let Some(fg) = self.glow(ctx, color, base + dx, out, f.salt, dx) {
+                            c.set_attr(x, fy, ch, fg, BOLD);
+                            prev = true;
+                            if dx == 0 {
+                                c.set(x - 1, fy, ' ', Color::Reset);
+                            }
+                            if dx + 1 == f.w {
+                                c.set(x + 1, fy, ' ', Color::Reset);
+                            }
+                            continue;
+                        }
+                        prev = false;
+                        if self.touched[base + dx] >= 0.0 {
+                            continue;
+                        }
+                        // Still falling: the letter leads a short trail down its column.
+                        let since = self.motion - f.start - f.delay(dx);
+                        if since < 0.0 {
+                            continue;
+                        }
+                        let y = fy - f.fall as i32 + (since * self.speed as f64) as i32;
+                        c.set_attr(x, y, ch, self.flash, BOLD);
+                        for i in 1..4 {
+                            if y - i < fy - f.fall as i32 {
+                                break;
+                            }
+                            let g =
+                                pool[(f.salt as usize + (y - i) as usize * 13 + dx) % pool.len()];
+                            c.set(x, y - i, g, ctx.fade(color, 0.25 * i as f32));
+                        }
+                    }
+                }
+                Shape::Skull(i, rosa) => {
+                    for (dy, row) in SKULLS[i].iter().enumerate() {
+                        for (dx, m) in row.bytes().enumerate() {
+                            let color = match m {
+                                b'#' => self.bone,
+                                b'o' => self.petals[rosa as usize],
+                                b'*' => self.heart,
+                                b'i' => self.icing,
+                                b'.' => Color::Reset,
+                                _ => continue,
+                            };
+                            let k = dy * f.w + dx;
+                            let Some(fg) = self.glow(ctx, color, base + k, out, f.salt, k) else {
+                                continue;
+                            };
+                            let (x, y) = (fx + dx as i32, fy + dy as i32);
+                            // Clear the rain right around it, so its outline reads.
+                            for (nx, ny) in [(-2, 0), (-1, 0), (1, 0), (2, 0), (0, -1), (0, 1)] {
+                                let (ex, ey) = (dx as i32 + nx, dy as i32 + ny);
+                                let inside = ex >= 0
+                                    && ey >= 0
+                                    && (ex as usize) < f.w
+                                    && (ey as usize) < f.h
+                                    && f.shape.has(ex as usize, ey as usize);
+                                if !inside {
+                                    c.set(fx + ex, fy + ey, ' ', Color::Reset);
+                                }
+                            }
+                            if m == b'.' {
+                                c.set(x, y, ' ', Color::Reset);
+                            } else {
+                                let g = pool[(f.salt as usize + k * 7) % pool.len()];
+                                let ch = self.dense[g as usize % self.dense.len()];
+                                c.set_attr(x, y, ch, fg, BOLD);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /// The color of a figure's cell `k`: nothing until the rain lights it
+    /// up, then a flash that settles into `color`, flashing again whenever a
+    /// droplet's head goes through; dimmer, then gone, as the figure fades `out`.
+    fn glow(
+        &self,
+        ctx: &Ctx,
+        color: Color,
+        k: usize,
+        out: f32,
+        salt: u32,
+        i: usize,
+    ) -> Option<Color> {
+        let touched = self.touched[k];
+        if touched < 0.0 {
+            return None;
+        }
+        // Each cell crumbles at its own moment of the fade.
+        if out > 0.0 && out >= 0.15 + 0.85 * hash01(salt ^ 0x5EED, i) {
+            return None;
+        }
+        let since = (self.motion - touched) as f32;
+        let mut flash = (1.0 - since / 0.6).max(0.0);
+        if self.head[k] >= 0.0 {
+            flash = flash.max(0.8 * (1.0 - (self.motion - self.head[k]) as f32 / 0.35).max(0.0));
+        }
+        if !color.is_rgb() {
+            return Some(color);
+        }
+        Some(ctx.fade(color.lerp(self.flash, flash), 0.6 * out))
+    }
+}
+
+const WHITE: Color = Color::Rgb(255, 255, 255);
+const CEMPASUCHIL: Color = Color::Rgb(255, 140, 0);
+const ROSA: Color = Color::Rgb(228, 0, 124);
+const AMARILLO: Color = Color::Rgb(255, 210, 0);
+const TURQUESA: Color = Color::Rgb(0, 170, 184);
+const HUESO: Color = Color::Rgb(244, 238, 226);
+
+/// The rain in cempasúchil under `classic`, pair 1 (the tail end) to the head.
+const CEMPASUCHIL_RAIN: &[(u8, u8, u8)] = &[
+    (52, 20, 0),
+    (124, 48, 0),
+    (190, 82, 0),
+    (230, 114, 0),
+    (255, 148, 12),
+    (255, 190, 60),
+    (255, 236, 170),
+];
+
+/// And in rosa mexicano, through terciopelo, with golden heads.
+const ROSA_RAIN: &[(u8, u8, u8)] = &[
+    (46, 0, 26),
+    (112, 0, 54),
+    (176, 0, 72),
+    (212, 0, 106),
+    (236, 34, 138),
+    (250, 116, 184),
+    (255, 206, 96),
+];
+
+/// The theme's accent closest in hue to `to` (grays come last), other than `not`.
+fn nearest(theme: &crate::theme::Theme, to: Color, not: Option<Color>) -> Color {
+    let Some((h, _)) = hue_sat(to) else { return to };
+    let far = |c: Color| match hue_sat(c) {
+        Some((h2, s)) => {
+            let d = (h - h2).abs() % 360.0;
+            d.min(360.0 - d) + 120.0 * (1.0 - s)
+        }
+        None => f32::MAX,
+    };
+    theme
+        .colors
+        .iter()
+        .copied()
+        .filter(|&c| Some(c) != not)
+        .min_by(|&a, &b| far(a).total_cmp(&far(b)))
+        .unwrap_or(to)
+}
+
+/// Hue (degrees) and saturation (0 to 1) of an RGB color, or of one of the
+/// terminal's 16 colors (when it would not tell us its palette) by its name.
+fn hue_sat(c: Color) -> Option<(f32, f32)> {
+    let (r, g, b) = match c {
+        Color::Rgb(r, g, b) => (r, g, b),
+        // Bit 0 red, bit 1 green, bit 2 blue; black, white and the grays have no hue.
+        Color::Ansi(i) if i < 16 => match i & 7 {
+            0 | 7 => (128, 128, 128),
+            m => (255 * (m & 1), 255 * ((m >> 1) & 1), 255 * (m >> 2)),
+        },
+        _ => return None,
+    };
+    let (r, g, b) = (r as f32 / 255.0, g as f32 / 255.0, b as f32 / 255.0);
+    let (max, min) = (r.max(g).max(b), r.min(g).min(b));
+    let d = max - min;
+    if d <= 0.0 {
+        return Some((0.0, 0.0));
+    }
+    let h = if max == r {
+        60.0 * ((g - b) / d).rem_euclid(6.0)
+    } else if max == g {
+        60.0 * ((b - r) / d + 2.0)
+    } else {
+        60.0 * ((r - g) / d + 4.0)
+    };
+    Some((h, d / max))
+}
+
+/// A pair table like the theme ramp's (see `resolve_colors`), in shades of
+/// one accent, with its own head color.
+fn accent_pairs(ctx: &Ctx, accent: Color, head: Color) -> Vec<Color> {
+    const LEVELS: usize = 12;
+    let g = color::Gradient::new(&[ctx.fade(accent, 0.7), accent, accent.lerp(WHITE, 0.35)]);
+    let mut pairs = Vec::with_capacity(LEVELS + 1);
+    pairs.push(Color::Reset);
+    for i in 1..LEVELS {
+        let t = (i - 1) as f32 / (LEVELS - 2) as f32;
+        pairs.push(ctx.fade(g.at(0.1 + 0.85 * t), 0.7 * (1.0 - t) * (1.0 - t)));
+    }
+    pairs.push(head);
+    pairs
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::fiesta::Fiesta;
+    use crate::scene::Opts;
+    use crate::theme::Theme;
 
     #[test]
     fn charsets_are_single_width() {
@@ -1212,8 +1927,6 @@ mod tests {
     /// Odd option values and sizes must not panic (the registry test covers the defaults).
     #[test]
     fn extreme_options_survive() {
-        use crate::scene::Opts;
-        use crate::theme::Theme;
         let cases = [
             "speed = 1000000.0\ndensity = 99.0\nglitch_ms = '1,1'\nasync = true\ncharset = 'arabic+hebrew'\nshading = 'distance'\nmessage = 'hello there, this is a long message for a tiny screen'",
             "chars = '漢字'\nspeed = 0.0001\ndensity = 0.0001\nglitch_pct = 100.0\nrip_pct = 100.0\nshort_pct = 100.0\nlinger_ms = '65535,65535'\nbold = 2\ncolors = '#ff0000'\nmax_dpc = 9",
@@ -1258,5 +1971,246 @@ mod tests {
         assert_eq!(parse_range("400,300", (1, 2)), (1, 2));
         assert_eq!(parse_range("0,3", (1, 2)), (1, 2));
         assert_eq!(parse_range("50", (1, 2)), (50, 50));
+    }
+
+    /// A neo dressed (or not) for a day, at a size.
+    fn dressed(theme: &Theme, opts: &Opts, fiesta: Fiesta, w: u16, h: u16) -> Neo {
+        let ctx = Ctx {
+            theme,
+            opts,
+            bg: Color::Rgb(13, 17, 23),
+            seed: 11,
+            fiesta,
+        };
+        let mut n = Neo::new(&ctx);
+        n.resize(&ctx, w, h);
+        n.retheme(&ctx);
+        n
+    }
+
+    /// Runs `secs` seconds of frames, in 30 fps steps, calling `look` after each.
+    fn run(n: &mut Neo, ctx: &Ctx, secs: f32, mut look: impl FnMut(&Neo, &Canvas)) {
+        let (w, h) = (n.cols as u16, n.lines as u16);
+        let mut c = Canvas::new(w, h, Color::Reset);
+        for _ in 0..(secs * 30.0) as usize {
+            n.tick(ctx, 1.0 / 30.0, 1.0 / 30.0);
+            c.clear();
+            n.draw(ctx, &mut c);
+            look(n, &c);
+        }
+    }
+
+    fn row_is(c: &Canvas, x: usize, y: usize, text: &str) -> bool {
+        text.chars().enumerate().all(|(i, ch)| {
+            c.get((x + i) as i32, y as i32)
+                .is_some_and(|cell| cell.ch == ch)
+        })
+    }
+
+    /// What the holiday adds shows: the rain in its two palettes, words that
+    /// land in place, calaveras made of heavy glyphs with flower eyes.
+    #[test]
+    fn muertos_lights_the_rain() {
+        let theme = Theme::classic();
+        let opts = Opts::new(INFO.options, toml::Table::new());
+        let mut most = Vec::new();
+        for fiesta in [Fiesta::of_day(10, 28), Fiesta::of_day(11, 2)] {
+            let ctx = Ctx {
+                theme: &theme,
+                opts: &opts,
+                bg: Color::Rgb(13, 17, 23),
+                seed: 11,
+                fiesta,
+            };
+            let mut n = dressed(&theme, &opts, fiesta, 120, 36);
+            assert!(n.muertos.on);
+            let cempa: Vec<Color> = CEMPASUCHIL_RAIN
+                .iter()
+                .map(|&(r, g, b)| Color::Rgb(r, g, b))
+                .collect();
+            assert_eq!(&n.pairs[1..], &cempa[..], "cempasúchil, not neo green");
+            assert_eq!(n.muertos.alt.len(), n.pairs.len());
+            let (mut word, mut skull, mut rosa, mut figs) = (false, false, false, 0);
+            run(&mut n, &ctx, 40.0, |n, c| {
+                figs = figs.max(n.muertos.figs.len());
+                rosa |= n.screen.iter().any(|g| g.hue == 1 && g.pair != 0);
+                for f in &n.muertos.figs {
+                    let settled = n.muertos.clock < f.born + f.life - FADE;
+                    match f.shape {
+                        Shape::Word(w, _) if settled => {
+                            let lit =
+                                (0..f.w).all(|dx| n.muertos.touched[f.slot * SLAB + dx] >= 0.0);
+                            word |= lit && row_is(c, f.x, f.y, w);
+                        }
+                        Shape::Skull(..) if settled => {
+                            // Flower eyes in petals and golden hearts, on bone glyphs.
+                            let bone = c.cells().iter().filter(|x| x.fg == n.muertos.bone).count();
+                            let eyes = c.cells().iter().any(|x| x.fg == n.muertos.heart);
+                            skull |= bone > 40 && eyes;
+                        }
+                        _ => {}
+                    }
+                }
+            });
+            assert!(word, "a word landed in the rain");
+            assert!(skull, "a calavera was painted");
+            assert!(rosa, "some droplets fell in rosa mexicano");
+            most.push(figs);
+        }
+        assert!(
+            most[1] > most[0],
+            "more is hidden in the rain at the height: {most:?}"
+        );
+    }
+
+    /// Every word and calavera fits its slab, in cells the rain can light up.
+    #[test]
+    fn figures_fit_their_slabs() {
+        for w in WORDS.iter().chain(NAMES) {
+            assert!(
+                w.chars().count() <= SLAB && w.chars().all(|c| !odd_width(c)),
+                "{w}"
+            );
+        }
+        for level in [0.25, 0.35, 0.45, 0.5, 0.6, 0.8, 1.0] {
+            if let Some(w) = day_word(level) {
+                assert!(
+                    w.chars().count() <= SLAB && w.chars().all(|c| !odd_width(c)),
+                    "{w}"
+                );
+            }
+        }
+        for (i, s) in SKULLS.iter().enumerate() {
+            let w = s[0].len();
+            assert!(s.iter().all(|r| r.len() == w), "skull {i} is a rectangle");
+            assert!(w * s.len() <= SLAB, "skull {i}");
+            assert!(s.iter().all(|r| r.bytes().all(|b| b" #o*i.".contains(&b))));
+        }
+        // The days of the holiday each have a word of their own, besides the first two.
+        for level in [0.45, 0.5, 0.6, 0.8, 1.0] {
+            assert!(day_word(level).is_some(), "{level}");
+        }
+        assert!(day_word(0.25).is_none() && day_word(0.35).is_none());
+    }
+
+    /// On an ordinary day there is nothing of it: neo's own green, no figures.
+    #[test]
+    fn ordinary_days_have_none() {
+        let theme = Theme::classic();
+        let opts = Opts::new(INFO.options, toml::Table::new());
+        let ctx = Ctx {
+            theme: &theme,
+            opts: &opts,
+            bg: Color::Rgb(13, 17, 23),
+            seed: 11,
+            fiesta: Fiesta::NONE,
+        };
+        let mut n = dressed(&theme, &opts, Fiesta::NONE, 120, 36);
+        assert!(!n.muertos.on);
+        assert_eq!(n.pairs, neo_scheme("green").unwrap());
+        run(&mut n, &ctx, 40.0, |n, _| {
+            assert!(n.muertos.figs.is_empty() && n.muertos.alt.is_empty());
+            assert!(n.screen.iter().all(|g| g.hue == 0));
+        });
+        // Not even the random numbers: the same rain as one that never heard of it.
+        let mut a = dressed(&theme, &opts, Fiesta::NONE, 80, 24);
+        let mut b = dressed(&theme, &opts, Fiesta::NONE, 80, 24);
+        for _ in 0..300 {
+            a.update(&ctx, 1.0 / 30.0);
+            b.tick(&ctx, 1.0 / 30.0, 1.0 / 30.0);
+        }
+        assert!(a.screen == b.screen);
+    }
+
+    /// The holiday comes and goes through `retheme`, in place.
+    #[test]
+    fn holiday_comes_and_goes() {
+        let theme = Theme::builtin("dracula").unwrap();
+        let opts = Opts::new(INFO.options, toml::Table::new());
+        let mut ctx = Ctx {
+            theme: &theme,
+            opts: &opts,
+            bg: Color::Rgb(13, 17, 23),
+            seed: 11,
+            fiesta: Fiesta::NONE,
+        };
+        let mut n = dressed(&theme, &opts, Fiesta::NONE, 100, 30);
+        let plain = n.pairs.clone();
+        run(&mut n, &ctx, 3.0, |_, _| {});
+        ctx.fiesta = Fiesta::of_day(11, 2);
+        n.retheme(&ctx);
+        assert!(n.muertos.on && n.pairs != plain && !n.muertos.alt.is_empty());
+        let mut seen = false;
+        run(&mut n, &ctx, 30.0, |n, _| {
+            seen |= !n.muertos.figs.is_empty()
+        });
+        assert!(seen, "words or calaveras were hidden");
+        ctx.fiesta = Fiesta::NONE;
+        n.retheme(&ctx);
+        assert!(!n.muertos.on && n.pairs == plain && n.muertos.alt.is_empty());
+        run(&mut n, &ctx, 30.0, |n, _| {
+            assert!(n.muertos.figs.is_empty())
+        });
+        // And back on, with the holiday's own palette again.
+        ctx.fiesta = Fiesta::of_day(10, 28);
+        n.retheme(&ctx);
+        assert!(n.muertos.on && n.pairs != plain);
+        // A palette picked by the user stays theirs.
+        let opts = Opts::new(INFO.options, "colors = 'blue'".parse().unwrap());
+        let mut blue = dressed(&theme, &opts, Fiesta::of_day(11, 2), 100, 30);
+        assert!(blue.muertos.on && blue.muertos.alt.is_empty());
+        assert_eq!(blue.pairs, neo_scheme("blue").unwrap());
+        run(&mut blue, &ctx, 5.0, |_, _| {});
+    }
+
+    /// The holiday survives tiny and huge screens, huge steps and odd options,
+    /// under `classic` and another theme.
+    #[test]
+    fn holiday_survives() {
+        let cases = [
+            "",
+            "speed = 1000000.0\ndensity = 99.0\nasync = true\ncharset = 'katakana'\nmessage = 'hello there, this is a long message for a tiny screen'",
+            "charset = 'binary'\nspeed = 0.0001\nglitch_pct = 100.0\nrip_pct = 100.0\nshort_pct = 100.0\nlinger_ms = '65535,65535'\nbold = 2",
+            "chars = '#@'\ncolors = '#ff0000'\nspeed = -3.0\ndensity = 0.0\nmax_dpc = 9",
+        ];
+        for (i, case) in cases.iter().enumerate() {
+            let opts = Opts::new(INFO.options, case.parse().unwrap());
+            for theme in [Theme::classic(), Theme::builtin("nord").unwrap()] {
+                for fiesta in [Fiesta::of_day(10, 28), Fiesta::of_day(11, 2)] {
+                    let ctx = Ctx {
+                        theme: &theme,
+                        opts: &opts,
+                        bg: Color::Rgb(10, 10, 20),
+                        seed: 3 + i as u64,
+                        fiesta,
+                    };
+                    let mut s = (INFO.make)(&ctx);
+                    let sizes = [(1u16, 1u16), (300, 90), (2, 3), (3, 1), (1, 40), (17, 5)]
+                        .into_iter()
+                        .chain([(40, 12), (80, 24)]);
+                    for (w, h) in sizes {
+                        // The biggest screen is slow in a debug build: two options will do.
+                        if w == 300 && i > 1 {
+                            continue;
+                        }
+                        s.resize(&ctx, w, h);
+                        s.retheme(&ctx);
+                        let mut c = Canvas::new(w, h, Color::Reset);
+                        for f in 0..24 {
+                            let dt = match f % 9 {
+                                0 => 5.0,
+                                3 => 0.0,
+                                5 => f32::NAN,
+                                7 => f32::INFINITY,
+                                _ => 1.0 / 30.0,
+                            };
+                            s.tick(&ctx, dt, if f % 13 == 12 { 5.0 } else { 1.0 / 30.0 });
+                            c.clear();
+                            s.draw(&ctx, &mut c);
+                        }
+                    }
+                }
+            }
+        }
     }
 }
