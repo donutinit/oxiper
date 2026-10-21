@@ -39,7 +39,6 @@ impl Fiesta {
     };
 
     /// Is this holiday on?
-    #[allow(dead_code)] // scene API (docs/SCENES.md)
     pub fn is(self, kind: Kind) -> bool {
         self.kind == kind && kind != Kind::None
     }

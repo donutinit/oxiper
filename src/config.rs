@@ -121,7 +121,7 @@ pub const GLOBAL: &[Opt] = &[
     Opt {
         key: "eggs",
         default: Val::S("all"),
-        help: "Easter eggs that may appear now and then: \"all\", \"none\", or names like \"sl, duckpond\"",
+        help: "Easter eggs that may appear now and then: \"all\", \"none\", or names like \"sl, nyancat, catrina\"",
     },
     Opt {
         key: "egg_rate",

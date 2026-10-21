@@ -18,7 +18,6 @@ pub struct Ctx<'a> {
     pub seed: u64,
     /// The Mexican holiday on today, if any (see `crate::fiesta`). Scenes
     /// dress up for it; `retheme` runs again whenever it changes.
-    #[allow(dead_code)] // scene API (docs/SCENES.md)
     pub fiesta: Fiesta,
 }
 

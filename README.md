@@ -21,6 +21,7 @@ plus sixteen more scenes. One small binary. Nearly no CPU. Your terminal's trans
 [Screensaver](#screensaver-mode) ·
 [Customize](#make-it-yours) ·
 [Aquarium](#the-aquarium) ·
+[Día de Muertos](#día-de-muertos) ·
 [Transparency](#transparency) ·
 [Performance](#performance) ·
 [Scene options](#scene-options)
@@ -40,6 +41,10 @@ plus sixteen more scenes. One small binary. Nearly no CPU. Your terminal's trans
   the original twelve frames.
 - **One binary, twenty-one scenes.** Mix them into a playlist and give each one its own theme, pace and
   time on screen. And now and then, when you least expect it, a train, a duck or Nyan Cat goes by.
+- **Fiestas.** On Mexican holidays every scene dresses up. On Día de Muertos the dog becomes a
+  xoloitzcuintle walking a path of marigolds to an ofrenda, the bonsai a tree of life, the DVD logo
+  a sugar skull, the aurora moves to Lake Pátzcuaro, and papel picado hangs over everything. See
+  [Día de Muertos](#día-de-muertos).
 - **Transparency first.** oxiper never paints a background it doesn't have to, so blurred or
   translucent terminals stay see-through. It even asks your terminal what its background looks like,
   so fading trails fade *into it*.
@@ -279,8 +284,71 @@ egg_rate = 1.2        # per hour of playing time; 0 = never
 
 Can't wait? Press <kbd>E</kbd>.
 
+During [Día de Muertos](#día-de-muertos) five more join them, and come far more often: La
+Catrina, a swarm of monarchs, an alebrije, skeleton mariachis and a *calaverita literaria*.
+
 The aurora sends its own: Nyan Cat or sl's train crosses its sky about three times an hour
 (`aurora.visitors`), whatever these settings say.
+
+## Día de Muertos
+
+From October 28 to November 3 every scene dresses up for Día de Muertos, and the holiday builds
+up the way an ofrenda does: the first petals on the 28th, the little ones (the angelitos) on the
+31st and November 1, everyone and everything on November 2, and on the 3rd the souls go back.
+oxiper follows your local date; try it any day, or turn it off:
+
+```sh
+oxiper -o fiestas=muertos          # the holiday at its height
+oxiper -o fiestas=muertos@10-28    # or one of its days
+```
+
+```toml
+fiestas = "auto"   # "none", "muertos", or "muertos@MM-DD"
+```
+
+Over every scene, papel picado hangs across the top (two strings from November 1) and
+cempasúchil petals drift down. Seasonal visitors cross far more often than the everyday eggs:
+La Catrina strolling with her bouquet, a swarm of monarchs, a winged jaguar alebrije, three
+skeleton mariachis, and a *calaverita literaria*, a rhymed verse in which La Muerte comes for one
+of oxiper's own characters, typing itself out in a corner.
+
+And each scene has its own:
+
+- **bonsai** grows as a Metepec *árbol de la vida*: cempasúchil, terciopelo and nube among the
+  leaves, a talavera pot, a sugar skull and veladoras at its foot, more of the ofrenda each day.
+- **aquarium** sets an ofrenda on the sea floor, in asciiquarium's ASCII: a path of petals the
+  souls walk down at night, candles floating on the waves, calavera fish and alebrijes.
+- **neo** rains cempasúchil and rosa mexicano, hides words in the rain (DÍA DE MUERTOS, MICTLÁN,
+  CEMPASÚCHIL) and now and then paints a calavera out of its own glyphs.
+- **nyancat** wears a sugar-skull face on a pan de muerto, trails papel picado, and the counter
+  reads "¡Llevas N segundos nyaneando!".
+- **dog** is a xoloitzcuintle with a marigold collar, walking a path of petals to an ofrenda under
+  a marigold arch; by night small souls follow it home.
+- **shark** wears calavera face paint over sunken ofrendas, with plankton glowing like embers.
+- **ocean** is Janitzio's night on the water: veladoras on rafts of marigolds, alebrije fish, and
+  orcas and sharks in calavera paint.
+- **fire** is a field of veladoras in painted glass, aafire's flames rising from every wick, with
+  marigolds and copal smoke.
+- **fireworks** turns the city into a panteón with candles on the graves; shells burst into
+  calaveras, marigolds and petals.
+- **aurora** moves to Lake Pátzcuaro: Janitzio with candles on its terraces, butterfly-net canoes
+  and monarchs crossing the sky (`look = "patzcuaro"` any day).
+- **constellation** gathers its stars into a calavera, La Catrina, a marigold, a monarch or a
+  veladora, then lets them go.
+- **pipes** become garlands of papel picado with marigolds opening at the joints.
+- **rain** brings marigold petals with the drops, veladoras along the ground, and lightning that
+  catches the dead dancing in the dark.
+- **dvd** bounces a sugar skull crowned with marigolds; at a corner, "¡Ya se lo llevó la Catrina!".
+- **boids** become monarchs migrating home to Michoacán, souls in candle-gold among them, with La
+  Catrina in place of the hawk.
+- **orrery** has a folk-art sun-calavera that winks, planets in marigold garlands and a belt of
+  petals.
+- **particles** carry cempasúchil blossoms and monarchs down a river of morado, rosa and turquesa.
+- **metaballs** melt colored veladora wax under flickering flames, with sugar-skull candles among
+  them.
+
+Under other themes the holiday takes the theme's colors, keeping only candle flames and
+marigolds their own. On any other day every scene is exactly as it always was.
 
 ## The aquarium
 
@@ -310,9 +378,10 @@ own drawing style: seven biomes with **281 fish**, 93 other creatures, 85 plants
 - **Something special now and then.** Feeding time in the tank, a plankton bloom that brings a
   whale shark, a ball of sardines swirling until the predators arrive, a long migration, a pod of
   orcas, and very rarely a legend: a coelacanth, a giant squid, a mermaid.
-- **Día de Muertos.** From October 28 to November 3, cempasúchil petals float on the water,
-  candles flicker on the floor at night, and calavera fish, alebrijes, an ofrenda and a trajinera
-  join in (`season = "muertos"` brings them any day).
+- **Día de Muertos.** During the holiday an ofrenda stands on the sea floor with a path of petals
+  that the souls walk down at night, veladoras float on rafts of marigolds, and calavera fish,
+  alebrijes, a catrina jellyfish, the xolo and La Catrina rowing a trajinera join in, more each day
+  (`season = "muertos"` brings them any day). See [Día de Muertos](#día-de-muertos).
 - **Never the same twice.** Each creature takes its colors from its species' palette, so no two
   clownfish match. The sea starts in a random biome and moves on every five minutes. The floor
   changes at once, and the creatures already swimming finish their crossing.
@@ -461,7 +530,7 @@ Aliases: `asciiquarium`, `fish`
 | `current` | `1.0` | Strength of the current that sways plants and carries bubbles; 0 is still water |
 | `weather` | `true` | Storms now and then: wind, rain and lightning over the water |
 | `events` | `1.0` | How often something special happens (feeding time, a bait ball, a rare sighting...); 0 never |
-| `season` | `"auto"` | auto (by the date), none, or muertos (Día de Muertos) |
+| `season` | `"auto"` | auto (the holidays, see `fiestas`), none, or muertos (Día de Muertos every day) |
 | `castle` | `true` | Show the castle (in classic and in the tank) |
 | `random_objects` | `true` | Send ships, whales, sharks, divers, submarines, birds... one at a time |
 | `bubbles` | `true` | Fish blow bubbles |
@@ -639,7 +708,7 @@ cypress and a village. Now and then Nyan Cat or sl's train goes by.
 |---|---|---|
 | `speed` | `1.0` | How fast the lights ripple and drift (0.1-4) |
 | `curtains` | `4` | Curtains of light in the sky at once (1-8) |
-| `look` | `"cycle"` | cycle, or one look to stay on: tanim, emerald, crimson, ultraviolet, ice, synthwave, ember, prism, starry |
+| `look` | `"cycle"` | cycle, or one look to stay on: tanim, emerald, crimson, ultraviolet, ice, synthwave, ember, prism, starry, patzcuaro (Día de Muertos) |
 | `stay` | `90.0` | Seconds each look lasts while cycling (10-3600) |
 | `landscape` | `true` | Mountains, a pine forest and the lake that mirrors the sky |
 | `stars` | `true` | Twinkling stars and the odd shooting star |
