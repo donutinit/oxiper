@@ -8,12 +8,20 @@
 //! 90 ms. On top of that, the stars are not baked into the 64×64 frame but
 //! scattered over the whole screen, using the frames' six star stages and
 //! moving left at the same pace, so big terminals get a sky instead of a box.
+//!
+//! On Día de Muertos (`nyancat/muertos.rs`) the cat comes home as a sugar
+//! skull riding a pan de muerto, on bone legs, trailing papel picado; the
+//! stars bloom as cempasúchil, petals fall, monarchs fly along and the counter
+//! speaks Spanish. Klange's frames are only re-dressed, so the cat moves just
+//! as it always has, and every other day is exactly nyancat.
 
 pub(crate) mod frames;
+mod muertos;
 
 use frames::{FRAME_HEIGHT, FRAME_WIDTH, FRAMES, Frame};
 
 use crate::color::{self, Color};
+use crate::fiesta::Kind;
 use crate::render::{BOLD, Canvas, Pixels};
 use crate::scene::{Ctx, Opt, Scene, SceneInfo, Val};
 
@@ -164,7 +172,22 @@ struct Nyancat {
     /// Scene seconds per real second, from the last tick.
     pace: f64,
     rng: fastrand::Rng,
+    seed: u64,
+
+    /// Día de Muertos: its level while it is on, the dressed frames (made the
+    /// first time it comes), where each frame's left eye is, the colors and
+    /// the sky's petals and monarchs.
+    muertos: Option<f32>,
+    dressed: Vec<[[u8; FRAME_WIDTH]; FRAME_HEIGHT]>,
+    eyes: Vec<(i32, i32)>,
+    holiday_pal: [Color; 128],
+    field: muertos::Field,
 }
+
+/// Seeds the holiday's own randomness, apart from the scene's.
+const MUERTOS_SEED: u64 = 0x6d75_6572_746f_7321;
+/// The sky under `classic` when it is painted during Día de Muertos: noche.
+const NOCHE: Color = Color::Rgb(18, 14, 40);
 
 impl Nyancat {
     fn new(ctx: &Ctx) -> Nyancat {
@@ -196,6 +219,12 @@ impl Nyancat {
             seconds: 0.0,
             pace: 1.0,
             rng: ctx.rng(),
+            seed: ctx.seed,
+            muertos: None,
+            dressed: Vec::new(),
+            eyes: Vec::new(),
+            holiday_pal: [Color::Reset; 128],
+            field: muertos::Field::new(),
         };
         n.retheme(ctx);
         n
@@ -315,6 +344,9 @@ impl Scene for Nyancat {
                 });
             }
         }
+        // The holiday's sky, from its own random numbers.
+        let mut rng = fastrand::Rng::with_seed(self.seed ^ MUERTOS_SEED);
+        self.field.layout(&mut rng, x0, x0 + self.star_span, y0, y1);
     }
 
     fn retheme(&mut self, ctx: &Ctx) {
@@ -357,6 +389,30 @@ impl Scene for Nyancat {
             (true, false) => Color::Reset,
             (false, _) => ctx.theme.fg,
         };
+
+        self.muertos = ctx.fiesta.is(Kind::Muertos).then_some(ctx.fiesta.level);
+        if self.muertos.is_some() {
+            if self.dressed.is_empty() {
+                self.dressed = self.frames.iter().map(muertos::dress).collect();
+                self.eyes = self
+                    .frames
+                    .iter()
+                    .map(|f| muertos::eye(f).unwrap_or((36, 33)))
+                    .collect();
+            }
+            let mut hp = self.pal;
+            muertos::palette(&mut hp, (!native).then(|| theme_rainbow(ctx.theme)));
+            if native {
+                self.sky = NOCHE;
+                self.text_fg = color::rgb(0xffaa1e);
+            }
+            hp[b',' as usize] = if self.background {
+                self.sky
+            } else {
+                Color::Reset
+            };
+            self.holiday_pal = hp;
+        }
     }
 
     fn update(&mut self, ctx: &Ctx, dt: f32) {
@@ -394,6 +450,10 @@ impl Scene for Nyancat {
     fn draw(&mut self, _ctx: &Ctx, c: &mut Canvas) {
         let i = (self.ticks % FRAMES.len() as u64) as usize;
         let flip = (i / 2) % 2 == 1;
+        if let Some(level) = self.muertos {
+            self.draw_muertos(c, i, flip, level);
+            return;
+        }
         let f = &self.frames[i];
         self.px.clear();
         let empty_sky = self.pal[b',' as usize] == Color::Reset;
@@ -427,7 +487,61 @@ impl Scene for Nyancat {
             }
         }
         self.px.blit(c);
+        self.draw_counter(c);
+    }
+}
 
+impl Nyancat {
+    /// The animation dressed for Día de Muertos at `level`, frame `i`.
+    fn draw_muertos(&mut self, c: &mut Canvas, i: usize, flip: bool, level: f32) {
+        let f = &self.dressed[i];
+        let pal = &self.holiday_pal;
+        self.px.clear();
+        let empty_sky = pal[b',' as usize] == Color::Reset;
+        for (py, &fy) in self.row_fy.iter().enumerate() {
+            if empty_sky && !(0..43).contains(&fy) {
+                continue;
+            }
+            for (px, &fx) in self.col_fx.iter().enumerate() {
+                let mut ch = sample(f, flip, fx, fy);
+                if muertos::is_band(ch) && muertos::cut(f, flip, fx, fy) {
+                    ch = b',';
+                }
+                let col = pal[ch as usize & 127];
+                if col != Color::Reset {
+                    self.px.set(px as i32, py as i32, col);
+                }
+            }
+        }
+
+        // Marigolds where the stars are, then petals and monarchs, all behind the cat.
+        let k = self.ticks as i64;
+        let shift = (k.wrapping_mul(STAR_STEP_X2) / 2).rem_euclid(self.star_span as i64) as i32;
+        let solid = |x: i32, y: i32| muertos::is_solid(sample(f, flip, x, y));
+        let filled = |x: i32, y: i32| match sample(f, flip, x, y) {
+            b',' => false,
+            ch => !muertos::is_band(ch) || !muertos::cut(f, flip, x, y),
+        };
+        let mut p = muertos::Painter {
+            px: &mut self.px,
+            pal,
+            ox: self.ox,
+            oy: self.oy,
+            s: self.scale,
+        };
+        for st in &self.stars {
+            let cx = self.star_lo + (st.x - self.star_lo - shift).rem_euclid(self.star_span);
+            let stage = (st.phase as i64 + st.dir as i64 * (k % 6)).rem_euclid(6) as usize;
+            p.sprite(&solid, cx, st.y, &muertos::MARIGOLD[stage]);
+        }
+        p.sky(&self.field, level, k & 0xffff_ffff, &solid, &filled);
+        p.crown(level, self.eyes[i]);
+        self.px.blit(c);
+        self.draw_counter(c);
+    }
+
+    /// nyancat's counter on the bottom line, in Spanish for the holiday.
+    fn draw_counter(&self, c: &mut Canvas) {
         if self.anim_rows() < self.h {
             let y = self.h as i32 - 1;
             if self.background {
@@ -438,11 +552,16 @@ impl Scene for Nyancat {
             // "You have nyaned for N seconds!", centered like nyancat does.
             let mut buf = [0u8; 20];
             let digits = fmt_u64(self.seconds.floor() as u64, &mut buf);
-            let x = ((self.w as i32 - 29 - digits.len() as i32) / 2).max(0);
+            let (before, after) = match self.muertos {
+                None => ("You have nyaned for ", " seconds!"),
+                Some(_) => ("¡Llevas ", " segundos nyaneando!"),
+            };
+            let len = (before.chars().count() + digits.len() + after.len()) as i32;
+            let x = ((self.w as i32 - len) / 2).max(0);
             let fg = self.text_fg;
-            let x = c.text_attr(x, y, "You have nyaned for ", fg, BOLD);
+            let x = c.text_attr(x, y, before, fg, BOLD);
             let x = c.text_attr(x, y, digits, fg, BOLD);
-            c.text_attr(x, y, " seconds!", fg, BOLD);
+            c.text_attr(x, y, after, fg, BOLD);
         }
     }
 }
@@ -595,6 +714,160 @@ mod tests {
                         s.update(&ctx, dt);
                         c.clear();
                         s.draw(&ctx, &mut c);
+                    }
+                }
+            }
+        }
+    }
+
+    /// Renders `w`×`h` at `seconds` with `fiesta` and the default options.
+    fn frame(
+        theme: &crate::theme::Theme,
+        fiesta: crate::fiesta::Fiesta,
+        w: u16,
+        h: u16,
+        seconds: f32,
+    ) -> Canvas {
+        use crate::scene::Opts;
+        let opts = Opts::new(INFO.options, toml::Table::new());
+        let ctx = Ctx {
+            theme,
+            opts: &opts,
+            bg: Color::Reset,
+            seed: 9,
+            fiesta,
+        };
+        let mut s = (INFO.make)(&ctx);
+        s.resize(&ctx, w, h);
+        s.update(&ctx, seconds);
+        let mut c = Canvas::new(w, h, Color::Reset);
+        s.draw(&ctx, &mut c);
+        c
+    }
+
+    /// How many cells show `col`, in either half.
+    fn count(c: &Canvas, col: Color) -> usize {
+        c.cells()
+            .iter()
+            .filter(|cell| cell.fg == col || cell.bg == col)
+            .count()
+    }
+
+    #[test]
+    fn dresses_up_for_muertos() {
+        use crate::fiesta::Fiesta;
+        use crate::theme::Theme;
+        let theme = Theme::classic();
+        let hueso = color::rgb(0xf4eee2);
+        let rosa = color::rgb(0xe4007c);
+        let petal = color::rgb(0xff8c00);
+        let gray = color::rgb(0x999999);
+        for day in [(10, 28), (11, 2)] {
+            let c = frame(&theme, Fiesta::of_day(day.0, day.1), 120, 36, 2.0);
+            // A sugar skull, papel picado, marigolds; no gray cat.
+            assert!(count(&c, hueso) > 30, "{day:?}");
+            assert!(count(&c, rosa) > 20, "{day:?}");
+            assert!(count(&c, petal) > 5, "{day:?}");
+            assert_eq!(count(&c, gray), 0, "{day:?}");
+            let text = c.to_text();
+            assert!(text.contains("segundos nyaneando!"), "{text}");
+        }
+        let c = frame(&theme, Fiesta::NONE, 120, 36, 2.0);
+        assert!(count(&c, gray) > 30);
+        for col in [hueso, rosa, petal] {
+            assert_eq!(count(&c, col), 0);
+        }
+        assert!(c.to_text().contains("You have nyaned for 2 seconds!"));
+    }
+
+    #[test]
+    fn more_comes_as_the_days_go() {
+        use crate::fiesta::Fiesta;
+        use crate::theme::Theme;
+        let theme = Theme::classic();
+        let monarch = color::rgb(0xd66200);
+        let lit = |day: (u32, u32)| {
+            (0..40)
+                .map(|i| {
+                    let c = frame(
+                        &theme,
+                        Fiesta::of_day(day.0, day.1),
+                        160,
+                        48,
+                        1.0 + i as f32 * 0.2,
+                    );
+                    count(&c, monarch) + count(&c, color::rgb(0xffaa1e))
+                })
+                .sum::<usize>()
+        };
+        assert!(lit((10, 28)) < lit((11, 2)));
+    }
+
+    #[test]
+    fn the_holiday_comes_and_goes_through_retheme() {
+        use crate::fiesta::Fiesta;
+        use crate::scene::Opts;
+        use crate::theme::Theme;
+        for theme in [Theme::classic(), Theme::builtin("dracula").unwrap()] {
+            let opts = Opts::new(INFO.options, "background = true".parse().unwrap());
+            let mut ctx = Ctx {
+                theme: &theme,
+                opts: &opts,
+                bg: Color::Reset,
+                seed: 3,
+                fiesta: Fiesta::NONE,
+            };
+            let mut s = (INFO.make)(&ctx);
+            s.resize(&ctx, 100, 30);
+            s.update(&ctx, 1.0);
+            let snap = |s: &mut Box<dyn Scene>, ctx: &Ctx| {
+                let mut c = Canvas::new(100, 30, Color::Reset);
+                s.draw(ctx, &mut c);
+                c.cells().to_vec()
+            };
+            let before = snap(&mut s, &ctx);
+            ctx.fiesta = Fiesta::of_day(11, 1);
+            s.retheme(&ctx);
+            let during = snap(&mut s, &ctx);
+            assert_ne!(before, during);
+            ctx.fiesta = Fiesta::NONE;
+            s.retheme(&ctx);
+            assert_eq!(before, snap(&mut s, &ctx));
+        }
+    }
+
+    /// Odd sizes and huge steps with the holiday on.
+    #[test]
+    fn the_holiday_survives_anything() {
+        use crate::fiesta::Fiesta;
+        use crate::scene::Opts;
+        use crate::theme::Theme;
+        let cases = [
+            "",
+            "scale = 64\ndelay_ms = 1\nbackground = true",
+            "counter = false\nscale = 1",
+        ];
+        for theme in [Theme::classic(), Theme::builtin("dracula").unwrap()] {
+            for case in cases {
+                let opts = Opts::new(INFO.options, case.parse().unwrap());
+                for day in [(10, 28), (10, 31), (11, 2), (11, 3)] {
+                    let ctx = Ctx {
+                        theme: &theme,
+                        opts: &opts,
+                        bg: Color::Reset,
+                        seed: 11,
+                        fiesta: Fiesta::of_day(day.0, day.1),
+                    };
+                    let mut s = (INFO.make)(&ctx);
+                    for &(w, h) in &[(1u16, 1u16), (2, 3), (3, 1), (1, 40), (300, 90), (80, 24)] {
+                        s.resize(&ctx, w, h);
+                        s.retheme(&ctx);
+                        let mut c = Canvas::new(w, h, Color::Reset);
+                        for dt in [0.0, f32::NAN, 0.09, 5.0, 5.0, 1e9] {
+                            s.update(&ctx, dt);
+                            c.clear();
+                            s.draw(&ctx, &mut c);
+                        }
                     }
                 }
             }
