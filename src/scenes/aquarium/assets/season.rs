@@ -253,6 +253,287 @@ r  r YYYY r  r
     .critter()
     .traits(SCAVENGER | DEFENDED)
     .season(MUERTOS),
+    // A goldfish whose tail is a marigold in bloom; they come in little schools.
+    Species::new(
+        "pez-cempasuchil",
+        &[
+            r"
+ .@@.  ,--.
+(@@@@)<  ~ o>
+ `@@'  `--'
+",
+            r"
+ ,@@,  ,--.
+{@@@@}<  ~ o>
+ '@@`  `--'
+",
+        ],
+        &[r"
+ yYYy  1111
+yYRRYy1  3 41
+ yYYy  1111
+"],
+    )
+    .tint("1:yYrR 3:rRmM")
+    .swim(Swim::Wave)
+    .speed(0.4, 1.4)
+    .fps(0.5)
+    .school(3, 7)
+    .weight(8)
+    .biomes(TANK | FRESH | REEF | KELP | OCEAN)
+    .season(MUERTOS),
+    // A seahorse with a crest of flames, painted all over.
+    Species::new(
+        "alebrije-seahorse",
+        &[
+            r"
+  /\/\
+ (  * o)>=-
+<`)@ * )
+ (  *  (
+< )* @ )
+ (  @ (
+<  )* )
+  (_,-'
+",
+            r"
+  /\/\
+ (  * o)>=-
+~`)@ * )
+ (  *  (
+~ )* @ )
+ (  @ (
+~  )* )
+  (_,-'
+",
+        ],
+        &[r"
+  3333
+ 1  2 41666
+3115 2 1
+ 1  2  1
+3 12 5 1
+ 1  5 1
+3  12 1
+  11111
+"],
+    )
+    .tint("1:mMrRbB 2:yYcC 3:cCgGyY 5:rRmM 6:yY")
+    .swim(Swim::Hover)
+    .speed(0.05, 0.25)
+    .fps(0.25)
+    .weight(6)
+    .biomes(REEF | TANK | KELP)
+    .critter()
+    .traits(SHY)
+    .home("cempasuchil,terciopelo")
+    .season(MUERTOS),
+    // An octopus with a sugar-skull head: flowers on its brow, icing
+    // around its eyes, tentacles in every color.
+    Species::new(
+        "calavera-octopus",
+        &[
+            r"
+     .-'''''-.
+   .'@ .-.-. @'.
+  /  (*)   (*)  \
+  |  '-' ^ '-'  |
+   \  \vvvvv/  /
+    `-.:___:.-'
+   ,~/ /|  |\ \~,
+  (~ (~ (  ) ~) ~)
+",
+            r"
+     .-'''''-.
+   .'@ .-.-. @'.
+  /  (*)   (*)  \
+  |  '-' ^ '-'  |
+   \  \vvvvv/  /
+    `-.:___:.-'
+   ,~\ \|  |/ /~,
+  ~) ~) )  ( (~ (~
+",
+        ],
+        &[
+            r"
+     WWWWWWWWW
+   WW3 22222 3WW
+  W  535   535  W
+  W  555 R 555  W
+   W  WWWWWWW  W
+    WWW2WWW2WWW
+   121 11  11 121
+  12 12 1  1 21 21
+",
+            r"
+     WWWWWWWWW
+   WW3 22222 3WW
+  W  535   535  W
+  W  555 R 555  W
+   W  WWWWWWW  W
+    WWW2WWW2WWW
+   121 11  11 121
+  21 21 1  1 12 12
+",
+        ],
+    )
+    .left(
+        &[
+            r"
+     .-'''''-.
+   .'@ .-.-. @'.
+  /  (*)   (*)  \
+  |  '-' ^ '-'  |
+   \  \vvvvv/  /
+    `-.:___:.-'
+   ,~/ /|  |\ \~,
+  (~ (~ (  ) ~) ~)
+",
+            r"
+     .-'''''-.
+   .'@ .-.-. @'.
+  /  (*)   (*)  \
+  |  '-' ^ '-'  |
+   \  \vvvvv/  /
+    `-.:___:.-'
+   ,~\ \|  |/ /~,
+  ~) ~) )  ( (~ (~
+",
+        ],
+        &[
+            r"
+     WWWWWWWWW
+   WW3 22222 3WW
+  W  535   535  W
+  W  555 R 555  W
+   W  WWWWWWW  W
+    WWW2WWW2WWW
+   121 11  11 121
+  12 12 1  1 21 21
+",
+            r"
+     WWWWWWWWW
+   WW3 22222 3WW
+  W  535   535  W
+  W  555 R 555  W
+   W  WWWWWWW  W
+    WWW2WWW2WWW
+   121 11  11 121
+  21 21 1  1 12 12
+",
+        ],
+    )
+    .tint("1:mMcCgG 2:cCmMyY 3:yYrR 5:mMbBrR")
+    .swim(Swim::Drift)
+    .speed(0.1, 0.4)
+    .fps(0.25)
+    .weight(6)
+    .biomes(REEF | OCEAN | KELP | TANK | ARCTIC | DEEP)
+    .critter()
+    .traits(INK | CURIOUS)
+    .season(MUERTOS),
+    // A sea turtle whose shell is carved and painted like an alebrije.
+    Species::new(
+        "alebrije-turtle",
+        &[
+            r"
+      _.-'''''-._
+    .'*<>*@*<>*'.    _,--.
+ ,-/<>*@*<>*@*<>\'-._/ o  )
+(_,'-.__________.-' `-.__.'
+   `-.\ \        `.\ \
+      `-'          `-'
+",
+            r"
+      _.-'''''-._
+    .'*<>*@*<>*'.    _,--.
+ ,-/<>*@*<>*@*<>\'-._/ o  )
+(_,'-.__________.-' `-.__.'
+    `-.\ \      `-.\ \
+       `-'         `-'
+",
+        ],
+        &[
+            r"
+      11111111111
+    1123325233211    66666
+ 111332523325233166666 4  6
+1111111111111111111 6666666
+   6666 6        666 6
+      666          666
+",
+            r"
+      11111111111
+    1123325233211    66666
+ 111332523325233166666 4  6
+1111111111111111111 6666666
+    6666 6      6666 6
+       666         666
+",
+        ],
+    )
+    .tint("1:mMrR 2:yYcC 3:cCgGbB 5:rRmMyY 6:gGyYcC")
+    .swim(Swim::Wave)
+    .speed(0.3, 0.8)
+    .fps(0.2)
+    .weight(5)
+    .biomes(REEF | OCEAN | TANK | KELP)
+    .critter()
+    .traits(DEFENDED | CURIOUS)
+    .season(MUERTOS),
+    // A manta ray painted with dots and diamonds, wings beating.
+    Species::new(
+        "alebrije-ray",
+        &[
+            r"
+            _.-~-._
+       _.-'*  @  *'-._
+   ,.-'*  <> * <> *  *'-._
+<=-=-=-=-=-=-=-=-=-=-=-=-=(o)>
+   `'-.*  <> * <> *  *.-'
+       `'-._*  @  *_.-'
+            `'-~-'
+",
+            r"
+            ?
+       _.-'''''''-._
+   ,.-'*  <> * <> *  *'-._
+<=-=-=-=-=-=-=-=-=-=-=-=-=(o)>
+   `'-.*  <> * <> *  *.-'
+       `'-._._._._.-'
+            ?
+",
+        ],
+        &[
+            r"
+            1115111
+       11112  5  21111
+   11112  33 2 33 2  21111
+131313131313131313131313131411
+   11112  33 2 33 2  2111
+       111112  5  21111
+            111511
+",
+            r"
+
+       1111111111111
+   11112  33 2 33 2  21111
+131313131313131313131313131411
+   11112  33 2 33 2  2111
+       11111111111111
+
+",
+        ],
+    )
+    .tint("1:mMbBcC 2:yYrR 3:cCgG 5:rRmMyY")
+    .swim(Swim::Wave)
+    .zone(Zone::Middle)
+    .speed(0.4, 1.2)
+    .fps(0.25)
+    .weight(5)
+    .biomes(REEF | OCEAN | KELP | ARCTIC | DEEP)
+    .traits(FILTER)
+    .season(MUERTOS),
 ];
 
 pub const PLANTS: &[Plant] = &[
@@ -468,7 +749,7 @@ yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy
     )
     .fps(0.35)
     .weight(7)
-    .biomes(TANK | REEF | FRESH | KELP | OCEAN)
+    .biomes(TANK | REEF | FRESH | KELP | OCEAN | ARCTIC)
     .traits(SHELTER | GLOW)
     .season(MUERTOS),
     Decor::new(
@@ -548,7 +829,7 @@ yyyyyyyyyyyyyyyyyyyyyyyy
     )
     .fps(0.35)
     .weight(7)
-    .biomes(TANK | REEF | FRESH | KELP | OCEAN)
+    .biomes(TANK | REEF | FRESH | KELP | OCEAN | ARCTIC)
     .traits(GLOW)
     .season(MUERTOS),
     Decor::new(
@@ -600,6 +881,179 @@ y                                        y
     )
     .weight(5)
     .biomes(TANK | REEF | FRESH | KELP | OCEAN)
+    .season(MUERTOS),
+    // A small altar for small screens: an arch of marigolds over a
+    // portrait, two candles, pan de muerto, a sugar skull, water.
+    Decor::new(
+        "ofrendita",
+        &[
+            r"
+   .@*@*@*@*@*@*@*@*@*@*@*.
+   @'      .-----.       '@
+   *   )   |  o  |    (   *
+   @   #   | /|\ |    #   @
+   *   #   '-----'    #   *
+.============================.
+|.@.  (=^=)   {oo}   [_]  .@.|
+|<>/\<>/\<>/\<>/\<>/\<>/\<>/\|
+'============================'
+",
+            r"
+   .@*@*@*@*@*@*@*@*@*@*@*.
+   @'      .-----.       '@
+   *   |   |  o  |    |   *
+   @   #   | /|\ |    #   @
+   *   #   '-----'    #   *
+.============================.
+|.@.  (=^=)   {oo}   [_]  .@.|
+|<>/\<>/\<>/\<>/\<>/\<>/\<>/\|
+'============================'
+",
+            r"
+   .@*@*@*@*@*@*@*@*@*@*@*.
+   @'      .-----.       '@
+   *   (   |  o  |    )   *
+   @   #   | /|\ |    #   @
+   *   #   '-----'    #   *
+.============================.
+|.@.  (=^=)   {oo}   [_]  .@.|
+|<>/\<>/\<>/\<>/\<>/\<>/\<>/\|
+'============================'
+",
+        ],
+        &[r"
+   yYRYRYRYRYRYRYRYRYRYRYRy
+   Yy      yyyyyyy       yY
+   R   Y   y  w  y    Y   R
+   Y   W   y www y    W   Y
+   R   W   yyyyyyy    W   R
+WWWWWWWWWWWWWWWWWWWWWWWWWWWWWW
+WYRY  yYYYy   WMMW   CCC  YRYW
+WMMYYCCGGRRBBMMYYCCGGRRBBMMYYW
+WWWWWWWWWWWWWWWWWWWWWWWWWWWWWW
+"],
+    )
+    .fps(0.35)
+    .weight(6)
+    .biomes(TANK | REEF | FRESH | KELP | OCEAN | ARCTIC | DEEP)
+    .traits(SHELTER | GLOW)
+    .season(MUERTOS),
+    // A clay sahumerio with glowing copal, its smoke curling up.
+    Decor::new(
+        "copal",
+        &[
+            r"
+    (
+     )  (
+    (  )
+  ._____.
+  \*~*~*/
+   `---'
+    |_|
+   /___\
+",
+            r"
+     )
+    (  )
+     )  (
+  ._____.
+  \*~*~*/
+   `---'
+    |_|
+   /___\
+",
+            r"
+    )  (
+   (  )
+    (
+  ._____.
+  \*~*~*/
+   `---'
+    |_|
+   /___\
+",
+        ],
+        &[
+            r"
+    w
+     w  w
+    w  w
+  rrrrrrr
+  rRYRYRr
+   rrrrr
+    rrr
+   rrrrr
+",
+            r"
+     w
+    w  w
+     w  w
+  rrrrrrr
+  rRYRYRr
+   rrrrr
+    rrr
+   rrrrr
+",
+            r"
+    w  w
+   w  w
+    w
+  rrrrrrr
+  rRYRYRr
+   rrrrr
+    rrr
+   rrrrr
+",
+        ],
+    )
+    .fps(0.2)
+    .weight(6)
+    .biomes(TANK | REEF | FRESH | KELP | OCEAN | ARCTIC | DEEP)
+    .traits(GLOW)
+    .season(MUERTOS),
+    // A grave dressed for the vigil: its cross, a blanket of marigolds,
+    // candles at either side.
+    Decor::new(
+        "tumba",
+        &[
+            r"
+          _|_
+    )     |     (
+    #  .@*@|@*@.  #
+    # (@*@*@*@*@) #
+ .@.#(*@*@*@*@*@*)#.@.
+(@@@)'-----------'(@@@)
+",
+            r"
+          _|_
+    |     |     |
+    #  .@*@|@*@.  #
+    # (@*@*@*@*@) #
+ .@.#(*@*@*@*@*@*)#.@.
+(@@@)'-----------'(@@@)
+",
+            r"
+          _|_
+    (     |     )
+    #  .@*@|@*@.  #
+    # (@*@*@*@*@) #
+ .@.#(*@*@*@*@*@*)#.@.
+(@@@)'-----------'(@@@)
+",
+        ],
+        &[r"
+          wwy
+    Y     Y     Y
+    W  yYRYwYRYy  W
+    W yYRYRYRYRYy W
+ yYyWyRYRYRYRYRYRyWyYy
+yYYYyyyyyyyyyyyyyyyYYYy
+"],
+    )
+    .fps(0.35)
+    .weight(5)
+    .biomes(TANK | REEF | FRESH | KELP | OCEAN | ARCTIC | DEEP)
+    .traits(GLOW)
     .season(MUERTOS),
 ];
 
@@ -816,5 +1270,98 @@ YRYMYYYCYRYMYYYCYRYMYYYCYRYMYY
     .weight(4)
     .biomes(FRESH | TANK | KELP | REEF | OCEAN)
     .traits(GLOW)
+    .season(MUERTOS),
+    // The xoloitzcuintle, who guides the souls across the river to
+    // Mictlán, swims by with one of them riding on its back.
+    Visitor::new(
+        "xolo",
+        Lane::Float,
+        &[
+            r"
+                 /\  /\
+       .-.      /  \/  \__
+      (o o)    |    o     `>
+       )=(_____|  .____.-'
+  ~~~~(_________@*@*@*/~~~~~
+    ~~~  ~~~~~ ~~~ ~~~ ~~~
+",
+            r"
+                 /\  /\
+       .-.      /  \/  \__
+      (o o)    |    o     `>
+       )=(_____|  .____.-'
+  ~~~~(_________@*@*@*/~~~~~
+   ~~~ ~~~~~ ~~~ ~~~ ~~~ ~
+",
+        ],
+        &[
+            r"
+                 KK  KK
+       WWW      K  KK  KKK
+      Wk kW    K    W     KK
+       WWWWKKKKK  KKKKKKKK
+  ccccKKKKKKKKKKYRYRYRKccccc
+    ccc  ccccc ccc ccc ccc
+",
+            r"
+                 KK  KK
+       WWW      K  KK  KKK
+      Wk kW    K    W     KK
+       WWWWKKKKK  KKKKKKKK
+  ccccKKKKKKKKKKYRYRYRKccccc
+   ccc ccccc ccc ccc ccc c
+",
+        ],
+    )
+    .speed(0.2, 0.35)
+    .fps(0.2)
+    .weight(5)
+    .biomes(FRESH | TANK | KELP | REEF | OCEAN)
+    .season(MUERTOS),
+    // La Catrina rows by in her great feathered hat.
+    Visitor::new(
+        "catrina-boat",
+        Lane::Boat,
+        &[
+            r"
+             ,~@*@~,
+        _.-~(*@*@*@*)~-._
+       (____.-------.____)
+               (o.o)
+          \   _/)=(\_
+  \________\_/_______\______/
+",
+            r"
+             ,~@*@~,
+        _.-~(*@*@*@*)~-._
+       (____.-------.____)
+               (o.o)
+              _/)=(\_
+  \______\___/_______\______/
+",
+        ],
+        &[
+            r"
+             MMYRYMM
+        MMMMMRYRYRYRMMMMM
+       MMMMMMMMMMMMMMMMMMM
+               WKKKW
+          y   mmWWWmm
+  yyyyyyyyyyyyyyyyyyyyyyyyyyy
+",
+            r"
+             MMYRYMM
+        MMMMMRYRYRYRMMMMM
+       MMMMMMMMMMMMMMMMMMM
+               WKKKW
+              mmWWWmm
+  yyyyyyyyyyyyyyyyyyyyyyyyyyy
+",
+        ],
+    )
+    .speed(0.3, 0.5)
+    .fps(0.15)
+    .weight(5)
+    .biomes(FRESH | TANK | KELP | REEF | OCEAN)
     .season(MUERTOS),
 ];

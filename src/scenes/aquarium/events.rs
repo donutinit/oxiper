@@ -1,13 +1,16 @@
 //! Now and then, something special: feeding time, a plankton bloom, a bait
 //! ball, a migration, a rare sighting, a pod of whales; and the season's
-//! decorations (Día de Muertos).
+//! decorations (Día de Muertos): petals on the waves, veladoras floating
+//! among them, the path of petals down to the altar and the souls walking
+//! it, candles on the floor at night. The season follows the holidays
+//! (`season_of`), and comes and goes with them in `retheme`.
 //!
 //! One event runs at a time. The scheduler waits a quiet spell, picks an event
 //! that fits the biome, and while it runs only spends a few cycles per step.
 //! Everything an event brings carries its `tag`, and comes in groups that are
 //! not replaced (`replace = false`), so the usual population is unchanged.
 
-use std::f32::consts::TAU;
+use std::f32::consts::{PI, TAU};
 
 use super::assets::{
     ALWAYS, ARCTIC, Biomes, DEEP, FILTER, FRESH, KELP, LEGENDARY, Lane, MUERTOS, OCEAN, PREDATOR,
@@ -16,6 +19,7 @@ use super::assets::{
 use super::biome::{Food, Visit, between, hash, swim_motion, weighted};
 use super::library::{SpeciesEntry, library};
 use super::*;
+use crate::fiesta::{self, Fiesta};
 
 /// Most entities the scene may hold before events hold back.
 const ENTITY_CAP: usize = 440;
@@ -165,41 +169,22 @@ enum Legend {
     Visitor(u16),
 }
 
-/// The season the options ask for: `auto` goes by today's date.
-pub(super) fn season_from_opts(o: &crate::scene::Opts) -> Season {
+/// The season the options ask for, and how far it has come (0 to 1): `auto`
+/// follows the holidays (`ctx.fiesta`, so the local date or the `fiestas`
+/// setting), `muertos` is Día de Muertos every day (as far as the holiday
+/// has come, or at its height), and anything else is no season at all.
+pub(super) fn season_of(o: &crate::scene::Opts, f: Fiesta) -> (Season, f32) {
+    let muertos = f.is(fiesta::Kind::Muertos);
+    let level = if muertos && f.level.is_finite() {
+        f.level.clamp(0.0, 1.0)
+    } else {
+        1.0
+    };
     match o.s("season").trim().to_ascii_lowercase().as_str() {
-        "muertos" | "dia-de-muertos" | "día de muertos" => MUERTOS,
-        "auto" | "" => season_on(today()),
-        _ => ALWAYS,
+        "muertos" | "dia-de-muertos" | "día de muertos" => (MUERTOS, level),
+        "auto" | "" if muertos => (MUERTOS, level),
+        _ => (ALWAYS, 0.0),
     }
-}
-
-/// The season on a (month, day).
-fn season_on((month, day): (u32, u32)) -> Season {
-    match (month, day) {
-        (10, 28..) | (11, ..=3) => MUERTOS,
-        _ => ALWAYS,
-    }
-}
-
-/// Today's (month, day), in UTC.
-fn today() -> (u32, u32) {
-    let secs = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map_or(0, |d| d.as_secs());
-    civil((secs / 86_400) as i64)
-}
-
-/// (month, day) of a day counted from 1970-01-01 (Howard Hinnant's `civil_from_days`).
-fn civil(days: i64) -> (u32, u32) {
-    let z = days + 719_468;
-    let doe = z.rem_euclid(146_097);
-    let yoe = (doe - doe / 1460 + doe / 36_524 - doe / 146_096) / 365;
-    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
-    let mp = (5 * doy + 2) / 153;
-    let day = (doy - (153 * mp + 2) / 5 + 1) as u32;
-    let month = if mp < 10 { mp + 3 } else { mp - 9 } as u32;
-    (month, day)
 }
 
 impl Aquarium {
@@ -643,12 +628,24 @@ impl Aquarium {
     fn begin_migration(&mut self, run: &mut Run) -> bool {
         let lib = library();
         // Swimmers that get somewhere: jellies drifting along make no procession.
-        let Some(si) = self.pick_species(|sp| {
+        let goes = |sp: &SpeciesEntry| {
             matches!(
                 sp.def.swim,
                 assets::Swim::Cruise | assets::Swim::Wave | assets::Swim::Dart
             ) && sp.def.speed.1 >= 0.5
-        }) else {
+        };
+        // In season, more and more often it is the season's own procession.
+        let level = self
+            .world
+            .as_ref()
+            .and_then(|w| (w.season != ALWAYS).then_some(w.level));
+        let ours = match level {
+            Some(l) if self.rng.f32() < 0.25 + 0.5 * l => {
+                self.pick_species(|sp| goes(sp) && sp.def.season != ALWAYS)
+            }
+            _ => None,
+        };
+        let Some(si) = ours.or_else(|| self.pick_species(goes)) else {
             return false;
         };
         let sp = &lib.species[si];
@@ -804,11 +801,24 @@ impl Aquarium {
             self.draw_hand(c, run);
         }
         if w.season == MUERTOS {
-            self.draw_petals(c, w.seed, w.ev.drift);
+            self.draw_petals(c, w.seed, w.ev.drift, w.level);
+            if self.surface() {
+                self.draw_floating_candles(c, w.seed, w.ev.drift, w.level);
+            }
             let light = self.light();
             if light < 0.4 {
-                self.draw_candles(c, w.seed, w.floor, light);
+                self.draw_candles(c, w.seed, w.floor, light, w.level);
             }
+        }
+    }
+
+    /// Behind everything but the backdrop: the season's path of petals.
+    pub(super) fn draw_event_backdrop(&self, c: &mut Canvas) {
+        let Some(w) = self.world.as_ref() else {
+            return;
+        };
+        if w.season == MUERTOS {
+            self.draw_path(c, w.seed, w.level);
         }
     }
 
@@ -837,8 +847,9 @@ impl Aquarium {
         }
     }
 
-    /// Marigold petals on the waves, drifting with the current; sinking in the deep.
-    fn draw_petals(&self, c: &mut Canvas, seed: u64, drift: f32) {
+    /// Marigold petals on the waves, drifting with the current; sinking in the
+    /// deep. More of them as the holiday comes.
+    fn draw_petals(&self, c: &mut Canvas, seed: u64, drift: f32, level: f32) {
         let (w, h) = (self.w, self.h);
         if w <= 0 || h <= 0 {
             return;
@@ -848,8 +859,9 @@ impl Aquarium {
             let (col, attr) = self.pens[pens[(r >> 8) as usize % 3] as usize];
             (b"*',"[(r >> 12) as usize % 3] as char, col, attr)
         };
+        let more = 0.5 + 0.5 * level;
         if self.surface() {
-            for i in 0..(w / 5).max(1) as u64 {
+            for i in 0..((w / 5) as f32 * more).max(1.0) as u64 {
                 let r = hash(seed ^ 0x4d41_5249 ^ i.wrapping_mul(0x9e37));
                 let speed = 0.3 + (r >> 20 & 63) as f32 / 63.0 * 0.5;
                 let x =
@@ -859,7 +871,7 @@ impl Aquarium {
                 c.set_attr(x as i32, y, ch, col, attr);
             }
         } else {
-            for i in 0..((w * h) / 500).max(2) as u64 {
+            for i in 0..(((w * h) / 500) as f32 * more).max(2.0) as u64 {
                 let r = hash(seed ^ 0x4d41_5249 ^ i.wrapping_mul(0x9e37));
                 let fall = 0.25 + (r >> 20 & 63) as f32 / 63.0 * 0.3;
                 let y = ((r >> 32) as f32 % h as f32 + self.time * fall).rem_euclid(h as f32);
@@ -872,13 +884,13 @@ impl Aquarium {
 
     /// Candle flames flickering on the floor row, in the gaps of the sand; more
     /// of them as it gets darker.
-    fn draw_candles(&self, c: &mut Canvas, seed: u64, floor: bool, light: f32) {
+    fn draw_candles(&self, c: &mut Canvas, seed: u64, floor: bool, light: f32, level: f32) {
         let (w, h) = (self.w, self.h);
         if w <= 0 || h < 3 {
             return;
         }
         let dark = (1.0 - light / 0.4).clamp(0.0, 1.0);
-        let n = ((w / 18).max(1) as f32 * dark).ceil() as u64;
+        let n = ((w / 18).max(1) as f32 * dark * (0.5 + level)).ceil() as u64;
         for i in 0..n {
             let r = hash(seed ^ 0x00ca_4d1e ^ i.wrapping_mul(0x51ed));
             let mut x = (r % w as u64) as i32;
@@ -894,9 +906,187 @@ impl Aquarium {
             let flick =
                 (self.time * 5.0 + i as f32 * 1.7).sin() + (self.time * 13.0 + i as f32).sin();
             let pen = if flick > 0.3 { Y + BRIGHT } else { R + BRIGHT };
-            let (col, attr) = self.pens[pen as usize];
+            let (col, attr) = self.glow(pen);
             c.set_attr(x, h - 1, 'i', col, attr);
         }
+    }
+
+    /// Veladoras floating on the waves, as on the lake of Pátzcuaro on the
+    /// night of the dead: a candle on a raft of marigolds, its flame
+    /// flickering, drifting with the current; at night the flame lights the
+    /// water under it. They pass behind the boats and the birds.
+    fn draw_floating_candles(&self, c: &mut Canvas, seed: u64, drift: f32, level: f32) {
+        let w = self.w;
+        if w < 8 || self.h < 9 {
+            return;
+        }
+        let n = ((w as f32 / 22.0) * (0.4 + 0.8 * level)).round().max(1.0) as u64;
+        let night = self.light() < 0.45;
+        let lap = (w + 8) as f32;
+        // Marigold rafts, and the colored glass of the veladora.
+        const RAFT: [(char, u8); 5] = [
+            ('.', Y),
+            ('@', Y + BRIGHT),
+            ('|', W + BRIGHT),
+            ('@', Y + BRIGHT),
+            ('.', Y),
+        ];
+        let glass = [M + BRIGHT, R + BRIGHT, C + BRIGHT, G + BRIGHT, Y + BRIGHT];
+        'candles: for i in 0..n {
+            let r = hash(seed ^ 0x7e1a_7e1a ^ i.wrapping_mul(0x51ed));
+            // Spread out along the water, drifting together, each its own way a little.
+            let gap = lap / n as f32;
+            let own = ((r >> 20) & 255) as f32 / 255.0 * 0.5 * gap
+                + (self.time * 0.05 + i as f32 * 2.1).sin() * 0.2 * gap;
+            let x =
+                (i as f32 * gap + own + self.time * 0.2 + drift * 0.5).rem_euclid(lap) as i32 - 4;
+            // Out of the way of whatever sails or swims on the surface.
+            for e in &self.ents {
+                let surface = matches!(
+                    e.kind,
+                    Kind::Visitor | Kind::Dolphin | Kind::Hook | Kind::Line
+                ) && e.y < 7.0
+                    && e.y + e.h > 3.0;
+                if surface && !e.dead && e.x < (x + 6) as f32 && e.x + e.w > (x - 1) as f32 {
+                    continue 'candles;
+                }
+            }
+            let flick =
+                (self.time * 6.0 + i as f32 * 2.3).sin() + (self.time * 15.0 + i as f32).sin();
+            let flame = if flick > 0.8 {
+                '('
+            } else if flick < -0.8 {
+                ')'
+            } else {
+                '|'
+            };
+            let (col, attr) = self.glow(if flick > -0.2 { Y + BRIGHT } else { R + BRIGHT });
+            c.set_attr(x + 2, 3, flame, col, attr);
+            let (col, attr) = self.glow(glass[(r >> 40) as usize % glass.len()]);
+            c.set_attr(x + 1, 4, '[', col, attr);
+            c.set_attr(x + 3, 4, ']', col, attr);
+            let (col, attr) = self.glow(W + BRIGHT);
+            c.set_attr(x + 2, 4, '#', col, attr);
+            for (dx, &(ch, pen)) in RAFT.iter().enumerate() {
+                let (col, attr) = self.glow(pen);
+                let ch = if dx == 2 { '_' } else { ch };
+                c.set_attr(x + dx as i32, 5, ch, col, attr);
+            }
+            if night {
+                // The flame's reflection, trembling on the water.
+                let (col, attr) = self.glow(if flick > 0.0 { Y + BRIGHT } else { Y });
+                c.set_attr(x + 2 + (flick > 1.2) as i32, 6, '~', col, attr);
+                c.set_attr(x + 2, 7, '.', col, attr);
+            }
+        }
+    }
+
+    /// The path of marigold petals that leads the souls home: from the
+    /// surface down to the altar on the floor, the petals flowing along it.
+    /// At night the souls themselves come down it, small lights.
+    fn draw_path(&self, c: &mut Canvas, seed: u64, level: f32) {
+        let lib = library();
+        let Some(altar) = self.ents.iter().find(|e| {
+            e.kind == Kind::Decor
+                && !e.dead
+                && lib
+                    .decor
+                    .get(e.who as usize)
+                    .is_some_and(|d| d.name.starts_with("ofrend"))
+        }) else {
+            return;
+        };
+        let (w, h) = (self.w as f32, self.h as f32);
+        let y0 = self.water_top() as f32;
+        let y1 = altar.y.floor() - 1.0;
+        let rows = y1 - y0;
+        if rows < 3.0 || w < 10.0 || h < 6.0 {
+            return;
+        }
+        let x1 = altar.x + altar.w / 2.0;
+        // It comes in from one side or the other, and meanders.
+        let side = if hash(seed ^ 0xca31) & 1 == 0 {
+            -1.0
+        } else {
+            1.0
+        };
+        let mut x0 = x1 + side * (w / 4.0).min(28.0);
+        if x0 < 2.0 || x0 > w - 3.0 {
+            x0 = x1 - side * (w / 4.0).min(28.0);
+        }
+        let x0 = x0.clamp(1.0, (w - 2.0).max(1.0));
+        let amp = (w / 18.0).min(6.0);
+        let ph = (hash(seed ^ 0xca32) % 628) as f32 / 100.0;
+        let at = |t: f32| {
+            let s = t * t * (3.0 - 2.0 * t);
+            let x = x0 + (x1 - x0) * s + amp * (t * PI * 1.5 + ph).sin() * (t * PI).sin();
+            (x, y0 + rows * t)
+        };
+        // A ribbon three petals wide, thicker in the middle and as the
+        // holiday comes, a step for every cell along it; its pattern flows
+        // down toward the altar a step at a time.
+        let steps = (rows + (x1 - x0).abs() + 2.0 * amp).min(2000.0) as i64;
+        let flow = (self.time * 0.8 * steps as f32 / rows).floor() as i64;
+        let dense = [0.25 + 0.3 * level, 0.5 + 0.35 * level, 0.25 + 0.3 * level];
+        let pens = [Y + BRIGHT, Y + BRIGHT, Y, R + BRIGHT];
+        for i in 0..steps {
+            let (x, y) = at(i as f32 / steps as f32);
+            let key = ((i - flow) as u64).wrapping_mul(0x9e37);
+            for (k, &p) in dense.iter().enumerate() {
+                let r = hash(seed ^ 0x9e7a_1000 ^ key ^ k as u64);
+                if ((r & 1023) as f32) >= p * 1024.0 {
+                    continue;
+                }
+                let ch = b"**,'@."[(r >> 16) as usize % 6] as char;
+                let (col, attr) = self.glow(pens[(r >> 24) as usize % 4]);
+                c.set_attr(x.round() as i32 + k as i32 - 1, y as i32, ch, col, attr);
+            }
+        }
+        // The souls walk it in the dark, more of them as the holiday comes.
+        if self.light() < 0.45 {
+            let souls = 1 + (level * 4.0) as u64;
+            for j in 0..souls {
+                let t = ((j as f32 + 0.37) / souls as f32 + self.time * 0.008).fract();
+                let (x, y) = at(t);
+                let pulse = (self.time * 2.0 + j as f32 * 1.9).sin();
+                let (col, attr) = self.glow(W + BRIGHT);
+                c.set_attr(
+                    x.round() as i32,
+                    y as i32,
+                    if pulse > 0.3 { '*' } else { 'o' },
+                    col,
+                    attr,
+                );
+                let (tx, ty) = at((t - 0.6 / rows).max(0.0));
+                if (ty as i32) < y as i32 {
+                    let (col, attr) = self.glow(Y);
+                    c.set_attr(tx.round() as i32, ty as i32, '.', col, attr);
+                }
+            }
+        }
+    }
+
+    /// After a theme change, or when the holiday comes or goes: when the
+    /// season changes, the floor is set again (its plants and props) and
+    /// what may come follows; whoever is swimming finishes the crossing.
+    pub(super) fn retheme_season(&mut self, ctx: &Ctx) {
+        let Some(w) = self.world.as_mut() else {
+            return;
+        };
+        let (season, level) = season_of(ctx.opts, ctx.fiesta);
+        w.level = level;
+        if season == w.season {
+            return;
+        }
+        w.season = season;
+        if w.biome == 0 {
+            return;
+        }
+        self.refresh_pools();
+        self.ents
+            .retain(|e| !matches!(e.kind, Kind::Seaweed | Kind::Decor));
+        self.add_decor();
+        self.add_all_plants();
     }
 }
 
@@ -905,19 +1095,37 @@ mod tests {
     use super::*;
 
     #[test]
-    fn dates_and_seasons() {
-        assert_eq!(civil(0), (1, 1));
-        // 2026-10-15 and 2024-02-29.
-        assert_eq!(civil(20_741), (10, 15));
-        assert_eq!(civil(19_782), (2, 29));
-        assert_eq!(season_on((11, 2)), MUERTOS);
-        assert_eq!(season_on((10, 31)), MUERTOS);
-        assert_eq!(season_on((10, 15)), ALWAYS);
-        assert_eq!(season_on((12, 25)), ALWAYS);
+    fn the_season_follows_the_holidays() {
+        let opts = |season: &str| {
+            let mut t = toml::Table::new();
+            t.insert("season".into(), s(season));
+            crate::scene::Opts::new(INFO.options, t)
+        };
+        let (auto, none, muertos) = (opts("auto"), opts("none"), opts("muertos"));
+        let height = Fiesta::of_day(11, 2);
+        let first = Fiesta::of_day(10, 28);
+        assert_eq!(season_of(&auto, Fiesta::NONE), (ALWAYS, 0.0));
+        assert_eq!(season_of(&auto, height), (MUERTOS, 1.0));
+        assert_eq!(season_of(&auto, first), (MUERTOS, 0.25));
+        assert_eq!(season_of(&none, height), (ALWAYS, 0.0));
+        // Asked for by name, it comes on any day: at its height, or as far
+        // as the holiday has come.
+        assert_eq!(season_of(&muertos, Fiesta::NONE), (MUERTOS, 1.0));
+        assert_eq!(season_of(&muertos, first), (MUERTOS, 0.25));
     }
 
     fn scene(opts: &[(&str, toml::Value)], f: impl FnOnce(&Ctx, &mut Aquarium)) {
-        let theme = crate::theme::Theme::classic();
+        festive_scene(opts, Fiesta::NONE, "classic", f);
+    }
+
+    /// A scene on a holiday (or none), under a theme.
+    fn festive_scene(
+        opts: &[(&str, toml::Value)],
+        fiesta: Fiesta,
+        theme: &str,
+        f: impl FnOnce(&Ctx, &mut Aquarium),
+    ) {
+        let theme = crate::theme::Theme::builtin(theme).unwrap();
         let mut t = toml::Table::new();
         for (k, v) in opts {
             t.insert(k.to_string(), v.clone());
@@ -928,7 +1136,7 @@ mod tests {
             opts: &opts,
             bg: Color::Reset,
             seed: 5,
-            fiesta: crate::fiesta::Fiesta::NONE,
+            fiesta,
         };
         let mut a = Aquarium::new(&ctx);
         a.retheme(&ctx);
@@ -1158,12 +1366,303 @@ mod tests {
             |ctx, a| {
                 a.resize(ctx, 120, 40);
                 let mut c = Canvas::new(120, 40, Color::Reset);
-                a.draw_candles(&mut c, 7, true, 0.0);
+                a.draw_candles(&mut c, 7, true, 0.0, 1.0);
                 let text = c.to_text();
                 let rows: Vec<&str> = text.lines().collect();
                 assert!(rows[39].contains('i'));
                 assert!(rows[..39].iter().all(|r| !r.contains('i')));
             },
         );
+    }
+
+    // ---- Día de Muertos ----
+
+    /// Names of the props on the floor, and whether each is of the season.
+    fn props(a: &Aquarium) -> Vec<(&'static str, bool)> {
+        let lib = library();
+        a.ents
+            .iter()
+            .filter(|e| e.kind == Kind::Decor && e.who != NOBODY)
+            .map(|e| {
+                let d = &lib.decor[e.who as usize];
+                (d.name, d.season != ALWAYS)
+            })
+            .collect()
+    }
+
+    /// How many of the creatures, plants and props are of the season.
+    fn seasonal(a: &Aquarium) -> usize {
+        let lib = library();
+        a.ents
+            .iter()
+            .filter(|e| e.who != NOBODY)
+            .filter(|e| match e.kind {
+                Kind::Fish | Kind::Critter => lib.species[e.who as usize].def.season != ALWAYS,
+                Kind::Seaweed => lib.plants[e.who as usize].season != ALWAYS,
+                Kind::Decor => lib.decor[e.who as usize].season != ALWAYS,
+                Kind::Visitor => lib.visitors[e.who as usize].def.season != ALWAYS,
+                _ => false,
+            })
+            .count()
+    }
+
+    /// A frame after `secs` seconds (at night when `night`), as text.
+    fn frame(ctx: &Ctx, a: &mut Aquarium, w: u16, h: u16, secs: f32, night: bool) -> String {
+        for _ in 0..(secs * 10.0) as usize {
+            a.update(ctx, 0.1);
+        }
+        if night && let Some(world) = a.world.as_mut() {
+            world.env.force_night();
+        }
+        let mut c = Canvas::new(w, h, Color::Reset);
+        a.draw(ctx, &mut c);
+        c.to_text()
+    }
+
+    #[test]
+    fn the_day_of_the_dead_comes_on_its_days() {
+        for (day, (w, h)) in [
+            ((11, 2), (120, 40)),
+            ((10, 28), (120, 40)),
+            ((11, 2), (80, 24)),
+        ] {
+            for biome in ["reef", "tank", "ocean", "fresh", "kelp", "arctic"] {
+                let fiesta = Fiesta::of_day(day.0, day.1);
+                festive_scene(&[("biome", s(biome))], fiesta, "classic", |ctx, a| {
+                    a.resize(ctx, w, h);
+                    let text = frame(ctx, a, w, h, 2.0, true);
+                    // The altar comes first, the path of petals leads to it,
+                    // and veladoras float on the water.
+                    let p = props(a);
+                    assert!(
+                        p.first().is_some_and(|d| d.0.starts_with("ofrend")),
+                        "{biome} {day:?}: {p:?}"
+                    );
+                    assert!(text.contains("[#]"), "{biome} {day:?}: no veladoras");
+                    assert!(seasonal(a) >= 2, "{biome} {day:?}");
+                });
+            }
+        }
+        // The deep has no surface, but an altar and souls coming down to it.
+        festive_scene(
+            &[("biome", s("deep"))],
+            Fiesta::of_day(11, 2),
+            "dracula",
+            |ctx, a| {
+                a.resize(ctx, 100, 40);
+                let text = frame(ctx, a, 100, 40, 2.0, false);
+                assert!(
+                    props(a).iter().any(|d| d.0 == "ofrendita"),
+                    "{:?}",
+                    props(a)
+                );
+                assert!(!text.contains("[#]"));
+                assert!(text.contains('o') || text.contains('*'));
+            },
+        );
+    }
+
+    #[test]
+    fn ordinary_days_have_none_of_it() {
+        for biome in ["reef", "tank", "ocean", "deep", "mixed"] {
+            festive_scene(&[("biome", s(biome))], Fiesta::NONE, "classic", |ctx, a| {
+                a.resize(ctx, 120, 40);
+                for _ in 0..10 {
+                    let text = frame(ctx, a, 120, 40, 30.0, true);
+                    assert!(!text.contains("[#]"), "{biome}");
+                    assert_eq!(seasonal(a), 0, "{biome}");
+                }
+                assert_eq!(a.world.as_ref().unwrap().season, ALWAYS);
+            });
+        }
+    }
+
+    #[test]
+    fn the_holiday_comes_and_goes_with_retheme() {
+        let theme = crate::theme::Theme::classic();
+        let mut t = toml::Table::new();
+        t.insert("biome".into(), s("tank"));
+        let opts = crate::scene::Opts::new(INFO.options, t);
+        let ctx = |fiesta| Ctx {
+            theme: &theme,
+            opts: &opts,
+            bg: Color::Reset,
+            seed: 5,
+            fiesta,
+        };
+        let (off, on) = (ctx(Fiesta::NONE), ctx(Fiesta::of_day(11, 2)));
+        let mut a = Aquarium::new(&off);
+        a.resize(&off, 120, 40);
+        a.retheme(&off);
+        assert_eq!(seasonal(&a), 0);
+        // Midnight, October 31 to November 1... and the floor is set at once.
+        a.retheme(&on);
+        assert!(props(&a).first().is_some_and(|d| d.0.starts_with("ofrend")));
+        let text = frame(&on, &mut a, 120, 40, 120.0, true);
+        assert!(text.contains("[#]"));
+        let lib = library();
+        let creatures = |a: &Aquarium| {
+            a.ents
+                .iter()
+                .filter(|e| matches!(e.kind, Kind::Fish | Kind::Critter))
+                .filter(|e| lib.species[e.who as usize].def.season != ALWAYS)
+                .count()
+        };
+        assert!(creatures(&a) > 0, "the season's creatures came");
+        // And on November 4 it is all gone; the last of the season's
+        // creatures finish their crossing.
+        a.retheme(&off);
+        assert!(props(&a).iter().all(|d| !d.1));
+        let text = frame(&off, &mut a, 120, 40, 600.0, true);
+        assert!(!text.contains("[#]"));
+        assert_eq!(seasonal(&a), 0);
+        // A theme change on an ordinary day changes nothing.
+        let n = a.ents.len();
+        a.retheme(&off);
+        assert_eq!(a.ents.len(), n);
+    }
+
+    #[test]
+    fn the_path_of_petals_leads_down_to_the_altar() {
+        let lib = library();
+        for day in [(11, 2), (10, 28)] {
+            for biome in ["reef", "tank", "deep"] {
+                let fiesta = Fiesta::of_day(day.0, day.1);
+                let opts = [("biome", s(biome)), ("day_length", rate(0.0))];
+                festive_scene(&opts, fiesta, "classic", |ctx, a| {
+                    a.resize(ctx, 120, 40);
+                    a.update(ctx, 0.1);
+                    let altar = a
+                        .ents
+                        .iter()
+                        .find(|e| {
+                            e.kind == Kind::Decor
+                                && lib
+                                    .decor
+                                    .get(e.who as usize)
+                                    .is_some_and(|d| d.name.starts_with("ofrend"))
+                        })
+                        .unwrap_or_else(|| panic!("{biome} {day:?}: no altar"));
+                    let (top, bottom) = (a.water_top() as usize, altar.y.floor() as usize);
+                    let mut c = Canvas::new(120, 40, Color::Reset);
+                    a.draw_event_backdrop(&mut c);
+                    let text = c.to_text();
+                    let rows: Vec<&str> = text.lines().collect();
+                    // Petals from the water to the altar, and not a cell above or below.
+                    let petals = |r: &str| r.chars().filter(|ch| "*',.@".contains(*ch)).count();
+                    assert!(
+                        rows[..top].iter().all(|r| petals(r) == 0),
+                        "{biome} {day:?}"
+                    );
+                    assert!(
+                        rows[bottom..].iter().all(|r| petals(r) == 0),
+                        "{biome} {day:?}"
+                    );
+                    let lit = rows[top..bottom].iter().filter(|r| petals(r) > 0).count();
+                    assert!(lit * 4 >= (bottom - top) * 3, "{biome} {day:?}: {lit} rows");
+                    // At night the souls come down it, small white lights, and only then.
+                    let white = a.glow(W + BRIGHT).0;
+                    let souls = |c: &Canvas| {
+                        let cells = (0..40).flat_map(|y| (0..120).map(move |x| (x, y)));
+                        cells
+                            .filter_map(|(x, y)| c.get(x, y))
+                            .filter(|cell| cell.fg == white && "*o".contains(cell.ch))
+                            .count()
+                    };
+                    let by_day = souls(&c);
+                    a.world.as_mut().unwrap().env.force_night();
+                    let mut c = Canvas::new(120, 40, Color::Reset);
+                    a.draw_event_backdrop(&mut c);
+                    let by_night = souls(&c);
+                    // (The deep is always dark.)
+                    assert_eq!(by_day > 0, biome == "deep", "{biome} {day:?}");
+                    assert!(by_night >= 1, "{biome} {day:?}: no souls");
+                });
+            }
+        }
+        // An ordinary day has no path, and a sea without an altar none either.
+        festive_scene(
+            &[("biome", s("reef"))],
+            Fiesta::NONE,
+            "classic",
+            |ctx, a| {
+                a.resize(ctx, 120, 40);
+                let mut c = Canvas::new(120, 40, Color::Reset);
+                a.draw_event_backdrop(&mut c);
+                assert!(c.to_text().trim().is_empty());
+            },
+        );
+        festive_scene(
+            &[("biome", s("reef")), ("decor", s("none"))],
+            Fiesta::of_day(11, 2),
+            "classic",
+            |ctx, a| {
+                a.resize(ctx, 120, 40);
+                let mut c = Canvas::new(120, 40, Color::Reset);
+                a.draw_event_backdrop(&mut c);
+                assert!(c.to_text().trim().is_empty());
+            },
+        );
+    }
+
+    #[test]
+    fn more_of_it_as_the_holiday_comes() {
+        // The share of new groups that are of the season.
+        let share = |day: (u32, u32)| {
+            let mut ours = 0;
+            festive_scene(
+                &[("biome", s("reef"))],
+                Fiesta::of_day(day.0, day.1),
+                "classic",
+                |ctx, a| {
+                    a.resize(ctx, 160, 50);
+                    let lib = library();
+                    for _ in 0..800 {
+                        let n = a.ents.len();
+                        a.add_group(false, true);
+                        ours += usize::from(
+                            a.ents
+                                .get(n)
+                                .is_some_and(|e| lib.species[e.who as usize].def.season != ALWAYS),
+                        );
+                    }
+                },
+            );
+            ours as f32 / 800.0
+        };
+        let (first, height) = (share((10, 28)), share((11, 2)));
+        assert!(
+            0.15 < first && first < height && height < 0.75,
+            "{first} {height}"
+        );
+    }
+
+    #[test]
+    fn the_holiday_survives_odd_screens_and_long_steps() {
+        for theme in ["classic", "dracula"] {
+            for (w, h) in [
+                (1, 1),
+                (5, 3),
+                (12, 9),
+                (30, 12),
+                (40, 14),
+                (300, 90),
+                (300, 10),
+            ] {
+                for biome in ["random", "deep", "tank", "mixed"] {
+                    let opts = [("biome", s(biome)), ("events", rate(20.0))];
+                    festive_scene(&opts, Fiesta::of_day(11, 2), theme, |ctx, a| {
+                        a.resize(ctx, w, h);
+                        let mut c = Canvas::new(w, h, Color::Reset);
+                        for _ in 0..40 {
+                            a.update(ctx, 5.0);
+                            a.draw(ctx, &mut c);
+                        }
+                        a.retheme(ctx);
+                        a.draw(ctx, &mut c);
+                    });
+                }
+            }
+        }
     }
 }

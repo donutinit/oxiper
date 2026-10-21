@@ -15,6 +15,7 @@ use super::assets::{
 };
 use super::library::library;
 use super::*;
+use crate::fiesta::Fiesta;
 
 /// A comma separated list of names from the options; `-name` leaves one out.
 #[derive(Default)]
@@ -123,6 +124,8 @@ pub(super) struct World {
     pub(super) seed: u64,
     /// What season it is: things of this season come too.
     pub(super) season: Season,
+    /// How far the season has come, 0 to 1: how much of it there is.
+    pub(super) level: f32,
     pub(super) eco: ecology::Eco,
     pub(super) enc: encounters::Enc,
     pub(super) env: environment::Env,
@@ -131,7 +134,7 @@ pub(super) struct World {
 
 impl World {
     /// The world the options describe, or `None` for classic asciiquarium.
-    pub(super) fn from_opts(o: &crate::scene::Opts) -> Option<World> {
+    pub(super) fn from_opts(o: &crate::scene::Opts, fiesta: Fiesta) -> Option<World> {
         let all = || BIOMES.iter().map(|b| b.1).collect::<Vec<_>>();
         let biomes = match o.s("biome").trim().to_ascii_lowercase().as_str() {
             "classic" | "asciiquarium" => return None,
@@ -146,6 +149,7 @@ impl World {
             }
         };
         let stay = o.f("biome_time");
+        let (season, level) = events::season_of(o, fiesta);
         Some(World {
             biomes,
             biome: 0,
@@ -177,7 +181,8 @@ impl World {
             groups: Vec::new(),
             next_group: 0,
             seed: 0,
-            season: events::season_from_opts(o),
+            season,
+            level,
             eco: ecology::Eco::from_opts(o),
             enc: encounters::Enc::from_opts(o),
             env: environment::Env::from_opts(o),
@@ -243,6 +248,30 @@ pub(super) fn swim_motion(rng: &mut fastrand::Rng, style: Swim, base: f32) -> Mo
         omega: TAU / period,
         phase: rng.f32() * TAU,
         timer: between(rng, 2.0, 8.0),
+    }
+}
+
+/// In season, gives the season's own things (those `festive` says) `share`
+/// of the total weight, so how much of the season comes follows how far it
+/// has come rather than how many ordinary things there are to pick from.
+pub(super) fn festive(weights: &mut [u32], festive: impl Fn(usize) -> bool, share: f32) {
+    let (mut ours, mut rest) = (0u64, 0u64);
+    for (k, &w) in weights.iter().enumerate() {
+        if festive(k) {
+            ours += w as u64;
+        } else {
+            rest += w as u64;
+        }
+    }
+    if ours == 0 || rest == 0 {
+        return;
+    }
+    let share = share.clamp(0.01, 0.95) as f64;
+    let k = share * rest as f64 / ((1.0 - share) * ours as f64);
+    for (i, w) in weights.iter_mut().enumerate() {
+        if festive(i) {
+            *w = (*w as f64 * k).round().clamp(1.0, 1e7) as u32;
+        }
     }
 }
 
@@ -440,7 +469,7 @@ impl Aquarium {
         };
         let pool = if crawler { &w.crawlers } else { &w.swimmers };
         // Day and night change who is about, and the screen's size how big.
-        let weights: Vec<u32> = pool
+        let mut weights: Vec<u32> = pool
             .iter()
             .map(|&i| {
                 let sp = &lib.species[i as usize];
@@ -449,6 +478,10 @@ impl Aquarium {
                 scaled(sp.def.weight, fit * self.activity(sp.def.traits))
             })
             .collect();
+        if w.season != ALWAYS {
+            let seasonal = |k: usize| lib.species[pool[k] as usize].def.season != ALWAYS;
+            festive(&mut weights, seasonal, 0.2 + 0.35 * w.level);
+        }
         let Some(k) = weighted(&mut self.rng, weights.len(), |k| weights[k]) else {
             return;
         };
@@ -649,7 +682,7 @@ impl Aquarium {
             return;
         };
         let pool = &w.plant_pool;
-        let weights: Vec<u32> = pool
+        let mut weights: Vec<u32> = pool
             .iter()
             .map(|&i| {
                 let p = &lib.plants[i as usize];
@@ -657,6 +690,10 @@ impl Aquarium {
                 scaled(p.weight, self.fit(s.w, s.h, 0.3, 0.5))
             })
             .collect();
+        if w.season != ALWAYS {
+            let seasonal = |k: usize| lib.plants[pool[k] as usize].season != ALWAYS;
+            festive(&mut weights, seasonal, 0.3 + 0.35 * w.level);
+        }
         let Some(k) = weighted(&mut self.rng, pool.len(), |k| weights[k]) else {
             return;
         };
@@ -699,7 +736,11 @@ impl Aquarium {
             return;
         };
         let mut cands = w.decor_pool.clone();
-        let want = if w.decor.only.is_empty() {
+        // In season (and unless the props are named) the floor is set for it:
+        // an altar first, the biggest that fits, and more of the season's own.
+        let festive_on = w.season != ALWAYS && w.decor.only.is_empty();
+        let level = w.level;
+        let mut want = if w.decor.only.is_empty() {
             (1 + self.w as usize / 70).min(cands.len())
         } else {
             cands.len()
@@ -713,12 +754,38 @@ impl Aquarium {
             })
             .collect();
         let fit_of = |i: u16| fits.iter().find(|f| f.0 == i).map_or(1.0, |f| f.1);
+        let mut altar = None;
+        if festive_on {
+            if level >= 0.8 {
+                want = (want + 1).min(cands.len());
+            }
+            altar = (0..cands.len())
+                .filter(|&k| lib.decor[cands[k] as usize].name.starts_with("ofrend"))
+                .max_by_key(|&k| {
+                    let s = &lib.sprites[lib.decor[cands[k] as usize].spr as usize];
+                    ((fit_of(cands[k]) * 100.0) as i32, s.w * s.h)
+                });
+        }
+        let mut weights = Vec::new();
         for _ in 0..want {
-            let Some(k) = weighted(&mut self.rng, cands.len(), |k| {
-                let i = cands[k];
-                scaled(lib.decor[i as usize].weight, fit_of(i))
-            }) else {
-                break;
+            let k = match altar.take() {
+                Some(k) => k,
+                None => {
+                    weights.clear();
+                    weights.extend(
+                        cands
+                            .iter()
+                            .map(|&i| scaled(lib.decor[i as usize].weight, fit_of(i))),
+                    );
+                    if festive_on {
+                        let seasonal = |k: usize| lib.decor[cands[k] as usize].season != ALWAYS;
+                        festive(&mut weights, seasonal, 0.35 + 0.3 * level);
+                    }
+                    let Some(k) = weighted(&mut self.rng, weights.len(), |k| weights[k]) else {
+                        break;
+                    };
+                    k
+                }
             };
             let di = cands.swap_remove(k);
             let d = &lib.decor[di as usize];
@@ -757,7 +824,7 @@ impl Aquarium {
         };
         let pool = &w.visit_pool;
         // Above the water only the width counts; below it, the height too.
-        let weights: Vec<u32> = pool
+        let mut weights: Vec<u32> = pool
             .iter()
             .map(|&v| match v {
                 // The hook waits for a bite; without fish it would wait forever.
@@ -779,6 +846,13 @@ impl Aquarium {
                 }
             })
             .collect();
+        if w.season != ALWAYS {
+            let seasonal = |k: usize| match pool[k] {
+                Visit::Data(i) => lib.visitors[i as usize].def.season != ALWAYS,
+                Visit::Classic(_) => false,
+            };
+            festive(&mut weights, seasonal, 0.25 + 0.35 * w.level);
+        }
         let Some(k) = weighted(&mut self.rng, pool.len(), |k| weights[k]) else {
             return;
         };

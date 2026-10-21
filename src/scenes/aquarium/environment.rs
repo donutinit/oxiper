@@ -208,6 +208,13 @@ impl Env {
             self.daylight * (1.0 - 0.4 * self.level)
         }
     }
+
+    /// Midnight, at once.
+    #[cfg(test)]
+    pub(super) fn force_night(&mut self) {
+        self.phase = 0.0;
+        self.daylight = 0.0;
+    }
 }
 
 /// A color that can be mixed: palette colors become RGB, and the terminal's
@@ -598,6 +605,14 @@ impl Aquarium {
     /// The pen for water line `i` (also in classic).
     pub(super) fn water_pen(&self, i: usize) -> (Color, u8) {
         self.water[i]
+    }
+
+    /// A pen that keeps its daylight color at night: flames and souls glow.
+    pub(super) fn glow(&self, pen: u8) -> (Color, u8) {
+        match self.world.as_ref() {
+            Some(w) if w.env.ready => w.env.day[pen as usize & 15],
+            _ => self.pens[pen as usize & 15],
+        }
     }
 
     /// How likely a creature with these traits is to come now, relative to

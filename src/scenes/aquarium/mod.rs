@@ -20,6 +20,17 @@
 //! reacts to everything else (`ecology.rs`, `encounters.rs`), light, current
 //! and weather change (`environment.rs`), and now and then something special
 //! happens (`events.rs`).
+//!
+//! On Día de Muertos (`season = "auto"` follows `ctx.fiesta`; `muertos`
+//! keeps it every day) the sea dresses up, still in asciiquarium's ASCII:
+//! an altar comes first to the floor (the great ofrenda, or a small one on a
+//! small screen) with tombs, copal, sugar skulls and pan de muerto beside it;
+//! a path of marigold petals flows down from the surface to it, and at night
+//! the souls come down it; veladoras on marigold rafts float on the waves;
+//! calavera and alebrije fish, a sugar-skull octopus, marigold goldfish and
+//! a catrina jellyfish swim; the xolo, La Catrina, trajineras and monarchs
+//! pass by. How much of it comes follows how far the holiday has come
+//! (`fiesta.level`); on an ordinary day nothing of it does.
 
 mod art;
 pub mod assets;
@@ -141,7 +152,7 @@ pub const INFO: SceneInfo = SceneInfo {
         Opt {
             key: "season",
             default: Val::S("auto"),
-            help: "auto (by the date), none, or muertos (Día de Muertos)",
+            help: "auto (the holidays, see `fiestas`), none, or muertos (Día de Muertos every day)",
         },
         Opt {
             key: "castle",
@@ -643,7 +654,7 @@ impl Aquarium {
             waves: o.b("waves"),
             pens: classic_pens(),
             water: [(Color::Ansi(C), 0); 4],
-            world: biome::World::from_opts(o),
+            world: biome::World::from_opts(o, ctx.fiesta),
             clock: 1.0,
         }
     }
@@ -1295,6 +1306,8 @@ impl Scene for Aquarium {
     }
 
     fn retheme(&mut self, ctx: &Ctx) {
+        // The holiday may have come or gone (at midnight, or a new config).
+        self.retheme_season(ctx);
         let th = ctx.theme;
         if let Some(w) = self.world.as_mut() {
             w.tint = (!th.native).then(|| {
@@ -1374,6 +1387,9 @@ impl Scene for Aquarium {
             self.draw_sky(c);
         }
         self.draw_backdrop(c);
+        if self.world.is_some() {
+            self.draw_event_backdrop(c);
+        }
         let ents = &self.ents;
         self.order.clear();
         self.order.extend(0..ents.len() as u32);
