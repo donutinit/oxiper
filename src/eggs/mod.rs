@@ -9,12 +9,19 @@
 //! eggs never change what `record`, `snap` and `bench` produce. Those never
 //! roll for an egg; only the interactive loop does (or a forced rate).
 
+pub mod alebrije;
+pub mod calaverita;
+pub mod catrina;
 pub mod duckpond;
+pub mod mariachis;
+pub mod monarcas;
+mod muertos;
 pub mod nyan;
 pub mod sl;
 
+use crate::color::Color;
 use crate::fiesta::{Fiesta, Kind};
-use crate::render::Canvas;
+use crate::render::{Canvas, Cell};
 use crate::theme::Theme;
 
 /// One easter egg while it plays.
@@ -36,7 +43,16 @@ pub struct Info {
     pub fiesta: Kind,
 }
 
-pub const ALL: &[&Info] = &[&sl::INFO, &duckpond::INFO, &nyan::INFO];
+pub const ALL: &[&Info] = &[
+    &sl::INFO,
+    &duckpond::INFO,
+    &nyan::INFO,
+    &catrina::INFO,
+    &monarcas::INFO,
+    &alebrije::INFO,
+    &mariachis::INFO,
+    &calaverita::INFO,
+];
 
 /// An `egg_rate` at or above this plays an egg at once, again and again, and
 /// even in `snap` and `record`: the way to force one for testing.
@@ -68,6 +84,94 @@ pub fn parse(s: &str, warnings: &mut Vec<String>) -> Vec<&'static Info> {
     }
     out.dedup_by_key(|i| i.name);
     out
+}
+
+/// The colors a cell shows in its upper and lower half.
+pub(crate) fn halves(cell: &Cell) -> (Color, Color) {
+    match cell.ch {
+        '▀' => (cell.fg, cell.bg),
+        '▄' => (cell.bg, cell.fg),
+        '█' => (cell.fg, cell.fg),
+        _ => (cell.bg, cell.bg),
+    }
+}
+
+/// Paints the upper and lower half of a cell as half-block pixels; a `None`
+/// half keeps what the cell showed there, so an egg covering a cell by half
+/// leaves the scene's other half alone.
+pub(crate) fn paint(c: &mut Canvas, col: i32, row: i32, up: Option<Color>, down: Option<Color>) {
+    if up.is_none() && down.is_none() {
+        return;
+    }
+    let (bg, strict) = (c.bg(), c.strict);
+    let Some(slot) = c.get_mut(col, row) else {
+        return;
+    };
+    let (old_up, old_down) = halves(slot);
+    let (t, b) = (up.unwrap_or(old_up), down.unwrap_or(old_down));
+    let cell = |ch, fg, bg| Cell {
+        ch,
+        fg,
+        bg,
+        attr: 0,
+    };
+    *slot = match (t, b) {
+        (t, Color::Reset) => cell('▀', t, bg),
+        (Color::Reset, b) => cell('▄', b, bg),
+        (t, b) if t == b => cell('█', t, bg),
+        (t, b) if strict => cell('█', t.lerp(b, 0.5), bg),
+        (t, b) => cell('▀', t, b),
+    };
+}
+
+/// Paints one half-block pixel (two to a cell, so `y` counts half rows).
+pub(crate) fn pixel(c: &mut Canvas, x: i32, y: i32, color: Color) {
+    let row = y.div_euclid(2);
+    if y.rem_euclid(2) == 0 {
+        paint(c, x, row, Some(color), None);
+    } else {
+        paint(c, x, row, None, Some(color));
+    }
+}
+
+/// Draws pixel art, one character per half-block pixel, with its top-left
+/// pixel at (`x`, `y`); `.` and spaces are see-through and `color` gives the
+/// rest their colors. `flip` mirrors it (the art faces right) and `shift`
+/// moves each of its rows sideways, for a skirt or a feather that sways.
+pub(crate) fn sprite(
+    c: &mut Canvas,
+    (x, y): (i32, i32),
+    rows: &[&str],
+    flip: bool,
+    shift: impl Fn(i32) -> i32,
+    color: impl Fn(u8) -> Option<Color>,
+) {
+    let w = rows.iter().map(|r| r.len()).max().unwrap_or(0) as i32;
+    let h = rows.len() as i32;
+    let at = |r: i32, col: i32| -> Option<Color> {
+        let line = rows.get(usize::try_from(r).ok()?)?.as_bytes();
+        let sx = col - x - shift(r);
+        if !(0..w).contains(&sx) {
+            return None;
+        }
+        match *line.get((if flip { w - 1 - sx } else { sx }) as usize)? {
+            b'.' | b' ' => None,
+            ch => color(ch),
+        }
+    };
+    let rows_on_screen = y.div_euclid(2).max(0)..=(y + h - 1).div_euclid(2).min(c.h() as i32 - 1);
+    for row in rows_on_screen {
+        let (r0, r1) = (row * 2 - y, row * 2 + 1 - y);
+        let span = |r: i32| (0..h).contains(&r).then(|| x + shift(r));
+        let (lo, hi) = match (span(r0), span(r1)) {
+            (Some(a), Some(b)) => (a.min(b), a.max(b) + w),
+            (Some(a), None) | (None, Some(a)) => (a, a + w),
+            (None, None) => continue,
+        };
+        for col in lo.max(0)..hi.min(c.w() as i32) {
+            paint(c, col, row, at(r0, col), at(r1, col));
+        }
+    }
 }
 
 pub struct Eggs {
@@ -175,7 +279,7 @@ impl Eggs {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::color::Color;
+    use crate::color::{Color, rgb};
 
     #[test]
     fn parses_the_setting() {
@@ -322,6 +426,104 @@ mod tests {
         };
         let (ordinary, holiday) = (starts(Fiesta::NONE), starts(muertos));
         assert!(holiday > ordinary * 4, "{ordinary} vs {holiday}");
+    }
+
+    /// Half-block pixels keep what the other half of their cell showed, and
+    /// nothing outside the screen is touched.
+    #[test]
+    fn pixels_keep_the_other_half() {
+        let (a, b) = (rgb(0xff8c00), rgb(0x0000ff));
+        let mut c = Canvas::new(3, 2, Color::Reset);
+        pixel(&mut c, 1, 0, a);
+        assert_eq!(halves(c.get(1, 0).unwrap()), (a, Color::Reset));
+        pixel(&mut c, 1, 1, b);
+        assert_eq!(halves(c.get(1, 0).unwrap()), (a, b));
+        pixel(&mut c, 1, 0, b);
+        assert_eq!(halves(c.get(1, 0).unwrap()), (b, b));
+        // Off the screen, or nothing to paint: no change, no panic.
+        pixel(&mut c, -1, 0, a);
+        pixel(&mut c, 3, 1, a);
+        pixel(&mut c, 0, 4, a);
+        paint(&mut c, 0, 0, None, None);
+        assert!(c.get(0, 0).unwrap().ch == ' ' && c.get(2, 1).unwrap().ch == ' ');
+        // A strict canvas has one color per cell.
+        let mut c = Canvas::new(1, 1, Color::Reset);
+        c.strict = true;
+        paint(&mut c, 0, 0, Some(a), Some(b));
+        assert_eq!(c.get(0, 0).unwrap().ch, '█');
+    }
+
+    /// Sprites paint only their own pixels, mirrored when asked, each row
+    /// shifted as told.
+    #[test]
+    fn sprites_flip_shift_and_clip() {
+        let red = rgb(0xff0000);
+        let mut c = Canvas::new(6, 2, Color::Reset);
+        let art = ["R.", "RR"];
+        sprite(&mut c, (1, 0), &art, false, |_| 0, |_| Some(red));
+        assert_eq!(halves(c.get(1, 0).unwrap()), (red, red));
+        assert_eq!(halves(c.get(2, 0).unwrap()), (Color::Reset, red));
+        c.clear();
+        // Mirrored, the bare pixel is on the left; shifted, row 1 moves right.
+        sprite(&mut c, (1, 0), &art, true, |r| r, |_| Some(red));
+        assert_eq!(halves(c.get(1, 0).unwrap()), (Color::Reset, Color::Reset));
+        assert_eq!(halves(c.get(2, 0).unwrap()), (red, red));
+        assert_eq!(halves(c.get(3, 0).unwrap()), (Color::Reset, red));
+        // Partly or wholly off the screen is fine.
+        for (x, y) in [(-5, -5), (-1, 0), (5, 1), (9, 9), (0, -1)] {
+            sprite(&mut c, (x, y), &art, true, |r| r, |_| Some(red));
+        }
+    }
+
+    /// The Día de Muertos visitors come during the holiday, from its first
+    /// day, and never on an ordinary day.
+    #[test]
+    fn the_visitors_keep_to_muertos() {
+        let names = ["catrina", "monarcas", "alebrije", "mariachis", "calaverita"];
+        for name in names {
+            let info = ALL.iter().find(|i| i.name == name).unwrap();
+            assert_eq!(info.fiesta, Kind::Muertos, "{name}");
+            let mut e = Eggs::new(80, 24);
+            e.start(&[info], Fiesta::NONE);
+            assert!(!e.active(), "{name} came on an ordinary day");
+            for (m, d) in [(10, 28), (11, 2), (11, 3)] {
+                let mut e = Eggs::new(80, 24);
+                e.start(&[info], Fiesta::of_day(m, d));
+                assert!(e.active(), "{name} on {m}-{d}");
+            }
+        }
+    }
+
+    /// Any egg survives tiny and huge screens and long steps, under any theme.
+    #[test]
+    fn eggs_survive_odd_sizes_and_huge_steps() {
+        let themes = [Theme::classic(), Theme::builtin("gruvbox").unwrap()];
+        let mut rng = fastrand::Rng::with_seed(9);
+        for info in ALL {
+            for t in &themes {
+                for (w, h) in [(1, 1), (2, 40), (7, 3), (40, 12), (300, 90), (500, 150)] {
+                    let mut e = (info.start)(w, h, &mut rng);
+                    let mut c = Canvas::new(w, h, Color::Reset);
+                    for dt in [0.0, 5.0, 0.01, 5.0, 3.0, 5.0, 5.0, 5.0, 5.0] {
+                        e.update(dt);
+                        c.clear();
+                        e.draw(&mut c, t);
+                    }
+                    // The visitors are done within 30 s at any size (the
+                    // scheduler cuts the others short).
+                    if info.fiesta == Kind::Muertos {
+                        let mut secs = 0.0;
+                        while !e.done() && secs <= 30.0 {
+                            e.update(0.25);
+                            secs += 0.25;
+                            c.clear();
+                            e.draw(&mut c, t);
+                        }
+                        assert!(secs <= 30.0, "{} still going at {w}x{h}", info.name);
+                    }
+                }
+            }
+        }
     }
 
     #[test]

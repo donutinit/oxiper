@@ -8,10 +8,10 @@
 //! painted: the sky is whatever the scene drew, and a cell the cat covers by
 //! half keeps the scene's other half.
 
-use super::{Egg, Info};
+use super::{Egg, Info, paint};
 use crate::color::{self, Color};
 use crate::fiesta::Kind;
-use crate::render::{Canvas, Cell};
+use crate::render::Canvas;
 use crate::scenes::nyancat::frames::{FRAME_HEIGHT, FRAME_WIDTH, FRAMES};
 use crate::scenes::nyancat::{PALETTE, RAINBOW_CHARS, sample, strip_stars, theme_rainbow};
 use crate::theme::Theme;
@@ -83,16 +83,6 @@ impl Cat {
     }
 }
 
-/// The colors a cell shows in its upper and lower half.
-fn halves(cell: &Cell) -> (Color, Color) {
-    match cell.ch {
-        '▀' => (cell.fg, cell.bg),
-        '▄' => (cell.bg, cell.fg),
-        '█' => (cell.fg, cell.fg),
-        _ => (cell.bg, cell.bg),
-    }
-}
-
 impl Egg for Cat {
     fn update(&mut self, dt: f32) {
         self.t += dt;
@@ -121,51 +111,10 @@ impl Egg for Cat {
                 ch => Some(pal[ch as usize & 127]),
             }
         };
-        let (bg, strict) = (c.bg(), c.strict);
         let rows = (self.y0 + self.top).div_euclid(2)..=(self.y0 + self.bot).div_euclid(2);
         for row in rows {
             for col in 0..self.w.min(c.w() as i32) {
-                let (up, down) = (pixel(col, row * 2), pixel(col, row * 2 + 1));
-                if up.is_none() && down.is_none() {
-                    continue;
-                }
-                let Some(slot) = c.get_mut(col, row) else {
-                    continue;
-                };
-                let (old_up, old_down) = halves(slot);
-                let (t, b) = (up.unwrap_or(old_up), down.unwrap_or(old_down));
-                *slot = match (t, b) {
-                    (t, Color::Reset) => Cell {
-                        ch: '▀',
-                        fg: t,
-                        bg,
-                        attr: 0,
-                    },
-                    (Color::Reset, b) => Cell {
-                        ch: '▄',
-                        fg: b,
-                        bg,
-                        attr: 0,
-                    },
-                    (t, b) if t == b => Cell {
-                        ch: '█',
-                        fg: t,
-                        bg,
-                        attr: 0,
-                    },
-                    (t, b) if strict => Cell {
-                        ch: '█',
-                        fg: t.lerp(b, 0.5),
-                        bg,
-                        attr: 0,
-                    },
-                    (t, b) => Cell {
-                        ch: '▀',
-                        fg: t,
-                        bg: b,
-                        attr: 0,
-                    },
-                };
+                paint(c, col, row, pixel(col, row * 2), pixel(col, row * 2 + 1));
             }
         }
     }
