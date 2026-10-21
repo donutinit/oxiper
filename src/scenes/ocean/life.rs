@@ -15,6 +15,7 @@
 use std::f32::consts::TAU;
 
 use super::art::{self, PUFFED, Role, Species, size};
+use super::muertos;
 use super::sea::Sea;
 use super::tank::{Bit, BitKind, EYE, EYE_WHITE, PLANKTON};
 use super::{Dice, Rng};
@@ -346,13 +347,19 @@ impl Sea {
     }
 
     fn spawn_reef(&mut self, on: bool, rng: &mut Rng) {
-        let sp = rng.pick(&art::REEF);
+        let mut sp = rng.pick(&art::REEF);
+        if self.fest.on && self.fest.rng.chance(0.15 + 0.25 * self.fest.level) {
+            sp = &art::ALEBRIJE;
+        }
         let dir = rng.sign();
         let (sw, sh) = size(sp.frames[0]);
         let (top, bottom) = self.band(sh as f32 * 0.5);
         let x = self.entry(sw as f32 * 0.5, dir, on, rng);
         let y = rng.rangef(top, bottom);
-        let s = self.swimmer(sp, (x, y), dir, rng);
+        let mut s = self.swimmer(sp, (x, y), dir, rng);
+        if sp.name == art::ALEBRIJE.name {
+            s.colors = self.fest.rng.pick(sp.palettes);
+        }
         self.swim.push(s);
     }
 
@@ -375,11 +382,16 @@ impl Sea {
 
     /// A school of up to `most` sardines or tetras; returns how many.
     fn spawn_school(&mut self, most: usize, on: bool, rng: &mut Rng) -> usize {
-        let sp = if rng.chance(0.65) {
+        let mut sp = if rng.chance(0.65) {
             &art::SARDINE
         } else {
             &art::TETRA
         };
+        // During Día de Muertos alebrijes school too, each painted its own way.
+        let alebrijes = self.fest.on && self.fest.rng.chance(0.3 + 0.3 * self.fest.level);
+        if alebrijes {
+            sp = &art::ALEBRIJITO;
+        }
         let n = (rng.range(8, 22) as usize).min(most);
         if n < 3 {
             return 0;
@@ -397,7 +409,11 @@ impl Sea {
             let x = x0 - dir * (col * (sw as f32 + 2.0) + rng.rangef(0.0, 2.0));
             let y = y0 + (row - 1.0) * (sh as f32 + 1.5) + rng.rangef(-0.5, 0.5);
             let mut s = self.swimmer(sp, (x, y), dir, rng);
-            s.colors = colors;
+            s.colors = if alebrijes {
+                self.fest.rng.pick(sp.palettes)
+            } else {
+                colors
+            };
             s.cruise = cruise * rng.rangef(0.95, 1.05);
             s.vx = dir * s.cruise;
             s.group = g;
@@ -1219,6 +1235,7 @@ impl Sea {
             Role::Dolphin,
             Role::Orca,
         ];
+        let fest = self.fest.on;
         for role in ORDER {
             for i in 0..self.swim.len() {
                 let s = &self.swim[i];
@@ -1237,6 +1254,7 @@ impl Sea {
                     _ => 0.0,
                 };
                 let at = (s.x, s.y + bob);
+                let face = art::face_paint(s.sp).filter(|_| fest && s.puffed == 0);
                 let (dir, slope, act) = (s.dir, s.slope, s.act);
                 let c = s.colors;
                 let paint = move |ch: u8| match ch {
@@ -1246,6 +1264,11 @@ impl Sea {
                     b'S' => c[3],
                     b'F' => c[4],
                     b'w' => EYE_WHITE,
+                    b'h' => muertos::HUESO,
+                    b'p' => muertos::ROSA,
+                    b't' => muertos::TURQUESA,
+                    b'y' => muertos::AMARILLO,
+                    b'm' => muertos::CEMPASUCHIL[0],
                     _ => EYE,
                 };
                 match act {
@@ -1254,6 +1277,9 @@ impl Sea {
                         self.sprite_turned(frame, at, dir, a, paint);
                     }
                     _ => self.sprite(frame, at, dir, slope, paint),
+                }
+                if let Some(face) = face {
+                    self.sprite(face, at, dir, slope, paint);
                 }
             }
         }

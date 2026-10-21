@@ -44,6 +44,16 @@
 //!   find; mantas glide past feeding on plankton and loop over. The eaten
 //!   are replaced by fish swimming in from the sides.
 //! - `sea.rs`: the sea as a whole: stepping, the visits and the drawing.
+//! - `muertos.rs`: Día de Muertos, Janitzio's night on the water. Night
+//!   falls with a thin moon and stars; veladoras in colored glass float on
+//!   rafts of cempasúchil, haloed and glinting in the water, among drifting
+//!   petals and candles far across the lake; petals sink and rest on the
+//!   sand among marigolds, terciopelo and nube; the castle glows from its
+//!   windows and door, with candles in its crenels and papel picado between
+//!   its towers. Alebrijes join the schools and swim on their own, sharks
+//!   and orcas wear calavera paint, and there is more of it all as the
+//!   holiday comes to November 2. An ordinary day's sea is left as it was,
+//!   down to its random numbers.
 //!
 //! tanim runs its tank at 20 ticks a second and moves things by pixels per
 //! tick; the sea steps at that rate on an accumulator scaled by `speed`, so
@@ -52,10 +62,12 @@
 
 mod art;
 mod life;
+mod muertos;
 mod sea;
 mod tank;
 
 use crate::color::Color;
+use crate::fiesta::{Fiesta, Kind};
 use crate::render::Canvas;
 use crate::scene::{Ctx, Opt, Scene, SceneInfo, Val};
 use sea::Sea;
@@ -180,6 +192,11 @@ struct Pal {
     surface: Color,
     /// The sky at the top and at the horizon.
     sky: [Color; 2],
+    /// Día de Muertos: the night sky, from the top through dusk to the
+    /// last glow at the horizon, and the colors of papel picado and
+    /// veladora glass.
+    night: [Color; 3],
+    papel: [Color; 5],
 }
 
 const WATER_TOP: Color = art::rgb(26, 104, 160);
@@ -190,13 +207,42 @@ const SURFACE: Color = art::rgb(160, 220, 245);
 const SKY_TOP: Color = art::rgb(112, 170, 222);
 const SKY_LOW: Color = art::rgb(198, 226, 244);
 
+// Janitzio's night: twilight water under the moon, candlelight on the
+// ripples, and a sky going from noche to the last of the sunset.
+const NIGHT_TOP: Color = art::rgb(22, 62, 116);
+const NIGHT_MID: Color = art::rgb(10, 32, 78);
+const NIGHT_BOT: Color = art::rgb(5, 12, 38);
+const MOON: Color = art::rgb(112, 140, 206);
+const CANDLELIT: Color = art::rgb(240, 150, 110);
+const NIGHT_SKY: [Color; 3] = [
+    art::rgb(18, 14, 40),
+    art::rgb(44, 22, 78),
+    art::rgb(120, 46, 110),
+];
+const PAPEL: [Color; 5] = [
+    art::rgb(228, 0, 124),
+    art::rgb(255, 140, 0),
+    art::rgb(140, 60, 200),
+    art::rgb(0, 170, 184),
+    art::rgb(255, 210, 0),
+];
+
 impl Pal {
     fn new(ctx: &Ctx) -> Pal {
+        let muertos = ctx.fiesta.is(Kind::Muertos);
+        let (water, ray, surface) = if muertos {
+            ([NIGHT_TOP, NIGHT_MID, NIGHT_BOT], MOON, CANDLELIT)
+        } else {
+            ([WATER_TOP, WATER_MID, WATER_BOT], RAY, SURFACE)
+        };
+        let papel = [0, 1, 2, 3, 4].map(|i| ctx.pick(i, PAPEL[i]));
         let native = Pal {
-            water: [WATER_TOP, WATER_MID, WATER_BOT],
-            ray: RAY,
-            surface: SURFACE,
+            water,
+            ray,
+            surface,
             sky: [SKY_TOP, SKY_LOW],
+            night: NIGHT_SKY,
+            papel,
         };
         if ctx.theme.native {
             return native;
@@ -205,13 +251,19 @@ impl Pal {
         let tint = |c: Color, k: f32| c.lerp(g.at(k), TINT);
         Pal {
             water: [
-                tint(WATER_TOP, 0.75),
-                tint(WATER_MID, 0.45),
-                tint(WATER_BOT, 0.15),
+                tint(water[0], 0.75),
+                tint(water[1], 0.45),
+                tint(water[2], 0.15),
             ],
-            ray: tint(RAY, 0.95),
-            surface: tint(SURFACE, 1.0),
+            ray: tint(ray, 0.95),
+            surface: tint(surface, 1.0),
             sky: [tint(SKY_TOP, 0.8), tint(SKY_LOW, 1.0)],
+            night: [
+                tint(NIGHT_SKY[0], 0.1),
+                tint(NIGHT_SKY[1], 0.5),
+                tint(NIGHT_SKY[2], 0.9),
+            ],
+            papel,
         }
     }
 }
@@ -221,6 +273,11 @@ struct OceanScene {
     sea: Sea,
     rng: Rng,
     set: Settings,
+    /// The holiday the sea is dressed for, the seed its dress is drawn
+    /// from, and the screen's size in cells.
+    fiesta: Fiesta,
+    seed: u64,
+    size: (u16, u16),
     speed: f64,
     /// Scene seconds not yet spent on ticks.
     acc: f64,
@@ -251,11 +308,14 @@ impl OceanScene {
             water: o.b("water"),
         };
         let mut rng = ctx.rng();
-        let sea = Sea::new(80, 24, &mut rng, Pal::new(ctx), set);
+        let sea = Sea::new(80, 24, &mut rng, Pal::new(ctx), set, ctx.fiesta, ctx.seed);
         OceanScene {
             sea,
             rng,
             set,
+            fiesta: ctx.fiesta,
+            seed: ctx.seed,
+            size: (80, 24),
             speed: num(o.f("speed"), 1.0, 0.0, 20.0) as f64,
             acc: 0.0,
             dirty: true,
@@ -263,15 +323,31 @@ impl OceanScene {
     }
 }
 
+impl OceanScene {
+    /// A new sea for the screen and the day.
+    fn fresh(&mut self, pal: Pal) -> Sea {
+        let (w, h) = self.size;
+        Sea::new(w, h, &mut self.rng, pal, self.set, self.fiesta, self.seed)
+    }
+}
+
 impl Scene for OceanScene {
     fn resize(&mut self, _ctx: &Ctx, w: u16, h: u16) {
         // The tank is built for the screen, so a resize fills a fresh one.
-        self.sea = Sea::new(w, h, &mut self.rng, self.sea.pal, self.set);
+        self.size = (w, h);
+        self.sea = self.fresh(self.sea.pal);
         self.dirty = true;
     }
 
     fn retheme(&mut self, ctx: &Ctx) {
-        self.sea.pal = Pal::new(ctx);
+        let pal = Pal::new(ctx);
+        if ctx.fiesta != self.fiesta {
+            // A new day of the holiday, or its end: a sea dressed for it.
+            self.fiesta = ctx.fiesta;
+            self.sea = self.fresh(pal);
+        } else {
+            self.sea.pal = pal;
+        }
         self.dirty = true;
     }
 
@@ -355,7 +431,7 @@ mod tests {
         }
     }
 
-    const ALL: [&Species; 13] = [
+    const ALL: [&Species; 15] = [
         &art::TETRA,
         &art::CLOWN,
         &art::ANGEL,
@@ -369,6 +445,8 @@ mod tests {
         &art::ORCA,
         &art::DOLPHIN,
         &art::MANTA,
+        &art::ALEBRIJITO,
+        &art::ALEBRIJE,
     ];
 
     /// Every drawing is a rectangle, all of an animal's frames are the same
@@ -395,6 +473,13 @@ mod tests {
                 "{}",
                 sp.name
             );
+            // Calavera paint fits its animal exactly.
+            if let Some(face) = art::face_paint(sp) {
+                assert_eq!(art::size(face), size, "{}", sp.name);
+                for ch in face.iter().flat_map(|r| r.bytes()) {
+                    assert!(b".hoptym".contains(&ch), "{}: {}", sp.name, ch as char);
+                }
+            }
         }
     }
 
@@ -504,5 +589,108 @@ mod tests {
             run(c, s, 20 * 120, |_| {});
             assert_eq!(s.sea.sharks_taken, 1);
         });
+    }
+
+    fn holiday<'a>(theme: &'a Theme, opts: &'a Opts, fiesta: Fiesta) -> Ctx<'a> {
+        Ctx {
+            fiesta,
+            ..ctx(theme, opts)
+        }
+    }
+
+    fn alebrijes(s: &OceanScene) -> usize {
+        s.sea
+            .swim
+            .iter()
+            .filter(|f| f.alive && [art::ALEBRIJE.name, art::ALEBRIJITO.name].contains(&f.sp.name))
+            .count()
+    }
+
+    /// Día de Muertos dresses the sea from its first day to its height:
+    /// night, veladoras and petals on the water, flowers on the floor and
+    /// alebrijes, more of it all on November 2. An ordinary day has none.
+    #[test]
+    fn muertos_dresses_the_sea() {
+        let theme = Theme::classic();
+        let opts = opts("visits = 0");
+        let mut counts = Vec::new();
+        for f in [Fiesta::of_day(10, 28), Fiesta::of_day(11, 2), Fiesta::NONE] {
+            let c = holiday(&theme, &opts, f);
+            let mut s = OceanScene::new(&c);
+            s.resize(&c, 160, 48);
+            s.retheme(&c);
+            assert_eq!(s.sea.fest.on, f.on());
+            let mut seen = alebrijes(&s);
+            run(&c, &mut s, 20 * 120, |s| seen = seen.max(alebrijes(s)));
+            let mut cv = Canvas::new(160, 48, Color::Reset);
+            s.draw(&c, &mut cv);
+            // The sky at the top: night, or the day's blue.
+            let night = s.sea.scr.get(0, 0) == s.sea.pal.night[0];
+            let (candles, petals, blooms) = s.sea.fest.counts();
+            if f.on() {
+                assert!(night && seen > 0, "{f:?}: {seen} alebrijes");
+                assert!(candles > 0 && petals > 0 && blooms > 0, "{f:?}");
+            } else {
+                assert!(!night && seen == 0 && candles + petals + blooms == 0);
+            }
+            counts.push((candles, blooms));
+        }
+        assert!(
+            counts[1].0 > counts[0].0 && counts[1].1 > counts[0].1,
+            "{counts:?}"
+        );
+    }
+
+    /// The holiday comes and goes with `retheme`, as it does at midnight.
+    #[test]
+    fn retheme_switches_the_holiday() {
+        let theme = Theme::classic();
+        let opts = opts("");
+        let off = ctx(&theme, &opts);
+        let on = holiday(&theme, &opts, Fiesta::of_day(11, 1));
+        let mut s = OceanScene::new(&off);
+        s.resize(&off, 120, 36);
+        s.retheme(&off);
+        assert!(!s.sea.fest.on);
+        s.retheme(&on);
+        assert!(s.sea.fest.on && s.sea.fest.counts().0 > 0);
+        run(&on, &mut s, 200, |_| {});
+        s.retheme(&off);
+        assert!(!s.sea.fest.on && s.sea.fest.counts() == (0, 0, 0));
+        run(&off, &mut s, 20 * 60, |s| assert_eq!(alebrijes(s), 0));
+    }
+
+    /// The holiday survives odd sizes, huge steps and another theme.
+    #[test]
+    fn muertos_survives() {
+        let themes = [Theme::classic(), Theme::builtin("dracula").unwrap()];
+        for case in [
+            "",
+            "visits = 10.0\nfish = 5.0",
+            "water = false\nsurface = false",
+        ] {
+            let opts = opts(case);
+            for theme in &themes {
+                for f in [Fiesta::of_day(10, 28), Fiesta::of_day(11, 2)] {
+                    let c = holiday(theme, &opts, f);
+                    let mut s = (INFO.make)(&c);
+                    for &(w, h) in &[(1u16, 1u16), (3, 2), (9, 4), (80, 24), (300, 90), (40, 12)] {
+                        s.resize(&c, w, h);
+                        s.retheme(&c);
+                        let mut cv = Canvas::new(w, h, Color::Reset);
+                        for dt in [0.05, 5.0, f32::NAN, 1e9, 0.05] {
+                            s.tick(&c, dt, dt);
+                            cv.clear();
+                            s.draw(&c, &mut cv);
+                        }
+                        for _ in 0..100 {
+                            s.tick(&c, 0.5, 0.5);
+                        }
+                        cv.clear();
+                        s.draw(&c, &mut cv);
+                    }
+                }
+            }
+        }
     }
 }

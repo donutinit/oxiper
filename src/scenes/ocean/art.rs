@@ -863,3 +863,124 @@ const MANTA_TOP: Sprite = &[
     "....................",
     "....................",
 ];
+
+// Día de Muertos: alebrijes, Oaxaca's wildly painted creatures, swimming in
+// schools and on their own, and the calavera paint the sharks and orcas wear
+// for the holiday.
+
+const ROSA: Color = rgb(236, 30, 136);
+const TURQUESA: Color = rgb(0, 186, 196);
+const AMARILLO: Color = rgb(255, 214, 20);
+const MORADO: Color = rgb(150, 70, 206);
+const LIMON: Color = rgb(150, 210, 50);
+const NARANJA: Color = rgb(255, 140, 0);
+
+/// Every alebrije wears its own: no two in a school alike.
+const ALEBRIJE_PALETTES: &[[Color; 5]] = &[
+    [ROSA, TURQUESA, AMARILLO, TURQUESA, MORADO],
+    [TURQUESA, ROSA, AMARILLO, ROSA, AMARILLO],
+    [AMARILLO, MORADO, ROSA, MORADO, ROSA],
+    [MORADO, AMARILLO, LIMON, AMARILLO, TURQUESA],
+    [LIMON, ROSA, AMARILLO, MORADO, ROSA],
+    [NARANJA, TURQUESA, AMARILLO, ROSA, TURQUESA],
+];
+
+pub const ALEBRIJITO: Species = Species {
+    name: "alebrijito",
+    frames: &[
+        &[
+            "....DSD...",
+            "F..BSBSBB.",
+            "FFSLLLLLkB",
+            "F..BSBSBB.",
+            ".....D....",
+        ],
+        &[
+            "....DSD...",
+            ".F.BSBSBB.",
+            ".FSLLLLLkB",
+            ".F.BSBSBB.",
+            ".....D....",
+        ],
+    ],
+    palettes: ALEBRIJE_PALETTES,
+    role: Role::School,
+    cruise: (0.2, 0.32),
+    burst: 0.85,
+    beat: 1.0,
+};
+
+pub const ALEBRIJE: Species = Species {
+    name: "alebrije",
+    frames: &[
+        &[
+            ".......D.D.D.....",
+            "F.....DSDSDSD....",
+            "FF...BBBBBBBBBB..",
+            "FSF.BSLSBSLSBBwB.",
+            "FFSBBLSLBLSLBwkBB",
+            "FSF.BSLSBSLSBBBBB",
+            "FF...BBBBBBBBBB..",
+            "F.....DSDSD......",
+            ".......D.D.......",
+        ],
+        &[
+            ".......D.D.D.....",
+            ".F....DSDSDSD....",
+            ".FF..BBBBBBBBBB..",
+            ".SF.BSLSBSLSBBwB.",
+            ".FSBBLSLBLSLBwkBB",
+            ".SF.BSLSBSLSBBBBB",
+            ".FF..BBBBBBBBBB..",
+            ".F....DSDSD......",
+            ".......D.D.......",
+        ],
+    ],
+    palettes: ALEBRIJE_PALETTES,
+    role: Role::Reef,
+    cruise: (0.08, 0.4),
+    burst: 0.8,
+    beat: 1.0,
+};
+
+/// Calavera paint laid over a shark or an orca, the size of its frames:
+/// `h` sugar white, `o` the dark of a socket or a stitch, `p` rosa, `t`
+/// turquesa, `y` amarillo and `m` cempasúchil.
+pub fn face_paint(sp: &Species) -> Option<Sprite> {
+    match sp.role {
+        Role::Shark => Some(SHARK_PAINT),
+        Role::Orca => Some(ORCA_PAINT),
+        _ => None,
+    }
+}
+
+const SHARK_PAINT: Sprite = &[
+    "..................................",
+    "..................................",
+    "..................................",
+    ".........................m........",
+    "........................mym.......",
+    "........................tmhhph....",
+    "........................pthpophoh.",
+    ".........................phhphhhhh",
+    "...........................hohoh..",
+    "..................................",
+    "..................................",
+];
+
+const ORCA_PAINT: Sprite = &[
+    ".......................................",
+    ".......................................",
+    ".......................................",
+    ".......................................",
+    "...........................m...........",
+    "..........................mym.p.t......",
+    "...........................m..toohp....",
+    ".............................phooht....",
+    "...............................t.p.hhoh",
+    "...................................ohoh",
+    ".......................................",
+    ".......................................",
+    ".......................................",
+    ".......................................",
+];

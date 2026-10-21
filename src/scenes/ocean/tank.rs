@@ -161,6 +161,7 @@ impl Sea {
                 };
                 self.set_scenery(x0 + x, y0 + y, c);
             });
+            self.castle = Some((x0, y0));
             // Bubbles stream out of the door.
             self.vents.push((x0 + cw / 2, y0 + chh - 3));
         }
@@ -371,7 +372,12 @@ impl Sea {
         let water = self.set.water;
         if water {
             for y in 0..top {
-                let c = self.pal.sky[0].lerp(self.pal.sky[1], y as f32 / top.max(1) as f32);
+                let k = y as f32 / top.max(1) as f32;
+                let c = if self.fest.on {
+                    ramp(&self.pal.night, k * k)
+                } else {
+                    self.pal.sky[0].lerp(self.pal.sky[1], k)
+                };
                 for x in 0..w {
                     self.put(x, y, c);
                 }

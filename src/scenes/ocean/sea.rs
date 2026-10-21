@@ -5,9 +5,11 @@ use std::f32::consts::TAU;
 
 use super::art::{Sprite, each_pixel, size};
 use super::life::{Group, Swimmer};
+use super::muertos::Fest;
 use super::tank::{Bit, Bubble, Crab, Weed};
 use super::{Dice, Pal, Rng, Settings};
 use crate::color::Color;
+use crate::fiesta::Fiesta;
 use crate::render::Pixels;
 
 pub struct Sea {
@@ -28,6 +30,8 @@ pub struct Sea {
     pub floor: i32,
     /// Sand, rocks and ornaments, laid over the water every frame.
     pub scenery: Vec<Option<Color>>,
+    /// The castle's top-left pixel, when there is one.
+    pub castle: Option<(i32, i32)>,
     pub rays: Vec<f32>,
     pub weeds: Vec<Weed>,
     /// Where bubbles stream from.
@@ -44,6 +48,8 @@ pub struct Sea {
     /// Real seconds until the next visit and the next mantas.
     pub visit_in: f32,
     pub manta_in: f32,
+    /// Día de Muertos, when it is on.
+    pub fest: Fest,
 }
 
 #[inline]
@@ -54,7 +60,15 @@ pub fn hash(x: i32, y: i32, seed: u32) -> u32 {
 }
 
 impl Sea {
-    pub fn new(cols: u16, rows: u16, rng: &mut Rng, pal: Pal, set: Settings) -> Sea {
+    pub fn new(
+        cols: u16,
+        rows: u16,
+        rng: &mut Rng,
+        pal: Pal,
+        set: Settings,
+        fiesta: Fiesta,
+        seed: u64,
+    ) -> Sea {
         let (cols, rows) = (cols.max(1), rows.max(1));
         let (w, ph) = (cols as i32, 2 * rows as i32);
         let surf = if set.surface && ph >= 40 {
@@ -87,6 +101,7 @@ impl Sea {
             sand_top,
             floor,
             scenery: vec![None; n],
+            castle: None,
             rays: vec![0.0; (w + (ph - surf) / 3 + 1).max(1) as usize],
             weeds: Vec::new(),
             vents: Vec::new(),
@@ -101,9 +116,13 @@ impl Sea {
             // Something comes by soon after the start, then every so often.
             visit_in: rng.rangef(3.0, 8.0) / visits,
             manta_in: rng.rangef(6.0, 16.0) / visits,
+            fest: Fest::new(fiesta, seed),
         };
         sea.build_scenery(rng);
         sea.plant(rng);
+        if sea.fest.on {
+            sea.dress();
+        }
         if sea.lively() {
             sea.populate(rng);
         }
@@ -122,6 +141,9 @@ impl Sea {
             self.life(rng);
         }
         self.tank(rng);
+        if self.fest.on {
+            self.fest_tick();
+        }
     }
 
     /// The wall clock: when the big animals come by. Returns whether
@@ -151,10 +173,23 @@ impl Sea {
         self.scr.clear();
         let t = self.t as f32;
         self.paint_water(t);
+        let fest = self.fest.on;
+        if fest {
+            self.paint_night(t);
+        }
         self.paint_surface(t);
+        if fest {
+            self.draw_altar(t);
+        }
         self.draw_weeds(t);
         self.draw_crab();
+        if fest {
+            self.draw_sinking(t);
+        }
         self.draw_life(t);
+        if fest {
+            self.draw_veladoras(t);
+        }
         self.draw_bits();
         self.draw_bubbles(t);
     }
