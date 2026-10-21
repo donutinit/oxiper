@@ -32,10 +32,23 @@
 //! onto the terminal. tanim steps the world 20 times a second; here an
 //! accumulator does the same at any frame rate, scaled by `speed`. The clocks
 //! (the day, how long a nap lasts) follow the wall clock instead.
+//!
+//! On Día de Muertos the dog is a xoloitzcuintle, the hairless dog who guides
+//! souls to Mictlán: slate grey, bat-eared, tufted, with a collar of
+//! cempasúchil. A path of marigold petals, trodden clear of grass and lined
+//! with veladoras, winds across the meadow to a small ofrenda by the fence
+//! (three tiers in papel picado colors, candles, a photo, sugar skulls, pan de
+//! muerto, water and salt, under an arch of cempasúchil that goes up as the
+//! days go by). The meadow's flowers turn to cempasúchil, terciopelo and nube.
+//! By day the souls are monarchs fluttering about the path; by night they are
+//! small lights strung out behind the xolo, and when one has walked with it a
+//! good while and passes the ofrenda it rises over the candles and is home.
+//! The holiday rolls its own dice, so ordinary days are untouched.
 
 use std::f32::consts::PI;
 
 use crate::color::Color;
+use crate::fiesta::Kind;
 use crate::render::{Canvas, Pixels};
 use crate::scene::{Ctx, Opt, Scene, SceneInfo, Val};
 
@@ -324,6 +337,215 @@ const SNIFF_WAG: Sprite = &[
 const RUN: [Sprite; 4] = [RUN_A, RUN_B, RUN_C, RUN_B];
 const WAG: [Sprite; 4] = [STAND, STAND_L, STAND, STAND_R];
 
+// The xoloitzcuintle of Día de Muertos, frame for frame and row for row like
+// the dog above. `B` slate skin, `h` its sheen, `D` the far legs, `E` and `e`
+// the bat ears and their pink inside, `t` the tufts on the head and the tail,
+// `k` eye and nose, `c` `o` `m` the cempasúchil collar, `p` tongue.
+
+const XOLO_STAND: Sprite = &[
+    ".............EE.......",
+    ".............EeE.t....",
+    ".............EeEttt...",
+    ".............BeBBkBB..",
+    ".............BBBBBBBBk",
+    ".t...........ocoBBBB..",
+    "..B.hhhhhhhhhmcoB.....",
+    "...BBBBBBBBBBBBBBB....",
+    "...BBBBB....BBBBBB....",
+    "...DDBBB.....DDBB.....",
+    "...DD.BB.....DD.BB....",
+    "...DD.BB.....DD.BB....",
+    "...DD.hh.....DD.hh....",
+];
+
+const XOLO_STAND_L: Sprite = &[
+    ".............EE.......",
+    ".............EeE.t....",
+    ".............EeEttt...",
+    ".............BeBBkBB..",
+    "t............BBBBBBBBk",
+    ".B...........ocoBBBB..",
+    "..B.hhhhhhhhhmcoB.....",
+    "...BBBBBBBBBBBBBBB....",
+    "...BBBBB....BBBBBB....",
+    "...DDBBB.....DDBB.....",
+    "...DD.BB.....DD.BB....",
+    "...DD.BB.....DD.BB....",
+    "...DD.hh.....DD.hh....",
+];
+
+const XOLO_STAND_R: Sprite = &[
+    ".............EE.......",
+    ".............EeE.t....",
+    ".............EeEttt...",
+    ".............BeBBkBB..",
+    "..t..........BBBBBBBBk",
+    "..B..........ocoBBBB..",
+    "..B.hhhhhhhhhmcoB.....",
+    "...BBBBBBBBBBBBBBB....",
+    "...BBBBB....BBBBBB....",
+    "...DDBBB.....DDBB.....",
+    "...DD.BB.....DD.BB....",
+    "...DD.BB.....DD.BB....",
+    "...DD.hh.....DD.hh....",
+];
+
+const XOLO_RUN_A: Sprite = &[
+    ".............EE.......",
+    ".............EeE.t....",
+    ".............EeEttt...",
+    ".............BeBBkBB..",
+    ".............BBBBBBBBk",
+    ".............ocoBBBB..",
+    "tBBBhhhhhhhhhmcoB.....",
+    "...BBBBBBBBBBBBBBB....",
+    "...BBBBB....BBBBBB....",
+    "..DBBB........BBB.....",
+    ".DBB...........DBB....",
+    "DB..............DBB...",
+    "h................Dhh..",
+];
+
+const XOLO_RUN_B: Sprite = &[
+    ".............EE.......",
+    ".............EeE.t....",
+    ".............EeEttt...",
+    ".............BeBBkBB..",
+    ".............BBBBBBBBk",
+    ".............ocoBBBB..",
+    "tBBBhhhhhhhhhmcoB.....",
+    "...BBBBBBBBBBBBBBB....",
+    "...BBBBB....BBBBBB....",
+    "...DBBB......DBBB.....",
+    "...D.BB.....DD.BB.....",
+    "...D..BB...DD..B......",
+    "...h..hh...hh..h......",
+];
+
+const XOLO_RUN_C: Sprite = &[
+    ".............EE.......",
+    ".............EeE.t....",
+    ".............EeEttt...",
+    ".............BeBBkBB..",
+    ".............BBBBBBBBk",
+    ".............ocoBBBB..",
+    "tBBBhhhhhhhhhmcoB.....",
+    "...BBBBBBBBBBBBBBB....",
+    "...BBBBB....BBBBBB....",
+    "....DBB......DBB......",
+    ".....DBB....DBB.......",
+    "......DB...BD.........",
+    "......hh..hh..........",
+];
+
+const XOLO_SIT: Sprite = &[
+    "............EE........",
+    "............EeE.t.....",
+    "............EeEttt....",
+    "............BeBBkBB...",
+    "............BBBBBBBBk.",
+    "............ocoBBBp...",
+    "...........BmcoBBp....",
+    "...........BBBBBB.....",
+    "..........hBBBBBB.....",
+    ".........hBBBBBBB.....",
+    "........hBBBBDBB......",
+    ".t.....BBBBBBDBB......",
+    "..BBBBBBBBBBDDhhh.....",
+];
+
+const XOLO_SIT_PANT: Sprite = &[
+    "............EE........",
+    "............EeE.t.....",
+    "............EeEttt....",
+    "............BeBBkBB...",
+    "............BBBBBBBBk.",
+    "............ocoBBBpp..",
+    "...........BmcoBBpp...",
+    "...........BBBBBB.....",
+    "..........hBBBBBB.....",
+    ".........hBBBBBBB.....",
+    "........hBBBBDBB......",
+    ".......BBBBBBDBB......",
+    "tBBBBBBBBBBBDDhhh.....",
+];
+
+const XOLO_LIE: Sprite = &[
+    "..............EE......",
+    "..............EeE.t...",
+    "........hhhhh.BeBBtB..",
+    "tBB...BBBBBBBBBBBBBBk.",
+    "..BBBBBBBBBBBmcoBBB...",
+    "..BBBBBBBBBBBBBBBB....",
+    "...DDBBBBBBBBBBhhhhh..",
+];
+
+const XOLO_SNIFF: Sprite = &[
+    "..t...................",
+    "..B...................",
+    "..B...................",
+    "...B..................",
+    "...BhhhhhhhhhB........",
+    "...BBBBBBBBBBBBmc.....",
+    "...BBBBB....BBBcoEE...",
+    "...DDBBB.....DBBBEeEt.",
+    "...DD.BB.....DD.BBBkBB",
+    "...DD.BB.....DD..BBBBB",
+    "...DD.hh.....DD...BBBk",
+];
+
+const XOLO_SNIFF_WAG: Sprite = &[
+    ".t....................",
+    ".B....................",
+    "..B...................",
+    "...B..................",
+    "...BhhhhhhhhhB........",
+    "...BBBBBBBBBBBBmc.....",
+    "...BBBBB....BBBcoEE...",
+    "...DDBBB.....DBBBEeEt.",
+    "...DD.BB.....DD.BBBkBB",
+    "...DD.BB.....DD..BBBBB",
+    "...DD.hh.....DD...BBBk",
+];
+
+const XOLO_RUN: [Sprite; 4] = [XOLO_RUN_A, XOLO_RUN_B, XOLO_RUN_C, XOLO_RUN_B];
+const XOLO_WAG: [Sprite; 4] = [XOLO_STAND, XOLO_STAND_L, XOLO_STAND, XOLO_STAND_R];
+
+/// The ofrenda, seen from the front. `Y` `Z` `X` the arch of cempasúchil,
+/// built up from the bottom as the holiday comes; `1` `2` `3` the cloths of
+/// the three tiers and `W` their white edges; `P` the photo's frame, `q` and
+/// `u` the photo; `v` candles and `f` their flames; `s` sugar skulls with `k`
+/// eyes and `R` `t` `y` icing; `b` pan de muerto with `n` its bones (and the
+/// salt); `a` a glass of water; `o` `O` cempasúchil and `l` their stems in `g`
+/// clay pots.
+const OFRENDA: Sprite = &[
+    "..........XZYZYZX..........",
+    ".......YZX.......XZY.......",
+    ".....ZX.............XZ.....",
+    "....Y.....PPPPPPP.....Y....",
+    "...Z......PquuuqP......Z...",
+    "...X....f.PqquqqP.f....X...",
+    "..Y.....v.PuuuuuP.v.....Y..",
+    "..Z.....v.PPPPPPP.v.....Z..",
+    "..X....WWWWWWWWWWWWW....X..",
+    "..Y....1111111111111....Y..",
+    "..Z..f.1.1.1.1.1.1.1.f..Z..",
+    "..X..v.sRs.obnbo.sRs.v..X..",
+    "..Y..v.ksk.lbbbl.ksk.v..Y..",
+    "..Z..WWWWWWWWWWWWWWWWW..Z..",
+    "..X..22222222222222222..X..",
+    "..Y..2.f.2.2.2.2.2.f.2..Y..",
+    "..ZoOo.v.sts.a.sts.v.oOoZ..",
+    "..Xggg.v.kyknankyk.v.gggX..",
+    "..WWWWWWWWWWWWWWWWWWWWWWW..",
+    "..33333333333333333333333..",
+    "..33333333333333333333333..",
+    "..3.3.3.3.3.3.3.3.3.3.3.3..",
+];
+const OFRENDA_W: i32 = 27;
+/// Rows of the arch's posts and crown, counted from the top.
+const ARCH_ROWS: i32 = 18;
+
 /// Height of the world in pixels; its width follows the terminal's aspect.
 const WORLD_H: i32 = 128;
 /// Camera zoom levels, as the number of world pixel rows in view.
@@ -385,6 +607,28 @@ const POST: Rgb = Rgb(132, 96, 60);
 const TRUNK: Rgb = Rgb(104, 72, 46);
 const LEAVES: Rgb = Rgb(52, 112, 52);
 const LEAVES_LIT: Rgb = Rgb(84, 150, 70);
+
+// Día de Muertos.
+const XOLO_SKIN: Rgb = Rgb(78, 84, 98);
+const XOLO_SHEEN: Rgb = Rgb(106, 113, 130);
+const XOLO_FAR: Rgb = Rgb(50, 54, 66);
+const XOLO_EAR: Rgb = Rgb(64, 68, 82);
+const XOLO_EAR_IN: Rgb = Rgb(196, 128, 140);
+const TUFT: Rgb = Rgb(220, 214, 204);
+/// Cempasúchil: orange, light and dark.
+const CEMPASUCHIL: [Rgb; 3] = [Rgb(255, 140, 0), Rgb(255, 176, 30), Rgb(214, 98, 0)];
+const TERCIOPELO: Rgb = Rgb(176, 0, 72);
+const HUESO: Rgb = Rgb(244, 238, 226);
+const FLAMA: Rgb = Rgb(255, 214, 120);
+const FLAMA_EDGE: Rgb = Rgb(255, 150, 40);
+/// The ofrenda's cloths, in papel picado colors: rosa mexicano, morado, turquesa.
+const CLOTHS: [Rgb; 3] = [Rgb(228, 0, 124), Rgb(112, 40, 160), Rgb(0, 170, 184)];
+const MONARCH: Rgb = Rgb(244, 124, 14);
+const MONARCH_VEIN: Rgb = Rgb(34, 24, 22);
+const SOUL: Rgb = Rgb(255, 244, 220);
+const SOUL_GLOW: Rgb = Rgb(255, 178, 92);
+/// Seeds the holiday's own dice, so ordinary days keep theirs.
+const MUERTOS_SEED: u64 = 0x0D1A_DE3E_3705;
 
 #[derive(Clone, Copy, PartialEq)]
 enum State {
@@ -470,6 +714,269 @@ struct Zzz {
     age: u32,
 }
 
+/// A veladora beside the petal path: its glass stands on `(x, y)`.
+struct Candle {
+    x: i32,
+    y: i32,
+    glass: Rgb,
+}
+
+/// A soul come home for the holiday: a monarch by day, and by night a
+/// glowing light that follows the xolo along the path to the ofrenda.
+struct Spirit {
+    x: f32,
+    y: f32,
+    /// How far it moved across the last step.
+    vx: f32,
+    /// Where it flutters to by day.
+    tx: f32,
+    ty: f32,
+    phase: f32,
+    /// Steps since it set out; it only goes home after a while with the xolo.
+    age: u32,
+    /// Steps into its homecoming over the ofrenda, 0 until then.
+    home: u32,
+}
+
+/// Steps a soul rises over the ofrenda before it is home.
+const HOMECOMING: u32 = 90;
+
+/// Día de Muertos in the meadow, laid out for one world: a path of
+/// cempasúchil petals from the edge of the world to a small ofrenda, candles
+/// along it, and the souls that come home by it.
+struct Muertos {
+    level: f32,
+    /// The ofrenda's left edge and bottom row, in world pixels.
+    ox: i32,
+    oy: i32,
+    /// Where the path enters the world, off its edge.
+    start: f32,
+    /// The path's centre row at every world x, and how far its petals
+    /// reach either side (0 where there is no path).
+    path: Vec<i32>,
+    width: Vec<u8>,
+    petals: Vec<(i32, i32, Rgb)>,
+    candles: Vec<Candle>,
+    /// Every candle flame, in world pixels.
+    flames: Vec<(i32, i32)>,
+    spirits: Vec<Spirit>,
+    /// Rows of the arch still missing while the holiday comes.
+    arch_from: i32,
+    cloths: [Rgb; 3],
+    /// The holiday's own dice, so ordinary days keep theirs.
+    rng: Rng,
+}
+
+/// The path's centre row at world x.
+#[inline]
+fn path_at(path: &[i32], x: f32) -> f32 {
+    path[(x as i32).clamp(0, path.len() as i32 - 1) as usize] as f32
+}
+
+impl Muertos {
+    /// The holiday for this world, if it is on.
+    fn of(ctx: &Ctx, m: &Meadow) -> Option<Muertos> {
+        ctx.fiesta
+            .is(Kind::Muertos)
+            .then(|| Muertos::new(ctx, m.w, m.ph, m.fence, m.ground))
+    }
+
+    fn new(ctx: &Ctx, w: i32, ph: i32, fence: i32, ground: i32) -> Muertos {
+        let level = ctx.fiesta.level.clamp(0.0, 1.0);
+        let mut rng = Rng::with_seed(ctx.seed ^ MUERTOS_SEED);
+        // The ofrenda stands by the fence in one half of the meadow, behind
+        // the xolo's track, and the path comes in from the far side.
+        let right = rng.bool();
+        let at = if right {
+            rng.rangef(0.62, 0.78)
+        } else {
+            rng.rangef(0.22, 0.38)
+        };
+        let ox = ((w as f32 * at) as i32 - OFRENDA_W / 2).clamp(0, (w - OFRENDA_W).max(0));
+        let cx = (ox + OFRENDA_W / 2) as f32;
+        let oy = fence + 2;
+        let start = if right { -3.0 } else { w as f32 + 2.0 };
+        // It winds across the meadow, then turns back to the ofrenda's foot.
+        let (a, b) = (rng.rangef(0.0, 6.3), rng.rangef(0.0, 6.3));
+        let foot = (oy + 2) as f32;
+        let path: Vec<i32> = (0..w.max(1))
+            .map(|x| {
+                let xf = x as f32;
+                let wave = ground as f32
+                    + 3.0
+                    + 4.0 * (xf * 0.045 + a).sin()
+                    + 1.5 * (xf * 0.12 + b).sin();
+                let t = (((xf - cx).abs() - OFRENDA_W as f32 / 2.0) / 50.0).clamp(0.0, 1.0);
+                (foot + (wave - foot) * t * t * (3.0 - 2.0 * t)).round() as i32
+            })
+            .collect();
+        // Narrower as it goes away.
+        let half =
+            |y: i32| 1.2 + 2.6 * ((y - fence) as f32 / (ph - fence).max(1) as f32).clamp(0.0, 1.0);
+        let (from, to) = if right {
+            (0, ox + OFRENDA_W - 3)
+        } else {
+            (ox + 3, w)
+        };
+        let (from, to) = (from.clamp(0, w), to.clamp(0, w));
+        let mut width = vec![0u8; path.len()];
+        // Petals, thicker as the holiday comes: mostly cempasúchil, some
+        // terciopelo, now and then a white nube.
+        let dens = 0.62 + 0.38 * level;
+        let mut petals = Vec::new();
+        for x in from..to {
+            let yc = path[x as usize];
+            let hw = half(yc);
+            let r = hw.ceil() as i32;
+            width[x as usize] = r as u8;
+            for y in yc - r..=yc + r {
+                let e = (y - yc) as f32 / hw;
+                if rng.f32() < dens * (1.0 - 0.8 * e * e) {
+                    let k = rng.f32();
+                    let c = if k < 0.4 {
+                        CEMPASUCHIL[0]
+                    } else if k < 0.66 {
+                        CEMPASUCHIL[1]
+                    } else if k < 0.86 {
+                        CEMPASUCHIL[2]
+                    } else if k < 0.96 {
+                        TERCIOPELO
+                    } else {
+                        HUESO
+                    };
+                    petals.push((x, y, c));
+                }
+            }
+        }
+        // Veladoras along it, more as the holiday comes, alternating sides.
+        let len = to - from;
+        let n = (len as f32 / 40.0 * (0.35 + 0.65 * level)).round() as i32;
+        let mut candles = Vec::new();
+        for i in 0..n {
+            let x = from + ((i as f32 + 0.5) * len as f32 / n as f32) as i32;
+            if (x as f32 - cx).abs() < (OFRENDA_W / 2 + 3) as f32 {
+                continue;
+            }
+            let yc = path[x as usize];
+            let side = if i % 2 == 0 { -1 } else { 1 };
+            candles.push(Candle {
+                x,
+                y: yc + side * (half(yc).ceil() as i32 + 1),
+                glass: if rng.chance(0.5) { HUESO } else { TERCIOPELO },
+            });
+        }
+        let top = oy - OFRENDA.len() as i32 + 1;
+        let mut flames: Vec<(i32, i32)> = candles.iter().map(|c| (c.x, c.y - 2)).collect();
+        for (ry, row) in OFRENDA.iter().enumerate() {
+            for (rx, ch) in row.bytes().enumerate() {
+                if ch == b'f' {
+                    flames.push((ox + rx as i32, top + ry as i32));
+                }
+            }
+        }
+        // More souls come home as the holiday does.
+        let spirits = (0..2 + (5.0 * level).round() as usize)
+            .map(|_| {
+                let x = rng.rangef(0.0, w as f32);
+                let y = path_at(&path, x) - rng.rangef(5.0, 20.0);
+                Spirit {
+                    x,
+                    y,
+                    vx: 0.0,
+                    tx: x,
+                    ty: y,
+                    phase: rng.rangef(0.0, 6.3),
+                    age: rng.u32(0..600),
+                    home: 0,
+                }
+            })
+            .collect();
+        // The arch goes up its posts as the days go by and closes over the
+        // ofrenda on November 1.
+        let built = (0.45 + 0.55 * (level - 0.25) / 0.55).clamp(0.45, 1.0);
+        let cloths =
+            std::array::from_fn(|i| rgb_of(ctx.pick(i, col(CLOTHS[i]))).unwrap_or(CLOTHS[i]));
+        Muertos {
+            level,
+            ox,
+            oy,
+            start,
+            path,
+            width,
+            petals,
+            candles,
+            flames,
+            spirits,
+            arch_from: ((1.0 - built) * ARCH_ROWS as f32).round() as i32,
+            cloths,
+            rng,
+        }
+    }
+
+    /// Whether a blade of grass grows where the path has trodden it down.
+    #[inline]
+    fn on_path(&self, x: i32, y: i32) -> bool {
+        let Some(&r) = self.width.get(x as usize) else {
+            return false;
+        };
+        r > 0 && (y - self.path[x as usize]).abs() <= r as i32
+    }
+
+    /// Whether the meadow's flower at a blade is a cempasúchil (or a
+    /// terciopelo): a few at first, nearly all of them on November 2.
+    #[inline]
+    fn blooms(&self, x: i32, y: i32) -> bool {
+        ((hash(x, y, 0xC3A5) % 100) as f32) < 30.0 + 68.0 * self.level
+    }
+
+    /// One step of the souls: by day monarchs fluttering about the path near
+    /// the xolo; by night lights strung out behind it, going home when they
+    /// pass the ofrenda after a good while on the way.
+    fn update(&mut self, dog_cx: f32, dir: f32, daylight: f32, w: f32, ph: f32) {
+        let night = daylight < 0.5;
+        let home_x = (self.ox + OFRENDA_W / 2) as f32;
+        let mut lead = dog_cx - dir * 12.0;
+        for i in 0..self.spirits.len() {
+            let s = &mut self.spirits[i];
+            let x0 = s.x;
+            s.age = s.age.wrapping_add(1);
+            if s.home > 0 {
+                s.home += 1;
+                s.y -= 0.22;
+                s.x += 0.15 * (s.home as f32 * 0.12 + s.phase).sin();
+                if s.home > HOMECOMING {
+                    // Another soul sets out from the start of the path.
+                    s.x = self.start;
+                    s.y = path_at(&self.path, s.x) - 8.0;
+                    (s.age, s.home) = (0, 0);
+                }
+                continue;
+            }
+            if night {
+                // Strung out behind the xolo, each a little behind the last.
+                let ty = path_at(&self.path, lead) - 7.0;
+                s.x += ((lead - s.x) * 0.15).clamp(-1.7, 1.7);
+                s.y += ((ty - s.y) * 0.12).clamp(-0.8, 0.8);
+                lead = s.x - dir * 6.0;
+                if s.age > 600 && (s.x - home_x).abs() < 1.5 {
+                    s.home = 1;
+                }
+            } else {
+                if ((s.tx - s.x).abs() < 3.0 && (s.ty - s.y).abs() < 3.0) || self.rng.chance(0.006)
+                {
+                    s.tx = (dog_cx + self.rng.rangef(-70.0, 70.0)).clamp(0.0, w);
+                    s.ty = path_at(&self.path, s.tx) - self.rng.rangef(5.0, 24.0);
+                }
+                let t = s.age as f32;
+                s.x += (s.tx - s.x).clamp(-0.55, 0.55) + 0.25 * (t * 0.3 + s.phase).sin();
+                s.y += (s.ty - s.y).clamp(-0.35, 0.35) + 0.45 * (t * 0.45 + s.phase).sin();
+            }
+            s.y = s.y.clamp(2.0, (ph - 2.0).max(2.0));
+            s.vx = s.x - x0;
+        }
+    }
+}
+
 /// What part of the world is on screen: top-left corner in world pixels and
 /// screen pixels per world pixel.
 #[derive(Clone, Copy)]
@@ -487,6 +994,16 @@ impl View {
         )
     }
 }
+/// A candle flame's colour this step: it flickers between core and edge.
+#[inline]
+fn flame(x: i32, y: i32, tick: u32) -> Rgb {
+    if hash(x, y ^ (tick / 2) as i32, 0xF1A3).is_multiple_of(3) {
+        FLAMA_EDGE
+    } else {
+        FLAMA
+    }
+}
+
 #[inline]
 fn hash(x: i32, y: i32, seed: u32) -> u32 {
     let mut h = (x as u32).wrapping_mul(374_761_393) ^ (y as u32).wrapping_mul(668_265_263) ^ seed;
@@ -609,6 +1126,9 @@ struct Meadow {
     cam_x: f32,
     pal: Pal,
     set: Settings,
+    /// Día de Muertos, when it is on; the dog is then a xoloitzcuintle.
+    muertos: Option<Muertos>,
+    xolo: bool,
 }
 
 impl Meadow {
@@ -741,9 +1261,17 @@ impl Meadow {
             cam_x,
             pal,
             set,
+            muertos: None,
+            xolo: false,
         };
         m.update_sky();
         m
+    }
+
+    /// Dresses the meadow for the holiday, or takes the dress off.
+    fn dress(&mut self, ctx: &Ctx) {
+        self.muertos = Muertos::of(ctx, self);
+        self.xolo = self.muertos.is_some();
     }
 
     fn cloud(rng: &mut Rng, w: i32, horizon: i32, anywhere: bool) -> Cloud {
@@ -850,6 +1378,12 @@ impl Meadow {
         }
         self.update_butterfly(rng);
         self.update_dog(rng);
+        if let Some(mut mu) = self.muertos.take() {
+            let cx = self.dog.x + SPRITE_W as f32 / 2.0;
+            let (w, ph) = (self.w as f32, self.ph as f32);
+            mu.update(cx, self.dog.dir, self.daylight(), w, ph);
+            self.muertos = Some(mu);
+        }
         for z in self.zs.iter_mut() {
             z.age += 1;
             z.y -= 0.18;
@@ -1123,10 +1657,31 @@ impl Meadow {
         self.draw_trees();
         self.draw_fence();
         let split = self.blades.partition_point(|b| b.y < self.ground);
-        self.draw_blades(0, split);
-        self.draw_dog();
-        self.draw_blades(split, self.blades.len());
-        self.draw_butterfly();
+        let mu = self.muertos.take();
+        match &mu {
+            None => {
+                self.draw_blades(0, split, None);
+                self.draw_dog();
+                self.draw_blades(split, self.blades.len(), None);
+                self.draw_butterfly();
+            }
+            Some(mu) => {
+                // The petals lie on the ground; the ofrenda stands just
+                // behind the xolo's track, the candles on either side of it.
+                self.draw_path(mu);
+                let behind = self.blades.partition_point(|b| b.y <= mu.oy).min(split);
+                self.draw_blades(0, behind, Some(mu));
+                self.draw_ofrenda(mu);
+                self.draw_candles(mu, true);
+                self.draw_blades(behind, split, Some(mu));
+                self.draw_dog();
+                self.draw_candles(mu, false);
+                self.draw_blades(split, self.blades.len(), Some(mu));
+                self.draw_butterfly();
+                self.draw_monarchs(mu);
+            }
+        }
+        self.muertos = mu;
     }
 
     fn draw_sun_moon(&mut self) {
@@ -1261,7 +1816,9 @@ impl Meadow {
         }
     }
 
-    fn draw_blades(&mut self, from: usize, to: usize) {
+    /// Blades from `from` to `to`; during Día de Muertos the meadow's
+    /// flowers turn to cempasúchil, terciopelo and nube.
+    fn draw_blades(&mut self, from: usize, to: usize, mu: Option<&Muertos>) {
         let tick = self.tick as f32;
         let wind = 0.9 + 0.7 * (tick * 0.004).sin();
         let center = self.shade(Rgb(250, 210, 60));
@@ -1270,6 +1827,10 @@ impl Meadow {
                 let b = &self.blades[i];
                 (b.x, b.y, b.h, b.color, b.flower)
             };
+            // The path of petals is trodden clear of grass.
+            if mu.is_some_and(|mu| mu.on_path(x, y)) {
+                continue;
+            }
             let sway =
                 (tick * 0.06 + x as f32 * 0.35 + y as f32 * 0.2).sin() * wind * h as f32 / 3.0;
             let color = self.shade(self.green(color));
@@ -1283,6 +1844,12 @@ impl Meadow {
             }
             if let Some((petal, big)) = flower {
                 let (tx, ty) = (x + sway.round() as i32, y - h);
+                if let Some(mu) = mu
+                    && mu.blooms(x, y)
+                {
+                    self.draw_bloom(tx, ty, big, hash(x, y, 0xB100));
+                    continue;
+                }
                 let petal = self.shade(petal);
                 if big {
                     for (dx, dy) in [(-1, 0), (1, 0), (0, -1), (0, 1)] {
@@ -1299,29 +1866,38 @@ impl Meadow {
     fn sprite(&self) -> (Sprite, i32) {
         let d = &self.dog;
         let a = d.anim;
+        let x = self.xolo;
         match d.state {
             State::Run | State::Chase => {
                 let f = (a / 2 % 4) as usize;
-                (RUN[f], if f == 0 && d.hop == 0.0 { -1 } else { 0 })
+                (
+                    if x { XOLO_RUN[f] } else { RUN[f] },
+                    if f == 0 && d.hop == 0.0 { -1 } else { 0 },
+                )
             }
-            State::Stand => (WAG[(a / 3 % 4) as usize], 0),
+            State::Stand => {
+                let f = (a / 3 % 4) as usize;
+                (if x { XOLO_WAG[f] } else { WAG[f] }, 0)
+            }
             State::Sit => (
-                if (a / 4).is_multiple_of(2) {
-                    SIT
-                } else {
-                    SIT_PANT
+                match ((a / 4).is_multiple_of(2), x) {
+                    (true, false) => SIT,
+                    (false, false) => SIT_PANT,
+                    (true, true) => XOLO_SIT,
+                    (false, true) => XOLO_SIT_PANT,
                 },
                 0,
             ),
             State::Sniff => (
-                if (a / 5).is_multiple_of(2) {
-                    SNIFF
-                } else {
-                    SNIFF_WAG
+                match ((a / 5).is_multiple_of(2), x) {
+                    (true, false) => SNIFF,
+                    (false, false) => SNIFF_WAG,
+                    (true, true) => XOLO_SNIFF,
+                    (false, true) => XOLO_SNIFF_WAG,
                 },
                 0,
             ),
-            State::Nap => (LIE, 0),
+            State::Nap => (if x { XOLO_LIE } else { LIE }, 0),
         }
     }
 
@@ -1339,16 +1915,38 @@ impl Meadow {
         let top = bottom - sprite.len() as i32 + 1;
         for (ry, row) in sprite.iter().enumerate() {
             for (rx, ch) in row.bytes().enumerate() {
-                let c = match ch {
-                    b'B' => coat,
-                    b'D' => dark,
-                    b'w' => cream,
-                    b'k' => EYE,
-                    b'c' => d.collar,
-                    b'p' => TONGUE,
-                    _ => continue,
+                let c = if self.xolo {
+                    match ch {
+                        b'B' => XOLO_SKIN,
+                        b'h' => XOLO_SHEEN,
+                        b'D' => XOLO_FAR,
+                        b'E' => XOLO_EAR,
+                        b'e' => XOLO_EAR_IN,
+                        b't' => TUFT,
+                        b'k' => EYE,
+                        b'c' => CEMPASUCHIL[0],
+                        b'o' => CEMPASUCHIL[1],
+                        b'm' => CEMPASUCHIL[2],
+                        b'p' => TONGUE,
+                        _ => continue,
+                    }
+                } else {
+                    match ch {
+                        b'B' => coat,
+                        b'D' => dark,
+                        b'w' => cream,
+                        b'k' => EYE,
+                        b'c' => d.collar,
+                        b'p' => TONGUE,
+                        _ => continue,
+                    }
                 };
-                let c = self.shade(c);
+                // The cempasúchil collar keeps some of its glow at night.
+                let c = if self.xolo && matches!(ch, b'c' | b'o' | b'm') {
+                    self.candlelit(c)
+                } else {
+                    self.shade(c)
+                };
                 let sx = if d.dir > 0.0 {
                     rx as i32
                 } else {
@@ -1362,6 +1960,11 @@ impl Meadow {
     fn draw_butterfly(&mut self) {
         let Some(b) = &self.butterfly else { return };
         let (x, y, color) = (b.x.round() as i32, b.y.round() as i32, b.color);
+        if self.xolo {
+            let open = (self.tick / 3).is_multiple_of(2);
+            self.draw_monarch(x, y, open);
+            return;
+        }
         let wing = self.shade(color);
         let body = self.shade(Rgb(50, 36, 30));
         let wy = if (self.tick / 3).is_multiple_of(2) {
@@ -1372,6 +1975,208 @@ impl Meadow {
         self.put(x - 1, wy, wing);
         self.put(x + 1, wy, wing);
         self.put(x, y, body);
+    }
+
+    // ----- Día de Muertos -----
+
+    /// How much candlelight brightens what stands near a flame: nothing by
+    /// day, most of its own colour back by night.
+    fn candlelit(&self, c: Rgb) -> Rgb {
+        self.shade(c).lerp(c, 0.55 * (1.0 - self.daylight()))
+    }
+
+    /// A flower of the holiday on a blade: mostly cempasúchil, a pompom of
+    /// orange; some terciopelo, velvet crimson; now and then white nube.
+    fn draw_bloom(&mut self, x: i32, y: i32, big: bool, h: u32) {
+        let (petal, lit, heart) = match h % 10 {
+            0..=6 => (CEMPASUCHIL[0], CEMPASUCHIL[1], CEMPASUCHIL[2]),
+            7 | 8 => (TERCIOPELO, Rgb(214, 30, 110), Rgb(110, 0, 46)),
+            _ => (HUESO, HUESO, Rgb(214, 210, 200)),
+        };
+        let (petal, lit, heart) = (self.shade(petal), self.shade(lit), self.shade(heart));
+        if big && matches!(h % 10, 7 | 8) {
+            // Terciopelo: a velvet crest rather than a round bloom.
+            self.put(x, y + 1, heart);
+            self.put(x - 1, y, petal);
+            self.put(x, y, petal);
+            self.put(x, y - 1, petal);
+            self.put(x + 1, y - 1, lit);
+            self.put(x, y - 2, lit);
+        } else if big {
+            self.put(x - 1, y, petal);
+            self.put(x + 1, y, petal);
+            self.put(x, y - 1, lit);
+            self.put(x, y + 1, heart);
+            self.put(x, y, petal);
+        } else {
+            self.put(x, y, petal);
+        }
+    }
+
+    /// The path of petals; marigolds keep a little of their glow at night.
+    fn draw_path(&mut self, mu: &Muertos) {
+        let glow = 0.3 * (1.0 - self.daylight());
+        for &(x, y, c) in &mu.petals {
+            let c = self.shade(c).lerp(c, glow);
+            self.put(x, y, c);
+        }
+    }
+
+    fn draw_ofrenda(&mut self, mu: &Muertos) {
+        let top = mu.oy - OFRENDA.len() as i32 + 1;
+        for (ry, row) in OFRENDA.iter().enumerate() {
+            let y = top + ry as i32;
+            for (rx, ch) in row.bytes().enumerate() {
+                let x = mu.ox + rx as i32;
+                let c = match ch {
+                    b'Y' | b'Z' | b'X' if (ry as i32) < mu.arch_from => continue,
+                    b'Y' | b'o' => CEMPASUCHIL[0],
+                    b'Z' | b'O' => CEMPASUCHIL[1],
+                    b'X' => CEMPASUCHIL[2],
+                    b'1' => mu.cloths[0],
+                    b'2' => mu.cloths[1],
+                    b'3' => mu.cloths[2],
+                    b'W' | b'v' | b's' => HUESO,
+                    b'P' => Rgb(150, 96, 40),
+                    b'q' => Rgb(206, 178, 136),
+                    b'u' => Rgb(96, 70, 52),
+                    b'k' => Rgb(40, 28, 40),
+                    b'R' => CLOTHS[0],
+                    b't' => CLOTHS[2],
+                    b'y' => Rgb(255, 210, 0),
+                    b'b' => Rgb(196, 120, 50),
+                    b'n' => Rgb(240, 204, 140),
+                    b'a' => Rgb(150, 200, 230),
+                    b'l' => Rgb(140, 200, 40),
+                    b'g' => Rgb(176, 92, 52),
+                    b'f' => {
+                        self.put(x, y, flame(x, y, self.tick));
+                        continue;
+                    }
+                    _ => continue,
+                };
+                let c = self.candlelit(c);
+                self.put(x, y, c);
+            }
+        }
+    }
+
+    /// The veladoras along the path, those behind the xolo's track or those
+    /// in front of it.
+    fn draw_candles(&mut self, mu: &Muertos, behind: bool) {
+        for c in &mu.candles {
+            if (c.y <= self.ground) != behind {
+                continue;
+            }
+            let glass = self.candlelit(c.glass);
+            self.put(c.x, c.y, glass);
+            self.put(c.x, c.y - 1, glass);
+            self.put(c.x, c.y - 2, flame(c.x, c.y, self.tick));
+        }
+    }
+
+    /// A monarch, wings spread or raised, its body at `(x, y)`: orange
+    /// forewings with dark tips, darker hindwings.
+    fn draw_monarch(&mut self, x: i32, y: i32, open: bool) {
+        let wing = self.shade(MONARCH);
+        let hind = self.shade(CEMPASUCHIL[2]);
+        let vein = self.shade(MONARCH_VEIN);
+        if open {
+            self.put(x - 2, y - 1, wing);
+            self.put(x - 1, y - 1, wing);
+            self.put(x + 1, y - 1, wing);
+            self.put(x + 2, y - 1, wing);
+            self.put(x - 3, y - 2, vein);
+            self.put(x + 3, y - 2, vein);
+            self.put(x - 1, y, hind);
+            self.put(x + 1, y, hind);
+        } else {
+            self.put(x - 1, y - 2, wing);
+            self.put(x + 1, y - 2, wing);
+            self.put(x - 1, y - 1, hind);
+            self.put(x + 1, y - 1, hind);
+            self.put(x - 1, y - 3, vein);
+            self.put(x + 1, y - 3, vein);
+        }
+        self.put(x, y - 1, vein);
+        self.put(x, y, vein);
+    }
+
+    /// By day the souls are monarchs.
+    fn draw_monarchs(&mut self, mu: &Muertos) {
+        if self.daylight() < 0.45 {
+            return;
+        }
+        for (i, s) in mu.spirits.iter().enumerate() {
+            let open = (self.tick / 3 + i as u32).is_multiple_of(2);
+            self.draw_monarch(s.x.round() as i32, s.y.round() as i32, open);
+        }
+    }
+
+    /// Candlelight, straight onto the screen like the other lights: the
+    /// ofrenda's warm glow, the flames that nothing stands in front of, and
+    /// by night the souls.
+    fn draw_candlelight(&mut self, mu: &Muertos, v: View, night: f32) {
+        let tick = self.tick as f32;
+        let k = ((night - 0.2) / 0.5).clamp(0.0, 1.0);
+        let flicker = 0.85 + 0.15 * (tick * 0.7).sin() * (tick * 0.23).cos();
+        if k > 0.0 {
+            let (cx, cy) = v.to_screen((mu.ox + OFRENDA_W / 2) as f32, (mu.oy - 9) as f32);
+            self.glow(cx, cy, (26.0 * v.z).max(2.0), FLAMA_EDGE, 0.3 * k * flicker);
+        }
+        for (i, &(fx, fy)) in mu.flames.iter().enumerate() {
+            if fx < 0 || fy < 0 || fx >= self.w || fy >= self.ph {
+                continue;
+            }
+            let p = self.px[(fy * self.w + fx) as usize];
+            if p != FLAMA && p != FLAMA_EDGE {
+                continue;
+            }
+            let (x, y) = v.to_screen(fx as f32 + 0.5, fy as f32 + 0.5);
+            if k > 0.0 {
+                let f = 0.8 + 0.2 * (tick * 0.9 + i as f32 * 1.7).sin();
+                self.glow(x, y, 2.5 + 2.0 * v.z, FLAMA_EDGE, 0.5 * k * f);
+            }
+            self.blend_out(x, y, p, 1.0);
+        }
+        let souls = ((night - 0.4) / 0.3).clamp(0.0, 1.0);
+        if souls > 0.0 {
+            for s in &mu.spirits {
+                let a = souls * (1.0 - s.home as f32 / HOMECOMING as f32);
+                let bob = 1.2 * (tick * 0.09 + s.phase).sin();
+                let (x, y) = v.to_screen(s.x, s.y + bob);
+                self.glow(x, y, 2.5 + 1.6 * v.z, SOUL_GLOW, 0.75 * a);
+                // A wisp trailing behind it as it goes, or below it, like a
+                // flame, while it waits.
+                let (bx, by) = if s.vx > 0.05 {
+                    (-1, 0)
+                } else if s.vx < -0.05 {
+                    (1, 0)
+                } else {
+                    (0, 1)
+                };
+                for j in 1..=3 {
+                    self.blend_out(x + bx * j, y + by * j, SOUL, a * 0.55 / j as f32);
+                }
+                for (dx, dy) in [(1, 0), (-1, 0), (0, 1), (0, -1)] {
+                    self.blend_out(x + dx, y + dy, SOUL, 0.6 * a);
+                }
+                self.blend_out(x, y, SOUL, a);
+            }
+        }
+    }
+
+    /// A soft round light on the screen, `a` at its centre and fading out at radius `r`.
+    fn glow(&mut self, x: i32, y: i32, r: f32, c: Rgb, a: f32) {
+        let ri = r.ceil() as i32;
+        for dy in -ri..=ri {
+            for dx in -ri..=ri {
+                let d = ((dx * dx + dy * dy) as f32).sqrt() / r;
+                if d < 1.0 {
+                    self.blend_out(x + dx, y + dy, c, a * (1.0 - d) * (1.0 - d));
+                }
+            }
+        }
     }
 
     /// Resamples the visible part of the world onto the screen: box-filtered
@@ -1458,6 +2263,10 @@ impl Meadow {
                 }
             }
         }
+        if let Some(mu) = self.muertos.take() {
+            self.draw_candlelight(&mu, v, night);
+            self.muertos = Some(mu);
+        }
     }
 
     /// The sleeping dog's z's, as letters over the picture.
@@ -1516,7 +2325,8 @@ impl DogScene {
             nap_scale: day / BASE_DAY,
         };
         let mut rng = ctx.rng();
-        let m = Meadow::new(80, 24, &mut rng, Pal::new(ctx), set);
+        let mut m = Meadow::new(80, 24, &mut rng, Pal::new(ctx), set);
+        m.dress(ctx);
         DogScene {
             m,
             rng,
@@ -1531,11 +2341,12 @@ impl DogScene {
 }
 
 impl Scene for DogScene {
-    fn resize(&mut self, _ctx: &Ctx, w: u16, h: u16) {
+    fn resize(&mut self, ctx: &Ctx, w: u16, h: u16) {
         // The world is built for the screen's shape, so a resize starts a
         // fresh meadow; the time of day carries over.
         let t = self.m.t;
         self.m = Meadow::new(w, h, &mut self.rng, self.m.pal, self.set);
+        self.m.dress(ctx);
         self.m.t = t;
         self.m.update_sky();
         self.dirty = true;
@@ -1543,6 +2354,8 @@ impl Scene for DogScene {
 
     fn retheme(&mut self, ctx: &Ctx) {
         self.m.pal = Pal::new(ctx);
+        // The holiday may have come or gone (or the theme changed its cloths).
+        self.m.dress(ctx);
         self.m.update_sky();
         self.dirty = true;
     }
@@ -1602,6 +2415,7 @@ impl Scene for DogScene {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::fiesta::Fiesta;
     use crate::scene::Opts;
     use crate::theme::{TermColors, Theme};
 
@@ -1766,5 +2580,206 @@ mod tests {
             s.draw(&c, &mut cv);
         }
         assert!(seen.iter().filter(|&&b| b).count() >= 4, "{seen:?}");
+    }
+
+    fn holiday<'a>(theme: &'a Theme, opts: &'a Opts, fiesta: Fiesta) -> Ctx<'a> {
+        Ctx {
+            fiesta,
+            ..ctx(theme, opts)
+        }
+    }
+
+    /// Whether the painted world holds a pixel of this color.
+    fn painted(m: &Meadow, c: Rgb) -> bool {
+        m.px.contains(&c)
+    }
+
+    /// From the first petals to Fieles Difuntos the meadow is dressed: a
+    /// xolo, the path, the ofrenda, its candles and the souls; more of
+    /// everything on November 2. On an ordinary day, none of it.
+    #[test]
+    fn muertos_dresses_the_meadow() {
+        let theme = Theme::classic();
+        let opts = Opts::new(INFO.options, toml::Table::new());
+        let mut counts = Vec::new();
+        for fiesta in [Fiesta::of_day(10, 28), Fiesta::of_day(11, 2)] {
+            let c = holiday(&theme, &opts, fiesta);
+            let mut s = DogScene::new(&c);
+            s.resize(&c, 120, 36);
+            s.retheme(&c);
+            let mut cv = Canvas::new(120, 36, Color::Reset);
+            s.tick(&c, 0.05, 0.05);
+            s.draw(&c, &mut cv);
+            assert!(s.m.xolo);
+            let mu = s.m.muertos.as_ref().expect("dressed");
+            assert!(!mu.petals.is_empty() && !mu.flames.is_empty());
+            for cloth in CLOTHS {
+                assert!(painted(&s.m, cloth), "{fiesta:?}: ofrenda cloth missing");
+            }
+            assert!(painted(&s.m, s.m.candlelit(CEMPASUCHIL[0])) || painted(&s.m, CEMPASUCHIL[0]));
+            assert!(painted(&s.m, s.m.shade(XOLO_SKIN)), "{fiesta:?}: no xolo");
+            counts.push((
+                mu.petals.len(),
+                mu.candles.len(),
+                mu.spirits.len(),
+                mu.arch_from,
+            ));
+        }
+        let (early, full) = (counts[0], counts[1]);
+        assert!(
+            full.0 > early.0 && full.1 >= early.1 && full.2 > early.2,
+            "{counts:?}"
+        );
+        assert!(
+            full.3 == 0 && early.3 > 0,
+            "the arch closes on Nov 2: {counts:?}"
+        );
+
+        let c = ctx(&theme, &opts);
+        let mut s = DogScene::new(&c);
+        s.resize(&c, 120, 36);
+        let mut cv = Canvas::new(120, 36, Color::Reset);
+        s.draw(&c, &mut cv);
+        assert!(s.m.muertos.is_none() && !s.m.xolo);
+        for cloth in CLOTHS {
+            assert!(!painted(&s.m, cloth));
+        }
+        assert!(!painted(&s.m, s.m.shade(XOLO_SKIN)));
+    }
+
+    /// The holiday comes and goes through `retheme`, and once it has gone the
+    /// meadow is exactly what it would have been without it: the holiday
+    /// rolls its own dice.
+    #[test]
+    fn the_holiday_comes_and_goes() {
+        let theme = Theme::classic();
+        let opts = Opts::new(INFO.options, "day = 30".parse().unwrap());
+        let plain = ctx(&theme, &opts);
+        let fiesta = holiday(&theme, &opts, Fiesta::of_day(11, 1));
+        let (mut a, mut b) = (DogScene::new(&plain), DogScene::new(&plain));
+        a.resize(&plain, 100, 30);
+        b.resize(&plain, 100, 30);
+        let (mut ca, mut cb) = (
+            Canvas::new(100, 30, Color::Reset),
+            Canvas::new(100, 30, Color::Reset),
+        );
+        for i in 0..900 {
+            if i == 100 {
+                b.retheme(&fiesta);
+                assert!(b.m.muertos.is_some() && b.m.xolo);
+            }
+            if i == 600 {
+                b.retheme(&plain);
+                assert!(b.m.muertos.is_none() && !b.m.xolo);
+            }
+            let c = if (100..600).contains(&i) {
+                &fiesta
+            } else {
+                &plain
+            };
+            a.tick(&plain, 1.0 / 30.0, 1.0 / 30.0);
+            b.tick(c, 1.0 / 30.0, 1.0 / 30.0);
+            ca.clear();
+            cb.clear();
+            a.draw(&plain, &mut ca);
+            b.draw(c, &mut cb);
+            let same = ca.cells() == cb.cells();
+            assert_eq!(same, !(100..600).contains(&i), "step {i}");
+        }
+    }
+
+    /// By night the souls string out behind the xolo, and now and then one
+    /// goes home over the ofrenda and another sets out along the path.
+    #[test]
+    fn souls_follow_the_xolo_home() {
+        let theme = Theme::classic();
+        let opts = Opts::new(INFO.options, toml::Table::new());
+        let c = holiday(&theme, &opts, Fiesta::of_day(11, 2));
+        let mut rng = Rng::with_seed(9);
+        let set = Settings {
+            sky: true,
+            butterflies: true,
+            zoom: 2,
+            nap_scale: 1.0,
+        };
+        let mut m = Meadow::new(120, 36, &mut rng, Pal::new(&c), set);
+        m.dress(&c);
+        m.t = 0.0;
+        m.update_sky();
+        assert!(m.daylight() < 0.1);
+        let mut homecomings = 0;
+        for _ in 0..20_000 {
+            m.dog.nap -= STEP as f32;
+            m.update(&mut rng);
+            let mu = m.muertos.as_ref().unwrap();
+            homecomings += mu.spirits.iter().filter(|s| s.home == 1).count();
+            for s in &mu.spirits {
+                assert!(s.x.is_finite() && s.y >= 0.0 && s.y <= m.ph as f32);
+            }
+        }
+        assert!(homecomings > 0);
+        // After a while they keep close to the xolo.
+        let mu = m.muertos.as_ref().unwrap();
+        let cx = m.dog.x + SPRITE_W as f32 / 2.0;
+        let near = mu
+            .spirits
+            .iter()
+            .filter(|s| s.home == 0 && (s.x - cx).abs() < 80.0)
+            .count();
+        assert!(near > 0, "no soul near the xolo");
+    }
+
+    /// With `sky = false` the holiday's glows and souls stay out of the sky
+    /// too: nothing is painted above the hills, night or day.
+    #[test]
+    fn the_holiday_keeps_a_see_through_sky_empty() {
+        let theme = Theme::classic();
+        let opts = Opts::new(INFO.options, "sky = false".parse().unwrap());
+        let c = holiday(&theme, &opts, Fiesta::of_day(11, 2));
+        for t in [0.0, 0.5] {
+            let mut s = DogScene::new(&c);
+            s.resize(&c, 120, 36);
+            s.m.t = t;
+            s.m.update_sky();
+            let mut cv = Canvas::new(120, 36, Color::Reset);
+            for _ in 0..60 {
+                s.tick(&c, 0.05, 0.05);
+                cv.clear();
+                s.draw(&c, &mut cv);
+                for x in 0..120 {
+                    assert_eq!(cv.get(x, 0).map(|c| c.ch), Some(' '), "t = {t}, x = {x}");
+                }
+            }
+        }
+    }
+
+    /// Odd sizes, steps and options survive with the holiday on, under the
+    /// native theme and another.
+    #[test]
+    fn the_holiday_survives_extremes() {
+        let themes = [Theme::classic(), Theme::builtin("dracula").unwrap()];
+        for case in ["", "speed = 50.0\nday = 1\nzoom = 99\nsky = false"] {
+            let opts = Opts::new(INFO.options, case.parse().unwrap());
+            for theme in &themes {
+                for fiesta in [
+                    Fiesta::of_day(10, 28),
+                    Fiesta::of_day(11, 2),
+                    Fiesta::of_day(11, 3),
+                ] {
+                    let c = holiday(theme, &opts, fiesta);
+                    let mut s = (INFO.make)(&c);
+                    for &(w, h) in &[(1u16, 1u16), (2, 3), (3, 1), (1, 40), (300, 90), (80, 24)] {
+                        s.resize(&c, w, h);
+                        s.retheme(&c);
+                        let mut cv = Canvas::new(w, h, Color::Reset);
+                        for dt in [0.0, f32::NAN, 0.05, 5.0, 1e9] {
+                            s.tick(&c, dt, 5.0);
+                            cv.clear();
+                            s.draw(&c, &mut cv);
+                        }
+                    }
+                }
+            }
+        }
     }
 }
