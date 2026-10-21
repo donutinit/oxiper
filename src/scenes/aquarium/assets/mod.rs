@@ -22,33 +22,19 @@
 //! at 2. Animation rates are frames advanced per original frame (0.25 = a new
 //! frame every 0.4 s).
 
-mod classic;
 mod critters;
-mod critters2;
 mod decor;
-mod decor2;
-mod decor3;
 mod deep;
-mod deep2;
 mod floor;
-mod floor2;
 mod fresh;
-mod fresh2;
-pub mod fx;
 mod ocean;
-mod ocean2;
 mod oddballs;
-mod oddballs2;
 mod plants;
-mod plants2;
 mod reef;
-mod reef2;
 mod season;
-pub mod twins;
 mod visitors;
-mod visitors2;
-mod visitors3;
 
+use super::art;
 use super::sprite::{self, Sprite};
 
 /// Places a thing belongs to, as a set of bits.
@@ -274,7 +260,6 @@ impl Species {
             season: ALWAYS,
         }
     }
-    #[allow(dead_code)] // asset API: hand-drawn left frames
     pub const fn left(
         mut self,
         art: &'static [&'static str],
@@ -627,24 +612,89 @@ impl Visitor {
     }
 }
 
+/// asciiquarium's own eight fish, colored at random as there.
+const fn classic(
+    name: &'static str,
+    r: &'static [&'static str],
+    rm: &'static [&'static str],
+    l: &'static [&'static str],
+    lm: &'static [&'static str],
+) -> Species {
+    Species::new(name, r, rm)
+        .left(l, lm)
+        .biomes(TANK | REEF | KELP)
+}
+
+const CLASSIC: &[Species] = &[
+    classic(
+        "classic-1",
+        &[art::FISH_0R],
+        &[art::FISH_0R_MASK],
+        &[art::FISH_0L],
+        &[art::FISH_0L_MASK],
+    ),
+    classic(
+        "classic-2",
+        &[art::FISH_1R],
+        &[art::FISH_1R_MASK],
+        &[art::FISH_1L],
+        &[art::FISH_1L_MASK],
+    ),
+    classic(
+        "classic-3",
+        &[art::FISH_2R],
+        &[art::FISH_2R_MASK],
+        &[art::FISH_2L],
+        &[art::FISH_2L_MASK],
+    ),
+    classic(
+        "classic-4",
+        &[art::FISH_3R],
+        &[art::FISH_3R_MASK],
+        &[art::FISH_3L],
+        &[art::FISH_3L_MASK],
+    ),
+    classic(
+        "classic-5",
+        &[art::FISH_4R],
+        &[art::FISH_4R_MASK],
+        &[art::FISH_4L],
+        &[art::FISH_4L_MASK],
+    ),
+    classic(
+        "classic-6",
+        &[art::FISH_5R],
+        &[art::FISH_5R_MASK],
+        &[art::FISH_5L],
+        &[art::FISH_5L_MASK],
+    ),
+    classic(
+        "classic-7",
+        &[art::FISH_6R],
+        &[art::FISH_6R_MASK],
+        &[art::FISH_6L],
+        &[art::FISH_6L_MASK],
+    ),
+    classic(
+        "classic-8",
+        &[art::FISH_7R],
+        &[art::FISH_7R_MASK],
+        &[art::FISH_7L],
+        &[art::FISH_7L_MASK],
+    ),
+];
+
 /// All the species, in a stable order.
 pub fn species() -> impl Iterator<Item = &'static Species> {
     [
-        classic::CLASSIC,
+        CLASSIC,
         reef::SPECIES,
-        reef2::SPECIES,
         ocean::SPECIES,
-        ocean2::SPECIES,
         fresh::SPECIES,
-        fresh2::SPECIES,
         deep::SPECIES,
-        deep2::SPECIES,
         oddballs::SPECIES,
-        oddballs2::SPECIES,
         critters::SPECIES,
-        critters2::SPECIES,
         floor::SPECIES,
-        floor2::SPECIES,
         season::SPECIES,
     ]
     .into_iter()
@@ -652,112 +702,15 @@ pub fn species() -> impl Iterator<Item = &'static Species> {
 }
 
 pub fn plants() -> impl Iterator<Item = &'static Plant> {
-    [
-        classic::PLANTS,
-        plants::PLANTS,
-        plants2::PLANTS,
-        season::PLANTS,
-    ]
-    .into_iter()
-    .flatten()
+    plants::PLANTS.iter().chain(season::PLANTS)
 }
 
 pub fn decor() -> impl Iterator<Item = &'static Decor> {
-    [
-        classic::DECOR,
-        decor::DECOR,
-        decor2::DECOR,
-        decor3::DECOR,
-        season::DECOR,
-    ]
-    .into_iter()
-    .flatten()
+    decor::DECOR.iter().chain(season::DECOR)
 }
 
 pub fn visitors() -> impl Iterator<Item = &'static Visitor> {
-    [
-        visitors::VISITORS,
-        visitors2::VISITORS,
-        visitors3::VISITORS,
-        season::VISITORS,
-    ]
-    .into_iter()
-    .flatten()
-}
-
-/// Whether a character may appear in a shape: a space, `?` (transparent),
-/// ASCII letters and digits (for writing: signs, names), or one of the
-/// Unicode characters monospace fonts draw one cell wide: box drawing,
-/// block elements, geometric shapes, braille, and a hand-picked set of
-/// punctuation, math and dingbats. No emoji, nothing two cells wide.
-#[cfg(test)]
-pub fn drawable(c: char) -> bool {
-    const EXTRA: &str = "¸´¨¯°¬¦×∼∽≈≋∘∙∩∪⊂⊃⊙⊚⊛⊕⊗⋮⋯⋰⋱≡∞∴∵∷∶≀⌀⌂⌃⌄⌇⌈⌉⌊⌋⌐⌒⌓⌠⌡⌢⌣⌜⌝⌞⌟\
-                         ⏜⏝⏞⏟⟨⟩✦✧★☆✶✷✸✹✺✱✲✳❋❊❉✿❀❁♡♢♤♧ωΩεϖʘɵʊ";
-    matches!(c, ' ' | '?')
-        || c.is_ascii_alphanumeric()
-        || matches!(c as u32,
-            0x2500..=0x259F // box drawing, block elements
-            | 0x25A0..=0x25FF // geometric shapes
-            | 0x2800..=0x28FF // braille
-            | 0x2010..=0x2027 | 0x2030..=0x205E // punctuation
-            | 0x2190..=0x2199 // arrows
-            | 0x239B..=0x23B3 // bracket pieces
-            | 0x02B9..=0x02DD) // modifier letters
-        || EXTRA.contains(c)
-}
-
-/// Characters with a direction but no mirror image among the drawable ones:
-/// a shape that is mirrored to face left must not use them.
-#[cfg(test)]
-pub const UNMIRRORABLE: &str = "▎▍▋▊▉◔◕⁄⌠⌡ε‣′″‴⌀¸";
-
-/// Checks that shapes are drawn in Unicode by hand: only `drawable`
-/// characters and no ASCII punctuation (the line art of asciiquarium);
-/// letters and digits only for writing. Each asset file runs it on its own
-/// shapes in its tests.
-#[cfg(test)]
-pub fn assert_drawn<'a>(who: &str, shapes: impl IntoIterator<Item = &'a str>) {
-    for (fi, f) in shapes.into_iter().enumerate() {
-        for c in f.chars().filter(|&c| c != '\n') {
-            assert!(
-                drawable(c) && !c.is_ascii_punctuation() || c == '?',
-                "{who}: shape {fi} has {c:?}: draw it with Unicode (box drawing, blocks, \
-                 shapes...), not ASCII punctuation"
-            );
-        }
-    }
-}
-
-#[cfg(test)]
-pub fn assert_species_drawn(list: &[Species]) {
-    for s in list {
-        assert_drawn(s.name, s.art.iter().chain(s.left).chain(s.alt).copied());
-    }
-}
-
-#[cfg(test)]
-pub fn assert_plants_drawn(list: &[Plant]) {
-    for p in list {
-        match p.art {
-            PlantArt::Sprite { frames, .. } => assert_drawn(p.name, frames.iter().copied()),
-            PlantArt::Stalk { a, b, .. } => assert_drawn(p.name, [a, b]),
-        }
-    }
-}
-
-#[cfg(test)]
-pub fn assert_decor_drawn(list: &[Decor]) {
-    for d in list {
-        assert_drawn(d.name, d.art.iter().copied());
-    }
-}
-
-#[cfg(test)]
-pub fn assert_visitors_drawn(list: &[Visitor]) {
-    for v in list {
-        assert_drawn(v.name, v.art.iter().chain(v.left).copied());
-    }
+    visitors::VISITORS.iter().chain(season::VISITORS)
 }
 
 /// Mask digit choices, parsed from a `tint` string.
@@ -924,47 +877,6 @@ pub fn gallery(filter: &str, color: bool) -> String {
         })
         .collect();
     section("visitors", visitors);
-    // asciiquarium's sprites drawn again, and the effects: only when asked by name.
-    let shapes = |frames: &[&str], masks: &[&str]| -> Vec<Sprite> {
-        (0..frames.len())
-            .map(|f| frame_sprite(frames, masks, f))
-            .collect()
-    };
-    if filter == "twins" {
-        let mut items: Vec<Item> = twins::SPRITES
-            .iter()
-            .map(|&(id, frames, masks)| {
-                let name = format!("sprite {id}");
-                Item::new("twin", ALL, name, shapes(frames, masks), 'w', "")
-            })
-            .collect();
-        let water = twins::WATER.map(|row| format!("\n{row}"));
-        let water: Vec<&str> = water.iter().map(String::as_str).collect();
-        items.push(Item::new(
-            "water",
-            ALL,
-            String::new(),
-            shapes(&water, &[]),
-            'c',
-            "",
-        ));
-        section("twins", items);
-    }
-    if filter == "fx" {
-        let line = format!("\n{0}\n{0}\n{1}", fx::LINE_BAR, fx::LINE_HOOK);
-        let items = [
-            ("flake", fx::FLAKE),
-            ("plankton", fx::PLANKTON),
-            ("scrap", fx::SCRAP),
-            ("ink", fx::INK),
-            ("net", fx::NET),
-            ("line", &[line.as_str()]),
-        ]
-        .into_iter()
-        .map(|(n, f)| Item::new(n, ALL, String::new(), shapes(f, &[]), 'w', ""))
-        .collect();
-        section("fx", items);
-    }
     out
 }
 
@@ -1113,8 +1025,8 @@ mod tests {
             );
             for ch in f.chars() {
                 assert!(
-                    ch == '\n' || (' '..='~').contains(&ch) || drawable(ch),
-                    "{who}: frame {fi} has {ch:?}, which is not drawable (see `drawable`)"
+                    ch == '\n' || (' '..='~').contains(&ch),
+                    "{who}: frame {fi} has {ch:?}; only printable ASCII is allowed"
                 );
             }
             let ls = lines(f);
@@ -1126,7 +1038,7 @@ mod tests {
                 None => height = Some(ls.len()),
                 Some(h) => assert_eq!(h, ls.len(), "{who}: frame {fi} has a different height"),
             }
-            width = width.max(ls.iter().map(|l| l.chars().count()).max().unwrap_or(0));
+            width = width.max(ls.iter().map(|l| l.len()).max().unwrap_or(0));
             if let Some(m) = masks.get(fi % masks.len().max(1)) {
                 assert!(
                     m.starts_with('\n'),
@@ -1150,9 +1062,7 @@ mod tests {
                         if mc != ' ' {
                             let sc = sl.chars().nth(x);
                             assert!(
-                                sc.is_some_and(|c| {
-                                    c != ' ' || sl.chars().take(x).any(|c| c != ' ')
-                                }),
+                                sc.is_some_and(|c| c != ' ' || sl[..x].trim() != ""),
                                 "{who}: mask {fi} row {y} col {x} colors nothing \
                                  (past the line end or in its leading blanks); misaligned?"
                             );
@@ -1236,10 +1146,8 @@ mod tests {
                     for piece in [a, b] {
                         assert!(
                             !piece.is_empty()
-                                && piece.chars().count() <= 8
-                                && piece
-                                    .chars()
-                                    .all(|c| (' '..='~').contains(&c) || drawable(c)),
+                                && piece.len() <= 8
+                                && piece.chars().all(|c| (' '..='~').contains(&c)),
                             "{who}: piece {piece:?}"
                         );
                     }
@@ -1368,28 +1276,6 @@ mod tests {
             let who = format!("decor {}", d.name);
             assert_eq!(d.traits & !(SHELTER | GLOW), 0, "{who}: traits");
             assert!(d.season <= MUERTOS, "{who}: season");
-        }
-    }
-
-    #[test]
-    fn mirrored_shapes_have_mirror_images() {
-        let check = |who: &str, shapes: &[&str]| {
-            for f in shapes {
-                if let Some(c) = f.chars().find(|&c| UNMIRRORABLE.contains(c)) {
-                    panic!("{who}: {c:?} has no mirror image; it cannot face left");
-                }
-            }
-        };
-        for s in species() {
-            if s.left.is_empty() {
-                check(s.name, s.art);
-            }
-            check(s.name, s.alt);
-        }
-        for v in visitors() {
-            if v.left.is_empty() {
-                check(v.name, v.art);
-            }
         }
     }
 

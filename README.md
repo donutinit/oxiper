@@ -35,9 +35,9 @@ plus thirteen more scenes. One small binary. Nearly no CPU. Your terminal's tran
   glibc's `rand()`, so `-o bonsai.seed=42` grows *exactly* the tree `cbonsai -s 42` grows. The aquarium
   carries all 95 sprites of asciiquarium, verified glyph by glyph against Term::Animation, with
   sharks that eat fish and hooks that catch them, and then grows into seven biomes with
-  **281 kinds of fish** and hundreds more creatures, plants, props and passers-by, drawn by hand
-  in Unicode and all reacting to each other. The rain is neo's droplet model, falling at neo's real
-  speed. Nyan Cat flies with the original twelve frames.
+  **281 kinds of fish** and hundreds more creatures, plants, props and passers-by, all reacting
+  to each other. The rain is neo's droplet model, falling at neo's real speed. Nyan Cat flies with
+  the original twelve frames.
 - **One binary, eighteen scenes.** Mix them into a playlist and give each one its own theme, pace and
   time on screen. And now and then, when you least expect it, a train or a duck goes by.
 - **Transparency first.** oxiper never paints a background it doesn't have to, so blurred or
@@ -272,11 +272,9 @@ Can't wait? Press <kbd>E</kbd>.
 
 ## The aquarium
 
-`biome = "classic"` is asciiquarium, exactly, ASCII and all. Every other setting goes further:
-seven biomes with **281 fish**, 93 other creatures, 85 plants and corals, 69 props and 84
-passers-by, every one drawn by hand in Unicode (box-drawing lines, block shading, geometric
-shapes and braille, still plain text, one cell per character), most with several frames of
-animation, and they all notice each other.
+`biome = "classic"` is asciiquarium, exactly. Every other setting goes further, in asciiquarium's
+own drawing style: seven biomes with **281 fish**, 93 other creatures, 85 plants and corals,
+69 props and 84 passers-by, and they all notice each other.
 
 <p align="center"><img src="assets/biomes.png" alt="The aquarium in each biome: classic, reef, ocean, kelp, deep, fresh, arctic and tank" width="840"></p>
 
@@ -366,7 +364,7 @@ CPU and memory against the originals, each in a 120×40 tmux pane for 15 s
 | scene | original | oxiper |
 |---|---|---|
 | bonsai (live, infinite) | cbonsai: 0.1 % · 3.3 MB | **0.07 %** · 3.9 MB |
-| aquarium | asciiquarium: 7.1 % · 11.7 MB | **0.9 %** · 8.5 MB |
+| aquarium | asciiquarium: 7.1 % · 11.7 MB | **1.2 %** · 7.0 MB |
 | neo | neo: 2.3 % · 5.6 MB | **1.3 %** · 3.9 MB |
 | nyancat | nyancat: 0.3 % · 1.9 MB | **0.27 %** · 4.1 MB |
 
@@ -375,7 +373,7 @@ Per-frame cost of every scene at 200×60 (`oxiper bench`, release build):
 | scene | simulate + draw (µs) | diff + encode (µs) | bytes / frame | cells changed |
 |---|--:|--:|--:|--:|
 | bonsai | 6 | 71 | 22 | 0.0% |
-| aquarium | 31 | 130 | 1840 | 2.1% |
+| aquarium | 22 | 81 | 1278 | 1.6% |
 | neo | 56 | 125 | 4154 | 1.6% |
 | nyancat | 62 | 112 | 1942 | 2.4% |
 | dog | 415 | 330 | 22318 | 8.3% |

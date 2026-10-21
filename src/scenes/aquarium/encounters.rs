@@ -152,9 +152,7 @@ fn takeable(e: &Ent, max: u16) -> bool {
 
 /// The classic big fish (a passer-by with no entry in the library).
 fn is_big_fish(e: &Ent) -> bool {
-    e.kind == Kind::Visitor
-        && e.who == NOBODY
-        && (SP_BIG_FISH..=SP_BIG_FISH + 1).contains(&classic_of(e.spr))
+    e.kind == Kind::Visitor && e.who == NOBODY && (e.spr == SP_BIG_FISH || e.spr == SP_BIG_FISH + 1)
 }
 
 /// The lane of a data visitor.

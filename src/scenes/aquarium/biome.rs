@@ -291,14 +291,14 @@ impl Aquarium {
 
     /// How well a shape `sw` by `sh` suits this screen, 0 to 1: 1 while it
     /// takes at most `fw` of the width and `fh` of the water's height, less
-    /// (cubed) the more it outgrows them. Big things come rarely to a small
+    /// (squared) the more it outgrows them. Big things come rarely to a small
     /// window and as usual to a big one, so the sea scales with the terminal.
     pub(super) fn fit(&self, sw: i32, sh: i32, fw: f32, fh: f32) -> f32 {
         let room = (self.h - self.water_top()).max(1) as f32;
         let fx = self.w.max(1) as f32 * fw / sw.max(1) as f32;
         let fy = room * fh / sh.max(1) as f32;
         let f = fx.min(fy).min(1.0);
-        f * f * f
+        f * f
     }
 
     /// The rows a creature `sh` tall may swim in, for its zone.
@@ -1047,14 +1047,13 @@ impl Aquarium {
             for x in 0..self.w {
                 let (ch, pen) = match hash(w.seed ^ x as u64) % 100 {
                     0..=34 => continue,
-                    35..=59 => (SAND[0], sand),
-                    60..=71 => (SAND[1], sand),
-                    72..=81 => (SAND[2], sand),
-                    82..=86 => (SAND[3], sand),
-                    87..=91 => (SAND[4], sand),
-                    92..=95 => (STONES[0], stone),
-                    96..=97 => (STONES[1], stone),
-                    _ => (STONES[2], stone),
+                    35..=59 => ('.', sand),
+                    60..=71 => (',', sand),
+                    72..=81 => ('_', sand),
+                    82..=86 => ('-', sand),
+                    87..=91 => ('`', sand),
+                    92..=97 => ('o', stone),
+                    _ => ('O', stone),
                 };
                 let (col, attr) = self.pens[pen as usize];
                 c.set_attr(x, y, ch, col, attr);
@@ -1070,7 +1069,7 @@ impl Aquarium {
                 let fall = 0.2 + ((r >> 32) % 100) as f32 / 100.0 * 0.6;
                 let y = (y0 + self.time * fall).rem_euclid(self.h as f32);
                 let x = x0 + (self.time * 0.3 + i as f32).sin() * 1.2;
-                let ch = SNOW[((r >> 40) % SNOW.len() as u64) as usize];
+                let ch = b"..'`,"[((r >> 40) % 5) as usize] as char;
                 c.set_attr(x.round() as i32, y as i32, ch, col, attr);
             }
         }
@@ -1326,13 +1325,6 @@ impl Aquarium {
     }
 }
 
-/// Grains of sand on the floor row.
-pub(super) const SAND: [char; 5] = ['⣀', '⡀', '▁', '▂', '⠤'];
-/// Pebbles among the sand.
-pub(super) const STONES: [char; 3] = ['◖', '◗', '●'];
-/// Marine snow of the deep.
-pub(super) const SNOW: [char; 6] = ['⠁', '⠂', '∙', '˚', '⠈', '⠐'];
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1479,9 +1471,9 @@ mod tests {
                     .collect();
                 assert_eq!(names, ["classic-2"], "listed species come anywhere");
                 assert!(
-                    a.ents.iter().any(
-                        |e| e.kind == Kind::Decor && lib.decor[e.who as usize].name == "castle"
-                    )
+                    a.ents
+                        .iter()
+                        .any(|e| e.kind == Kind::Decor && e.spr == SP_CASTLE)
                 );
             },
         );
@@ -1516,8 +1508,7 @@ mod tests {
 
     #[test]
     fn big_things_come_rarely_to_small_screens() {
-        // The share of groups led by something big for 80x24: wider than 24
-        // columns or taller than 7 rows.
+        // The share of groups led by something big (120 cells or more).
         let big_share = |w: u16, h: u16| {
             let mut big = 0;
             scene(&[("biome", s("mixed"))], |ctx, a| {
@@ -1525,7 +1516,7 @@ mod tests {
                 for _ in 0..600 {
                     let n = a.ents.len();
                     a.add_group(false, true);
-                    big += usize::from(a.ents.get(n).is_some_and(|e| e.w > 24.0 || e.h > 7.0));
+                    big += usize::from(a.ents.get(n).is_some_and(|e| e.size >= 120));
                 }
             });
             big as f32 / 600.0

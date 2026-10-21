@@ -1,12 +1,11 @@
 //! Every sprite the aquarium draws, built once: asciiquarium's own first, at
-//! the indices `mod.rs` names, then the cast from `assets`, the twins that
-//! stand in for asciiquarium's sprites beyond classic, and a few effects.
+//! the indices `mod.rs` names, then the cast from `assets` and a few effects.
 
 use std::sync::OnceLock;
 
 use super::assets::{self, Biomes, PlantArt, Season, Tint, Traits};
 use super::sprite::{self, Sprite};
-use super::{SP_COUNT, SP_NONE, W};
+use super::{BRIGHT, G, K, SP_CASTLE, SP_SEAWEED, W};
 
 pub struct SpeciesEntry {
     pub def: &'static assets::Species,
@@ -57,20 +56,21 @@ pub struct VisitorEntry {
     pub color: u8,
 }
 
-/// Small effects (drawn in `assets::fx`), each a sprite whose frames are
-/// variants (or, for ink, stages from thick to thin).
+/// Small effects, each a sprite whose frames are variants (or, for ink,
+/// stages from thick to thin).
 pub struct Fx {
-    /// Fish food.
+    /// Fish food: `*` `,` `~`.
     pub flake: u16,
-    /// Plankton.
+    /// Plankton: `.` `:` `'` `` ` ``.
     pub plankton: u16,
-    /// What is left when something is eaten.
+    /// What is left when something is eaten: `,` `'` `~`.
     pub scrap: u16,
-    /// A cloud of ink, thinning out frame by frame.
+    /// A cloud of ink, 5x3, thinning out over four frames.
     pub ink: u16,
-    /// A trawl net hanging behind a boat that moves right (`+ 1` for left).
+    /// A trawl net hanging behind a boat that moves right (`+ 1` for left):
+    /// a rope from the stern and a mesh, two frames swaying.
     pub net: u16,
-    /// A fishing line: frame `n` is `n + 1` pieces of line and a hook, up to 16.
+    /// A fishing line: frame `n` is `n + 1` bars and a hook `J`, up to 16.
     pub line: u16,
 }
 
@@ -81,11 +81,6 @@ pub struct Library {
     pub decor: Vec<DecorEntry>,
     pub visitors: Vec<VisitorEntry>,
     pub fx: Fx,
-    /// For each of asciiquarium's sprites, the twin that stands in for it
-    /// beyond classic, or `SP_NONE`.
-    pub twin: Vec<u16>,
-    /// The rows of the water's surface beyond classic.
-    pub water: [Vec<char>; 4],
 }
 
 #[cfg(test)]
@@ -150,7 +145,19 @@ fn build() -> Library {
             }
         })
         .collect();
-    let mut plants = Vec::new();
+    // asciiquarium's seaweed grows in most places too.
+    let mut plants = vec![PlantEntry {
+        name: "seaweed",
+        spr: SP_SEAWEED,
+        stalk: Some((3, 6)),
+        tint: Tint::default(),
+        color: G,
+        fps: 0.27,
+        weight: 6,
+        biomes: assets::TANK | assets::REEF | assets::KELP | assets::OCEAN | assets::FRESH,
+        traits: assets::SHELTER,
+        season: assets::ALWAYS,
+    }];
     for p in assets::plants() {
         let (spr, stalk) = match p.art {
             PlantArt::Sprite { frames, masks } => {
@@ -184,7 +191,19 @@ fn build() -> Library {
             season: p.season,
         });
     }
-    let mut decor = Vec::new();
+    // asciiquarium's castle belongs in a home aquarium.
+    let mut decor = vec![DecorEntry {
+        name: "castle",
+        spr: SP_CASTLE,
+        tint: Tint::default(),
+        color: K + BRIGHT,
+        fps: 0.0,
+        bubbles: None,
+        weight: 7,
+        biomes: assets::TANK,
+        traits: assets::SHELTER,
+        season: assets::ALWAYS,
+    }];
     for d in assets::decor() {
         decor.push(DecorEntry {
             name: d.name,
@@ -215,38 +234,31 @@ fn build() -> Library {
             }
         })
         .collect();
-    let mut twin = vec![SP_NONE; SP_COUNT];
-    for &(id, frames, masks) in assets::twins::SPRITES {
-        let Some(slot) = twin.get_mut(id as usize) else {
-            continue;
-        };
-        *slot = push(Sprite::new(frames, masks, true, '?'));
-        let pair = assets::twins::WANTED
-            .iter()
-            .any(|&(w, pair)| w == id && pair);
-        if pair && (id as usize + 1) < SP_COUNT {
-            let (l, lm) = sprite::mirror(frames, masks);
-            twin[id as usize + 1] = push(Sprite::new(&l, &strs(&lm), true, '?'));
-        }
-    }
-    let water = assets::twins::WATER.map(|row| row.chars().collect());
-    let fx_art = &assets::fx::NET;
     let mut fx = |frames: &[&str]| push(Sprite::new(frames, &[], true, '?'));
     let fx = Fx {
-        flake: fx(assets::fx::FLAKE),
-        plankton: fx(assets::fx::PLANKTON),
-        scrap: fx(assets::fx::SCRAP),
-        ink: fx(assets::fx::INK),
+        flake: fx(&["\n*", "\n,", "\n~"]),
+        plankton: fx(&["\n.", "\n:", "\n'", "\n`"]),
+        scrap: fx(&["\n,", "\n'", "\n~"]),
+        ink: fx(&[
+            "\n @@@\n@@@@@\n @@@",
+            "\n @%@\n%@@@%\n %@%",
+            "\n % %\n%  :%\n .%",
+            "\n .  \n.   :\n  .",
+        ]),
         net: {
-            let (left, _) = sprite::mirror(fx_art, &[]);
-            let right = fx(fx_art);
+            // `?` is transparent, so what the net holds shows through.
+            let frames = [
+                "\n            /\n           /\n  ,-\\/\\/\\/\\/\n  (?\\/\\/\\/\\/\n  `-/\\/\\/\\/\\\n    `-\\/\\/-'",
+                "\n            /\n           /\n  ,-/\\/\\/\\/\\\n  (?/\\/\\/\\/\\\n  `-\\/\\/\\/\\/\n    `-/\\/\\-'",
+            ];
+            let (left, _) = sprite::mirror(&frames, &[]);
+            let right = fx(&frames);
             fx(&strs(&left));
             right
         },
         line: {
-            let (bar, hook) = (assets::fx::LINE_BAR, assets::fx::LINE_HOOK);
             let frames: Vec<String> = (1..=16)
-                .map(|n| format!("\n{}{hook}", format!("{bar}\n").repeat(n)))
+                .map(|n| format!("\n{}J", "|\n".repeat(n)))
                 .collect();
             fx(&strs(&frames))
         },
@@ -258,7 +270,5 @@ fn build() -> Library {
         decor,
         visitors,
         fx,
-        twin,
-        water,
     }
 }

@@ -275,19 +275,6 @@ pub fn roster() -> Vec<(&'static str, Vec<(&'static str, assets::Biomes)>)> {
     ]
 }
 
-/// Which of asciiquarium's sprites `spr` is, or stands in for (a twin);
-/// anything else is returned as is.
-fn classic_of(spr: u16) -> u16 {
-    if (spr as usize) < SP_COUNT {
-        return spr;
-    }
-    library::library()
-        .twin
-        .iter()
-        .position(|&t| t == spr)
-        .map_or(spr, |i| i as u16)
-}
-
 fn sprites() -> &'static [Sprite] {
     &library::library().sprites
 }
@@ -685,15 +672,6 @@ impl Aquarium {
         pal
     }
 
-    /// The sprite to draw asciiquarium's sprite `id` with: the original in
-    /// classic, its twin (`assets::twins`) beyond it, when there is one.
-    fn sp(&self, id: u16) -> u16 {
-        match library::library().twin.get(id as usize) {
-            Some(&t) if t != SP_NONE && self.world.is_some() => t,
-            _ => id,
-        }
-    }
-
     fn spawn(&mut self, mut e: Ent) -> usize {
         e.id = self.next_id;
         self.next_id = self.next_id.wrapping_add(1);
@@ -812,7 +790,7 @@ impl Aquarium {
 
     fn add_bubble_at(&mut self, x: f32, y: f32, z: i32) {
         self.spawn(
-            Ent::new(Kind::Bubble, self.sp(SP_BUBBLE), x, y, z, C + BRIGHT)
+            Ent::new(Kind::Bubble, SP_BUBBLE, x, y, z, C + BRIGHT)
                 .per_frame(0.0, -1.0, 0.1)
                 .physical(1)
                 .die_offscreen(),
@@ -820,15 +798,8 @@ impl Aquarium {
     }
 
     fn add_splat(&mut self, x: f32, y: f32, z: i32) {
-        let mut e = Ent::new(
-            Kind::Splat,
-            self.sp(SP_SPLAT),
-            x - 4.0,
-            y - 2.0,
-            z - 2,
-            R + BRIGHT,
-        )
-        .per_frame(0.0, 0.0, 0.25);
+        let mut e = Ent::new(Kind::Splat, SP_SPLAT, x - 4.0, y - 2.0, z - 2, R + BRIGHT)
+            .per_frame(0.0, 0.0, 0.25);
         // `die_frame => 15`: drawn for 16 frames.
         e.ttl = 16.0 / TICK - 0.01;
         self.spawn(e);
@@ -875,21 +846,21 @@ impl Aquarium {
     fn add_ship(&mut self) {
         let dir = self.rand_dir();
         let (x, dx) = self.start(dir, -24.0, -2, 1.0);
-        let spr = self.sp(SP_SHIP + dir as u16);
+        let spr = SP_SHIP + dir as u16;
         self.spawn(visitor(spr, x, 0.0, Z_WATER_GAP[1], W + BRIGHT).per_frame(dx, 0.0, 0.0));
     }
 
     fn add_whale(&mut self) {
         let dir = self.rand_dir();
         let (x, dx) = self.start(dir, -18.0, -2, 1.0);
-        let spr = self.sp(SP_WHALE + dir as u16);
+        let spr = SP_WHALE + dir as u16;
         self.spawn(visitor(spr, x, 0.0, Z_WATER_GAP[2], W + BRIGHT).per_frame(dx, 0.0, 1.0));
     }
 
     fn add_monster(&mut self) {
         let dir = self.rand_dir();
         let (x, dx) = self.start(dir, -64.0, -2, 2.0);
-        let spr = self.sp(SP_MONSTER + dir as u16);
+        let spr = SP_MONSTER + dir as u16;
         self.spawn(visitor(spr, x, 2.0, Z_WATER_GAP[2], G + BRIGHT).per_frame(dx, 0.0, 0.25));
     }
 
@@ -898,7 +869,7 @@ impl Aquarium {
         let (x, dx) = self.start(dir, -34.0, -1, 3.0);
         let y = self.rand_int((self.h - 15 - 9) as f32) + 9.0;
         let pal = self.rand_pal();
-        let spr = self.sp(SP_BIG_FISH + dir as u16);
+        let spr = SP_BIG_FISH + dir as u16;
         let mut e = visitor(spr, x, y, Z_SHARK, Y + BRIGHT).per_frame(dx, 0.0, 0.0);
         e.pal = pal;
         self.spawn(e);
@@ -907,14 +878,14 @@ impl Aquarium {
     fn add_ducks(&mut self) {
         let dir = self.rand_dir();
         let (x, dx) = self.start(dir, -30.0, -2, 1.0);
-        let spr = self.sp(SP_DUCKS + dir as u16);
+        let spr = SP_DUCKS + dir as u16;
         self.spawn(visitor(spr, x, 5.0, Z_WATER_GAP[3], W + BRIGHT).per_frame(dx, 0.0, 0.25));
     }
 
     fn add_swan(&mut self) {
         let dir = self.rand_dir();
         let (x, dx) = self.start(dir, -10.0, -2, 1.0);
-        let spr = self.sp(SP_SWAN + dir as u16);
+        let spr = SP_SWAN + dir as u16;
         self.spawn(visitor(spr, x, 1.0, Z_WATER_GAP[3], W + BRIGHT).per_frame(dx, 0.0, 0.25));
     }
 
@@ -929,7 +900,7 @@ impl Aquarium {
                 .per_frame(dx, 0.0, 0.0)
                 .physical(Z_FISH_END - Z_FISH_START),
         );
-        let spr = self.sp(SP_SHARK + dir as u16);
+        let spr = SP_SHARK + dir as u16;
         self.spawn(
             Ent::new(Kind::Shark, spr, x, y, Z_SHARK, C + BRIGHT)
                 .per_frame(dx, 0.0, 0.0)
@@ -943,9 +914,9 @@ impl Aquarium {
         let y = -4.0;
         let sink = Motion::Hook { hooked: false };
         let z = Z_WATER_LINE[1];
-        self.spawn(Ent::new(Kind::Line, self.sp(SP_LINE), x + 7.0, y - 50.0, z, W).motion(sink));
+        self.spawn(Ent::new(Kind::Line, SP_LINE, x + 7.0, y - 50.0, z, W).motion(sink));
         self.spawn(
-            Ent::new(Kind::Hook, self.sp(SP_HOOK), x, y, z, G + BRIGHT)
+            Ent::new(Kind::Hook, SP_HOOK, x, y, z, G + BRIGHT)
                 .motion(sink)
                 .die_offscreen()
                 .on_death(Death::Hook),
@@ -953,7 +924,7 @@ impl Aquarium {
         self.spawn(
             Ent::new(
                 Kind::Point,
-                self.sp(SP_POINT),
+                SP_POINT,
                 x + 1.0,
                 y + 2.0,
                 Z_SHARK + 1,
@@ -969,7 +940,7 @@ impl Aquarium {
         let (x, dx) = self.start(dir, -13.0, -2, 1.0);
         // How far apart the dolphins are.
         let distance = if dir == 1 { -15.0 } else { 15.0 };
-        let spr = self.sp(SP_DOLPHIN + dir as u16);
+        let spr = SP_DOLPHIN + dir as u16;
         let z = Z_WATER_GAP[3];
         // They follow the same path a few frames apart. The original's path
         // also names a frame, but as 0.5, which always shows the first one.
@@ -1199,24 +1170,8 @@ impl Aquarium {
         let x0 = e.x.floor().clamp(-1e6, 1e6) as i32;
         let y0 = e.y.floor().clamp(-1e6, 1e6) as i32;
         if let Kind::Water(i) = e.kind {
-            let (col, attr) = self.water_pen(i as usize);
-            let twin = &library::library().water[i as usize];
-            if self.world.is_some() && !twin.is_empty() {
-                // Beyond classic: the surface drawn again, in Unicode.
-                let shift = self.storm_shift(i as usize)
-                    + if self.waves {
-                        (self.time * [0.0, 1.2, -0.9, 0.6][i as usize]).floor() as i64
-                    } else {
-                        0
-                    };
-                for x in 0..self.w {
-                    let ch = twin[(x as i64 - shift).rem_euclid(twin.len() as i64) as usize];
-                    let col = if ch == ' ' { Color::Reset } else { col };
-                    c.set_attr(x, y0, ch, col, if ch == ' ' { 0 } else { attr });
-                }
-                return;
-            }
             let row = art::WATER[i as usize].as_bytes();
+            let (col, attr) = self.water_pen(i as usize);
             let shift = if self.waves {
                 // Neighboring rows drift in opposite directions.
                 let v = [0.0, 1.2, -0.9, 0.6][i as usize];

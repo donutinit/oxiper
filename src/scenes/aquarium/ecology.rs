@@ -640,7 +640,7 @@ impl Aquarium {
                     let Some(v) = lib.visitors.get(e.who as usize).filter(|_| e.who != NOBODY)
                     else {
                         // asciiquarium's big fish: something to keep company with.
-                        if (SP_BIG_FISH..=SP_BIG_FISH + 1).contains(&classic_of(e.spr)) {
+                        if e.spr == SP_BIG_FISH || e.spr == SP_BIG_FISH + 1 {
                             o.size = cells(e.spr);
                             eco.hosts.push(o);
                         }
@@ -2182,10 +2182,6 @@ mod tests {
             let fish = put(aq, "classic-4", (50.0, 30.0), false, 4.0, a::SHY);
             set_size(aq, fish, 20);
             let orca = visit(aq, "orca", (30.0, 28.0), 0.0, a::PREDATOR | a::SCARY);
-            // Close, but not within a bite: its nose ten columns short of the fish.
-            if let Some(o) = aq.ents.iter_mut().find(|e| e.id == orca) {
-                o.x = 40.0 - o.w;
-            }
             let mut hid = false;
             run(ctx, aq, 12.0, |aq| {
                 let e = get(aq, fish).unwrap();
@@ -2236,9 +2232,7 @@ mod tests {
             let arrived = arrived.expect("it went home");
             assert!(arrived < 30.0, "{arrived}");
             assert!(!stung, "its home never stings it");
-            // Around it, on an ellipse a little wider than the fish itself.
-            let reach = get(aq, fish).map_or(20.0, |e| e.w * 0.6 + 3.0);
-            assert!(far < reach, "{far} > {reach}");
+            assert!(far < 12.0, "{far}");
             let left_at = left_at.expect("it left after a while");
             let stay = left_at - arrived;
             assert!((55.0..=300.0).contains(&stay), "{stay}");

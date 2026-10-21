@@ -155,136 +155,24 @@ impl Sprite {
     }
 }
 
-/// Pairs of characters that are each other's mirror image (left-right).
-const MIRROR_PAIRS: &[(char, char)] = &[
-    ('(', ')'),
-    ('[', ']'),
-    ('{', '}'),
-    ('<', '>'),
-    ('/', '\\'),
-    // A backtick and a quote lean opposite ways: `-. mirrors to .-'
-    ('`', '\''),
-    // Box drawing.
-    ('╱', '╲'),
-    ('┌', '┐'),
-    ('└', '┘'),
-    ('├', '┤'),
-    ('┍', '┑'),
-    ('┎', '┒'),
-    ('┏', '┓'),
-    ('┕', '┙'),
-    ('┖', '┚'),
-    ('┗', '┛'),
-    ('┝', '┥'),
-    ('┞', '┦'),
-    ('┟', '┧'),
-    ('┠', '┨'),
-    ('┡', '┩'),
-    ('┢', '┪'),
-    ('┣', '┫'),
-    ('┭', '┮'),
-    ('┱', '┲'),
-    ('┵', '┶'),
-    ('┹', '┺'),
-    ('┽', '┾'),
-    ('╃', '╄'),
-    ('╅', '╆'),
-    ('╉', '╊'),
-    ('╒', '╕'),
-    ('╓', '╖'),
-    ('╔', '╗'),
-    ('╘', '╛'),
-    ('╙', '╜'),
-    ('╚', '╝'),
-    ('╞', '╡'),
-    ('╟', '╢'),
-    ('╠', '╣'),
-    ('╭', '╮'),
-    ('╰', '╯'),
-    ('╴', '╶'),
-    ('╸', '╺'),
-    ('╼', '╾'),
-    // Blocks.
-    ('▌', '▐'),
-    ('▏', '▕'),
-    ('▖', '▗'),
-    ('▘', '▝'),
-    ('▙', '▟'),
-    ('▛', '▜'),
-    ('▚', '▞'),
-    // Shapes.
-    ('◀', '▶'),
-    ('◁', '▷'),
-    ('◂', '▸'),
-    ('◃', '▹'),
-    ('◄', '►'),
-    ('◅', '▻'),
-    ('◢', '◣'),
-    ('◤', '◥'),
-    ('◜', '◝'),
-    ('◟', '◞'),
-    ('◖', '◗'),
-    ('◐', '◑'),
-    ('◧', '◨'),
-    ('◩', '◪'),
-    ('◭', '◮'),
-    ('◰', '◳'),
-    ('◱', '◲'),
-    ('◴', '◷'),
-    ('◵', '◶'),
-    ('◸', '◹'),
-    ('◺', '◿'),
-    // Brackets, angles, quotes, arrows and the rest.
-    ('⟨', '⟩'),
-    ('‹', '›'),
-    ('«', '»'),
-    ('⎛', '⎞'),
-    ('⎜', '⎟'),
-    ('⎝', '⎠'),
-    ('⎡', '⎤'),
-    ('⎢', '⎥'),
-    ('⎣', '⎦'),
-    ('⎧', '⎫'),
-    ('⎨', '⎬'),
-    ('⎩', '⎭'),
-    ('⌈', '⌉'),
-    ('⌊', '⌋'),
-    ('⌜', '⌝'),
-    ('⌞', '⌟'),
-    ('⌐', '¬'),
-    ('‘', '’'),
-    ('“', '”'),
-    ('←', '→'),
-    ('↖', '↗'),
-    ('↙', '↘'),
-    ('⋰', '⋱'),
-    ('⊂', '⊃'),
-    ('∼', '∽'),
-    ('´', 'ˋ'),
-    ('ˊ', 'ˋ'),
-];
-
 /// The mirror image of a character, for flipping a creature to face the other way.
 pub fn mirror_char(c: char) -> char {
-    // Braille: swap the left column of dots (1 2 3 7) with the right (4 5 6 8).
-    if let 0x2800..=0x28FF = c as u32 {
-        let b = c as u32 - 0x2800;
-        let swap = |b: u32, i: u32, j: u32| {
-            let (x, y) = ((b >> i) & 1, (b >> j) & 1);
-            b & !(1 << i | 1 << j) | x << j | y << i
-        };
-        let b = swap(swap(swap(swap(b, 0, 3), 1, 4), 2, 5), 6, 7);
-        return char::from_u32(0x2800 + b).unwrap_or(c);
+    match c {
+        '(' => ')',
+        ')' => '(',
+        '[' => ']',
+        ']' => '[',
+        '{' => '}',
+        '}' => '{',
+        '<' => '>',
+        '>' => '<',
+        '/' => '\\',
+        '\\' => '/',
+        // A backtick and a quote lean opposite ways: `-. mirrors to .-'
+        '`' => '\'',
+        '\'' => '`',
+        c => c,
     }
-    for &(a, b) in MIRROR_PAIRS {
-        if c == a {
-            return b;
-        }
-        if c == b {
-            return a;
-        }
-    }
-    c
 }
 
 /// Flips right-facing frames (and their masks) to face left. Every line is
@@ -347,20 +235,6 @@ mod tests {
         let s = Sprite::new(&["\nabcd\n"], &["\nR1 \n"], false, '?');
         let codes: Vec<u8> = s.frame(0).iter().map(|c| c.code).collect();
         assert_eq!(codes, vec![9, DIGIT + 1, DEFAULT, DEFAULT]);
-    }
-
-    #[test]
-    fn unicode_mirrors() {
-        assert_eq!(mirror_char('╭'), '╮');
-        assert_eq!(mirror_char('▐'), '▌');
-        assert_eq!(mirror_char('◀'), '▶');
-        assert_eq!(mirror_char('─'), '─');
-        // ⠁ (dot 1) and ⠈ (dot 4); ⡇ (dots 1 2 3 7) and ⢸ (dots 4 5 6 8).
-        assert_eq!(mirror_char('⠁'), '⠈');
-        assert_eq!(mirror_char('⡇'), '⢸');
-        assert_eq!(mirror_char('⣿'), '⣿');
-        let (l, _) = mirror(&["\n╭──╮▶\n╰▙▟╯"], &[]);
-        assert_eq!(l[0], "\n◀╭──╮\n ╰▙▟╯\n");
     }
 
     #[test]
