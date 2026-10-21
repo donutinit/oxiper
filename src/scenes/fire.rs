@@ -8,10 +8,18 @@
 //! minus a decay ("minus") tuned to the screen height. The `ascii` style picks
 //! characters the way aalib does: by matching the four quadrant brightnesses of
 //! a cell against glyph coverage measured from aalib's 8×16 VGA font.
+//!
+//! On Día de Muertos the bonfire becomes a field of veladoras (see
+//! `fire/muertos.rs`): the heat is fed at the wicks of rows of glass candles
+//! instead of along the bottom, so the same flames rise out of each glass,
+//! among marigolds, sugar skulls and the smoke of copal.
+
+mod muertos;
 
 use std::sync::OnceLock;
 
 use crate::color::{Color, Gradient, rgb};
+use crate::fiesta::Kind;
 use crate::render::{BOLD, Canvas, Pixels};
 use crate::scene::{Ctx, Opt, Scene, SceneInfo, Val};
 
@@ -173,6 +181,27 @@ const FP: u32 = 8;
 const REACH: f32 = 180.0;
 /// Side of the tiling cooling map (a power of two).
 const CMAP: usize = 64;
+/// How high candle flames reach, relative to the bonfire's.
+const CANDLE_REACH: f32 = 0.4;
+
+/// Whether a flame shows at pixel (`x`, `y`) of a `w`-column screen with
+/// `vis` pixel rows (holiday candles behind it stay hidden).
+fn flame_at(
+    heat: &[u16],
+    lut: &[Color; 256],
+    stride: usize,
+    w: usize,
+    vis: usize,
+    x: i32,
+    y: i32,
+) -> bool {
+    if x < 0 || y < 0 || x as usize >= w || y as usize >= vis {
+        return false;
+    }
+    let i = y as usize * stride + PAD + 2 * x as usize;
+    let v = (heat[i] as u32 + heat[i + 1] as u32) / (2 * FP);
+    v >= 40 && lut[v.min(255) as usize] != Color::Reset
+}
 
 #[derive(Clone, Copy, PartialEq)]
 enum Style {
@@ -235,6 +264,8 @@ struct Fire {
     lut: [Color; 256],
     /// Heat → quadrant brightness level for glyph matching.
     level: [u8; 256],
+    /// Día de Muertos: the candles, flowers and copal.
+    muertos: muertos::Veladoras,
 }
 
 impl Fire {
@@ -306,7 +337,23 @@ impl Fire {
             px: Pixels::new(1, 1),
             lut: [Color::Reset; 256],
             level,
+            muertos: muertos::Veladoras::new(ctx.seed, style == Style::Ascii),
         }
+    }
+
+    /// The decay and the turbulence for the screen height: the bonfire's, or
+    /// the shorter candle flames'.
+    fn tune(&mut self) {
+        // aafire: minus = 800 / YSIZ, so flames always reach about as high
+        // relative to the screen. Heat lost per row, in the kernel's units
+        // (a sum of five fixed-point pixels).
+        let mut per_row = REACH / (self.vis as f32 * self.height);
+        if self.muertos.on() {
+            per_row /= CANDLE_REACH;
+        }
+        self.minus = (per_row * 5.0 * FP as f32).round() as u32;
+        // Turbulent cooling, scaled with the decay so it bites at any height.
+        self.cool_k = (self.cooling * per_row * 0.16 * FP as f32).round() as u32;
     }
 
     /// One aafire frame: new fuel at the bottom, then everything moves up a row.
@@ -317,6 +364,12 @@ impl Fire {
         let f0 = rows * stride + PAD;
         let f1 = f0 + stride;
         let mut x = 0;
+        if self.muertos.on() {
+            // Día de Muertos: no fuel along the bottom, a flame at every wick.
+            self.muertos
+                .feed(&mut self.heat, stride, sw, self.intensity, self.wind);
+            x = sw;
+        }
         while x < sw {
             // Runs of 0-5 pixels share a hot spot that wanders as it goes.
             let edge = (1 + self.taper * x as u32).min(1 + self.taper * (sw - 1 - x) as u32);
@@ -400,7 +453,9 @@ impl Fire {
         // The flames rise one row per step; embers start out about as fast.
         let px_per_s = 1.0 / self.step_dt;
         // Embers break off the flame tips.
-        self.spawn_acc += dt * self.w as f32 * 0.12 * self.intensity.min(2.0);
+        // Candles hardly spark.
+        let rate = if self.muertos.on() { 0.03 } else { 0.12 };
+        self.spawn_acc += dt * self.w as f32 * rate * self.intensity.min(2.0);
         while self.spawn_acc >= 1.0 {
             self.spawn_acc -= 1.0;
             if self.sparks.len() >= self.sparks.capacity() {
@@ -440,8 +495,13 @@ impl Fire {
         });
     }
 
-    fn draw_blocks(&mut self, c: &mut Canvas) {
+    fn draw_blocks(&mut self, ctx: &Ctx, c: &mut Canvas) {
         self.px.clear();
+        let holiday = self.muertos.on();
+        if holiday {
+            // Copal smoke behind the flames.
+            self.muertos.draw_smoke(ctx, &mut self.px);
+        }
         let (w, vis, stride) = (self.w, self.vis, self.stride);
         for y in 0..vis {
             let row = &self.heat[y * stride + PAD..y * stride + PAD + 2 * w];
@@ -452,6 +512,11 @@ impl Fire {
                     self.px.set(x as i32, y as i32, col);
                 }
             }
+        }
+        if holiday {
+            let (heat, lut) = (&self.heat, &self.lut);
+            let hot = |x, y| flame_at(heat, lut, stride, w, vis, x, y);
+            self.muertos.draw(ctx, &mut self.px, &hot);
         }
         for s in &self.sparks {
             let (x, y) = (s.x as i32, s.y as i32);
@@ -466,7 +531,7 @@ impl Fire {
         self.px.blit(c);
     }
 
-    fn draw_ascii(&self, c: &mut Canvas) {
+    fn draw_ascii(&self, ctx: &Ctx, c: &mut Canvas) {
         let table = glyph_table();
         let stride = self.stride;
         for cy in 0..self.h {
@@ -490,6 +555,11 @@ impl Fire {
                 c.set_attr(cx as i32, cy as i32, GLYPHS[g].0, col, attr);
             }
         }
+        if self.muertos.on() {
+            let (heat, lut) = (&self.heat, &self.lut);
+            let hot = |x, y| flame_at(heat, lut, stride, self.w, self.vis, x, y);
+            self.muertos.draw_ascii(ctx, c, &hot);
+        }
         for s in &self.sparks {
             let (x, y) = (s.x.floor() as i32, s.y.floor() as i32);
             if x < 0 || y < 0 || x as usize >= self.sw || y as usize >= self.vis {
@@ -510,7 +580,7 @@ impl Fire {
 }
 
 impl Scene for Fire {
-    fn resize(&mut self, _ctx: &Ctx, w: u16, h: u16) {
+    fn resize(&mut self, ctx: &Ctx, w: u16, h: u16) {
         let (w, h) = (w.max(1) as usize, h.max(1) as usize);
         self.w = w;
         self.h = h;
@@ -520,13 +590,10 @@ impl Scene for Fire {
         self.heat.clear();
         self.heat
             .resize(self.stride * (self.vis + HIDDEN + FUEL), 0);
-        // aafire: minus = 800 / YSIZ, so flames always reach about as high
-        // relative to the screen. Heat lost per row, in the kernel's units
-        // (a sum of five fixed-point pixels).
-        let per_row = REACH / (self.vis as f32 * self.height);
-        self.minus = (per_row * 5.0 * FP as f32).round() as u32;
-        // Turbulent cooling, scaled with the decay so it bites at any height.
-        self.cool_k = (self.cooling * per_row * 0.16 * FP as f32).round() as u32;
+        self.muertos
+            .set(ctx.fiesta.is(Kind::Muertos), ctx.fiesta.level);
+        self.muertos.layout(w, self.vis);
+        self.tune();
         // Fuel tapers off near the sides: aafire's 4 per pixel, but never over
         // more than a fifth of the width.
         self.taper = (256.0 / (self.sw as f32 * 0.2)).ceil().max(4.0) as u32;
@@ -579,6 +646,21 @@ impl Scene for Fire {
                 base(FIRST + (i - CUT) * (255 - FIRST) / (255 - CUT))
             };
         }
+        // The holiday came or went (or moved on a day): set the candles out
+        // again. Coming, the bonfire burns down to them.
+        self.muertos.recolor(ctx);
+        let was = self.muertos.on();
+        if self
+            .muertos
+            .set(ctx.fiesta.is(Kind::Muertos), ctx.fiesta.level)
+        {
+            self.muertos.layout(self.w, self.vis);
+            self.tune();
+            if self.muertos.on() && !was {
+                let fuel = ((self.vis + HIDDEN) * self.stride).min(self.heat.len());
+                self.heat[fuel..].fill(0);
+            }
+        }
     }
 
     fn update(&mut self, _ctx: &Ctx, dt: f32) {
@@ -600,12 +682,15 @@ impl Scene for Fire {
             }
         }
         self.update_sparks(dt);
+        if self.muertos.on() {
+            self.muertos.update(dt, self.wind);
+        }
     }
 
-    fn draw(&mut self, _ctx: &Ctx, c: &mut Canvas) {
+    fn draw(&mut self, ctx: &Ctx, c: &mut Canvas) {
         match self.style {
-            Style::Blocks => self.draw_blocks(c),
-            Style::Ascii => self.draw_ascii(c),
+            Style::Blocks => self.draw_blocks(ctx, c),
+            Style::Ascii => self.draw_ascii(ctx, c),
         }
     }
 }
@@ -613,6 +698,7 @@ impl Scene for Fire {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::fiesta::Fiesta;
     use crate::scene::Opts;
     use crate::theme::Theme;
 
@@ -674,5 +760,139 @@ mod tests {
         f.draw(&ctx, &mut c);
         assert!(c.cells().iter().all(|cell| cell.ch == ' '));
         assert!(c.cells().iter().all(|cell| cell.bg == Color::Reset));
+    }
+
+    fn holiday_fire(theme: &Theme, opts: &Opts, fiesta: Fiesta, w: u16, h: u16) -> Fire {
+        let ctx = Ctx {
+            theme,
+            opts,
+            bg: Color::Rgb(13, 17, 23),
+            seed: 9,
+            fiesta,
+        };
+        let mut f = Fire::new(&ctx);
+        f.resize(&ctx, w, h);
+        f.retheme(&ctx);
+        for _ in 0..60 {
+            f.update(&ctx, 1.0 / 30.0);
+        }
+        f
+    }
+
+    /// Heat in the lowest visible pixel row: aafire's fuel along the bottom.
+    fn bottom_heat(f: &Fire) -> u32 {
+        (0..f.sw).map(|x| f.heat_at(x, f.vis - 1)).sum()
+    }
+
+    /// Día de Muertos sets out candles, flowers and copal, from its first day,
+    /// more at its height, and the flames rise from the wicks, not the bottom.
+    #[test]
+    fn muertos_lights_veladoras() {
+        let theme = Theme::classic();
+        let opts = Opts::new(INFO.options, toml::Table::new());
+        let first = holiday_fire(&theme, &opts, Fiesta::of_day(10, 28), 120, 36);
+        let height = holiday_fire(&theme, &opts, Fiesta::of_day(11, 2), 120, 36);
+        for f in [&first, &height] {
+            let (candles, blooms, things) = f.muertos.counts();
+            assert!(candles >= 3 && blooms >= 1 && things >= 1);
+            assert_eq!(bottom_heat(f), 0);
+            assert!(f.heat.iter().any(|&v| v > 0), "the candles burn");
+        }
+        assert!(height.muertos.counts().0 > first.muertos.counts().0 + 3);
+        assert!(height.muertos.counts().1 > first.muertos.counts().1);
+        // Marigolds on screen.
+        let mut f = height;
+        let ctx = Ctx {
+            theme: &theme,
+            opts: &opts,
+            bg: Color::Rgb(13, 17, 23),
+            seed: 9,
+            fiesta: Fiesta::of_day(11, 2),
+        };
+        let mut c = Canvas::new(120, 36, Color::Reset);
+        f.draw(&ctx, &mut c);
+        let orange = rgb(0xff8c00);
+        assert!(
+            c.cells()
+                .iter()
+                .any(|cell| cell.fg == orange || cell.bg == orange)
+        );
+    }
+
+    /// On an ordinary day there is nothing of it: the bonfire burns along the bottom.
+    #[test]
+    fn ordinary_days_have_none() {
+        let theme = Theme::classic();
+        let opts = Opts::new(INFO.options, toml::Table::new());
+        let f = holiday_fire(&theme, &opts, Fiesta::NONE, 120, 36);
+        assert_eq!(f.muertos.counts(), (0, 0, 0));
+        assert!(!f.muertos.on());
+        assert!(bottom_heat(&f) > 0);
+    }
+
+    /// The holiday comes and goes through `retheme`.
+    #[test]
+    fn holiday_comes_and_goes() {
+        let theme = Theme::builtin("dracula").unwrap();
+        let opts = Opts::new(INFO.options, toml::Table::new());
+        let mut f = holiday_fire(&theme, &opts, Fiesta::NONE, 100, 30);
+        let mut ctx = Ctx {
+            theme: &theme,
+            opts: &opts,
+            bg: theme.bg,
+            seed: 9,
+            fiesta: Fiesta::of_day(11, 1),
+        };
+        f.retheme(&ctx);
+        assert!(f.muertos.on() && f.muertos.counts().0 > 0);
+        for _ in 0..90 {
+            f.update(&ctx, 1.0 / 30.0);
+        }
+        assert_eq!(bottom_heat(&f), 0, "the bonfire burned down to the candles");
+        ctx.fiesta = Fiesta::NONE;
+        f.retheme(&ctx);
+        assert_eq!(f.muertos.counts(), (0, 0, 0));
+        for _ in 0..30 {
+            f.update(&ctx, 1.0 / 30.0);
+        }
+        assert!(bottom_heat(&f) > 0, "and lit again");
+    }
+
+    /// The holiday survives tiny and huge screens and huge steps, in both styles.
+    #[test]
+    fn holiday_survives() {
+        for v in [
+            "style = 'blocks'",
+            "style = 'ascii'\nwind = 2.0\nheight = 3.0",
+        ] {
+            for theme in [Theme::classic(), Theme::builtin("dracula").unwrap()] {
+                for fiesta in [Fiesta::of_day(10, 28), Fiesta::of_day(11, 2)] {
+                    let opts = Opts::new(INFO.options, v.parse().unwrap());
+                    for bg in [Color::Reset, theme.bg] {
+                        let ctx = Ctx {
+                            theme: &theme,
+                            opts: &opts,
+                            bg,
+                            seed: 5,
+                            fiesta,
+                        };
+                        let mut s = (INFO.make)(&ctx);
+                        let sizes = [(1, 1), (300, 90), (2, 3), (7, 5), (13, 30), (80, 24)];
+                        for (i, &(w, h)) in sizes.iter().enumerate() {
+                            s.resize(&ctx, w, h);
+                            if i == 0 {
+                                s.retheme(&ctx);
+                            }
+                            let mut c = Canvas::new(w, h, Color::Reset);
+                            for f in 0..30 {
+                                s.update(&ctx, if f % 11 == 10 { 5.0 } else { 1.0 / 30.0 });
+                                c.clear();
+                                s.draw(&ctx, &mut c);
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 }
