@@ -9,8 +9,18 @@
 //! cbonsai grows the whole tree recursively and sleeps after every step in
 //! live mode. Here the recursion runs at once and records every step; live
 //! mode then reveals the recorded steps at `step` seconds each.
+//!
+//! On Día de Muertos the same tree grows as a Metepec árbol de la vida: its
+//! leaves open into clumps of cempasúchil, terciopelo and nube among the green
+//! (more of them as the holiday builds up), it stands in a talavera pot with
+//! marigold petals strewn on the soil, and petals let go of the blossoms,
+//! tumble down and lie a while on the ground. At its foot, a calavera de
+//! azúcar and veladoras flickering in colored glass; by November 2 tapers and
+//! a pan de muerto have joined them. Leaves the user chose keep their glyph
+//! and only take the colors.
 
-use crate::color::{self, Color};
+use crate::color::{self, Color, rgb};
+use crate::fiesta::Fiesta;
 use crate::render::{BOLD, Canvas};
 use crate::scene::{Ctx, Opt, Scene, SceneInfo, Val};
 
@@ -791,6 +801,247 @@ fn theme_pairs(ctx: &Ctx) -> [Color; 5] {
 }
 
 // ---------------------------------------------------------------------------
+// Día de Muertos: the árbol de la vida
+
+const CEMPASUCHIL: Color = rgb(0xff8c00);
+const CEMPASUCHIL_LIGHT: Color = rgb(0xffaa1e);
+const CEMPASUCHIL_DARK: Color = rgb(0xd66200);
+const ROSA: Color = rgb(0xe4007c);
+const TERCIOPELO: Color = rgb(0xb00048);
+const MORADO: Color = rgb(0x7028a0);
+const TURQUESA: Color = rgb(0x00aab8);
+const AMARILLO: Color = rgb(0xffd200);
+const LIMON: Color = rgb(0x8cc828);
+const HUESO: Color = rgb(0xf4eee2);
+const COBALTO: Color = rgb(0x2f5fd0);
+const COBALTO_LIGHT: Color = rgb(0x7a9cf0);
+const FLAMA: Color = rgb(0xffd678);
+const FLAMA_EDGE: Color = rgb(0xff9628);
+
+/// Salts the holiday's own randomness, so ordinary days draw the same numbers.
+const FIESTA_SALT: u64 = 0x6d75_6572_746f_7321;
+
+/// What a leaf becomes on the árbol de la vida.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum Bloom {
+    Leaf,
+    /// Cempasúchil, in one of three shades.
+    Marigold(u8),
+    /// Terciopelo, the velvet cockscomb, in one of two.
+    Velvet(u8),
+    /// Nube, baby's breath.
+    Nube,
+}
+
+/// A hash of a cell and a salt, 0..1.
+fn hash01(x: i32, y: i32, salt: u32) -> f32 {
+    let mut h = (x as u32).wrapping_mul(0x9e37_79b1)
+        ^ (y as u32).wrapping_mul(0x85eb_ca77)
+        ^ salt.wrapping_mul(0xc2b2_ae3d);
+    h ^= h >> 15;
+    h = h.wrapping_mul(0x2c1b_3c6d);
+    h ^= h >> 12;
+    h = h.wrapping_mul(0x297a_2d39);
+    h ^= h >> 15;
+    (h >> 8) as f32 / (1u32 << 24) as f32
+}
+
+/// What the leaf at a cell of tree `seed` is today. Blossoms come in clumps,
+/// more of them as the holiday builds up.
+fn bloom(x: i32, y: i32, seed: u32, level: f32) -> Bloom {
+    // Clumps about four cells wide and two tall, staggered row to row.
+    let (cx, cy) = (
+        (x + 2 * (y.div_euclid(2) & 1)).div_euclid(4),
+        y.div_euclid(2),
+    );
+    let clump = hash01(cx, cy, seed ^ 0x636c_756d);
+    let amount = 0.3 + 0.6 * level.clamp(0.0, 1.0);
+    let p = if clump < amount { 0.86 } else { 0.1 };
+    let cell = hash01(x, y, seed);
+    if cell >= p {
+        return Bloom::Leaf;
+    }
+    let shade = (hash01(x, y, seed ^ 0x7368_6164) * 3.0) as u8;
+    match hash01(cx, cy, seed ^ 0x6b69_6e64) {
+        k if k < 0.6 => Bloom::Marigold(shade),
+        k if k < 0.9 => Bloom::Velvet(shade & 1),
+        _ => Bloom::Nube,
+    }
+}
+
+/// The holiday's colors.
+struct Dress {
+    marigold: [Color; 3],
+    velvet: [Color; 2],
+    nube: Color,
+    /// The talavera pot: cobalt, a lighter cobalt, the white glaze, a yellow accent.
+    cobalt: [Color; 2],
+    glaze: Color,
+    yellow: Color,
+    /// The calavera: bone and its icing.
+    bone: Color,
+    icing: [Color; 4],
+    /// The veladoras' glass, and wax.
+    glass: [Color; 3],
+    wax: Color,
+    /// Pan de muerto: its crust and its sugared bones.
+    crust: Color,
+    sugar: Color,
+}
+
+impl Dress {
+    const CLASSIC: Dress = Dress {
+        marigold: [CEMPASUCHIL_DARK, CEMPASUCHIL, CEMPASUCHIL_LIGHT],
+        velvet: [TERCIOPELO, ROSA],
+        nube: HUESO,
+        cobalt: [COBALTO, COBALTO_LIGHT],
+        glaze: HUESO,
+        yellow: AMARILLO,
+        bone: HUESO,
+        icing: [ROSA, TURQUESA, AMARILLO, LIMON],
+        glass: [ROSA, TURQUESA, MORADO],
+        wax: rgb(0xe6d8b8),
+        crust: rgb(0xc47830),
+        sugar: rgb(0xf0c88c),
+    };
+
+    /// The same dress in the theme's colors. The marigolds keep their own hue
+    /// when the theme has nothing close.
+    fn themed(ctx: &Ctx, pot: Color) -> Dress {
+        let t = ctx.theme;
+        let mari = by_hue(&t.colors, 32.0, 30.0, None).unwrap_or(CEMPASUCHIL);
+        let velvet =
+            by_hue(&t.colors, 335.0, 40.0, Some(mari)).unwrap_or_else(|| ctx.pick(1, ROSA));
+        let cobalt = by_hue(&t.colors, 222.0, 45.0, Some(mari)).unwrap_or(pot);
+        let yellow = by_hue(&t.colors, 52.0, 22.0, Some(mari)).unwrap_or(mari);
+        Dress {
+            marigold: [ctx.fade(mari, 0.25), mari, mari.scale(1.18)],
+            velvet: [ctx.fade(velvet, 0.25), velvet],
+            nube: t.fg,
+            cobalt: [cobalt, cobalt.scale(1.3)],
+            glaze: t.fg,
+            yellow,
+            bone: t.fg,
+            icing: [velvet, ctx.pick(2, TURQUESA), yellow, ctx.pick(3, LIMON)],
+            glass: [velvet, ctx.pick(2, TURQUESA), ctx.pick(0, MORADO)],
+            wax: ctx.fade(t.fg, 0.15),
+            crust: mari.lerp(t.grad.at(0.3), 0.4),
+            sugar: mari.lerp(t.fg, 0.55),
+        }
+    }
+}
+
+/// A petal falling from a blossom, or lying where it fell.
+#[derive(Clone, Copy)]
+struct Petal {
+    x: f32,
+    y: f32,
+    /// Where it sways around, and how fast it falls.
+    x0: f32,
+    vy: f32,
+    phase: f32,
+    /// Seconds left lying on the ground; below zero while falling.
+    rest: f32,
+    /// How it lies once it lands.
+    lie: char,
+    /// Its two sides, which take turns as it tumbles.
+    color: Color,
+    shade: Color,
+}
+
+/// At most this many petals at once.
+const PETALS: usize = 48;
+
+/// A little picture drawn by hand: its characters, and an ink letter for
+/// each (see `Bonsai::ink`; a space leaves the cell alone).
+struct Sprite {
+    art: &'static [&'static str],
+    ink: &'static [&'static str],
+}
+
+/// The talavera pots, the same size as cbonsai's so the tree grows the same:
+/// cobalt on white glaze, and the moss turned into marigold petals.
+const TALAVERA_ONE: Sprite = Sprite {
+    art: &[
+        ":___________./~~~\\.___________:",
+        " \\~@~.~@~.~@~.~@~.~@~.~@~.~@~/ ",
+        "  \\_________________________/ ",
+        "  (_)                     (_)",
+    ],
+    ink: &[
+        "bpppppppppppWWWWWWWpppppppppppb",
+        " bwBwywBwywBwywBwywBwywBwywBwb ",
+        "  bbbbbbbbbbbbbbbbbbbbbbbbbbbb ",
+        "  bbb                     bbb",
+    ],
+};
+
+const TALAVERA_TWO: Sprite = Sprite {
+    art: &["(---./~~~\\.---)", " (~@~.~@~.~@~) ", "  (_________)  "],
+    ink: &["bpppWWWWWWWpppb", " bwBwywBwywBwb ", "  bbbbbbbbbbb  "],
+};
+
+/// A calavera de azúcar: icing on the brow, flowers for eyes.
+const CALAVERA: Sprite = Sprite {
+    art: &[
+        "  .-\"\"\"-.  ",
+        " / * @ * \\ ",
+        "| (@) (@) |",
+        " \\   ^   / ",
+        "  |'|'|'|  ",
+    ],
+    ink: &[
+        "  hhhhhhh  ",
+        " h k i l h ",
+        "h hjh hkh h",
+        " h   i   h ",
+        "  hhhhhhh  ",
+    ],
+};
+
+/// A smaller one, for small screens.
+const CALAVERITA: Sprite = Sprite {
+    art: &[" .-*-. ", "(@) (@)", " \\ ^ / ", "  www  "],
+    ink: &[" hhihh ", "hjhhhkh", " h i h ", "  hhh  "],
+};
+
+/// Veladoras: candles in colored glass. `t` and `f` are the tip and the
+/// heart of the flame.
+const VELADORA: Sprite = Sprite {
+    art: &[" t ", " f ", "|~|", "|+|", "|_|"],
+    ink: &[" t ", " f ", "gxg", "gyg", "ggg"],
+};
+
+const VELADORA_SHORT: Sprite = Sprite {
+    art: &[" t ", " f ", "|~|", "|_|"],
+    ink: &[" t ", " f ", "gxg", "ggg"],
+};
+
+/// A wax taper in a clay holder.
+const CIRIO: Sprite = Sprite {
+    art: &[" t ", " f ", " | ", " | ", " | ", "_|_"],
+    ink: &[" t ", " f ", " x ", " x ", " x ", "dxd"],
+};
+
+/// Pan de muerto: a round loaf with its bones crossed on top.
+const PAN: Sprite = Sprite {
+    art: &["  _o_  ", " /=X=\\ ", "(_____)"],
+    ink: &["  dsd  ", " dsssd ", "ddddddd"],
+};
+
+/// The ofrenda's pieces besides the calavera, in the order they come as the
+/// holiday builds up: from what level, right of the pot or left, how many
+/// columns away, and which.
+const OFRENDA: [(f32, bool, i32, &Sprite); 6] = [
+    (0.0, false, 2, &VELADORA),
+    (0.0, true, 2, &VELADORA),
+    (0.4, true, 6, &CIRIO),
+    (0.55, true, 14, &PAN),
+    (0.75, true, 10, &VELADORA_SHORT),
+    (0.95, false, 19, &CIRIO),
+];
+
+// ---------------------------------------------------------------------------
 // The scene
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -839,6 +1090,19 @@ struct Bonsai {
 
     pairs: [Color; 5],
     msg_fg: Color,
+
+    // Día de Muertos
+    fiesta: Fiesta,
+    dress: Dress,
+    /// Leaves may turn into blossom glyphs (only with the default `&` leaves;
+    /// leaves the user chose keep their glyph and only change color).
+    bloom_glyphs: bool,
+    /// The holiday's own randomness.
+    frng: fastrand::Rng,
+    petals: Vec<Petal>,
+    /// Petals owed, and scene seconds for the candles' flicker.
+    spawn: f32,
+    clock: f32,
 }
 
 impl Bonsai {
@@ -884,6 +1148,7 @@ impl Bonsai {
             s if s > 0 => s as u32,
             _ => seeder.u32(..),
         };
+        let bloom_glyphs = leaves.len() == 1 && leaves[0].text == "&";
         Bonsai {
             life: o.i("life").clamp(0, 200) as i32,
             multiplier: o.i("multiplier").clamp(1, 20) as i32,
@@ -913,6 +1178,13 @@ impl Bonsai {
             msg: None,
             pairs: CLASSIC,
             msg_fg: Color::Reset,
+            fiesta: ctx.fiesta,
+            dress: Dress::CLASSIC,
+            bloom_glyphs,
+            frng: fastrand::Rng::with_seed(ctx.seed ^ FIESTA_SALT),
+            petals: Vec::with_capacity(PETALS),
+            spawn: 0.0,
+            clock: 0.0,
         }
     }
 
@@ -1019,6 +1291,232 @@ impl Bonsai {
             c.text(m.x + 2 + cw - marker.len() as i32, y, marker, self.msg_fg);
         }
     }
+
+    // -- Día de Muertos --
+
+    /// The pot's left and right columns and the ground row, where the ofrenda
+    /// stands (without a pot, where the first pot would be, so the lowest
+    /// branches have room).
+    fn foot(&self) -> (i32, i32, i32) {
+        match base_size(self.base) {
+            (0, _) => {
+                let half = base_size(1).0 / 2;
+                (self.base_x - half, self.base_x + half, self.base_y - 1)
+            }
+            (bw, bh) => (self.base_x, self.base_x + bw - 1, self.base_y + bh - 1),
+        }
+    }
+
+    /// What a leaf is today: its glyph and color.
+    fn blossom(&self, x: i32, y: i32, cell: GCell) -> (char, Color) {
+        let glyph = |g: char| if self.bloom_glyphs { g } else { cell.ch };
+        let d = &self.dress;
+        match bloom(x, y, self.seed, self.fiesta.level) {
+            Bloom::Leaf => (cell.ch, self.pairs[(cell.style & 7) as usize]),
+            Bloom::Marigold(s) => (glyph('@'), d.marigold[s.min(2) as usize]),
+            Bloom::Velvet(s) => (cell.ch, d.velvet[s.min(1) as usize]),
+            Bloom::Nube => (glyph('*'), d.nube),
+        }
+    }
+
+    /// The color of a sprite's ink letter.
+    fn ink(&self, k: u8, x: i32, glass: Color) -> Color {
+        let d = &self.dress;
+        match k {
+            b'b' => d.cobalt[0],
+            b'B' => d.cobalt[1],
+            b'w' => d.glaze,
+            b'y' => d.yellow,
+            // the petals strewn on the soil
+            b'p' => d.marigold[((hash01(x, 0, self.seed) * 3.0) as usize).min(2)],
+            b'W' => self.pairs[WOOD_BRIGHT as usize],
+            b'i' => d.icing[0],
+            b'j' => d.icing[1],
+            b'k' => d.icing[2],
+            b'l' => d.icing[3],
+            b'g' => glass,
+            b'x' => d.wax,
+            b'd' => d.crust,
+            b's' => d.sugar,
+            _ => d.bone,
+        }
+    }
+
+    /// Candle `i`'s flame as it flickers: its tip, or its heart.
+    fn flame(&self, i: i32, tip: bool) -> (char, Color) {
+        let f = (self.clock * 9.0) as i32;
+        let h = hash01(f, i, 0x666c_616d);
+        if tip {
+            let ch = ['(', ')', '\'', '`', ')', '.'][((h * 6.0) as usize).min(5)];
+            (ch, FLAMA_EDGE)
+        } else {
+            let ch = if h < 0.5 { ')' } else { '(' };
+            (ch, FLAMA.lerp(FLAMA_EDGE, 0.4 * hash01(f, i, 0x676c_6f77)))
+        }
+    }
+
+    /// Draws a sprite at column `x` standing on row `ground`; its flame cells
+    /// are candle `candle`'s.
+    #[allow(clippy::too_many_arguments)]
+    fn sprite(
+        &self,
+        c: &mut Canvas,
+        x: i32,
+        ground: i32,
+        s: &Sprite,
+        glass: Color,
+        candle: i32,
+        attr: u8,
+    ) {
+        let top = ground + 1 - s.art.len() as i32;
+        for (dy, (art, ink)) in s.art.iter().zip(s.ink).enumerate() {
+            let y = top + dy as i32;
+            for (dx, (ch, k)) in art.chars().zip(ink.bytes()).enumerate() {
+                let x = x + dx as i32;
+                if ch == ' ' || k == b' ' {
+                    continue;
+                }
+                if k == b'f' || k == b't' {
+                    let (ch, fg) = self.flame(candle, k == b't');
+                    c.set_attr(x, y, ch, fg, BOLD);
+                } else {
+                    let a = if k == b'B' { BOLD } else { attr };
+                    c.set_attr(x, y, ch, self.ink(k, x, glass), a);
+                }
+            }
+        }
+    }
+
+    /// The talavera pot in place of cbonsai's.
+    fn draw_talavera(&self, c: &mut Canvas) {
+        let (pot, bold) = match self.base {
+            1 => (&TALAVERA_ONE, true),
+            2 => (&TALAVERA_TWO, false),
+            _ => return,
+        };
+        let ground = self.base_y + pot.art.len() as i32 - 1;
+        let attr = if bold { BOLD } else { 0 };
+        self.sprite(c, self.base_x, ground, pot, Color::Reset, 0, attr);
+    }
+
+    /// The ofrenda at the foot of the tree, and the petals.
+    fn draw_ofrenda(&self, ctx: &Ctx, c: &mut Canvas) {
+        let (l, r, ground) = self.foot();
+        // Petals lying on the ground, under everything else.
+        for p in self.petals.iter().filter(|p| p.rest >= 0.0) {
+            let (x, y) = (p.x.floor() as i32, p.y.floor() as i32);
+            if c.get(x, y).is_some_and(|cell| cell.ch == ' ') {
+                let fg = ctx.fade(p.color, (1.0 - p.rest / 1.5).clamp(0.0, 1.0));
+                c.set(x, y, p.lie, fg);
+            }
+        }
+        let skull = if l - 6 - 10 >= 0 || self.w >= 100 {
+            &CALAVERA
+        } else {
+            &CALAVERITA
+        };
+        let sw = skull.art[0].len() as i32;
+        self.sprite(c, l - 6 - sw + 1, ground, skull, Color::Reset, 0, 0);
+        let level = self.fiesta.level;
+        for (i, &(from, right, off, s)) in OFRENDA.iter().enumerate() {
+            if from > level {
+                continue;
+            }
+            let w = s.art[0].len() as i32;
+            let x = if right { r + off } else { l - off - w + 1 };
+            let glass = self.dress.glass[i % 3];
+            self.sprite(c, x, ground, s, glass, i as i32, 0);
+        }
+        // Petals in the air, in front of it all.
+        for p in self.petals.iter().filter(|p| p.rest < 0.0) {
+            let k = (p.phase * 1.6) as i32;
+            let ch = ['\'', '`', '.', ','][k.rem_euclid(4) as usize];
+            let fg = if k & 1 == 0 { p.color } else { p.shade };
+            c.set_attr(p.x.floor() as i32, p.y.floor() as i32, ch, fg, BOLD);
+        }
+    }
+
+    /// Petals fall from the blossoms, sway, and lie a while where they land.
+    fn tick_fiesta(&mut self, dt: f32, real: f32) {
+        let dt = dt.clamp(0.0, 1.0);
+        let real = real.clamp(0.0, 60.0);
+        self.clock = (self.clock + dt).rem_euclid(3600.0);
+        let (l, r, ground) = self.foot();
+        let pot = base_size(self.base).0 > 0;
+        let mut i = 0;
+        while i < self.petals.len() {
+            let p = &mut self.petals[i];
+            let alive = if p.rest >= 0.0 {
+                p.rest -= real;
+                p.rest > 0.0
+            } else {
+                p.phase += dt * 2.4;
+                // a breath of wind
+                p.x0 += dt * 0.3;
+                p.y += p.vy * dt;
+                p.x = p.x0 + p.phase.sin() * 1.2;
+                let (x, y) = (p.x.floor() as i32, p.y.floor() as i32);
+                if pot && (l..=r).contains(&x) && y >= self.base_y {
+                    // into the petals strewn on the soil
+                    false
+                } else if y >= ground {
+                    p.y = ground as f32;
+                    p.rest = 5.0 + 9.0 * self.frng.f32();
+                    p.lie = ['.', ',', '_'][self.frng.usize(..3)];
+                    true
+                } else {
+                    x >= 0 && x < self.w
+                }
+            };
+            if alive {
+                i += 1;
+            } else {
+                self.petals.swap_remove(i);
+            }
+        }
+        self.spawn += dt * (0.8 + 3.2 * self.fiesta.level);
+        while self.spawn >= 1.0 {
+            self.spawn -= 1.0;
+            if self.petals.len() < PETALS {
+                self.drop_petal();
+            }
+        }
+    }
+
+    /// A petal lets go of a blossom somewhere on the tree, if there is one.
+    fn drop_petal(&mut self) {
+        let Some((x0, y0, x1, y1)) = self.grid.bbox else {
+            return;
+        };
+        for _ in 0..24 {
+            let (x, y) = (self.frng.i32(x0..=x1), self.frng.i32(y0..=y1));
+            let cell = self.grid.cells[(y * self.grid.w + x) as usize];
+            let leaf = matches!(cell.style & 7, LEAF_DARK | LEAF_BRIGHT);
+            if cell.ch <= ' ' || cell.style & WIDE_TAIL != 0 || !leaf {
+                continue;
+            }
+            let d = &self.dress;
+            let (color, shade) = match bloom(x, y, self.seed, self.fiesta.level) {
+                Bloom::Marigold(_) => (d.marigold[2], d.marigold[1]),
+                Bloom::Velvet(_) => (d.velvet[1], d.velvet[0]),
+                _ => continue,
+            };
+            let phase = self.frng.f32() * std::f32::consts::TAU;
+            let px = x as f32 + 0.5;
+            self.petals.push(Petal {
+                x: px,
+                y: y as f32 + 0.5,
+                x0: px - phase.sin() * 1.2,
+                vy: 1.3 + 1.5 * self.frng.f32(),
+                phase,
+                rest: -1.0,
+                lie: '.',
+                color,
+                shade,
+            });
+            return;
+        }
+    }
 }
 
 impl Scene for Bonsai {
@@ -1062,6 +1560,15 @@ impl Scene for Bonsai {
         } else {
             ctx.theme.fg
         };
+        self.fiesta = ctx.fiesta;
+        self.dress = if ctx.theme.native {
+            Dress::CLASSIC
+        } else {
+            Dress::themed(ctx, self.pairs[TEXT as usize])
+        };
+        if !self.fiesta.on() {
+            self.petals.clear();
+        }
     }
 
     fn update(&mut self, ctx: &Ctx, dt: f32) {
@@ -1069,6 +1576,9 @@ impl Scene for Bonsai {
     }
 
     fn tick(&mut self, _ctx: &Ctx, dt: f32, real: f32) {
+        if self.fiesta.on() {
+            self.tick_fiesta(dt, real);
+        }
         let mut t = (dt.max(0.0) as f64).min(86_400.0);
         let mut r = (real.max(0.0) as f64).min(86_400.0);
         if t > 0.0 && r > 0.0 {
@@ -1109,6 +1619,10 @@ impl Scene for Bonsai {
     }
 
     fn next_change(&self) -> f32 {
+        if self.fiesta.on() {
+            // candles flicker and petals fall
+            return 0.0;
+        }
         match self.phase {
             Phase::Growing => (self.step - self.acc).max(0.0) as f32,
             // The wait is in real seconds; this is asked in scene seconds.
@@ -1117,8 +1631,13 @@ impl Scene for Bonsai {
         }
     }
 
-    fn draw(&mut self, _ctx: &Ctx, c: &mut Canvas) {
-        self.draw_base(c);
+    fn draw(&mut self, ctx: &Ctx, c: &mut Canvas) {
+        let dressed = self.fiesta.on();
+        if dressed {
+            self.draw_talavera(c);
+        } else {
+            self.draw_base(c);
+        }
         let g = &self.grid;
         if let Some((x0, y0, x1, y1)) = g.bbox {
             for y in y0..=y1 {
@@ -1127,10 +1646,17 @@ impl Scene for Bonsai {
                     let cell = row[x as usize];
                     if cell.ch > ' ' && cell.style & WIDE_TAIL == 0 {
                         let attr = if cell.style & BOLD_BIT != 0 { BOLD } else { 0 };
-                        c.set_attr(x, y, cell.ch, self.pairs[(cell.style & 7) as usize], attr);
+                        let (ch, fg) = match cell.style & 7 {
+                            LEAF_DARK | LEAF_BRIGHT if dressed => self.blossom(x, y, cell),
+                            pair => (cell.ch, self.pairs[pair as usize]),
+                        };
+                        c.set_attr(x, y, ch, fg, attr);
                     }
                 }
             }
+        }
+        if dressed {
+            self.draw_ofrenda(ctx, c);
         }
         self.draw_message(c);
     }
@@ -1298,6 +1824,157 @@ mod tests {
         let (_, c) = scene("seed = 3\nmessage = 'hi there'\nlive = false", 60, 24);
         let t = c.to_text();
         assert!(t.contains("| hi there |"), "{t}");
+    }
+
+    /// A grown tree on a holiday (or on none), and what it draws.
+    fn dressed(opts: &str, theme: &Theme, fiesta: Fiesta, w: u16, h: u16) -> (Bonsai, Canvas) {
+        let opts = Opts::new(INFO.options, opts.parse().unwrap());
+        let ctx = Ctx {
+            theme,
+            opts: &opts,
+            bg: Color::Reset,
+            seed: 1,
+            fiesta,
+        };
+        let mut b = Bonsai::new(&ctx);
+        b.resize(&ctx, w, h);
+        b.retheme(&ctx);
+        for _ in 0..40 {
+            b.tick(&ctx, 0.25, 0.25);
+        }
+        let mut c = Canvas::new(w, h, Color::Reset);
+        b.draw(&ctx, &mut c);
+        (b, c)
+    }
+
+    fn count(c: &Canvas, f: impl Fn(&crate::render::Cell) -> bool) -> usize {
+        c.cells().iter().filter(|cell| f(cell)).count()
+    }
+
+    #[test]
+    fn muertos_dresses_the_tree() {
+        let theme = Theme::classic();
+        let opts = "seed = 42\nlive = false\ninfinite = false";
+        for (day, pieces) in [((10, 28), 2), ((11, 2), 6)] {
+            let fiesta = Fiesta::of_day(day.0, day.1);
+            let (b, c) = dressed(opts, &theme, fiesta, 100, 30);
+            let text = c.to_text();
+            // marigolds and terciopelo on the branches, among the leaves
+            let marigolds = count(&c, |cell| {
+                cell.ch == '@' && Dress::CLASSIC.marigold.contains(&cell.fg)
+            });
+            let velvet = count(&c, |cell| Dress::CLASSIC.velvet.contains(&cell.fg));
+            let leaves = count(&c, |cell| cell.ch == '&' && CLASSIC[..3].contains(&cell.fg));
+            assert!(
+                marigolds > 10 && velvet > 5 && leaves > 5,
+                "{day:?}\n{text}"
+            );
+            // the talavera pot, the calavera, the candles and the petals
+            assert!(text.contains("~@~.~@~.~@~"), "{text}");
+            assert!(text.contains("| (@) (@) |"), "{text}");
+            // below the tree, which grows above the pot
+            let ground: String = text.lines().rev().take(3).collect();
+            let candles = ground.matches("|~|").count() + ground.matches("_|_").count();
+            let pan = ground.contains("/=X=\\") as usize;
+            assert_eq!(candles + pan, pieces, "{day:?}\n{text}");
+            let flames = count(&c, |cell| cell.fg == FLAMA_EDGE);
+            assert!(flames >= 2, "{text}");
+            assert!(!b.petals.is_empty());
+        }
+    }
+
+    #[test]
+    fn ordinary_days_are_untouched() {
+        let theme = Theme::classic();
+        let opts = "seed = 42\nlive = false\ninfinite = false";
+        let (b, c) = dressed(opts, &theme, Fiesta::NONE, 60, 24);
+        assert_eq!(
+            c.to_text().trim_matches('\n'),
+            CBONSAI_42.trim_matches('\n')
+        );
+        assert!(b.petals.is_empty());
+        assert_eq!(b.next_change(), f32::INFINITY);
+        let rgb = count(&c, |cell| cell.fg.is_rgb());
+        assert_eq!(rgb, 0);
+    }
+
+    #[test]
+    fn the_holiday_comes_and_goes_through_retheme() {
+        let theme = Theme::classic();
+        let opts = Opts::new(
+            INFO.options,
+            "seed = 42\nlive = false\ninfinite = false".parse().unwrap(),
+        );
+        let ctx = |fiesta| Ctx {
+            theme: &theme,
+            opts: &opts,
+            bg: Color::Reset,
+            seed: 1,
+            fiesta,
+        };
+        let plain = ctx(Fiesta::NONE);
+        let mut b = Bonsai::new(&plain);
+        b.resize(&plain, 60, 24);
+        b.retheme(&plain);
+        let draw = |b: &mut Bonsai, ctx: &Ctx| {
+            let mut c = Canvas::new(60, 24, Color::Reset);
+            b.draw(ctx, &mut c);
+            c
+        };
+        let before = draw(&mut b, &plain).to_text();
+        let muertos = ctx(Fiesta::of_day(11, 2));
+        b.retheme(&muertos);
+        for _ in 0..20 {
+            b.tick(&muertos, 0.2, 0.2);
+        }
+        assert!(!b.petals.is_empty() && b.next_change() == 0.0);
+        assert!(draw(&mut b, &muertos).to_text().contains("~@~."));
+        b.retheme(&plain);
+        assert!(b.petals.is_empty());
+        assert_eq!(draw(&mut b, &plain).to_text(), before);
+    }
+
+    #[test]
+    fn muertos_survives_odd_sizes_and_huge_steps() {
+        let themes = [Theme::classic(), Theme::builtin("dracula").unwrap()];
+        for theme in &themes {
+            for opts in [
+                "",
+                "base = 2",
+                "base = 0\nmessage = 'hola'",
+                "geometry = '3,70'",
+            ] {
+                for (w, h) in [(1, 1), (2, 3), (7, 2), (40, 6), (300, 90)] {
+                    let opts = Opts::new(INFO.options, opts.parse().unwrap());
+                    let ctx = Ctx {
+                        theme,
+                        opts: &opts,
+                        bg: rgb(0x0d1117),
+                        seed: 5,
+                        fiesta: Fiesta::of_day(11, 2),
+                    };
+                    let mut b = Bonsai::new(&ctx);
+                    b.resize(&ctx, w, h);
+                    b.retheme(&ctx);
+                    let mut c = Canvas::new(w, h, Color::Reset);
+                    for dt in [5.0, 0.01, 5.0, 1e6, 0.0, 5.0] {
+                        b.tick(&ctx, dt, dt);
+                        b.draw(&ctx, &mut c);
+                    }
+                    assert!(b.petals.len() <= PETALS);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn muertos_under_a_theme_uses_its_colors() {
+        let theme = Theme::builtin("dracula").unwrap();
+        let opts = "seed = 42\nlive = false\ninfinite = false";
+        let (_, c) = dressed(opts, &theme, Fiesta::of_day(11, 2), 100, 30);
+        // dracula's orange and pink for the marigolds and the terciopelo
+        assert!(count(&c, |cell| cell.ch == '@' && cell.fg == rgb(0xffb86c)) > 10);
+        assert!(count(&c, |cell| cell.fg == rgb(0xff79c6)) > 5);
     }
 
     #[test]
