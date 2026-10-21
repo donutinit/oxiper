@@ -7,7 +7,7 @@
 ### Animated terminal wallpapers, oxidized.
 
 **cbonsai · asciiquarium · neo · nyancat · aafire**, ported faithfully to Rust,<br>
-plus fifteen more scenes. One small binary. Nearly no CPU. Your terminal's transparency stays intact.
+plus sixteen more scenes. One small binary. Nearly no CPU. Your terminal's transparency stays intact.
 
 [![CI](https://github.com/donutinit/oxiper/actions/workflows/ci.yml/badge.svg)](https://github.com/donutinit/oxiper/actions/workflows/ci.yml)
 [![License: GPL-3.0-only](https://img.shields.io/badge/license-GPL--3.0--only-3b82f6)](LICENSE)
@@ -38,7 +38,7 @@ plus fifteen more scenes. One small binary. Nearly no CPU. Your terminal's trans
   **281 kinds of fish** and hundreds more creatures, plants, props and passers-by, all reacting
   to each other. The rain is neo's droplet model, falling at neo's real speed. Nyan Cat flies with
   the original twelve frames.
-- **One binary, twenty scenes.** Mix them into a playlist and give each one its own theme, pace and
+- **One binary, twenty-one scenes.** Mix them into a playlist and give each one its own theme, pace and
   time on screen. And now and then, when you least expect it, a train, a duck or Nyan Cat goes by.
 - **Transparency first.** oxiper never paints a background it doesn't have to, so blurred or
   translucent terminals stay see-through. It even asks your terminal what its background looks like,
@@ -83,6 +83,9 @@ plus fifteen more scenes. One small binary. Nearly no CPU. Your terminal's trans
 <tr>
 <td align="center"><img src="assets/dog.gif" alt="dog"><br><b>dog</b> · after <a href="https://github.com/SantiagoSchez/tanim">tanim</a><br><sub><code>oxiper -s dog</code></sub></td>
 <td align="center"><img src="assets/shark.gif" alt="shark"><br><b>shark</b> · four species, day and night<br><sub><code>oxiper -s shark</code></sub></td>
+</tr>
+<tr>
+<td align="center" colspan="2"><img src="assets/tiger.gif" alt="tiger" width="50%"><br><b>tiger</b> · an immortal apex predator, until the saucer comes<br><sub><code>oxiper -s tiger</code></sub></td>
 </tr>
 <tr>
 <td align="center"><img src="assets/fireworks.gif" alt="fireworks"><br><b>fireworks</b> · after <a href="https://github.com/SantiagoSchez/tanim">tanim</a><br><sub><code>oxiper -s fireworks</code></sub></td>
@@ -387,6 +390,7 @@ Per-frame cost of every scene at 200×60 (`oxiper bench`, release build):
 | nyancat | 62 | 112 | 1942 | 2.4% |
 | dog | 415 | 330 | 22318 | 8.3% |
 | shark | 431 | 426 | 54179 | 17.8% |
+| tiger | 287 | 327 | 25534 | 9.0% |
 | ocean | 184 | 253 | 12385 | 3.7% |
 | fire | 137 | 428 | 159136 | 48.6% |
 | fireworks | 188 | 117 | 8712 | 2.8% |
@@ -537,6 +541,30 @@ Aliases: `sharks`
 | `fish` | `1.0` | How many fish swim in schools; 0 for none |
 | `rays` | `true` | Shafts of light from the surface and caustics on the sand |
 | `water` | `true` | Paint the water; off leaves it see-through around the sea life |
+
+</details>
+
+<details>
+<summary><b>tiger</b> — an immortal tiger rules an endless jungle, hunting through the day and night</summary>
+
+Aliases: `tigers`
+
+An immortal tiger rules an endless jungle. It patrols and marks its territory, stalks chital
+through the tall grass, charges and pounces, eats behind the grass, drinks, swims the rivers,
+naps in the shade and roars now and then. Bears, dholes and crocodiles try their luck and always
+run. The langurs bark the alarm from the trees. Once in a long while a saucer freezes the jungle,
+beams the struggling tiger up and brings it back later, landing on its feet and roaring.
+`kind = "siberian"` moves it to a snowy taiga, `"white"` makes it a white tiger.
+
+| option | default | |
+|---|---|---|
+| `speed` | `1.0` | Pace of the tiger and the jungle (the day keeps real time) |
+| `day` | `180` | Real seconds for a full day, from dawn through night to dawn (10-86400) |
+| `zoom` | `2` | How close the camera is to the tiger, 0 (the whole jungle) to 6 |
+| `kind` | `"bengal"` | bengal, siberian (snowy taiga), white, or random |
+| `prey` | `1.0` | How many deer, boar, peafowl and birds live around it; 0 for none |
+| `ufo` | `1.0` | Saucer visits per hour of playing time, on average; 0 = never |
+| `sky` | `true` | Paint the sky; off leaves it see-through above the forest |
 
 </details>
 
