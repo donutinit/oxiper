@@ -4,6 +4,17 @@
 //! cell is 1×2 units and braille dots (2×4 per cell) are 0.5×0.5 units. The
 //! star field extends one link distance past every edge, so stars drift in
 //! and out of view (with their links) instead of popping when they wrap.
+//!
+//! On Día de Muertos the sky takes the holiday's colors (marigold, bone,
+//! rosa mexicano, turquoise and violet stars, links leaning violet, marigold
+//! meteors) and now and then a handful of stars leave their drift, glide
+//! together and draw a calavera de azúcar, La Catrina, a cempasúchil, a
+//! monarch or a veladora with their links; a spark traces it, its icing
+//! and flowers light up, and after a while the stars let go and drift on.
+//! Figures come more often as the holiday builds up, up to three at once on
+//! November 2 (see `muertos`).
+
+mod muertos;
 
 use std::f32::consts::TAU;
 
@@ -85,6 +96,13 @@ struct Star {
     /// Brightness this frame.
     b: f32,
     links: u8,
+    /// Día de Muertos: the figure that called this star (0 = none, or
+    /// `muertos::LETTING_GO`), how visible its ordinary links are, how much
+    /// it shines as part of a figure, and its figure's hue.
+    fig: u8,
+    gain: f32,
+    glow: f32,
+    hue: u8,
 }
 
 #[derive(Clone, Copy, Default)]
@@ -127,6 +145,8 @@ pub struct Constellation {
     tints: [Color; 7],
     link_tints: [Color; 7],
     meteor_col: Color,
+    meteor_tail: Color,
+    holiday: muertos::Muertos,
 }
 
 impl Constellation {
@@ -158,6 +178,8 @@ impl Constellation {
             tints: [Color::Reset; 7],
             link_tints: [Color::Reset; 7],
             meteor_col: Color::Reset,
+            meteor_tail: Color::Reset,
+            holiday: muertos::Muertos::new(ctx.seed),
         }
     }
 
@@ -205,6 +227,10 @@ impl Constellation {
             f2: 1.7 + 3.5 * r.f32(),
             b: base,
             links: 0,
+            fig: 0,
+            gain: 1.0,
+            glow: 0.0,
+            hue: 0,
         }
     }
 
@@ -255,7 +281,8 @@ impl Constellation {
         let mut linkable = 0;
         for s in &self.stars {
             // Faint dust never links; only real stars form constellations.
-            if s.kind == 0 {
+            // Stars drawing a holiday figure link only within it.
+            if s.kind == 0 || s.gain <= 0.0 {
                 self.cell_of.push(u32::MAX);
                 continue;
             }
@@ -324,6 +351,7 @@ impl Constellation {
 
 impl Scene for Constellation {
     fn resize(&mut self, _ctx: &Ctx, w: u16, h: u16) {
+        self.holiday.cancel(&mut self.stars);
         let (sw, sh) = (w.max(1) as f32, h.max(1) as f32 * 2.0);
         let m = self.margin;
         let (fw, fh) = (sw + 2.0 * m, sh + 2.0 * m);
@@ -382,6 +410,32 @@ impl Scene for Constellation {
             }
             self.meteor_col = g.at(1.0);
         }
+        self.meteor_tail = self.meteor_col;
+        self.holiday.set(ctx.fiesta, &mut self.stars);
+        if self.holiday.on {
+            self.holiday.retheme(
+                ctx,
+                &mut self.tints,
+                &mut self.link_tints,
+                &mut self.meteor_col,
+                &mut self.meteor_tail,
+            );
+        }
+    }
+
+    fn tick(&mut self, ctx: &Ctx, dt: f32, real: f32) {
+        self.update(ctx, dt);
+        if self.holiday.on {
+            let dt = if dt.is_finite() {
+                dt.clamp(0.0, 0.25)
+            } else {
+                0.0
+            };
+            let lines = self.max_links > 0;
+            let (sw, sh, m) = (self.sw, self.sh, self.margin);
+            self.holiday
+                .tick(&mut self.stars, sw, sh, m, dt, real, lines);
+        }
     }
 
     fn update(&mut self, _ctx: &Ctx, dt: f32) {
@@ -393,6 +447,12 @@ impl Scene for Constellation {
         let (fw, fh) = (self.fw, self.fh);
         let v = self.speed * dt;
         for s in &mut self.stars {
+            if s.fig != 0 && s.fig != muertos::LETTING_GO {
+                // A holiday figure holds it.
+                s.p1 = (s.p1 + s.f1 * dt).rem_euclid(TAU);
+                s.p2 = (s.p2 + s.f2 * dt).rem_euclid(TAU);
+                continue;
+            }
             s.heading = (s.heading + s.turn * dt).rem_euclid(TAU);
             s.x = (s.x + s.heading.cos() * s.speed * v).rem_euclid(fw);
             s.y = (s.y + s.heading.sin() * s.speed * v).rem_euclid(fh);
@@ -467,7 +527,12 @@ impl Scene for Constellation {
             }
             let k = d2.sqrt() * inv_l;
             let fall = (1.0 - k).max(0.0);
-            let alpha = fall.powf(0.8) * (0.5 + 0.3 * (a.b + b.b));
+            let mut alpha = fall.powf(0.8) * (0.5 + 0.3 * (a.b + b.b));
+            if self.holiday.on {
+                // Stars called by a figure fade out of the ordinary links,
+                // and the sky clears around the figure.
+                alpha *= a.gain.min(b.gain) * self.holiday.clear(a.x, a.y, b.x, b.y);
+            }
             // Below a floor brightness, links dissolve into ever sparser dots
             // instead of getting darker: on a terminal whose background we do
             // not know, "darker" can end up darker than the background.
@@ -514,16 +579,39 @@ impl Scene for Constellation {
                         continue;
                     }
                 }
-                let col = ctx.fade(self.meteor_col, 1.0 - v.max(LINK_FLOOR));
+                let base = if self.holiday.on {
+                    self.meteor_col.lerp(self.meteor_tail, f * 1.6)
+                } else {
+                    self.meteor_col
+                };
+                let col = ctx.fade(base, 1.0 - v.max(LINK_FLOOR));
                 self.br
                     .setf(hx + (tx - hx) * f + 0.5, hy + (ty - hy) * f + 0.5, col);
             }
+        }
+        if self.holiday.on {
+            self.holiday.draw_lines(ctx, &self.stars, &mut self.br, m);
+            self.holiday.paint_nodes(&mut self.stars);
         }
         self.br.blit(c);
 
         for s in &self.stars {
             let (x, y) = (s.x - m, s.y - m);
             if x < 0.0 || y < 0.0 || x >= self.sw || y >= self.sh {
+                continue;
+            }
+            if s.glow > 0.0 {
+                // A star drawing a holiday figure shines in its hue.
+                let g = s.glow;
+                let b = s.b + (1.0 - s.b) * g;
+                let (ch, attr) = match s.kind {
+                    _ if g < 0.5 => ('•', 0),
+                    2 | 3 => ('✦', BOLD),
+                    _ => ('•', BOLD),
+                };
+                let tint = self.tints[s.tint as usize].lerp(self.holiday.node_color(s), g);
+                let col = ctx.fade(tint, 1.0 - b.clamp(0.0, 1.0));
+                c.set_attr(x as i32, (y * 0.5) as i32, ch, col, attr);
                 continue;
             }
             let b = s.b;
@@ -542,6 +630,10 @@ impl Scene for Constellation {
             c.set_attr(x as i32, (y * 0.5) as i32, ch, col, attr);
         }
 
+        if self.holiday.on {
+            self.holiday.draw_marks(ctx, &self.stars, c, m);
+        }
+
         // Meteor heads on top of everything.
         for mt in &self.meteors {
             if mt.on && mt.age < mt.life - 0.2 {
@@ -554,5 +646,162 @@ impl Scene for Constellation {
                 );
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::fiesta::Fiesta;
+    use crate::scene::Opts;
+    use crate::theme::Theme;
+
+    const MARKS: [char; 3] = ['✿', '❀', '♥'];
+
+    fn ctx<'a>(theme: &'a Theme, opts: &'a Opts, fiesta: Fiesta) -> Ctx<'a> {
+        Ctx {
+            theme,
+            opts,
+            bg: theme.bg,
+            seed: 11,
+            fiesta,
+        }
+    }
+
+    /// Runs `secs` seconds at 30 fps and draws the last frame.
+    fn run(s: &mut Constellation, ctx: &Ctx, c: &mut Canvas, secs: f32) {
+        for _ in 0..(secs * 30.0) as usize {
+            s.tick(ctx, 1.0 / 30.0, 1.0 / 30.0);
+        }
+        c.clear();
+        s.draw(ctx, c);
+    }
+
+    fn marks(c: &Canvas) -> usize {
+        c.cells().iter().filter(|x| MARKS.contains(&x.ch)).count()
+    }
+
+    /// Dots of finished figure links the holiday draws now.
+    fn traced(s: &Constellation, ctx: &Ctx) -> usize {
+        let mut br = Braille::new(s.sw as u16, (s.sh * 0.5) as u16);
+        s.holiday.draw_lines(ctx, &s.stars, &mut br, s.margin)
+    }
+
+    /// A figure is drawn within seconds on the holiday's first day and at
+    /// its height: its stars held and shining, its links traced.
+    #[test]
+    fn figures_come_on_the_holiday() {
+        let theme = Theme::classic();
+        let opts = Opts::new(INFO.options, toml::Table::new());
+        for day in [(10, 28), (11, 2)] {
+            let ctx = ctx(&theme, &opts, Fiesta::of_day(day.0, day.1));
+            let mut s = Constellation::new(&ctx);
+            s.resize(&ctx, 120, 36);
+            s.retheme(&ctx);
+            let mut c = Canvas::new(120, 36, Color::Reset);
+            // Well into the first figure's stay.
+            run(&mut s, &ctx, &mut c, 10.0);
+            assert!(s.holiday.figures_on() >= 1, "{day:?}");
+            assert!(s.stars.iter().any(|st| st.glow > 0.9), "{day:?}");
+            assert!(traced(&s, &ctx) > 100, "{day:?}");
+            assert_ne!(s.tints[0], rgb(NATIVE_TINTS[0]));
+        }
+    }
+
+    /// No figures, no holiday colors on an ordinary day.
+    #[test]
+    fn ordinary_days_stay_plain() {
+        let theme = Theme::classic();
+        let opts = Opts::new(INFO.options, toml::Table::new());
+        let ctx = ctx(&theme, &opts, Fiesta::NONE);
+        let mut s = Constellation::new(&ctx);
+        s.resize(&ctx, 120, 36);
+        s.retheme(&ctx);
+        let mut c = Canvas::new(120, 36, Color::Reset);
+        for _ in 0..6 {
+            run(&mut s, &ctx, &mut c, 5.0);
+            assert_eq!(s.holiday.figures_on(), 0);
+            assert!(s.stars.iter().all(|st| st.fig == 0 && st.glow == 0.0));
+            assert_eq!(traced(&s, &ctx), 0);
+            assert_eq!(marks(&c), 0);
+        }
+        assert_eq!(s.tints[0], rgb(NATIVE_TINTS[0]));
+    }
+
+    /// The holiday arrives and leaves through `retheme`, as at midnight.
+    #[test]
+    fn retheme_switches_the_holiday() {
+        let theme = Theme::classic();
+        let opts = Opts::new(INFO.options, toml::Table::new());
+        let plain = ctx(&theme, &opts, Fiesta::NONE);
+        let fiesta = ctx(&theme, &opts, Fiesta::of_day(11, 1));
+        let mut s = Constellation::new(&plain);
+        s.resize(&plain, 100, 30);
+        s.retheme(&plain);
+        let tints = s.tints;
+        let mut c = Canvas::new(100, 30, Color::Reset);
+        run(&mut s, &plain, &mut c, 3.0);
+        s.retheme(&fiesta);
+        assert_ne!(s.tints, tints);
+        run(&mut s, &fiesta, &mut c, 9.0);
+        assert!(s.holiday.figures_on() >= 1);
+        assert!(traced(&s, &fiesta) > 100);
+        s.retheme(&plain);
+        assert_eq!(s.tints, tints);
+        assert_eq!(s.holiday.figures_on(), 0);
+        assert!(
+            s.stars
+                .iter()
+                .all(|st| st.fig == 0 && st.gain == 1.0 && st.glow == 0.0)
+        );
+        run(&mut s, &plain, &mut c, 12.0);
+        assert_eq!(s.holiday.figures_on(), 0);
+        assert_eq!(marks(&c), 0);
+    }
+
+    /// Odd sizes, resizes mid-figure, huge steps and odd options survive
+    /// the holiday under two themes.
+    #[test]
+    fn holiday_survives_sizes_and_steps() {
+        let variants = [
+            "",
+            "density = 0.05",
+            "density = 20.0\nlink_distance = 1.0",
+            "max_links = 0\ntwinkle = 0.0",
+            "speed = 50.0\nshooting_stars = 600.0",
+        ];
+        for v in variants {
+            for theme in [Theme::classic(), Theme::builtin("dracula").unwrap()] {
+                let opts = Opts::new(INFO.options, v.parse().unwrap());
+                let ctx = ctx(&theme, &opts, Fiesta::of_day(11, 2));
+                let mut s = Constellation::new(&ctx);
+                s.retheme(&ctx);
+                let sizes = [
+                    (120, 36),
+                    (1, 1),
+                    (2, 3),
+                    (7, 2),
+                    (300, 90),
+                    (40, 12),
+                    (3, 40),
+                ];
+                for &(w, h) in &sizes {
+                    s.resize(&ctx, w, h);
+                    let mut c = Canvas::new(w, h, Color::Reset);
+                    for f in 0..200 {
+                        let dt = if f % 37 == 36 { 5.0 } else { 1.0 / 30.0 };
+                        s.tick(&ctx, dt, dt);
+                        c.clear();
+                        s.draw(&ctx, &mut c);
+                    }
+                }
+            }
+        }
+    }
+
+    /// Every figure fits the node budget and links only its own nodes.
+    #[test]
+    fn figures_are_well_formed() {
+        muertos::check_figures();
     }
 }
