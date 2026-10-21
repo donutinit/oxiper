@@ -4,6 +4,7 @@
 use super::art::Kind;
 use super::hunter::Shark;
 use super::life::Life;
+use super::muertos::{Dress, Muertos};
 use super::water::{self, Col, RAY_LEVELS, SandRow};
 use super::{Dice, KEY, Light, Pal, Rgb, Rng, STEP, Settings, WORLD_H, ZOOMS, col, keys, noise};
 use crate::render::Pixels;
@@ -107,10 +108,20 @@ pub struct Sea {
     taps_y: Vec<Tap>,
     /// Weights of the taps, 256 being a whole screen pixel.
     weights: Vec<u32>,
+    /// Día de Muertos, when it is on.
+    pub muertos: Option<Muertos>,
 }
 
 impl Sea {
-    pub fn new(cols: u16, rows: u16, rng: &mut Rng, pal: Pal, set: Settings, kind: Kind) -> Sea {
+    pub fn new(
+        cols: u16,
+        rows: u16,
+        rng: &mut Rng,
+        pal: Pal,
+        set: Settings,
+        kind: Kind,
+        dress: Option<Dress>,
+    ) -> Sea {
         let (sw, sph) = (cols.max(1) as i32, 2 * rows.max(1) as i32);
         let seed = rng.u32(..);
         let shark = Shark::new(kind, rng);
@@ -146,6 +157,7 @@ impl Sea {
             taps_x: Vec::new(),
             taps_y: Vec::new(),
             weights: Vec::new(),
+            muertos: None,
         };
         let (vw, vh) = sea.view_size();
         let (bw, bh) = (vw.ceil() as usize + 3, vh.ceil() as usize + 3);
@@ -161,6 +173,7 @@ impl Sea {
             .populate(&sea.shark, sea.tropical, sea.set.fish, vw, rng);
         sea.place_schools(rng);
         sea.update_light();
+        sea.dress(dress);
         sea
     }
 
@@ -256,6 +269,7 @@ impl Sea {
         self.tick = self.tick.wrapping_add(1);
         self.update_shark(rng);
         self.update_life(rng);
+        self.update_muertos();
         self.follow();
         self.rebase();
     }
@@ -421,12 +435,14 @@ impl Sea {
         self.light_rows();
         self.paint_backdrop(v);
         self.paint_floor(v);
+        self.paint_ofrendas();
         self.draw_life_behind();
         self.draw_shark();
         self.draw_life_front();
         self.paint_front(v);
         self.project(v);
         self.draw_motes(v);
+        self.draw_muertos(v);
     }
 
     /// Resamples the painted world onto the screen: box-filtered when zoomed

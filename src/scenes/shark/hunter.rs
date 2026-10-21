@@ -5,6 +5,7 @@ use std::f32::consts::{PI, TAU};
 
 use super::art::{self, Kind, Rig, Sprite, TAIL_W};
 use super::life::Speck;
+use super::muertos::{self, Dab};
 use super::sea::{SURF, Sea};
 use super::{Dice, Rgb, Rng};
 
@@ -637,6 +638,8 @@ impl Sea {
         for &(ch, c) in rig.palette {
             lut[ch as usize] = Some(self.shade(c, s.y as i32, 0.08));
         }
+        // On Día de Muertos, calavera face paint.
+        let paint = self.muertos.is_some().then(|| muertos::face(s.kind));
         if s.turn > 0.0 {
             let p = s.turn;
             let (sprite, face) = if p < 0.16 {
@@ -657,12 +660,18 @@ impl Sea {
                     } else {
                         s.pitch
                     };
-                    self.draw_whole(sp, &lut, face, pitch);
+                    let dab =
+                        paint.map(|f| self.dab(if sp == rig.front { f.front } else { f.quarter }));
+                    self.draw_whole(sp, &lut, face, pitch, dab.as_ref());
                 }
-                None => self.draw_side(&lut, face),
+                None => {
+                    let dab = paint.map(|f| self.dab(f.side));
+                    self.draw_side(&lut, face, dab.as_ref());
+                }
             }
         } else {
-            self.draw_side(&lut, s.dir);
+            let dab = paint.map(|f| self.dab(f.side));
+            self.draw_side(&lut, s.dir, dab.as_ref());
         }
         self.draw_riders();
     }
@@ -687,7 +696,7 @@ impl Sea {
 
     /// The side view, put together from its parts: the tail frame for the
     /// beat and the head frame for the mouth, tilted and bent.
-    fn draw_side(&mut self, lut: &[Option<Rgb>; 128], face: f32) {
+    fn draw_side(&mut self, lut: &[Option<Rgb>; 128], face: f32, dab: Option<&Dab>) {
         let s = &self.shark;
         let rig = s.rig;
         let (tail, near) = self.tail_frame();
@@ -729,7 +738,9 @@ impl Sea {
                 (rig.side, c, lut)
             };
             for (r, row) in src.iter().enumerate() {
-                if let Some(color) = pal[(row.as_bytes()[sc] & 127) as usize] {
+                let ch = row.as_bytes()[sc] & 127;
+                if let Some(color) = pal[ch as usize] {
+                    let color = dab.and_then(|d| d.over(c, r, ch)).unwrap_or(color);
                     let (x, y) = pose.place(c as i32, r as i32);
                     self.put(x, y, color);
                 }
@@ -738,11 +749,20 @@ impl Sea {
     }
 
     /// A whole sprite centred on the shark, for the turn.
-    fn draw_whole(&mut self, sprite: Sprite, lut: &[Option<Rgb>; 128], face: f32, pitch: f32) {
+    fn draw_whole(
+        &mut self,
+        sprite: Sprite,
+        lut: &[Option<Rgb>; 128],
+        face: f32,
+        pitch: f32,
+        dab: Option<&Dab>,
+    ) {
         let pose = self.pose(sprite[0].len(), face, pitch, 0.0);
         for (r, row) in sprite.iter().enumerate() {
             for (c, ch) in row.bytes().enumerate() {
-                if let Some(color) = lut[(ch & 127) as usize] {
+                let ch = ch & 127;
+                if let Some(color) = lut[ch as usize] {
+                    let color = dab.and_then(|d| d.over(c, r, ch)).unwrap_or(color);
                     let (x, y) = pose.place(c as i32, r as i32);
                     self.put(x, y, color);
                 }

@@ -20,6 +20,15 @@
 //!   grows and lies on the floor; warm seas get coral, cool ones kelp.
 //! - `sea.rs`: light by depth and time of day, the camera, and the
 //!   projection onto the screen.
+//! - `muertos.rs`: Día de Muertos, below.
+//!
+//! On Día de Muertos the shark wears calavera face paint (a sugar skull's
+//! white face, marigold eye sockets, a stitched grin, gill slits in papel
+//! picado colors), the plankton glows like embers, the lanternfish carry
+//! candlelight, and sunken ofrendas stand on the sand with their veladoras
+//! lit, a path of cempasúchil petals leading to each; the higher the level,
+//! the fuller they are. Petals float on the surface and sink slowly to the
+//! sand. None of it exists on an ordinary day, and its randomness is its own.
 //!
 //! The only things done to the sprites at run time are tilting and bending
 //! them (whole pixels moved, none lost or doubled) and lighting them. The
@@ -31,12 +40,14 @@ mod art;
 mod floor;
 mod hunter;
 mod life;
+mod muertos;
 mod sea;
 mod water;
 
 use crate::color::Color;
 use crate::render::Canvas;
 use crate::scene::{Ctx, Opt, Scene, SceneInfo, Val};
+use muertos::Dress;
 use sea::Sea;
 
 pub const INFO: SceneInfo = SceneInfo {
@@ -351,6 +362,8 @@ struct SharkScene {
     dirty: bool,
     /// The time of day last painted.
     drawn_t: f32,
+    /// Día de Muertos's colors and level, when it is on.
+    dress: Option<Dress>,
 }
 
 impl SharkScene {
@@ -374,7 +387,8 @@ impl SharkScene {
             KindOpt::One(k) => k,
             KindOpt::Random => art::Kind::ALL[rng.usize(..art::Kind::ALL.len())],
         };
-        let sea = Sea::new(80, 24, &mut rng, Pal::new(ctx), set, kind);
+        let dress = Dress::of(ctx);
+        let sea = Sea::new(80, 24, &mut rng, Pal::new(ctx), set, kind, dress);
         SharkScene {
             sea,
             rng,
@@ -384,6 +398,7 @@ impl SharkScene {
             acc: 0.0,
             dirty: true,
             drawn_t: 0.0,
+            dress,
         }
     }
 }
@@ -393,7 +408,15 @@ impl Scene for SharkScene {
         // The view is built for the screen's shape, so a resize starts a fresh
         // sea with the same kind of shark; the time of day carries over.
         let (t, kind) = (self.sea.t, self.sea.shark.kind);
-        self.sea = Sea::new(w, h, &mut self.rng, self.sea.pal, self.set, kind);
+        self.sea = Sea::new(
+            w,
+            h,
+            &mut self.rng,
+            self.sea.pal,
+            self.set,
+            kind,
+            self.dress,
+        );
         self.sea.t = t;
         self.sea.update_light();
         self.dirty = true;
@@ -402,6 +425,8 @@ impl Scene for SharkScene {
     fn retheme(&mut self, ctx: &Ctx) {
         self.sea.pal = Pal::new(ctx);
         self.sea.update_light();
+        self.dress = Dress::of(ctx);
+        self.sea.dress(self.dress);
         self.dirty = true;
     }
 

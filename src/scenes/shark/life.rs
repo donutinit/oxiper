@@ -4,6 +4,7 @@
 
 use super::art::{self, Species, Sprite};
 use super::hunter::Shark;
+use super::muertos;
 use super::sea::{SURF, Sea, View};
 use super::{Dice, Rgb, Rng, WORLD_H};
 
@@ -735,12 +736,28 @@ impl Sea {
             let near = ((m.p - 0.55) / 0.85).clamp(0.0, 1.0);
             let a = (0.05 + 0.22 * near) * (0.3 + 0.7 * self.daylight);
             let c = Rgb(214, 228, 226).mul(tint);
-            self.blend_out(sx, sy, c, a);
+            match &self.muertos {
+                // Día de Muertos: plankton glowing like embers, twinkling,
+                // brightest at night.
+                Some(md) if md.plankton(i) => {
+                    let dark = 1.0 - self.daylight;
+                    let twinkle = 0.65 + 0.35 * (self.time() * 1.7 + m.phase * 3.0).sin();
+                    let a = (0.25 + 0.45 * near) * (0.45 + 0.55 * dark) * twinkle;
+                    self.blend_out(sx, sy, muertos::GLOW, a);
+                }
+                _ => self.blend_out(sx, sy, c, a),
+            }
         }
         let tick = self.tick;
         // Lanternfish lights and the jellies' faint glow, at night.
         let dark = self.lantern_rise();
         if dark > 0.0 {
+            // On Día de Muertos the lanternfish carry candlelight, and the
+            // jellies glow rosa mexicano.
+            let (lamp, jelly) = match &self.muertos {
+                Some(m) => (muertos::LAMP, m.dress.icing[0]),
+                None => (Rgb(140, 230, 255), Rgb(210, 160, 255)),
+            };
             let deep = 60.0 * (1.0 - dark);
             for i in 0..self.life.lanterns.len() {
                 let l = self.life.lanterns[i];
@@ -751,15 +768,15 @@ impl Sea {
                 let face = if l.vx >= 0.0 { 1.0 } else { -1.0 };
                 let blink = 0.55 + 0.45 * (l.phase * 0.31).sin();
                 let (sx, sy) = v.to_screen(l.x + face * 1.5, y + 0.6);
-                self.blend_out(sx, sy, Rgb(140, 230, 255), dark * blink);
+                self.blend_out(sx, sy, lamp, dark * blink);
                 let (sx, sy) = v.to_screen(l.x - face * 1.2, y + 0.6);
-                self.blend_out(sx, sy, Rgb(140, 230, 255), dark * blink * 0.6);
+                self.blend_out(sx, sy, lamp, dark * blink * 0.6);
             }
             for i in 0..self.life.jellies.len() {
                 let j = self.life.jellies[i];
                 let (sx, sy) = v.to_screen(j.x, j.y + 2.0);
                 let glow = dark * (0.35 + 0.25 * (j.phase).sin());
-                self.blend_out(sx, sy, Rgb(210, 160, 255), glow);
+                self.blend_out(sx, sy, jelly, glow);
             }
         }
         for i in 0..self.life.flecks.len() {
@@ -767,7 +784,10 @@ impl Sea {
             let (sx, sy) = v.to_screen(f.x, f.y);
             let fade = (f.life as f32 / f.span as f32).min(1.0);
             match f.kind {
-                Speck::Spark => self.blend_out(sx, sy, Rgb(120, 255, 220), 0.9 * fade),
+                Speck::Spark => {
+                    let c = self.fleck_color(f.kind).unwrap_or(Rgb(120, 255, 220));
+                    self.blend_out(sx, sy, c, 0.9 * fade)
+                }
                 Speck::Scale => {
                     // Scales catch the light as they turn.
                     let twinkle = (tick.wrapping_add(i as u32 * 7) / 3).is_multiple_of(4);
@@ -776,6 +796,7 @@ impl Sea {
                 }
                 Speck::Plankton => {
                     let c = Rgb(200, 236, 200).mul(tint.lerp(Rgb::WHITE, 0.3));
+                    let c = self.fleck_color(f.kind).unwrap_or(c);
                     self.blend_out(sx, sy, c, 0.55 * fade);
                 }
                 Speck::Foam => {

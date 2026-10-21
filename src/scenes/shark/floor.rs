@@ -89,6 +89,10 @@ impl Sea {
         );
         for c in lo.div_euclid(CELL as i64) as i32..=hi.div_euclid(CELL as i64) as i32 {
             let x0 = c * CELL - shift as i32;
+            // On Día de Muertos the sand is cleared for the ofrendas.
+            if self.muertos.is_some() && self.ofrenda_on(x0, CELL) {
+                continue;
+            }
             match self.feature(c) {
                 Feature::Rocks => self.rocks(c, x0),
                 Feature::Garden => self.garden(c, x0),
