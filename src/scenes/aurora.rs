@@ -19,6 +19,19 @@
 //! and then Nyan Cat or sl's locomotive goes by (the easter eggs, sent by the
 //! scene itself).
 //!
+//! On Día de Muertos the night moves to Lake Pátzcuaro, in Michoacán: the
+//! curtains burn cempasúchil gold into rosa mexicano and morado over violet
+//! mountains, Janitzio rises from the lake with candles on its terraces and
+//! Morelos floodlit on its summit, canoes glide by with their butterfly nets
+//! raised like wings and veladoras at bow and stern, more veladoras float on
+//! the water, every flame trailing its streak down the lake, and monarchs
+//! cross the sky on their way south. The cycle shows Pátzcuaro most of the
+//! time while the holiday lasts (nearly always on November 2), more candles,
+//! canoes, veladoras and monarchs as the holiday comes, and the holiday's own
+//! visitors stop by most of the time; a fixed `look` wins, and
+//! `look = "patzcuaro"` shows it on any day. Its randomness has its own RNG,
+//! so ordinary days stay exactly as they were.
+//!
 //! MIT License
 //!
 //! Copyright (c) 2026 Santiago Sánchez
@@ -45,6 +58,7 @@ use std::f32::consts::PI;
 
 use crate::color::{Color, ansi_rgb};
 use crate::eggs::{self, Egg};
+use crate::fiesta::Fiesta;
 use crate::render::{Canvas, Pixels};
 use crate::scene::{Ctx, Opt, Scene, SceneInfo, Val};
 use crate::theme::Theme;
@@ -67,7 +81,7 @@ pub const INFO: SceneInfo = SceneInfo {
         Opt {
             key: "look",
             default: Val::S("cycle"),
-            help: "cycle, or one look to stay on: tanim, emerald, crimson, ultraviolet, ice, synthwave, ember, prism, starry",
+            help: "cycle, or one look to stay on: tanim, emerald, crimson, ultraviolet, ice, synthwave, ember, prism, starry, patzcuaro (Día de Muertos)",
         },
         Opt {
             key: "stay",
@@ -142,6 +156,9 @@ struct Look {
     lights: f32,
     prism: f32,
     starry: f32,
+    /// How much of Pátzcuaro's Día de Muertos night shows: Janitzio and its
+    /// candles, the butterfly-net canoes and the monarchs.
+    muertos: f32,
 }
 
 /// tanim's night.
@@ -168,9 +185,15 @@ const TANIM: Look = Look {
     lights: 1.0,
     prism: 0.0,
     starry: 0.0,
+    muertos: 0.0,
 };
 
-const LOOKS: [(&str, Look); 9] = [
+/// The looks the cycle picks from on an ordinary day: all but Pátzcuaro.
+const ORDINARY: usize = 9;
+/// Pátzcuaro's place in `LOOKS`.
+const PATZCUARO: usize = 9;
+
+const LOOKS: [(&str, Look); 10] = [
     ("tanim", TANIM),
     (
         "emerald",
@@ -321,6 +344,30 @@ const LOOKS: [(&str, Look); 9] = [
             ..TANIM
         },
     ),
+    (
+        "patzcuaro",
+        Look {
+            glow: [
+                c8(255, 176, 40),
+                c8(240, 60, 110),
+                c8(228, 0, 124),
+                c8(120, 40, 170),
+            ],
+            sky_top: c8(8, 6, 22),
+            sky_low: c8(34, 16, 48),
+            far: c8(40, 24, 58),
+            near: c8(16, 10, 26),
+            snow: c8(40, 24, 58),
+            pine: c8(8, 4, 14),
+            water: c8(8, 6, 24),
+            star: c8(255, 236, 200),
+            glint: c8(255, 170, 70),
+            rim: c8(228, 0, 124),
+            rim_k: 0.3,
+            muertos: 1.0,
+            ..TANIM
+        },
+    ),
 ];
 
 /// Van Gogh's brushstrokes, from the deepest blue to the palest yellow.
@@ -363,6 +410,7 @@ impl Look {
             lights: f(self.lights, o.lights),
             prism: f(self.prism, o.prism),
             starry: f(self.starry, o.starry),
+            muertos: f(self.muertos, o.muertos),
         }
     }
 
@@ -435,6 +483,314 @@ impl Paint {
             prism,
         }
     }
+}
+
+/// The colors of Pátzcuaro's night. Candle flames keep their own hue under
+/// every theme; the rest comes from the theme.
+#[derive(Clone, Copy)]
+struct Fest {
+    /// A flame's edge and core.
+    flame: [V3; 2],
+    /// Janitzio: the dark island, where candles warm it, and the statue.
+    isle: [V3; 3],
+    /// A butterfly net's hoop and its mesh.
+    net: [V3; 2],
+    /// A canoe's hull, its shadow side, the fisherman and a candle's wax.
+    hull: [V3; 2],
+    rower: V3,
+    wax: V3,
+    /// A monarch's wings (bright and dark) and its veins and body.
+    wing: [V3; 2],
+    vein: V3,
+}
+
+impl Fest {
+    fn new(t: &Theme) -> Fest {
+        let flame = [c8(255, 150, 40), c8(255, 214, 120)];
+        if t.native {
+            return Fest {
+                flame,
+                isle: [c8(8, 5, 12), c8(96, 44, 22), c8(214, 200, 176)],
+                net: [c8(176, 156, 128), c8(150, 130, 104)],
+                hull: [c8(84, 48, 28), c8(40, 22, 16)],
+                rower: c8(22, 12, 20),
+                wax: c8(244, 238, 226),
+                wing: [c8(255, 140, 0), c8(214, 98, 0)],
+                vein: c8(24, 12, 8),
+            };
+        }
+        let at = |k: f32| v3(t.grad.at(k));
+        Fest {
+            flame,
+            isle: [
+                scale(at(0.0), 0.2),
+                mix(at(0.0), at(0.8), 0.4),
+                mix(at(0.5), at(1.0), 0.7),
+            ],
+            net: [mix(at(0.5), at(1.0), 0.7), mix(at(0.3), at(1.0), 0.4)],
+            hull: [mix(at(0.0), at(0.5), 0.35), scale(at(0.0), 0.6)],
+            rower: scale(at(0.0), 0.3),
+            wax: mix(at(0.5), at(1.0), 0.8),
+            wing: [at(1.0), at(0.75)],
+            vein: scale(at(0.0), 0.3),
+        }
+    }
+}
+
+/// A Pátzcuaro canoe with its two butterfly nets raised like wings, and
+/// candles at the bow and the stern. `o` hoop, `:` mesh, `f` fisherman,
+/// `h`/`H` hull, `c` flame; the last row sits on the water.
+const CANOE: [&str; 10] = [
+    " oo         oo ",
+    "o::oo     oo::o",
+    "o::::o   o::::o",
+    "o:::::o o:::::o",
+    " o:::::o:::::o ",
+    "  oo:::o:::oo  ",
+    " c  ooofooo  c ",
+    " w     f     w ",
+    "hhhhhhhhhhhhhhh",
+    " HHHHHHHHHHHHH ",
+];
+/// The same canoe farther away.
+const CANOE_FAR: [&str; 6] = [
+    "oo     oo",
+    "o:o   o:o",
+    "o::o o::o",
+    " o::o::o ",
+    "c  ofo  c",
+    "hhhhhhhhh",
+];
+/// José María Morelos with his fist raised, on Janitzio's summit.
+const STATUE: [&str; 7] = ["   S", " S S", "SSSS", " SS ", " SS ", " SS ", "SSSS"];
+/// The statue on a smaller island.
+const STATUE_SMALL: [&str; 4] = ["  S", " SS", " S ", "SSS"];
+/// A monarch flapping: open, half, closed, half. `O`/`o` wing, `k` its
+/// black veins, border and body.
+const MONARCH: [[&str; 4]; 4] = [
+    ["kO   Ok", "kOOkOOk", " oOkOo ", "  oko  "],
+    ["       ", " kOkOk ", "  oko  ", "   k   "],
+    ["       ", "  kOk  ", "   k   ", "   k   "],
+    ["       ", " kOkOk ", "  oko  ", "   k   "],
+];
+
+/// One pixel of Janitzio: where, what (0 island, 1 candle, 2 statue, 3 its skyline), a
+/// random number that decides when a candle is lit, and how much candlelight
+/// warms it.
+struct Isle {
+    x: i32,
+    y: i32,
+    part: u8,
+    r: f32,
+    warm: f32,
+}
+
+struct Canoe {
+    x: f32,
+    /// The row it floats on.
+    y: i32,
+    vx: f32,
+    far: bool,
+    phase: f32,
+    /// The canoes come out in this order as the holiday grows.
+    rank: usize,
+}
+
+/// A veladora floating on the lake.
+struct Float {
+    x: f32,
+    y: i32,
+    vx: f32,
+    phase: f32,
+}
+
+struct Monarch {
+    x: f32,
+    y: f32,
+    vx: f32,
+    /// How far it bobs, how fast, and where in the bob and the flap it is.
+    bob: f32,
+    rate: f32,
+    phase: f32,
+    flap: f32,
+}
+
+/// The share of looks that are Pátzcuaro's while the holiday is on: most of
+/// them from the first day, nearly all at its height.
+fn patzcuaro_share(level: f32) -> f32 {
+    0.6 + 0.35 * level.clamp(0.0, 1.0)
+}
+
+/// Where Pátzcuaro's night draws: the picture, which pixels are solid, its
+/// size, how far the night has faded in (`m`), how much brighter solid
+/// things are drawn, and what reflections fade toward (`None`: they dim).
+struct Layer<'a> {
+    px: &'a mut [V3],
+    solid: &'a mut [bool],
+    w: i32,
+    h: i32,
+    m: f32,
+    lift: f32,
+    water: Option<V3>,
+    /// Motion time and the horizon, for the lake's ripples.
+    t: f32,
+    hz: i32,
+}
+
+impl Layer<'_> {
+    /// How far row `y` of the lake ripples sideways, as in `compose`.
+    fn ripple(&self, y: i32) -> i32 {
+        let d = (y - self.hz) as f32 / (self.h - self.hz).max(1) as f32;
+        ((y as f32 * 0.7 + self.t * 0.09).sin() * (0.4 + 2.2 * d)).round() as i32
+    }
+
+    /// Janitzio and its reflection, `lit` of its candles burning.
+    fn janitzio(&mut self, isle: &[Isle], base: i32, f: &Fest, lit: f32) {
+        for p in isle {
+            let ry = 2 * base - p.y + 1;
+            let col = if p.part == 2 {
+                // The statue, floodlit.
+                self.lamp(p.x, p.y, f.isle[2]);
+                f.isle[2]
+            } else {
+                let ridge = if p.part == 3 { 0.45 } else { 0.0 };
+                let col = mix(f.isle[0], f.isle[1], p.warm * lit + ridge);
+                self.put(p.x, p.y, col);
+                col
+            };
+            self.mirror(p.x + self.ripple(ry), ry, col, 0.55);
+        }
+        for p in isle.iter().filter(|p| p.part == 1 && p.r < lit) {
+            let (c, k) = flicker(&f.flame, self.t, p.r * 40.0);
+            self.candle(p.x, p.y, c, k, 0.0);
+            // Each flame trails a shimmering streak down the water.
+            let ry = 2 * base - p.y + 1;
+            for (dy, a) in [(0, 0.5), (1, 0.35), (2, 0.2), (3, 0.1)] {
+                self.shine(p.x + self.ripple(ry + dy), ry + dy, c, a * k);
+            }
+        }
+    }
+
+    /// A veladora on the water: its flame over the glass, and the flame's
+    /// streak down the lake.
+    fn veladora(&mut self, v: &Float, f: &Fest) {
+        let x = v.x.round() as i32;
+        let (fl, k) = flicker(&f.flame, self.t, v.phase);
+        self.candle(x, v.y - 1, fl, k, 0.2);
+        self.lamp(x, v.y, f.wax);
+        for (dy, a) in [(1, 0.45), (2, 0.25), (3, 0.1)] {
+            let y = v.y + dy;
+            self.shine(x + self.ripple(y), y, fl, a * k);
+        }
+    }
+
+    /// A canoe, its nets and candles, and its reflection.
+    fn canoe(&mut self, c: &Canoe, f: &Fest) {
+        let rows: &[&str] = if c.far { &CANOE_FAR } else { &CANOE };
+        let (x0, n) = (c.x.round() as i32, rows.len() as i32);
+        for (r, row) in rows.iter().enumerate() {
+            let y = c.y - (n - 1 - r as i32);
+            let ry = c.y + n - r as i32;
+            let dx = self.ripple(ry);
+            for (k, ch) in row.bytes().enumerate() {
+                let x = x0 + k as i32;
+                match ch {
+                    b'o' => {
+                        self.lamp(x, y, f.net[0]);
+                        self.veil(x + dx, ry, f.net[0], 0.25);
+                    }
+                    b':' => {
+                        self.veil(x, y, f.net[1], 0.22);
+                        self.veil(x + dx, ry, f.net[1], 0.08);
+                    }
+                    b'f' | b'h' | b'H' => {
+                        let col = match ch {
+                            b'f' => f.rower,
+                            b'h' => f.hull[0],
+                            _ => f.hull[1],
+                        };
+                        self.put(x, y, col);
+                        self.mirror(x + dx, ry, col, 0.5);
+                    }
+                    b'w' => {
+                        self.lamp(x, y, f.wax);
+                        self.veil(x + dx, ry, f.wax, 0.3);
+                    }
+                    b'c' => {
+                        let (fl, kk) = flicker(&f.flame, self.t, c.phase + k as f32);
+                        self.candle(x, y, fl, kk, 0.25);
+                        for dy in 0..5 {
+                            let yy = c.y + 1 + dy;
+                            let a = kk * (0.6 - 0.11 * dy as f32);
+                            self.shine(x + self.ripple(yy), yy, fl, a);
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
+    }
+    fn at(&self, x: i32, y: i32) -> Option<usize> {
+        (x >= 0 && y >= 0 && x < self.w && y < self.h).then(|| (y * self.w + x) as usize)
+    }
+
+    /// A solid pixel of something dark, drawn brighter over a transparent sky.
+    fn put(&mut self, x: i32, y: i32, col: V3) {
+        self.lamp(x, y, scale(col, self.lift));
+    }
+
+    /// A solid pixel in its own color: a flame, a wing.
+    fn lamp(&mut self, x: i32, y: i32, col: V3) {
+        if let Some(i) = self.at(x, y) {
+            self.px[i] = mix(self.px[i], col, self.m);
+            self.solid[i] |= self.m >= 0.5;
+        }
+    }
+
+    /// Light added to whatever is there.
+    fn shine(&mut self, x: i32, y: i32, col: V3, a: f32) {
+        if let Some(i) = self.at(x, y) {
+            self.px[i] = add(self.px[i], scale(col, a * self.m));
+        }
+    }
+
+    /// A flame `k` bright, with a halo of `glow` around it.
+    fn candle(&mut self, x: i32, y: i32, flame: V3, k: f32, glow: f32) {
+        for (dx, dy) in [(-1, 0), (1, 0), (0, -1), (0, 1)] {
+            self.shine(x + dx, y + dy, flame, glow * k);
+        }
+        self.lamp(x, y, scale(flame, k));
+    }
+
+    /// See-through: blends over something solid, glows faintly over the sky.
+    fn veil(&mut self, x: i32, y: i32, col: V3, a: f32) {
+        if let Some(i) = self.at(x, y) {
+            if self.solid[i] {
+                self.px[i] = mix(self.px[i], scale(col, self.lift), a * self.m);
+            } else {
+                self.px[i] = add(self.px[i], scale(col, a * self.m));
+            }
+        }
+    }
+
+    /// A solid thing's reflection in the lake, darkened by `dim`.
+    fn mirror(&mut self, x: i32, y: i32, col: V3, dim: f32) {
+        let c = match self.water {
+            Some(water) => mix(water, scale(col, self.lift), dim),
+            None => scale(col, self.lift * dim),
+        };
+        if let Some(i) = self.at(x, y) {
+            self.px[i] = mix(self.px[i], c, self.m);
+            self.solid[i] |= self.m >= 0.5;
+        }
+    }
+}
+
+/// A candle flame flickering at time `t` (in tanim ticks): its color and
+/// how bright it is.
+fn flicker(flame: &[V3; 2], t: f32, phase: f32) -> (V3, f32) {
+    let f = 0.55 * (t * 0.7 + phase).sin() + 0.45 * (t * 1.9 + 2.3 * phase).sin();
+    (mix(flame[0], flame[1], 0.5 + 0.5 * f), 0.85 + 0.15 * f)
 }
 
 struct Curtain {
@@ -663,16 +1019,39 @@ struct Aurora {
     visitors: f32,
     cols: u16,
     rows: u16,
+    /// The holiday, and its own RNG so that ordinary days draw the same
+    /// random numbers they always have.
+    fiesta: Fiesta,
+    hrng: fastrand::Rng,
+    fest: Fest,
+    /// Pátzcuaro: Janitzio and the row its shore meets the water on, the
+    /// canoes and the monarchs (as many as the holiday's height brings).
+    isle: Vec<Isle>,
+    isle_base: i32,
+    canoes: Vec<Canoe>,
+    floats: Vec<Float>,
+    monarchs: Vec<Monarch>,
 }
 
 impl Aurora {
     fn new(ctx: &Ctx) -> Aurora {
         let o = ctx.opts;
         let mut rng = ctx.rng();
+        let mut hrng = fastrand::Rng::with_seed(ctx.seed ^ 0x0102_1102_0028_1103);
         let t = rangef(&mut rng, 0.0, 1000.0);
-        let fixed = LOOKS.iter().position(|(n, _)| *n == o.s("look").trim());
-        let which = fixed.unwrap_or_else(|| rng.usize(0..LOOKS.len()));
-        let next = Self::pick_next(&mut rng, which, fixed);
+        let look = match o.s("look").trim() {
+            "pátzcuaro" | "muertos" => "patzcuaro",
+            l => l,
+        };
+        let fixed = LOOKS.iter().position(|(n, _)| *n == look);
+        let which = fixed.unwrap_or_else(|| rng.usize(0..ORDINARY));
+        // The holiday opens on Pátzcuaro.
+        let which = if fixed.is_none() && ctx.fiesta.on() {
+            PATZCUARO
+        } else {
+            which
+        };
+        let next = Self::pick_next(&mut rng, &mut hrng, which, fixed, ctx.fiesta);
         Aurora {
             seed: ctx.seed,
             speed: num(o.f("speed"), 1.0, 0.1, 4.0),
@@ -716,15 +1095,43 @@ impl Aurora {
             visitors: num(o.f("visitors"), 3.0, 0.0, eggs::FORCE_RATE as f32),
             cols: 0,
             rows: 0,
+            fiesta: ctx.fiesta,
+            fest: Fest::new(ctx.theme),
+            isle: Vec::new(),
+            isle_base: 0,
+            canoes: Vec::new(),
+            floats: Vec::new(),
+            monarchs: Vec::new(),
             rng,
+            hrng,
         }
     }
 
     /// The look after `which`: any other one, or the same when it is fixed.
-    fn pick_next(rng: &mut fastrand::Rng, which: usize, fixed: Option<usize>) -> usize {
+    /// During the holiday it is mostly Pátzcuaro, decided by the holiday's
+    /// own RNG.
+    fn pick_next(
+        rng: &mut fastrand::Rng,
+        hrng: &mut fastrand::Rng,
+        which: usize,
+        fixed: Option<usize>,
+        fiesta: Fiesta,
+    ) -> usize {
         match fixed {
             Some(i) => i,
-            None => (which + 1 + rng.usize(0..LOOKS.len() - 1)) % LOOKS.len(),
+            None if fiesta.on() && hrng.f32() < patzcuaro_share(fiesta.level) => PATZCUARO,
+            None if which >= ORDINARY => rng.usize(0..ORDINARY),
+            None => (which + 1 + rng.usize(0..ORDINARY - 1)) % ORDINARY,
+        }
+    }
+
+    /// How much of the holiday has come: all of it when Pátzcuaro is asked
+    /// for on another day.
+    fn level(&self) -> f32 {
+        if self.fiesta.on() {
+            self.fiesta.level.clamp(0.0, 1.0)
+        } else {
+            1.0
         }
     }
 
@@ -791,6 +1198,176 @@ impl Aurora {
         }
         self.meteor = None;
         self.build_starry();
+        self.build_patzcuaro();
+    }
+
+    /// Pátzcuaro's night for this size, from the holiday's own RNG: the
+    /// monarchs, Janitzio rising from the lake with candles on its terraces
+    /// and Morelos on its summit, and the canoes on the water in front.
+    fn build_patzcuaro(&mut self) {
+        let (w, ph, hz) = (self.w as i32, self.ph as i32, self.horizon as i32);
+        let (wf, hzf) = (w as f32, hz as f32);
+        let rng = &mut self.hrng;
+        self.monarchs.clear();
+        let dir = if rng.bool() { 1.0 } else { -1.0 };
+        let n = ((w * hz) as f32 / 450.0).ceil().clamp(2.0, 60.0) as usize;
+        for _ in 0..n {
+            self.monarchs.push(Monarch {
+                x: rangef(rng, -0.2, 1.2) * wf,
+                y: rangef(rng, 0.06, 0.8) * hzf,
+                vx: dir * rangef(rng, 4.0, 8.0),
+                bob: rangef(rng, 1.0, 3.0),
+                rate: rangef(rng, 0.6, 1.4),
+                phase: rangef(rng, 0.0, 6.3),
+                flap: rangef(rng, 0.0, 4.0),
+            });
+        }
+        self.isle.clear();
+        self.canoes.clear();
+        self.floats.clear();
+        let depth = ph - hz;
+        if !self.landscape || w < 16 || hz < 6 || depth < 6 {
+            return;
+        }
+        // Janitzio: a round island out on the lake, its terraces lined with
+        // candles.
+        let base = hz + (depth as f32 * 0.3).round().max(1.0) as i32;
+        let half = (wf * 0.11).clamp(7.0, 30.0);
+        let tall = (depth as f32 * 0.42).clamp(4.0, 18.0);
+        let cx = wf * rangef(rng, 0.55, 0.7);
+        let mut summit = base;
+        for x in (cx - half) as i32..=(cx + half) as i32 {
+            let u = (x as f32 + 0.5 - cx) / half;
+            if u.abs() >= 1.0 {
+                continue;
+            }
+            let rise = tall * (1.0 - u * u).powf(0.65) * (0.92 + 0.08 * (x as f32 * 0.9).sin());
+            let top = base - rise.round() as i32;
+            if x == cx as i32 {
+                summit = top;
+            }
+            for y in top..=base {
+                let terrace = (base - y) % 2 == 1 && y > top;
+                let candle = terrace && hash(x, y, self.seed ^ 0x3A).is_multiple_of(3);
+                self.isle.push(Isle {
+                    x,
+                    y,
+                    part: if y == top { 3 } else { u8::from(candle) },
+                    r: rng.f32(),
+                    warm: 0.0,
+                });
+            }
+        }
+        if tall >= 6.0 {
+            let statue: &[&str] = if tall >= 11.0 { &STATUE } else { &STATUE_SMALL };
+            let x0 = cx as i32 - 2;
+            for (dy, row) in statue.iter().enumerate() {
+                for (dx, ch) in row.bytes().enumerate() {
+                    if ch == b'S' {
+                        self.isle.push(Isle {
+                            x: x0 + dx as i32,
+                            y: summit - statue.len() as i32 + dy as i32 + 2,
+                            part: 2,
+                            r: 0.0,
+                            warm: 0.0,
+                        });
+                    }
+                }
+            }
+        }
+        // Candlelight warms the island around each candle (as if all were lit).
+        for i in 0..self.isle.len() {
+            let (x, y) = (self.isle[i].x, self.isle[i].y);
+            let near = self
+                .isle
+                .iter()
+                .filter(|o| o.part == 1 && (o.x - x).abs() <= 1 && (o.y - y).abs() <= 1)
+                .count();
+            self.isle[i].warm = (near as f32 / 3.0).min(1.0) * 0.6;
+        }
+        self.isle_base = base;
+        // Canoes in lanes from the far water to the near, the far ones
+        // smaller and slower; those beyond the island pass behind it.
+        let lanes = ((wf / 30.0).round() as i32).clamp(1, 8);
+        let (first, last) = (hz + 3, ph - 1);
+        let mut ranks: Vec<usize> = (0..lanes as usize).collect();
+        rng.shuffle(&mut ranks);
+        for (k, rank) in (0..lanes).zip(ranks) {
+            let y = first + ((k as f32 + 0.5) / lanes as f32 * (last - first) as f32) as i32;
+            let far = y - hz < depth * 45 / 100 || depth < 24;
+            let dir = if rng.bool() { 1.0 } else { -1.0 };
+            self.canoes.push(Canoe {
+                x: rangef(rng, 0.0, wf),
+                y: y.min(last),
+                vx: dir * rangef(rng, 1.0, 2.5) * if far { 0.6 } else { 1.0 },
+                far,
+                phase: rangef(rng, 0.0, 6.3),
+                rank,
+            });
+        }
+        // Veladoras floating on the water, half of them around the island.
+        self.floats.clear();
+        let n = ((wf / 5.0).round() as usize).clamp(2, 60);
+        for i in 0..n {
+            let (x, y) = if i % 2 == 0 {
+                (
+                    cx + rangef(rng, -1.8, 1.8) * half,
+                    range(rng, base - 2, base + depth / 3),
+                )
+            } else {
+                (rangef(rng, 0.0, wf), range(rng, hz + 2, ph))
+            };
+            self.floats.push(Float {
+                x,
+                y: y.clamp(hz + 2, ph - 1),
+                vx: rangef(rng, -0.4, 0.4),
+                phase: rangef(rng, 0.0, 6.3),
+            });
+        }
+    }
+
+    /// Paddles the canoes, drifts the veladoras and flies the monarchs `dt`
+    /// seconds on, sending whoever leaves the screen around again from the
+    /// other side.
+    fn row(&mut self, dt: f32) {
+        let (w, hz) = (self.w as f32, self.horizon as f32);
+        let rng = &mut self.hrng;
+        for c in &mut self.canoes {
+            c.x += c.vx * dt;
+            let len = if c.far {
+                CANOE_FAR[0].len()
+            } else {
+                CANOE[0].len()
+            } as f32;
+            if c.vx > 0.0 && c.x > w + 1.0 {
+                c.x = -len - rangef(rng, 0.0, 0.3 * w);
+            } else if c.vx < 0.0 && c.x < -len - 1.0 {
+                c.x = w + rangef(rng, 0.0, 0.3 * w);
+            }
+        }
+        for v in &mut self.floats {
+            v.x += v.vx * dt;
+            if v.x < -1.0 {
+                v.x += w + 2.0;
+            } else if v.x > w + 1.0 {
+                v.x -= w + 2.0;
+            }
+        }
+        for m in &mut self.monarchs {
+            m.x += m.vx * dt;
+            m.phase += m.rate * dt;
+            m.flap = (m.flap + dt * 9.0) % 4.0;
+            let gone = if m.vx > 0.0 {
+                m.x > w + 6.0
+            } else {
+                m.x < -6.0
+            };
+            if gone {
+                let back = rangef(rng, 6.0, 6.0 + 0.6 * w);
+                m.x = if m.vx > 0.0 { -back } else { w + back };
+                m.y = rangef(rng, 0.06, 0.8) * hz;
+            }
+        }
     }
 
     /// Van Gogh's sky: a great double whirl and a smaller one in a sky
@@ -1031,7 +1608,15 @@ impl Aurora {
             return;
         }
         if rate >= eggs::FORCE_RATE || self.rng.f64() < 1.0 - (-rate / 3600.0 * real as f64).exp() {
-            let info = if self.rng.bool() {
+            // During a holiday its own visitors come by most of the time.
+            let kind = self.fiesta.kind;
+            let ours = || eggs::ALL.iter().filter(move |i| i.fiesta == kind);
+            let seasonal = ours().count();
+            let info = if self.fiesta.on() && seasonal > 0 && self.hrng.f32() < 0.8 {
+                ours()
+                    .nth(self.hrng.usize(0..seasonal))
+                    .unwrap_or(&&eggs::nyan::INFO)
+            } else if self.rng.bool() {
                 &eggs::nyan::INFO
             } else {
                 &eggs::sl::INFO
@@ -1353,6 +1938,63 @@ impl Aurora {
         }
     }
 
+    /// Pátzcuaro's night over the picture: Janitzio with its candles, the
+    /// canoes, everything mirrored in the lake, and the monarchs above.
+    fn draw_patzcuaro(&mut self, look: &Look, bg: Option<V3>) {
+        let (w, ph, hz) = (self.w as i32, self.ph as i32, self.horizon as i32);
+        let (f, level) = (self.fest, self.level());
+        let mut l = Layer {
+            px: &mut self.px,
+            solid: &mut self.solid,
+            w,
+            h: ph,
+            m: look.muertos,
+            lift: if self.paint_sky { 1.0 } else { LIFT.min(1.3) },
+            water: if self.paint_sky { Some(look.water) } else { bg },
+            t: self.t,
+            hz,
+        };
+        // The canoes, far to near, more of them as the holiday comes; those
+        // beyond Janitzio pass behind it.
+        let shown = ((self.canoes.len() as f32 * (0.3 + 0.7 * level)).round() as usize).max(1);
+        let base = self.isle_base;
+        let canoes = || self.canoes.iter().filter(|c| c.rank < shown);
+        let shown_floats = (self.floats.len() as f32 * (0.2 + 0.8 * level)).ceil() as usize;
+        let floats = || self.floats.iter().take(shown_floats);
+        for v in floats().filter(|v| v.y <= base) {
+            l.veladora(v, &f);
+        }
+        for c in canoes().filter(|c| c.y <= base) {
+            l.canoe(c, &f);
+        }
+        l.janitzio(&self.isle, base, &f, 0.45 + 0.55 * level);
+        for v in floats().filter(|v| v.y > base) {
+            l.veladora(v, &f);
+        }
+        for c in canoes().filter(|c| c.y > base) {
+            l.canoe(c, &f);
+        }
+        // Monarchs on their way south, over everything.
+        let shown = (self.monarchs.len() as f32 * (0.3 + 0.7 * level)).ceil() as usize;
+        for mo in &self.monarchs[..shown.min(self.monarchs.len())] {
+            let glide = (mo.phase * 1.7).sin() > 0.4;
+            let frame = &MONARCH[if glide { 0 } else { mo.flap as usize % 4 }];
+            let x0 = mo.x.round() as i32 - 3;
+            let y0 = (mo.y + mo.bob * mo.phase.sin()).round() as i32 - 2;
+            for (r, row) in frame.iter().enumerate() {
+                for (k, ch) in row.bytes().enumerate() {
+                    let col = match ch {
+                        b'O' => f.wing[0],
+                        b'o' => f.wing[1],
+                        b'k' => f.vein,
+                        _ => continue,
+                    };
+                    l.lamp(x0 + k as i32, y0 + r as i32, col);
+                }
+            }
+        }
+    }
+
     /// Turns accumulated light on a transparent sky into a visible pixel.
     /// Weak light fades toward the terminal background; with no known
     /// background it dims instead, and the faintest part is dropped so
@@ -1393,9 +2035,24 @@ impl Scene for Aurora {
     }
 
     fn retheme(&mut self, ctx: &Ctx) {
+        if ctx.fiesta != self.fiesta {
+            let (was, now) = (self.fiesta.on(), ctx.fiesta.on());
+            self.fiesta = ctx.fiesta;
+            if self.fixed.is_none() && was != now {
+                // The holiday comes or goes: fade into Pátzcuaro, or out of
+                // it, starting now.
+                if now {
+                    self.next = PATZCUARO;
+                } else if self.next == PATZCUARO {
+                    self.next = self.rng.usize(0..ORDINARY);
+                }
+                self.clock = self.clock.max(self.stay - BLEND);
+            }
+        }
         self.cur = Self::look_of(self.which, ctx.theme);
         self.nxt = Self::look_of(self.next, ctx.theme);
         self.paint = Paint::new(ctx.theme);
+        self.fest = Fest::new(ctx.theme);
     }
 
     fn update(&mut self, _ctx: &Ctx, dt: f32) {
@@ -1417,6 +2074,9 @@ impl Scene for Aurora {
                 break;
             }
         }
+        if self.cur.muertos > 0.0 || self.nxt.muertos > 0.0 {
+            self.row(dt);
+        }
     }
 
     /// Motion follows the speed setting; the looks and the visitors keep real time.
@@ -1430,7 +2090,13 @@ impl Scene for Aurora {
         if self.clock >= self.stay {
             self.clock -= self.stay;
             self.which = self.next;
-            self.next = Self::pick_next(&mut self.rng, self.which, self.fixed);
+            self.next = Self::pick_next(
+                &mut self.rng,
+                &mut self.hrng,
+                self.which,
+                self.fixed,
+                self.fiesta,
+            );
             self.cur = Self::look_of(self.which, ctx.theme);
             self.nxt = Self::look_of(self.next, ctx.theme);
         }
@@ -1449,6 +2115,9 @@ impl Scene for Aurora {
         let look = self.look();
         self.draw_curtains(&look);
         self.compose(&look, bg);
+        if look.muertos > 0.01 {
+            self.draw_patzcuaro(&look, bg);
+        }
         self.out.clear();
         for y in 0..ph {
             for x in 0..w {
@@ -1485,13 +2154,50 @@ mod tests {
     }
 
     fn ctx_with<'a>(theme: &'a Theme, opts: &'a Opts, bg: Color) -> Ctx<'a> {
+        ctx_on(theme, opts, bg, Fiesta::NONE)
+    }
+
+    fn ctx_on<'a>(theme: &'a Theme, opts: &'a Opts, bg: Color, fiesta: Fiesta) -> Ctx<'a> {
         Ctx {
             theme,
             opts,
             bg,
             seed: 3,
-            fiesta: crate::fiesta::Fiesta::NONE,
+            fiesta,
         }
+    }
+
+    fn make_on(opts: &str, theme: &Theme, fiesta: Fiesta, w: u16, h: u16) -> (Aurora, Opts) {
+        let o = Opts::new(INFO.options, opts.parse().unwrap());
+        let ctx = ctx_on(theme, &o, Color::Reset, fiesta);
+        let mut a = Aurora::new(&ctx);
+        a.resize(&ctx, w, h);
+        a.retheme(&ctx);
+        (a, o)
+    }
+
+    /// Candle flames drawn in the picture: solid pixels whose color lies
+    /// between a flame's edge and core, at some brightness.
+    fn flames(a: &Aurora) -> usize {
+        let [edge, core] = a.fest.flame;
+        let is_flame = |p: &V3| {
+            let k = p[0];
+            if k < 0.6 {
+                return false;
+            }
+            let u = (p[1] / k - edge[1]) / (core[1] - edge[1]);
+            let b = edge[2] + u * (core[2] - edge[2]);
+            (-0.02..=1.02).contains(&u) && (p[2] / k - b).abs() < 0.01
+        };
+        a.px.iter()
+            .zip(&a.solid)
+            .filter(|(p, s)| **s && is_flame(p))
+            .count()
+    }
+
+    /// Pixels painted in a monarch's bright wing color.
+    fn wings(a: &Aurora) -> usize {
+        a.px.iter().filter(|p| **p == a.fest.wing[0]).count()
     }
 
     /// Odd options and sizes survive long runs and huge steps.
@@ -1637,6 +2343,127 @@ mod tests {
         for _ in 0..(600 * 30) {
             a.tick(&ctx, 1.0 / 30.0, 1.0 / 30.0);
             assert!(a.visitor.is_none());
+        }
+    }
+
+    /// Día de Muertos opens on Pátzcuaro, from its first day: Janitzio's
+    /// candles, the canoes and the veladoras on the lake, the monarchs, and
+    /// more of everything at the holiday's height.
+    #[test]
+    fn patzcuaro_comes_with_the_holiday() {
+        let mut lit = Vec::new();
+        for theme in [Theme::classic(), Theme::builtin("dracula").unwrap()] {
+            for (m, d) in [(10, 28), (11, 2)] {
+                let fiesta = Fiesta::of_day(m, d);
+                let (mut a, o) = make_on("", &theme, fiesta, 120, 36);
+                let ctx = ctx_on(&theme, &o, Color::Reset, fiesta);
+                assert_eq!(a.which, PATZCUARO);
+                assert!(!a.isle.is_empty() && !a.canoes.is_empty() && !a.floats.is_empty());
+                let mut c = Canvas::new(120, 36, Color::Reset);
+                a.tick(&ctx, 1.0 / 30.0, 1.0 / 30.0);
+                a.draw(&ctx, &mut c);
+                assert!(flames(&a) > 10, "{m}-{d}: {} flames", flames(&a));
+                assert!(wings(&a) > 0, "{m}-{d}: no monarchs");
+                lit.push(flames(&a));
+            }
+        }
+        assert!(lit[0] < lit[1] && lit[2] < lit[3], "{lit:?}");
+    }
+
+    /// The holiday shows Pátzcuaro most of the time; ordinary days never.
+    #[test]
+    fn patzcuaro_only_on_the_holiday() {
+        let theme = Theme::classic();
+        for (fiesta, lo, hi) in [(Fiesta::of_day(11, 2), 0.75, 1.0), (Fiesta::NONE, 0.0, 0.0)] {
+            let (mut a, o) = make_on("stay = 10.0", &theme, fiesta, 80, 24);
+            let ctx = ctx_on(&theme, &o, Color::Reset, fiesta);
+            let mut c = Canvas::new(80, 24, Color::Reset);
+            let (mut on, n) = (0, 30 * 600);
+            for k in 0..n {
+                a.tick(&ctx, 1.0 / 30.0, 1.0 / 30.0);
+                on += usize::from(a.which == PATZCUARO);
+                if k % 300 == 0 && !fiesta.on() {
+                    a.draw(&ctx, &mut c);
+                    assert_eq!(flames(&a), 0);
+                }
+            }
+            let share = on as f32 / n as f32;
+            assert!((lo..=hi).contains(&share), "{share}");
+        }
+    }
+
+    /// When the holiday comes (at midnight, through `retheme`) the sky fades
+    /// into Pátzcuaro, and out of it when the holiday goes.
+    #[test]
+    fn the_holiday_comes_and_goes() {
+        let theme = Theme::classic();
+        let (mut a, o) = make_on("", &theme, Fiesta::NONE, 80, 24);
+        let off = ctx_on(&theme, &o, Color::Reset, Fiesta::NONE);
+        let on = ctx_on(&theme, &o, Color::Reset, Fiesta::of_day(10, 31));
+        assert_ne!(a.which, PATZCUARO);
+        a.retheme(&on);
+        for _ in 0..(30 * 15) {
+            a.tick(&on, 1.0 / 30.0, 1.0 / 30.0);
+        }
+        assert_eq!(a.which, PATZCUARO);
+        assert!(a.look().muertos > 0.99);
+        a.retheme(&off);
+        for _ in 0..(30 * 15) {
+            a.tick(&off, 1.0 / 30.0, 1.0 / 30.0);
+        }
+        assert_ne!(a.which, PATZCUARO);
+        assert_eq!(a.look().muertos, 0.0);
+        let mut c = Canvas::new(80, 24, Color::Reset);
+        a.draw(&off, &mut c);
+        assert_eq!(flames(&a), 0);
+    }
+
+    /// A fixed look wins over the holiday, and Pátzcuaro can be fixed on any day.
+    #[test]
+    fn a_fixed_look_wins() {
+        let theme = Theme::classic();
+        let fiesta = Fiesta::of_day(11, 2);
+        let (mut a, o) = make_on("look = 'ice'\nstay = 10.0", &theme, fiesta, 80, 24);
+        let ctx = ctx_on(&theme, &o, Color::Reset, fiesta);
+        for _ in 0..(30 * 60) {
+            a.tick(&ctx, 1.0 / 30.0, 1.0 / 30.0);
+            assert_eq!(LOOKS[a.which].0, "ice");
+        }
+        let (mut a, o) = make_on("look = 'pátzcuaro'", &theme, Fiesta::NONE, 80, 24);
+        let ctx = ctx_with(&theme, &o, Color::Reset);
+        assert_eq!(a.which, PATZCUARO);
+        let mut c = Canvas::new(80, 24, Color::Reset);
+        a.draw(&ctx, &mut c);
+        assert!(flames(&a) > 0);
+    }
+
+    /// The holiday survives odd options and sizes, long runs and huge steps.
+    #[test]
+    fn the_holiday_survives() {
+        let variants = [
+            "",
+            "sky = true\nlook = 'patzcuaro'\nspeed = 4.0",
+            "landscape = false\nstars = false\nlook = 'patzcuaro'",
+            "speed = nan\ncurtains = -5\nstay = nan\nvisitors = inf",
+        ];
+        for v in variants {
+            for theme in [Theme::classic(), Theme::builtin("dracula").unwrap()] {
+                for fiesta in [Fiesta::of_day(10, 28), Fiesta::of_day(11, 2)] {
+                    let (mut a, o) = make_on(v, &theme, fiesta, 80, 24);
+                    let ctx = ctx_on(&theme, &o, theme.bg, fiesta);
+                    for (w, h) in [(1, 1), (2, 3), (16, 4), (17, 9), (300, 90)] {
+                        a.resize(&ctx, w, h);
+                        a.retheme(&ctx);
+                        let mut c = Canvas::new(w, h, Color::Reset);
+                        for k in 0..120 {
+                            let dt = if k % 50 == 49 { 5.0 } else { 1.0 / 30.0 };
+                            a.tick(&ctx, dt, dt);
+                            c.clear();
+                            a.draw(&ctx, &mut c);
+                        }
+                    }
+                }
+            }
         }
     }
 }
