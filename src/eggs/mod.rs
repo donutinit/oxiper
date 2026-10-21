@@ -10,6 +10,7 @@
 //! roll for an egg; only the interactive loop does (or a forced rate).
 
 pub mod duckpond;
+pub mod nyan;
 pub mod sl;
 
 use crate::render::Canvas;
@@ -31,7 +32,7 @@ pub struct Info {
     pub start: fn(w: u16, h: u16, rng: &mut fastrand::Rng) -> Box<dyn Egg>,
 }
 
-pub const ALL: &[&Info] = &[&sl::INFO, &duckpond::INFO];
+pub const ALL: &[&Info] = &[&sl::INFO, &duckpond::INFO, &nyan::INFO];
 
 /// An `egg_rate` at or above this plays an egg at once, again and again, and
 /// even in `snap` and `record`: the way to force one for testing.

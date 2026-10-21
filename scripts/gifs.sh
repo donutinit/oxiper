@@ -34,6 +34,7 @@ SHOTS=(
   "shark|8|0|80x24|12|-s shark --seed 3"
   "fireworks|10|3|80x24|24|-s fireworks --seed 4"
   "metaballs|4|0|80x24|10|-s metaballs --seed 3 -t synthwave"
+  "aurora|8|10|80x24|6|-s aurora --seed 18 -o aurora.stay=20"
   "hollywood|10|4|80x24|15|-s hollywood --seed 3"
   "tour|24|0|100x30|15|-s bonsai,aquarium,neo,nyancat,fire,constellation,pipes,orrery -d 3 --seed 4 -o bonsai.step=0.004"
 )

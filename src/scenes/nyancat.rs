@@ -9,7 +9,7 @@
 //! scattered over the whole screen, using the frames' six star stages and
 //! moving left at the same pace, so big terminals get a sky instead of a box.
 
-mod frames;
+pub(crate) mod frames;
 
 use frames::{FRAME_HEIGHT, FRAME_WIDTH, FRAMES, Frame};
 
@@ -52,10 +52,10 @@ pub const INFO: SceneInfo = SceneInfo {
 };
 
 /// The rainbow nyancat extends to the left of the frame, rows 23-42 (with padding).
-const RAINBOW: &[u8; 20] = b",,>>&&&+++###==;;;,,";
+pub(crate) const RAINBOW: &[u8; 20] = b",,>>&&&+++###==;;;,,";
 
 /// nyancat's truecolor palette (`TERM=truecolor`) and xterm-256 palette, per frame character.
-const PALETTE: &[(u8, u32, u8)] = &[
+pub(crate) const PALETTE: &[(u8, u32, u8)] = &[
     (b',', 0x003169, 17),  // blue background
     (b'.', 0xffffff, 231), // white stars
     (b'\'', 0x000000, 16), // black border
@@ -72,7 +72,7 @@ const PALETTE: &[(u8, u32, u8)] = &[
     (b'%', 0xffa398, 175), // pink cheeks
 ];
 
-const RAINBOW_CHARS: [u8; 6] = *b">&+#=;";
+pub(crate) const RAINBOW_CHARS: [u8; 6] = *b">&+#=;";
 
 /// The six stages a star goes through in nyancat's frames, as offsets from its center.
 const STAR_STAGES: [&[(i32, i32)]; 6] = [
@@ -214,7 +214,7 @@ impl Nyancat {
 /// A copy of a frame without its stars: every white pixel except the eyes (the
 /// only ones with face on their left and outline on their right) becomes
 /// whatever is behind it, the sky or the rainbow.
-fn strip_stars(f: &Frame) -> [[u8; FRAME_WIDTH]; FRAME_HEIGHT] {
+pub(crate) fn strip_stars(f: &Frame) -> [[u8; FRAME_WIDTH]; FRAME_HEIGHT] {
     let mut out = [[b','; FRAME_WIDTH]; FRAME_HEIGHT];
     for (y, row) in f.iter().enumerate() {
         for x in 0..FRAME_WIDTH {
@@ -238,14 +238,14 @@ fn strip_stars(f: &Frame) -> [[u8; FRAME_WIDTH]; FRAME_HEIGHT] {
 }
 
 #[inline]
-fn is_cat(ch: u8) -> bool {
+pub(crate) fn is_cat(ch: u8) -> bool {
     matches!(ch, b'\'' | b'@' | b'$' | b'-' | b'*' | b'%' | b'.')
 }
 
 /// What nyancat shows at cat-pixel (x, y): the frame inside it, the generated
 /// rainbow to its left, sky everywhere else.
 #[inline]
-fn sample(f: &[[u8; FRAME_WIDTH]; FRAME_HEIGHT], flip: bool, x: i32, y: i32) -> u8 {
+pub(crate) fn sample(f: &[[u8; FRAME_WIDTH]; FRAME_HEIGHT], flip: bool, x: i32, y: i32) -> u8 {
     if y > 23 && y < 43 && x < 0 {
         // nyancat's square wave: eight columns up, eight down, flipping every two frames.
         let mut mod_x = ((2 - x as i64) % 16) / 8;
@@ -333,7 +333,7 @@ impl Scene for Nyancat {
             self.star_color = pal[b'.' as usize];
             self.sky = blue;
         } else {
-            for (ch, c) in RAINBOW_CHARS.iter().zip(theme_rainbow(ctx)) {
+            for (ch, c) in RAINBOW_CHARS.iter().zip(theme_rainbow(ctx.theme)) {
                 pal[*ch as usize] = c;
             }
             self.star_color = match ctx.theme.fg {
@@ -464,10 +464,10 @@ fn fmt_u64(mut n: u64, buf: &mut [u8; 20]) -> &str {
 /// Six theme accents for the rainbow bands, in rainbow order: by hue when the
 /// accents differ in hue, else bright to dark. Themes with fewer than six
 /// accents get bands blended between them, so no two bands repeat.
-fn theme_rainbow(ctx: &Ctx) -> [Color; 6] {
-    let mut v: Vec<Color> = ctx.theme.colors.iter().take(6).copied().collect();
+pub(crate) fn theme_rainbow(theme: &crate::theme::Theme) -> [Color; 6] {
+    let mut v: Vec<Color> = theme.colors.iter().take(6).copied().collect();
     if v.is_empty() {
-        v.push(ctx.theme.fg);
+        v.push(theme.fg);
     }
     let hues: Vec<Option<f32>> = v.iter().map(|&c| hue(c)).collect();
     let all_rgb = v.iter().all(|c| c.is_rgb());

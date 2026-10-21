@@ -3,6 +3,7 @@
 use crate::scene::SceneInfo;
 
 pub mod aquarium;
+pub mod aurora;
 pub mod boids;
 pub mod bonsai;
 pub mod constellation;
@@ -31,6 +32,7 @@ pub const ALL: &[&SceneInfo] = &[
     &shark::INFO,
     &fire::INFO,
     &fireworks::INFO,
+    &aurora::INFO,
     &constellation::INFO,
     &waveform::INFO,
     &pipes::INFO,

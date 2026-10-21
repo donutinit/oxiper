@@ -7,7 +7,7 @@
 ### Animated terminal wallpapers, oxidized.
 
 **cbonsai · asciiquarium · neo · nyancat · aafire**, ported faithfully to Rust,<br>
-plus thirteen more scenes. One small binary. Nearly no CPU. Your terminal's transparency stays intact.
+plus fourteen more scenes. One small binary. Nearly no CPU. Your terminal's transparency stays intact.
 
 [![CI](https://github.com/donutinit/oxiper/actions/workflows/ci.yml/badge.svg)](https://github.com/donutinit/oxiper/actions/workflows/ci.yml)
 [![License: GPL-3.0-only](https://img.shields.io/badge/license-GPL--3.0--only-3b82f6)](LICENSE)
@@ -38,8 +38,8 @@ plus thirteen more scenes. One small binary. Nearly no CPU. Your terminal's tran
   **281 kinds of fish** and hundreds more creatures, plants, props and passers-by, all reacting
   to each other. The rain is neo's droplet model, falling at neo's real speed. Nyan Cat flies with
   the original twelve frames.
-- **One binary, eighteen scenes.** Mix them into a playlist and give each one its own theme, pace and
-  time on screen. And now and then, when you least expect it, a train or a duck goes by.
+- **One binary, nineteen scenes.** Mix them into a playlist and give each one its own theme, pace and
+  time on screen. And now and then, when you least expect it, a train, a duck or Nyan Cat goes by.
 - **Transparency first.** oxiper never paints a background it doesn't have to, so blurred or
   translucent terminals stay see-through. It even asks your terminal what its background looks like,
   so fading trails fade *into it*.
@@ -91,6 +91,9 @@ plus thirteen more scenes. One small binary. Nearly no CPU. Your terminal's tran
 <tr>
 <td align="center"><img src="assets/particles.gif" alt="particles"><br><b>particles</b> · a flow field, or fireworks<br><sub><code>oxiper -s particles -t rosepine</code></sub></td>
 <td align="center"><img src="assets/hollywood.gif" alt="hollywood"><br><b>hollywood</b> · after <a href="https://github.com/dustinkirkland/hollywood">hollywood</a><br><sub><code>oxiper -s hollywood</code></sub></td>
+</tr>
+<tr>
+<td align="center" colspan="2"><img src="assets/aurora.gif" alt="aurora" width="50%"><br><b>aurora</b> · after <a href="https://github.com/SantiagoSchez/tanim">tanim</a>, nine looks, one of them Van Gogh's<br><sub><code>oxiper -s aurora</code></sub></td>
 </tr>
 <tr>
 <td align="center" colspan="2"><img src="assets/themes.png" alt="the same scene in six themes" width="50%"><br><b>23 themes</b> · or follow your terminal's palette<br><sub><code>oxiper list themes</code></sub></td>
@@ -259,6 +262,8 @@ whatever scene is playing, then leaves on its own within 30 seconds:
   shouting for help.
 - **duckpond**: the duck from [duckpond.sh](https://github.com/gsobell/duckpond.sh) paddles
   along a line of water, quacking.
+- **nyancat**: Nyan Cat flies across with its rainbow, the frames and palette of the nyancat
+  scene, over whatever is below.
 
 They are not scenes, so they never show up in a playlist. Make them rarer, more frequent, or
 turn them off:
@@ -269,6 +274,9 @@ egg_rate = 1.2        # per hour of playing time; 0 = never
 ```
 
 Can't wait? Press <kbd>E</kbd>.
+
+The aurora sends its own: Nyan Cat or sl's train crosses its sky about three times an hour
+(`aurora.visitors`), whatever these settings say.
 
 ## The aquarium
 
@@ -380,6 +388,7 @@ Per-frame cost of every scene at 200×60 (`oxiper bench`, release build):
 | shark | 431 | 426 | 54179 | 17.8% |
 | fire | 137 | 428 | 159136 | 48.6% |
 | fireworks | 188 | 117 | 8712 | 2.8% |
+| aurora | 587 | 329 | 81651 | 21.4% |
 | constellation | 155 | 144 | 20705 | 7.8% |
 | waveform | 112 | 115 | 11271 | 7.2% |
 | pipes | 45 | 158 | 253 | 0.1% |
@@ -557,6 +566,30 @@ Aliases: `rockets`
 | `skyline` | `true` | Draw the city with its lit windows |
 | `stars` | `true` | Faint stars in the night sky |
 | `sky` | `false` | Paint the night sky instead of leaving it transparent |
+
+</details>
+
+<details>
+<summary><b>aurora</b> — northern lights over mountains, mirrored in a lake, after tanim</summary>
+
+Aliases: `northern-lights`, `borealis`
+
+The sky changes its look every `stay` seconds, fading from one to the next: tanim's own green,
+teal and violet, an emerald night, a crimson storm, ultraviolet, ice under a crescent moon,
+synthwave with neon ridges, embers, a prism whose curtains run through every hue, and now and
+then Van Gogh's starry night: the sky whirling in brushstrokes, ringed stars, a crescent moon, a
+cypress and a village. Now and then Nyan Cat or sl's train goes by.
+
+| option | default | |
+|---|---|---|
+| `speed` | `1.0` | How fast the lights ripple and drift (0.1-4) |
+| `curtains` | `4` | Curtains of light in the sky at once (1-8) |
+| `look` | `"cycle"` | cycle, or one look to stay on: tanim, emerald, crimson, ultraviolet, ice, synthwave, ember, prism, starry |
+| `stay` | `90.0` | Seconds each look lasts while cycling (10-3600) |
+| `landscape` | `true` | Mountains, a pine forest and the lake that mirrors the sky |
+| `stars` | `true` | Twinkling stars and the odd shooting star |
+| `visitors` | `3.0` | Times per hour Nyan Cat or sl's train goes by, 0 = never |
+| `sky` | `false` | Paint the night sky and the lake instead of leaving them transparent |
 
 </details>
 
@@ -753,7 +786,7 @@ oxiper stands on the shoulders of these wonderful programs:
 - [**pipes.sh**](https://github.com/pipeseroni/pipes.sh) (MIT): pipe pieces and behavior.
 - [**drift**](https://github.com/phlx0/drift) by phlx0 (MIT): inspiration for several ambient scenes and for idle activation.
 - [**tanim**](https://github.com/SantiagoSchez/tanim) by Santiago Sánchez (MIT): the dog,
-  fireworks and metaballs scenes are adapted from it, and its aquarium inspired the painted water.
+  fireworks, metaballs and aurora scenes are adapted from it, and its aquarium inspired the painted water.
 - [**sl**](https://github.com/mtoyoda/sl) by Toyoda Masashi: the locomotives of the `sl` easter
   egg, under its own license, whose notice is kept in [`sl.rs`](src/eggs/sl.rs).
 - [**duckpond.sh**](https://github.com/gsobell/duckpond.sh) by Gavi Sobell (GPL-3.0): the duck.
