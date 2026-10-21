@@ -35,8 +35,19 @@
 //! the Lissajous motion is a function of continuous time at that same pace. The
 //! space between blobs is transparent and their glow fades toward the terminal
 //! background (`background = true` paints tanim's dark backdrop instead).
+//!
+//! On Día de Muertos the gel becomes veladora wax, in cempasúchil,
+//! terciopelo, rosa mexicano, morado, turquesa and hueso, softer and lit
+//! from above with a sheen the color of candlelight. The balls are candles:
+//! a flickering flame stands on top of each (about half of them on October
+//! 28, all of them on November 2), warming the wax around it, and candles
+//! that fuse share their flames. Drops of wax swell from their rims, hang,
+//! pinch off and fall, more of them as the holiday comes. One candle is a
+//! calavera de azúcar with an icing face (two from October 31, three on
+//! November 2). The backdrop, when painted, is the night of the vigil.
 
 use crate::color::Color;
+use crate::fiesta::{Fiesta, Kind};
 use crate::render::{Canvas, Pixels};
 use crate::scene::{Ctx, Opt, Scene, SceneInfo, Val};
 
@@ -106,6 +117,216 @@ const SETS: [[Rgb; 4]; 5] = [
 ];
 const BG_TOP: Rgb = [10., 6., 24.];
 const BG_BOT: Rgb = [24., 10., 36.];
+
+/// Día de Muertos: five sets of colored veladora wax that take the place of
+/// tanim's (cempasúchil, terciopelo and rosa mexicano, the papel picado
+/// colors, morado and turquesa, hueso with marigold).
+const WAX: [[Rgb; 4]; 5] = [
+    [
+        [255., 140., 0.],
+        [255., 196., 40.],
+        [214., 98., 0.],
+        [255., 214., 10.],
+    ],
+    [
+        [228., 0., 124.],
+        [176., 0., 72.],
+        [255., 140., 0.],
+        [240., 84., 150.],
+    ],
+    [
+        [228., 0., 124.],
+        [0., 170., 184.],
+        [255., 210., 0.],
+        [112., 40., 160.],
+    ],
+    [
+        [112., 40., 160.],
+        [0., 170., 184.],
+        [140., 200., 40.],
+        [176., 0., 72.],
+    ],
+    [
+        [244., 238., 226.],
+        [255., 170., 30.],
+        [228., 0., 124.],
+        [255., 140., 0.],
+    ],
+];
+/// The night of the vigil behind the candles (`background = true`).
+const NOCHE_TOP: Rgb = [18., 14., 40.];
+const NOCHE_BOT: Rgb = [40., 16., 34.];
+/// The warm light a flame throws on the wax around it.
+const FLAME_GLOW: Rgb = [255., 170., 60.];
+/// At most this many drops of wax run at once.
+const MAX_DRIPS: usize = 8;
+
+/// Candle flames in four sizes, three flickers each (one char per pixel):
+/// `r` the tip, `o` the edge, `y` the core, `w` white heat, `b` the blue
+/// root, `k` the wick, which stands in the wax.
+const FLAMES: [[&[&str]; 3]; 4] = [
+    [
+        &[".r.", ".o.", "oyo", "oyo", ".w.", ".k."],
+        &["..r", ".o.", "oyo", "oyo", ".w.", ".k."],
+        &["...", "r..", ".o.", "oyo", ".w.", ".k."],
+    ],
+    [
+        &[
+            "..r..", "..o..", ".oyo.", ".oyo.", "oywyo", "oywyo", ".ywy.", ".bkb.", "..k..",
+        ],
+        &[
+            "...r.", "..oo.", ".oyo.", ".oyyo", "oywyo", "oywyo", ".ywy.", ".bkb.", "..k..",
+        ],
+        &[
+            ".....", ".r...", ".oo..", ".oyo.", "oywyo", "oywyo", ".ywy.", ".bkb.", "..k..",
+        ],
+    ],
+    [
+        &[
+            "...r...", "...o...", "..ooo..", "..oyo..", ".oyyyo.", ".oyyyo.", "oyywyyo", "oywwwyo",
+            "oywwwyo", ".ywwwy.", ".bywyb.", "..bkb..", "...k...",
+        ],
+        &[
+            "....r..", "....o..", "...oo..", "..oyo..", "..oyyo.", ".oyyyo.", ".oyywyo", "oywwwyo",
+            "oywwwyo", ".ywwwy.", ".bywyb.", "..bkb..", "...k...",
+        ],
+        &[
+            ".......", "..r....", "..oo...", "..oyo..", ".oyyo..", ".oyyyo.", "oyywyyo", "oywwwyo",
+            "oywwwyo", ".ywwwy.", ".bywyb.", "..bkb..", "...k...",
+        ],
+    ],
+    [
+        &[
+            "....r....",
+            "....r....",
+            "....o....",
+            "...ooo...",
+            "...oyo...",
+            "..ooyoo..",
+            "..oyyyo..",
+            ".ooyyyoo.",
+            ".oyywyyo.",
+            ".oyywyyo.",
+            "oyywwwyyo",
+            "oywwwwwyo",
+            "oywwwwwyo",
+            ".oywwwyo.",
+            ".bbywybb.",
+            "..bbkbb..",
+            "....k....",
+        ],
+        &[
+            ".....r...",
+            ".....o...",
+            "....oo...",
+            "....oyo..",
+            "...oyyo..",
+            "..ooyyo..",
+            "..oyyyoo.",
+            ".ooyywyo.",
+            ".oyywyyo.",
+            ".oyywwyo.",
+            "oyywwwyyo",
+            "oywwwwwyo",
+            "oywwwwwyo",
+            ".oywwwyo.",
+            ".bbywybb.",
+            "..bbkbb..",
+            "....k....",
+        ],
+        &[
+            ".........",
+            ".........",
+            "...r.....",
+            "...oo....",
+            "...oyo...",
+            "..ooyo...",
+            "..oyyyo..",
+            ".ooyyyoo.",
+            ".oyywyyo.",
+            ".oyywyyo.",
+            "oyywwwyyo",
+            "oywwwwwyo",
+            "oywwwwwyo",
+            ".oywwwyo.",
+            ".bbywybb.",
+            "..bbkbb..",
+            "....k....",
+        ],
+    ],
+];
+/// Flicker: which of the three flames shows, a few times a second.
+const FLICKER: [u8; 12] = [0, 0, 1, 0, 2, 0, 0, 1, 1, 0, 2, 2];
+
+/// Some candles are calaveras de azúcar: white wax with a face in icing,
+/// in three sizes (`k` the sockets, nose and stitched smile, `p` rosa
+/// mexicano and `t` turquesa around the eyes and in the flower on the
+/// forehead with `o`/`y`, `g` verde limón on the cheeks).
+const SKULLS: [&[&str]; 3] = [
+    &[
+        "...y...", ".t...p.", "tkt.pkp", ".t...p.", "...k...", ".k.k.k.", "..kkk..",
+    ],
+    &[
+        "....p.p....",
+        ".....o.....",
+        "....p.p....",
+        ".ttt...ppp.",
+        "tkkkt.pkkkp",
+        "tkkkt.pkkkp",
+        ".ttt...ppp.",
+        "....k.k....",
+        "g....k....g",
+        "..k.k.k.k..",
+        ".kkkkkkkkk.",
+        "..k.k.k.k..",
+    ],
+    &[
+        "......p.p......",
+        ".......o.......",
+        "......p.p......",
+        "...............",
+        "..ttt.....ppp..",
+        ".tkkkt...pkkkp.",
+        "tkkkkkt.pkkkkkp",
+        "tkkkkkt.pkkkkkp",
+        ".tkkkt...pkkkp.",
+        "..ttt.....ppp..",
+        "......k.k......",
+        "g......k......g",
+        "...............",
+        "..k.k.k.k.k.k..",
+        ".kkkkkkkkkkkkk.",
+        "..k.k.k.k.k.k..",
+    ],
+];
+/// Sugar-skull white.
+const HUESO: Rgb = [244., 238., 226.];
+
+/// An icing pixel's color.
+fn icing(ch: u8) -> Option<Rgb> {
+    Some(match ch {
+        b'k' => [70., 28., 62.],
+        b'p' => [228., 0., 124.],
+        b't' => [0., 170., 184.],
+        b'o' => [255., 140., 0.],
+        b'y' => [255., 210., 0.],
+        b'g' => [140., 200., 40.],
+        _ => return None,
+    })
+}
+
+/// A flame pixel's color (flames keep their own hue under every theme).
+fn flame_px(ch: u8) -> Option<Color> {
+    Some(match ch {
+        b'r' => Color::Rgb(232, 92, 20),
+        b'o' => Color::Rgb(255, 150, 40),
+        b'y' => Color::Rgb(255, 214, 120),
+        b'w' => Color::Rgb(255, 248, 224),
+        b'b' => Color::Rgb(96, 120, 232),
+        b'k' => Color::Rgb(44, 30, 28),
+        _ => return None,
+    })
+}
 /// tanim's frame rate: its per-frame rates become per-second ones through this.
 const FPS: f32 = 30.0;
 /// Seconds a color set lasts and how long the colors take to blend into the next.
@@ -121,6 +342,35 @@ struct Ball {
     /// Radius as a fraction of the screen's smaller side.
     r: f32,
     slot: usize,
+}
+
+/// A drop of wax that runs down a candle, hangs, pinches off and falls.
+struct Drip {
+    /// The candle it melts from.
+    ball: usize,
+    /// While it hangs: its place relative to the candle's center.
+    ox: f32,
+    oy: f32,
+    hanging: bool,
+    /// Once it falls: where it is.
+    x: f32,
+    y: f32,
+    /// Speed downward, pixels per second.
+    v: f32,
+    /// Radius as a fraction of its candle's.
+    r: f32,
+}
+
+/// A flame on top of a candle this frame: the pixel its wick stands on,
+/// its size and which candle it is (for the flicker).
+#[derive(Clone, Copy)]
+struct Flame {
+    x: i32,
+    y: i32,
+    size: usize,
+    id: usize,
+    /// Its candle's radius in pixels.
+    r: f32,
 }
 
 /// A ball's state for one frame.
@@ -166,6 +416,60 @@ fn accumulate(live: &[B], fy: f32, hw: usize, out: &mut [f32]) {
             rc2[i] += v * b.col[2];
         }
     }
+}
+
+/// A drop's field is 1.6 r²/(d² + 0.6 r²): as wide as a ball's, but round
+/// at the core, so a small drop inside a candle leaves no dent in the light.
+/// (strength, softness) for a squared radius.
+fn soft(r2: f32) -> (f32, f32) {
+    (1.6 * r2, 0.6 * r2 + 0.25)
+}
+
+/// Adds drops of wax to the sums like `accumulate`, but only where they
+/// reach, so a few small drops cost little.
+fn accumulate_near(drops: &[B], fy: f32, hw: usize, out: &mut [f32]) {
+    let (rf, rest) = out.split_at_mut(hw);
+    let (rgx, rest) = rest.split_at_mut(hw);
+    let (rgy, rest) = rest.split_at_mut(hw);
+    let (rc0, rest) = rest.split_at_mut(hw);
+    let (rc1, rc2) = rest.split_at_mut(hw);
+    for b in drops {
+        let (k, c) = soft(b.r2);
+        let reach = 8.0 * b.r2.sqrt() + 2.0;
+        let dy = fy - b.y;
+        if dy.abs() > reach {
+            continue;
+        }
+        let dy2 = dy * dy;
+        let i0 = (((b.x - reach) * 0.5).max(0.0) as usize).min(hw);
+        let i1 = (((b.x + reach) * 0.5 + 1.0).max(0.0) as usize).min(hw);
+        for i in i0..i1 {
+            let dx = (2 * i) as f32 + 0.5 - b.x;
+            let inv = 1.0 / (dx * dx + dy2 + c);
+            let v = k * inv;
+            let g = -2.0 * v * inv;
+            rf[i] += v;
+            rgx[i] += g * dx;
+            rgy[i] += g * dy;
+            rc0[i] += v * b.col[0];
+            rc1[i] += v * b.col[1];
+            rc2[i] += v * b.col[2];
+        }
+    }
+}
+
+/// The field of the balls and the drops at one point.
+fn field(balls: &[B], drops: &[B], x: f32, y: f32) -> f32 {
+    let d2 = |b: &B| (x - b.x).powi(2) + (y - b.y).powi(2);
+    let balls: f32 = balls.iter().map(|b| b.r2 / d2(b).max(0.25)).sum();
+    let drops: f32 = drops
+        .iter()
+        .map(|b| {
+            let (k, c) = soft(b.r2);
+            k / (d2(b) + c)
+        })
+        .sum();
+    balls + drops
 }
 
 /// A sample run and the same run shifted by `par` samples, both `n` long.
@@ -217,6 +521,21 @@ struct Metaballs {
     /// The four slot colors of the current and next set.
     cur: [Rgb; 4],
     nxt: [Rgb; 4],
+    /// The holiday, as of the last `retheme`.
+    fiesta: Fiesta,
+    /// Middle and reach of the balls' vertical swing, as fractions of the
+    /// height (lower for candles, to leave room for their flames).
+    band: (f32, f32),
+    /// Día de Muertos' own dice, so ordinary days roll exactly as before.
+    wax_rng: fastrand::Rng,
+    drips: Vec<Drip>,
+    /// Per-frame state of the drops and the flames.
+    drops: Vec<B>,
+    flames: Vec<Flame>,
+    /// Wall-clock seconds, for the flicker.
+    flicker: f32,
+    /// The calaveras' wax: hueso, or the theme's foreground.
+    bone: Rgb,
 }
 
 impl Metaballs {
@@ -270,17 +589,247 @@ impl Metaballs {
             cur: SETS[set],
             nxt: SETS[next],
             rng,
+            fiesta: Fiesta::NONE,
+            band: (0.5, 0.38),
+            wax_rng: fastrand::Rng::with_seed(ctx.seed ^ 0x7e1a_d0a5_c1e5),
+            drips: Vec::with_capacity(MAX_DRIPS),
+            drops: Vec::with_capacity(MAX_DRIPS),
+            flames: Vec::with_capacity(n),
+            flicker: 0.0,
+            bone: HUESO,
         }
     }
 
-    /// Slot colors of color set `s`: tanim's own, or the theme's accents
-    /// rotated by one per set so the blobs still change hands over time.
+    /// Slot colors of color set `s`: tanim's own (or, on Día de Muertos,
+    /// colored wax), or the theme's accents rotated by one per set so the
+    /// blobs still change hands over time.
     fn slots(ctx: &Ctx, s: usize) -> [Rgb; 4] {
-        let mut out = SETS[s];
+        let sets = if ctx.fiesta.is(Kind::Muertos) {
+            &WAX
+        } else {
+            &SETS
+        };
+        let mut out = sets[s];
         for (i, c) in out.iter_mut().enumerate() {
-            *c = rgb_of(ctx.pick(i + s, color(SETS[s][i])));
+            *c = rgb_of(ctx.pick(i + s, color(sets[s][i])));
         }
         out
+    }
+
+    /// Where a ball is now, in pixels.
+    fn center(&self, b: &Ball) -> (f32, f32) {
+        let (wf, phf) = (self.w as f32, self.ph as f32);
+        (
+            wf * (0.5 + 0.4 * (self.t * b.fx + b.px).sin()),
+            phf * (self.band.0 + self.band.1 * (self.t * b.fy + b.py).sin()),
+        )
+    }
+
+    /// A ball's radius in pixels.
+    fn radius(&self, b: &Ball) -> f32 {
+        let side = (self.w as f32).min(self.ph as f32).max(1.0);
+        b.r * self.size * side
+    }
+
+    /// How many of the balls are candles with a flame: about half of them
+    /// on October 28, all of them on November 2.
+    fn candles(&self) -> usize {
+        if !self.fiesta.on() {
+            return 0;
+        }
+        let n = self.balls.len();
+        ((n as f32 * (0.35 + 0.65 * self.fiesta.level)).ceil() as usize).clamp(1, n)
+    }
+
+    /// Is ball `i` a calavera? One from the first day; two from October 31,
+    /// three on November 2 (every third ball, and at most a third of them).
+    fn calavera(&self, i: usize) -> bool {
+        if !self.fiesta.on() || !i.is_multiple_of(3) {
+            return false;
+        }
+        let level = self.fiesta.level;
+        let n = 1 + (level >= 0.6) as usize + (level >= 1.0) as usize;
+        i / 3 < n.min(self.balls.len().div_ceil(3))
+    }
+
+    /// The candles melt: drops of wax run down their sides, hang, pinch off
+    /// and fall (`ds` seconds of motion).
+    fn melt(&mut self, ds: f32) {
+        let phf = self.ph as f32;
+        let level = self.fiesta.level;
+        let candles = self.candles();
+        let cap = ((2.0 + 6.0 * level) as usize).min(MAX_DRIPS);
+        let mut left = ds;
+        while left > 0.0 {
+            let h = left.min(1.0 / FPS);
+            left -= h;
+            for ball in 0..candles {
+                if self.drips.len() < cap && self.wax_rng.f32() < (0.04 + 0.12 * level) * h {
+                    self.drips.push(Drip {
+                        ball,
+                        ox: (self.wax_rng.f32() - 0.5) * 0.9,
+                        oy: 0.8,
+                        hanging: true,
+                        x: 0.0,
+                        y: 0.0,
+                        v: 0.1,
+                        r: 0.26 + self.wax_rng.f32() * 0.1,
+                    });
+                }
+            }
+            for i in 0..self.drips.len() {
+                let d = &self.drips[i];
+                let b = &self.balls[d.ball];
+                let (r, (cx, cy)) = (self.radius(b), self.center(b));
+                let d = &mut self.drips[i];
+                if d.hanging {
+                    // Wax creeps down slowly (in radii per second), then lets go.
+                    d.v += 0.3 * h;
+                    d.oy += d.v * h;
+                    if d.oy > 1.4 {
+                        d.hanging = false;
+                        (d.x, d.y) = (cx + d.ox * r, cy + d.oy * r);
+                        d.v *= r;
+                    }
+                } else {
+                    d.v = (d.v + 0.5 * phf * h).min(0.8 * phf);
+                    d.y += d.v * h;
+                    d.r *= 1.0 - 0.25 * h;
+                    if d.y - d.r * r > phf + 2.0 {
+                        d.r = 0.0;
+                    }
+                }
+            }
+            self.drips.retain(|d| d.r > 0.05);
+        }
+    }
+
+    /// Lights the candles: finds where each flame stands, warms the wax
+    /// around it and draws it.
+    fn candlelight(&mut self, ctx: &Ctx) {
+        let ph = self.ph as i32;
+        self.flames.clear();
+        for id in 0..self.candles() {
+            let b = self.live[id];
+            let r = b.r2.sqrt();
+            let x = b.x.floor();
+            // Climb from the ball's center to the top of the wax around it.
+            let mut y = b.y.floor();
+            let mut steps = 0;
+            while steps < ph && field(&self.live, &self.drops, x + 0.5, y - 0.5) >= 1.0 {
+                y -= 1.0;
+                steps += 1;
+            }
+            let (x, y) = (x as i32, y as i32);
+            // Fused candles share one flame.
+            if self
+                .flames
+                .iter()
+                .any(|f| (f.x - x).abs() < 10 && (f.y - y).abs() < 6)
+            {
+                continue;
+            }
+            let size = match r {
+                r if r < 5.0 => 0,
+                r if r < 9.0 => 1,
+                r if r < 15.0 => 2,
+                _ => 3,
+            };
+            self.flames.push(Flame { x, y, size, id, r });
+        }
+
+        // The calaveras' faces, shaded like the wax they are drawn on.
+        let lum = |c: Rgb| 0.3 * c[0] + 0.59 * c[1] + 0.11 * c[2];
+        let bone = lum(self.bone).max(1.0);
+        for i in 0..self.balls.len() {
+            let b = self.live[i];
+            let r = b.r2.sqrt();
+            if !self.calavera(i) || r < 4.5 {
+                continue;
+            }
+            let face = SKULLS[(r >= 8.0) as usize + (r >= 14.0) as usize];
+            let (left, top) = (
+                b.x as i32 - face[0].len() as i32 / 2,
+                b.y as i32 - face.len() as i32 / 2,
+            );
+            for (j, row) in face.iter().enumerate() {
+                for (k, ch) in row.bytes().enumerate() {
+                    let (x, y) = (left + k as i32, top + j as i32);
+                    let (Some(ic), Color::Rgb(..)) = (icing(ch), self.px.get(x, y)) else {
+                        continue;
+                    };
+                    let shade = (lum(rgb_of(self.px.get(x, y))) / bone * 1.1).clamp(0.5, 1.0);
+                    self.px
+                        .set(x, y, color([ic[0] * shade, ic[1] * shade, ic[2] * shade]));
+                }
+            }
+        }
+
+        // The glow fades into the backdrop or the terminal's known background;
+        // over a transparent terminal it only warms the wax.
+        let known = match ctx.bg {
+            Color::Rgb(..) => Some(rgb_of(ctx.bg)),
+            _ => None,
+        };
+        let tick = (self.flicker * 7.0) as usize;
+        let sprite =
+            |f: &Flame| FLAMES[f.size][FLICKER[(tick + f.id * 5) % FLICKER.len()] as usize];
+        for f in &self.flames {
+            let fh = sprite(f).len() as i32;
+            let (gx, gy) = (f.x as f32 + 0.5, (f.y - fh / 2) as f32);
+            // The flame warms the wax down to its candle's middle, and the
+            // air only close around it.
+            let reach = (fh as f32 * 1.8 + 2.0).max(f.r * 1.3);
+            let air = fh as f32 * 1.5 + 2.0;
+            let k = self.flicker + f.id as f32 * 1.7;
+            let strength = 0.8 + 0.2 * (k * 11.0).sin() * (k * 6.3).sin();
+            let ri = reach as i32 + 1;
+            for py in (gy as i32 - ri).max(0)..(gy as i32 + ri).min(ph) {
+                let dy2 = (py as f32 + 0.5 - gy).powi(2);
+                // Only the span of this row inside the circle.
+                let span = (reach * reach - dy2).max(0.0).sqrt() as i32 + 1;
+                for px in (f.x - span).max(0)..(f.x + span).min(self.w as i32) {
+                    let d = ((px as f32 + 0.5 - gx).powi(2) + dy2).sqrt();
+                    if d >= reach {
+                        continue;
+                    }
+                    let g = (1.0 - d / reach).powi(2) * strength;
+                    let lit = match self.px.get(px, py) {
+                        Color::Reset => {
+                            let g = (1.0 - d / air).max(0.0).powi(2) * strength * 0.22;
+                            match known {
+                                Some(bg) if g >= 0.04 => mix(bg, FLAME_GLOW, g),
+                                _ => continue,
+                            }
+                        }
+                        c => {
+                            let c = rgb_of(c);
+                            let (a, b) = (1.0 + 0.4 * g, 0.12 * g);
+                            [
+                                (c[0] * a + FLAME_GLOW[0] * b).min(255.0),
+                                (c[1] * a + FLAME_GLOW[1] * b).min(255.0),
+                                (c[2] * a + FLAME_GLOW[2] * b).min(255.0),
+                            ]
+                        }
+                    };
+                    self.px.set(px, py, color(lit));
+                }
+            }
+        }
+        for f in &self.flames {
+            let sprite = sprite(f);
+            let (left, top) = (
+                f.x - sprite[0].len() as i32 / 2,
+                f.y + 1 - sprite.len() as i32,
+            );
+            for (j, row) in sprite.iter().enumerate() {
+                for (i, ch) in row.bytes().enumerate() {
+                    if let Some(c) = flame_px(ch) {
+                        self.px.set(left + i as i32, top + j as i32, c);
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -292,22 +841,40 @@ impl Scene for Metaballs {
         self.px.resize(w, h);
         self.acc.resize(6 * (self.w / 2 + 2), 0.0);
         self.shade.resize(14 * (self.w / 2 + 2), 0.0);
+        self.drips.clear();
     }
 
     fn retheme(&mut self, ctx: &Ctx) {
+        self.fiesta = ctx.fiesta;
+        self.band = match self.fiesta.on() {
+            true => (0.6, 0.3),
+            false => (0.5, 0.38),
+        };
+        if !self.fiesta.on() {
+            self.drips.clear();
+        }
         self.cur = Self::slots(ctx, self.set);
         self.nxt = Self::slots(ctx, self.next);
-        if ctx.theme.native {
+        if ctx.theme.native && self.fiesta.on() {
+            (self.bg_top, self.bg_bot) = (NOCHE_TOP, NOCHE_BOT);
+        } else if ctx.theme.native {
             (self.bg_top, self.bg_bot) = (BG_TOP, BG_BOT);
         } else {
             let b = rgb_of(ctx.theme.bg);
             (self.bg_top, self.bg_bot) = (b, b);
         }
+        self.bone = match ctx.theme.native {
+            true => HUESO,
+            false => rgb_of(ctx.theme.fg),
+        };
     }
 
     fn update(&mut self, _ctx: &Ctx, dt: f32) {
         if dt.is_finite() {
             self.t += dt.clamp(0.0, 5.0) * FPS * self.speed;
+            if self.fiesta.on() {
+                self.melt(dt.clamp(0.0, 5.0) * self.speed);
+            }
         }
     }
 
@@ -318,6 +885,7 @@ impl Scene for Metaballs {
             return;
         }
         self.clock += real.clamp(0.0, 5.0);
+        self.flicker = (self.flicker + real.clamp(0.0, 5.0)) % 3600.0;
         let epoch = (self.clock / SET_LEN) as u32;
         if epoch != self.epoch {
             self.epoch = epoch;
@@ -337,23 +905,57 @@ impl Scene for Metaballs {
         // Crossfade the ball colors toward the next set at the end of each one.
         let into = self.clock % SET_LEN;
         let blend = ((into - (SET_LEN - BLEND)) / BLEND).clamp(0.0, 1.0);
-        for (l, b) in self.live.iter_mut().zip(&self.balls) {
-            l.x = wf * (0.5 + 0.4 * (self.t * b.fx + b.px).sin());
-            l.y = phf * (0.5 + 0.38 * (self.t * b.fy + b.py).sin());
-            l.r2 = (b.r * self.size * side).powi(2);
-            l.col = mix(self.cur[b.slot], self.nxt[b.slot], blend);
+        for i in 0..self.balls.len() {
+            let b = &self.balls[i];
+            let (x, y) = self.center(b);
+            self.live[i] = B {
+                x,
+                y,
+                r2: (b.r * self.size * side).powi(2),
+                col: match self.calavera(i) {
+                    true => self.bone,
+                    false => mix(self.cur[b.slot], self.nxt[b.slot], blend),
+                },
+            };
+        }
+        self.drops.clear();
+        for d in &self.drips {
+            let p = self.live[d.ball];
+            let r = p.r2.sqrt();
+            // A hanging drop swells out of the candle's rim.
+            let (x, y, swell) = match d.hanging {
+                true => (p.x + d.ox * r, p.y + d.oy * r, (d.oy - 0.8) / 0.3),
+                false => (d.x, d.y, 1.0),
+            };
+            self.drops.push(B {
+                x,
+                y,
+                r2: (d.r * swell.clamp(0.0, 1.0) * r).powi(2),
+                col: p.col,
+            });
         }
 
-        // Light from the upper left, towards the viewer.
-        let (lx, ly, lz) = (-0.45f32, -0.55f32, 0.70f32);
+        // Gel is lit from the upper left, towards the viewer, with a white
+        // highlight; candle wax from above, softer and warmer, with a sheen
+        // the color of the flames.
+        let wax = self.fiesta.on();
+        let (lx, ly, lz) = match wax {
+            false => (-0.45f32, -0.55f32, 0.70f32),
+            true => (-0.25f32, -0.75f32, 0.62f32),
+        };
+        let (amb, dif, ka, kb, sp) = match wax {
+            false => (0.25, 0.85, 0.85, 0.0, [255.0f32; 3]),
+            true => (0.45, 0.62, 0.45, 0.25, [255.0, 226.0, 170.0]),
+        };
         let norm = (lx * lx + ly * ly + lz * lz).sqrt();
         let (lx, ly, lz) = (lx / norm, ly / norm, lz / norm);
         // Halfway vector between the light and the viewer, for highlights.
         let (hx, hy, hz) = (lx, ly, lz + 1.0);
         let hn = (hx * hx + hy * hy + hz * hz).sqrt();
         let (hx, hy, hz) = (hx / hn, hy / hn, hz / hn);
-        // How steeply the domes curve at their rims.
-        let steep = side * 0.13 * self.size;
+        // How steeply the domes curve at their rims (wax is softer than gel).
+        let curve = if wax { 0.08 } else { 0.13 };
+        let steep = side * curve * self.size;
 
         // The glow fades into the terminal's background when it is known; with
         // a transparent terminal of unknown color a fade could only darken, so
@@ -381,6 +983,7 @@ impl Scene for Metaballs {
             // pixels in between are averages.
             let st = 6 * hw;
             accumulate(&self.live, fy, hw, &mut self.acc[..st]);
+            accumulate_near(&self.drops, fy, hw, &mut self.acc[..st]);
             let src = &self.acc[..st];
             let (rf, rest) = src.split_at(hw);
             let (rgx, rest) = rest.split_at(hw);
@@ -416,17 +1019,17 @@ impl Scene for Metaballs {
                     // s^24 without powi.
                     let s4 = s * s * s * s;
                     let s12 = s4 * s4 * s4;
-                    let lit = 0.25 + 0.85 * diff;
-                    let k = s12 * s12 * 0.85;
+                    let lit = amb + dif * diff;
+                    let k = s12 * s12 * ka + s12 * kb;
                     let b0 = (c00[i] + (c01[i] - c00[i]) * t) * inv;
                     let b1 = (c10[i] + (c11[i] - c10[i]) * t) * inv;
                     let b2 = (c20[i] + (c21[i] - c20[i]) * t) * inv;
                     rb0[i] = b0;
                     rb1[i] = b1;
                     rb2[i] = b2;
-                    ro0[i] = b0 * lit + (255.0 - b0 * lit) * k;
-                    ro1[i] = b1 * lit + (255.0 - b1 * lit) * k;
-                    ro2[i] = b2 * lit + (255.0 - b2 * lit) * k;
+                    ro0[i] = b0 * lit + (sp[0] - b0 * lit) * k;
+                    ro1[i] = b1 * lit + (sp[1] - b1 * lit) * k;
+                    ro2[i] = b2 * lit + (sp[2] - b2 * lit) * k;
                     rff[i] = f;
                 }
             }
@@ -463,6 +1066,9 @@ impl Scene for Metaballs {
                 }
             }
         }
+        if wax {
+            self.candlelight(ctx);
+        }
         self.px.blit(c);
     }
 }
@@ -479,11 +1085,12 @@ mod tests {
             opts,
             bg,
             seed: 3,
-            fiesta: crate::fiesta::Fiesta::NONE,
+            fiesta: Fiesta::NONE,
         }
     }
 
-    /// Odd options and sizes survive long runs and huge steps, in every color mode.
+    /// Odd options and sizes survive long runs and huge steps, in every color
+    /// mode, on ordinary days and on Día de Muertos.
     #[test]
     fn variants_survive() {
         let variants = [
@@ -494,9 +1101,14 @@ mod tests {
         ];
         for v in variants {
             for theme in [Theme::classic(), Theme::builtin("dracula").unwrap()] {
-                for bg in [Color::Reset, theme.bg] {
+                for (bg, fiesta) in [Color::Reset, theme.bg].into_iter().flat_map(|bg| {
+                    [Fiesta::NONE, Fiesta::of_day(10, 28), Fiesta::of_day(11, 2)].map(|f| (bg, f))
+                }) {
                     let opts = Opts::new(INFO.options, v.parse().unwrap());
-                    let ctx = ctx_with(&theme, &opts, bg);
+                    let ctx = Ctx {
+                        fiesta,
+                        ..ctx_with(&theme, &opts, bg)
+                    };
                     let mut s = (INFO.make)(&ctx);
                     for &(w, h) in &[(80, 24), (1, 1), (2, 3), (7, 2), (200, 60)] {
                         s.resize(&ctx, w, h);
@@ -542,5 +1154,120 @@ mod tests {
         let mut c = Canvas::new(40, 12, Color::Reset);
         s.draw(&ctx, &mut c);
         assert!(c.cells().iter().all(|cell| cell.ch != ' '));
+    }
+
+    /// A frame after `secs` seconds at 120x36, as the scene and its canvas.
+    fn frame(ctx: &Ctx, secs: usize) -> (Metaballs, Canvas) {
+        let mut s = Metaballs::new(ctx);
+        s.resize(ctx, 120, 36);
+        s.retheme(ctx);
+        let mut c = Canvas::new(120, 36, Color::Reset);
+        for _ in 0..secs * 10 {
+            s.tick(ctx, 0.1, 0.1);
+        }
+        s.draw(ctx, &mut c);
+        (s, c)
+    }
+
+    /// Flame pixels: wax and gel snap to steps of 4 and never reach 255.
+    fn flames(c: &Canvas) -> usize {
+        let lit = |col: Color| matches!(col, Color::Rgb(r, g, _) if r == 255 || g == 255);
+        c.cells().iter().filter(|k| lit(k.fg) || lit(k.bg)).count()
+    }
+
+    /// On Día de Muertos the balls are candles: lit, melting, some of them
+    /// calaveras; from the first day to the height of the holiday.
+    #[test]
+    fn muertos_lights_the_candles() {
+        for theme in [Theme::classic(), Theme::builtin("dracula").unwrap()] {
+            let opts = Opts::new(INFO.options, toml::Table::new());
+            for (day, n) in [((10, 28), 1), ((11, 2), 3)] {
+                let ctx = Ctx {
+                    fiesta: Fiesta::of_day(day.0, day.1),
+                    ..ctx_with(&theme, &opts, Color::Reset)
+                };
+                let (s, c) = frame(&ctx, 6);
+                assert!(flames(&c) > 0, "no flames on {day:?}");
+                assert!(!s.flames.is_empty() && s.candles() >= s.balls.len() / 2);
+                let skulls = (0..s.balls.len()).filter(|&i| s.calavera(i)).count();
+                assert_eq!(skulls, n.min(s.balls.len().div_ceil(3)), "{day:?}");
+                if theme.native {
+                    assert_eq!(s.live[0].col, HUESO);
+                }
+            }
+            // Ordinary days: no flames, no drops, the gel as always.
+            let ctx = ctx_with(&theme, &opts, Color::Reset);
+            let (s, c) = frame(&ctx, 6);
+            assert_eq!(flames(&c), 0);
+            assert!(s.flames.is_empty() && s.drips.is_empty() && s.candles() == 0);
+            assert!(!s.calavera(0));
+        }
+    }
+
+    /// Wax runs down the candles, never more than `MAX_DRIPS` drops at once.
+    #[test]
+    fn candles_drip() {
+        let theme = Theme::classic();
+        let opts = Opts::new(INFO.options, "blobs = 16".parse().unwrap());
+        let ctx = Ctx {
+            fiesta: Fiesta::of_day(11, 2),
+            ..ctx_with(&theme, &opts, Color::Reset)
+        };
+        let mut s = Metaballs::new(&ctx);
+        s.resize(&ctx, 120, 36);
+        s.retheme(&ctx);
+        let (mut most, mut fell) = (0, false);
+        for _ in 0..1200 {
+            s.tick(&ctx, 0.05, 0.05);
+            most = most.max(s.drips.len());
+            fell |= s.drips.iter().any(|d| !d.hanging);
+        }
+        assert!(most > 0 && most <= MAX_DRIPS && fell, "{most} drops");
+    }
+
+    /// The holiday comes and goes through `retheme`, and goes without a trace.
+    #[test]
+    fn holiday_switches_on_and_off() {
+        let theme = Theme::classic();
+        let opts = Opts::new(INFO.options, toml::Table::new());
+        let none = ctx_with(&theme, &opts, Color::Reset);
+        let muertos = Ctx {
+            fiesta: Fiesta::of_day(11, 1),
+            ..ctx_with(&theme, &opts, Color::Reset)
+        };
+        let mut s = Metaballs::new(&none);
+        s.resize(&none, 100, 30);
+        s.retheme(&none);
+        let mut c = Canvas::new(100, 30, Color::Reset);
+        let run = |s: &mut Metaballs, ctx: &Ctx, c: &mut Canvas| {
+            for _ in 0..60 {
+                s.tick(ctx, 0.1, 0.1);
+            }
+            c.clear();
+            s.draw(ctx, c);
+            flames(c)
+        };
+        assert_eq!(run(&mut s, &none, &mut c), 0);
+        s.retheme(&muertos);
+        assert!(run(&mut s, &muertos, &mut c) > 0);
+        assert_eq!(s.cur, Metaballs::slots(&muertos, s.set));
+        s.retheme(&none);
+        assert!(s.drips.is_empty());
+        assert_eq!(s.cur, Metaballs::slots(&none, s.set));
+        assert_eq!(run(&mut s, &none, &mut c), 0);
+    }
+
+    /// The same seed gives the same candles, drops and flicker.
+    #[test]
+    fn muertos_is_deterministic() {
+        let theme = Theme::classic();
+        let opts = Opts::new(INFO.options, toml::Table::new());
+        let ctx = Ctx {
+            fiesta: Fiesta::of_day(11, 2),
+            ..ctx_with(&theme, &opts, Color::Rgb(13, 17, 23))
+        };
+        let (_, a) = frame(&ctx, 20);
+        let (_, b) = frame(&ctx, 20);
+        assert!(a.cells() == b.cells());
     }
 }
