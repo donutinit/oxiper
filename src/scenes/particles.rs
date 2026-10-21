@@ -6,12 +6,21 @@
 //! frame. The flow field is the curl of 3D simplex noise (time is the third
 //! axis), sampled on a coarse grid and interpolated, so it swirls without
 //! sinks and costs almost nothing per particle.
+//!
+//! On Día de Muertos (`muertos.rs`) the river turns morado, rosa mexicano
+//! and turquesa, and carries what stands out against it: cempasúchil
+//! blossoms that open in the current and shed their petals into it, petals
+//! tumbling along with golden wakes, and monarch butterflies migrating
+//! across. Fireworks shells burst in papel picado colors, some into petals,
+//! and the fountain springs from marigolds.
 
 use std::f32::consts::TAU;
 
 use crate::color::{Color, rgb};
 use crate::render::{Braille, Canvas};
 use crate::scene::{Ctx, Opt, Scene, SceneInfo, Val};
+
+mod muertos;
 
 pub const INFO: SceneInfo = SceneInfo {
     name: "particles",
@@ -427,6 +436,8 @@ struct Particles {
     /// Palette entry × fade step → color, built in `retheme`.
     lut: Vec<Color>,
     shells: usize,
+    /// Día de Muertos: petals, blossoms and monarchs.
+    muertos: muertos::Muertos,
 }
 
 impl Particles {
@@ -474,6 +485,7 @@ impl Particles {
             emit_acc: 0.0,
             lut: Vec::new(),
             shells: SHELLS.len(),
+            muertos: muertos::Muertos::new(ctx.seed),
         }
     }
 
@@ -605,6 +617,7 @@ impl Particles {
                 flag: r.kind == 4,
             });
         }
+        self.muertos.burst(r.x, r.y, radius);
     }
 
     fn update_fireworks(&mut self, dt: f32) {
@@ -755,7 +768,7 @@ impl Particles {
 }
 
 impl Scene for Particles {
-    fn resize(&mut self, _ctx: &Ctx, w: u16, h: u16) {
+    fn resize(&mut self, ctx: &Ctx, w: u16, h: u16) {
         let (w, h) = (w.max(1) as usize, h.max(1) as usize);
         self.w = w;
         self.h = h;
@@ -801,6 +814,7 @@ impl Scene for Particles {
                 self.jets = (w / 60).clamp(1, 5);
             }
         }
+        self.muertos.dress(ctx.fiesta, self.mode, w, h, self.jets);
     }
 
     fn retheme(&mut self, ctx: &Ctx) {
@@ -815,10 +829,11 @@ impl Scene for Particles {
             let k = l as f32 / (FADE - 1) as f32;
             ctx.fade(c, k.powf(1.3) * reach)
         };
+        let fiesta = ctx.fiesta.on();
         self.lut.clear();
         match self.mode {
             Mode::Flow | Mode::Fountain => {
-                let g = ctx.ramp(&FLOW_PAL);
+                let g = ctx.ramp(if fiesta { &muertos::RAMP } else { &FLOW_PAL });
                 // Theme ramps start near the background; keep particles visible.
                 let lo = if ctx.theme.native { 0.0 } else { 0.3 };
                 for i in 0..GRAD {
@@ -845,6 +860,7 @@ impl Scene for Particles {
                     let c = match i {
                         _ if i == n => hot,
                         _ if i == n + 1 => gold,
+                        _ if fiesta => ctx.pick(i, muertos::SHELLS[i % muertos::SHELLS.len()]),
                         _ => ctx.pick(i, SHELLS[i % SHELLS.len()]),
                     };
                     for l in 0..FADE {
@@ -854,6 +870,20 @@ impl Scene for Particles {
                     }
                 }
             }
+        }
+        if fiesta {
+            // The petals' wakes come after the scene's own colors.
+            let slot = self.lut.len() / FADE;
+            for c in muertos::WAKES {
+                for l in 0..FADE {
+                    self.lut.push(fade(c, l));
+                }
+            }
+            self.muertos.retheme(ctx, slot);
+        }
+        if ctx.fiesta != self.muertos.fiesta() {
+            self.muertos
+                .dress(ctx.fiesta, self.mode, self.w, self.h, self.jets);
         }
     }
 
@@ -870,9 +900,19 @@ impl Scene for Particles {
             Mode::Fireworks => self.update_fireworks(dt),
             Mode::Fountain => self.update_fountain(dt),
         }
+        if self.muertos.on() {
+            if self.mode != Mode::Flow {
+                // The monarchs ride the flow in every mode.
+                let z = self.t * 0.045 * self.speed.sqrt();
+                self.field.update(&self.noise, self.freq, z, false);
+            }
+            let v = 13.0 * self.speed;
+            self.muertos
+                .update(dt, &self.field, &mut self.dots, self.now, self.max_age, v);
+        }
     }
 
-    fn draw(&mut self, _ctx: &Ctx, c: &mut Canvas) {
+    fn draw(&mut self, ctx: &Ctx, c: &mut Canvas) {
         self.braille.clear();
         let (now, max_age) = (self.now, self.max_age);
         let palette_len = self.lut.len() / FADE;
@@ -923,6 +963,7 @@ impl Scene for Particles {
                 }
             }
         }
+        self.muertos.draw(ctx, &mut self.braille);
         self.braille.blit(c);
     }
 }
