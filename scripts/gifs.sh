@@ -32,6 +32,7 @@ SHOTS=(
   "particles|6|3|80x24|15|-s particles --seed 7 -t rosepine"
   "dog|8|0|80x24|15|-s dog --seed 2"
   "shark|8|0|80x24|12|-s shark --seed 3"
+  "ocean|8|20|80x24|12|-s ocean --seed 5 -o ocean.visits=3"
   "fireworks|10|3|80x24|24|-s fireworks --seed 4"
   "metaballs|4|0|80x24|10|-s metaballs --seed 3 -t synthwave"
   "aurora|8|10|80x24|6|-s aurora --seed 18 -o aurora.stay=20"

@@ -7,7 +7,7 @@
 ### Animated terminal wallpapers, oxidized.
 
 **cbonsai · asciiquarium · neo · nyancat · aafire**, ported faithfully to Rust,<br>
-plus fourteen more scenes. One small binary. Nearly no CPU. Your terminal's transparency stays intact.
+plus fifteen more scenes. One small binary. Nearly no CPU. Your terminal's transparency stays intact.
 
 [![CI](https://github.com/donutinit/oxiper/actions/workflows/ci.yml/badge.svg)](https://github.com/donutinit/oxiper/actions/workflows/ci.yml)
 [![License: GPL-3.0-only](https://img.shields.io/badge/license-GPL--3.0--only-3b82f6)](LICENSE)
@@ -38,7 +38,7 @@ plus fourteen more scenes. One small binary. Nearly no CPU. Your terminal's tran
   **281 kinds of fish** and hundreds more creatures, plants, props and passers-by, all reacting
   to each other. The rain is neo's droplet model, falling at neo's real speed. Nyan Cat flies with
   the original twelve frames.
-- **One binary, nineteen scenes.** Mix them into a playlist and give each one its own theme, pace and
+- **One binary, twenty scenes.** Mix them into a playlist and give each one its own theme, pace and
   time on screen. And now and then, when you least expect it, a train, a duck or Nyan Cat goes by.
 - **Transparency first.** oxiper never paints a background it doesn't have to, so blurred or
   translucent terminals stay see-through. It even asks your terminal what its background looks like,
@@ -93,7 +93,8 @@ plus fourteen more scenes. One small binary. Nearly no CPU. Your terminal's tran
 <td align="center"><img src="assets/hollywood.gif" alt="hollywood"><br><b>hollywood</b> · after <a href="https://github.com/dustinkirkland/hollywood">hollywood</a><br><sub><code>oxiper -s hollywood</code></sub></td>
 </tr>
 <tr>
-<td align="center" colspan="2"><img src="assets/aurora.gif" alt="aurora" width="50%"><br><b>aurora</b> · after <a href="https://github.com/SantiagoSchez/tanim">tanim</a>, nine looks, one of them Van Gogh's<br><sub><code>oxiper -s aurora</code></sub></td>
+<td align="center"><img src="assets/aurora.gif" alt="aurora"><br><b>aurora</b> · after <a href="https://github.com/SantiagoSchez/tanim">tanim</a>, nine looks, one of them Van Gogh's<br><sub><code>oxiper -s aurora</code></sub></td>
+<td align="center"><img src="assets/ocean.gif" alt="ocean"><br><b>ocean</b> · tanim's tank with orcas, dolphins and mantas<br><sub><code>oxiper -s ocean</code></sub></td>
 </tr>
 <tr>
 <td align="center" colspan="2"><img src="assets/themes.png" alt="the same scene in six themes" width="50%"><br><b>23 themes</b> · or follow your terminal's palette<br><sub><code>oxiper list themes</code></sub></td>
@@ -386,6 +387,7 @@ Per-frame cost of every scene at 200×60 (`oxiper bench`, release build):
 | nyancat | 62 | 112 | 1942 | 2.4% |
 | dog | 415 | 330 | 22318 | 8.3% |
 | shark | 431 | 426 | 54179 | 17.8% |
+| ocean | 184 | 253 | 12385 | 3.7% |
 | fire | 137 | 428 | 159136 | 48.6% |
 | fireworks | 188 | 117 | 8712 | 2.8% |
 | aurora | 587 | 329 | 81651 | 21.4% |
@@ -535,6 +537,31 @@ Aliases: `sharks`
 | `fish` | `1.0` | How many fish swim in schools; 0 for none |
 | `rays` | `true` | Shafts of light from the surface and caustics on the sand |
 | `water` | `true` | Paint the water; off leaves it see-through around the sea life |
+
+</details>
+
+<details>
+<summary><b>ocean</b> — tanim's fish tank opened to the sea: schools, sharks, orcas, dolphins and mantas</summary>
+
+Aliases: `sea`
+
+tanim's pixel fish tank, opened up to the sea and its food chain. Sardines and tetras school and
+scatter, pufferfish blow up, groupers and barracudas snap up the smallest, and sharks stalk the
+schools. Dolphin pods herd fish and leap into the sky, orca pods round a school into a bait ball
+and run down any shark they meet, and mantas glide overhead feeding on plankton, now and then
+looping over. Whatever is eaten, new fish swim in to replace.
+
+| option | default | |
+|---|---|---|
+| `speed` | `1.0` | How fast everything swims (the visits keep real time) |
+| `fish` | `1.0` | How many fish, 1 being the usual; 0 for none (0-5) |
+| `sharks` | `true` | Sharks come by to hunt the schools |
+| `orcas` | `true` | Pods of orcas herd schools into bait balls and take sharks |
+| `dolphins` | `true` | Pods of dolphins chase fish and leap from the water |
+| `mantas` | `true` | Mantas glide by feeding, now and then looping over |
+| `visits` | `1.0` | How often the big animals come by, 1 being the usual (0 = never, up to 10) |
+| `surface` | `true` | A strip of sky over the water, for the dolphins to leap into |
+| `water` | `true` | Paint the water and the sky; off leaves them see-through |
 
 </details>
 
@@ -786,7 +813,8 @@ oxiper stands on the shoulders of these wonderful programs:
 - [**pipes.sh**](https://github.com/pipeseroni/pipes.sh) (MIT): pipe pieces and behavior.
 - [**drift**](https://github.com/phlx0/drift) by phlx0 (MIT): inspiration for several ambient scenes and for idle activation.
 - [**tanim**](https://github.com/SantiagoSchez/tanim) by Santiago Sánchez (MIT): the dog,
-  fireworks, metaballs and aurora scenes are adapted from it, and its aquarium inspired the painted water.
+  fireworks, metaballs and aurora scenes are adapted from it, the ocean grows out of its aquarium,
+  which also inspired the aquarium's painted water.
 - [**sl**](https://github.com/mtoyoda/sl) by Toyoda Masashi: the locomotives of the `sl` easter
   egg, under its own license, whose notice is kept in [`sl.rs`](src/eggs/sl.rs).
 - [**duckpond.sh**](https://github.com/gsobell/duckpond.sh) by Gavi Sobell (GPL-3.0): the duck.

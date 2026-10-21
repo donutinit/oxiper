@@ -15,6 +15,7 @@ pub mod hollywood;
 pub mod metaballs;
 pub mod neo;
 pub mod nyancat;
+pub mod ocean;
 pub mod orrery;
 pub mod particles;
 pub mod pipes;
@@ -30,6 +31,7 @@ pub const ALL: &[&SceneInfo] = &[
     &nyancat::INFO,
     &dog::INFO,
     &shark::INFO,
+    &ocean::INFO,
     &fire::INFO,
     &fireworks::INFO,
     &aurora::INFO,
