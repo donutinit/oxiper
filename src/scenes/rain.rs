@@ -3,6 +3,18 @@
 //! Near drops are bright, long and fast; far ones are short, slow and faded
 //! toward the background. Every drop falls along the current wind slope, so
 //! the glyphs follow the angle (`│ |` straight down, `\ /` when slanted).
+//!
+//! On Día de Muertos cempasúchil petals fall with the rain, tumbling and
+//! carried further by the wind, and gather along the ground into the path
+//! home; splashes throw up petals and leave some behind. Veladoras burn along
+//! the ground and the drops falling past them catch their light. Lightning
+//! strikes more often (more as the holiday builds up) and each flash catches
+//! skeletons dancing in the dark, a new step at every flicker, fading back
+//! into the night after it (see `muertos`).
+
+mod muertos;
+
+use muertos::Muertos;
 
 use crate::color::{Color, Gradient, rgb};
 use crate::render::{BOLD, Canvas};
@@ -100,6 +112,8 @@ struct Splash {
     x: i32,
     age: f32,
     kind: Kind,
+    /// Throws up marigold petals (Día de Muertos).
+    petal: bool,
 }
 
 #[derive(Clone, Copy)]
@@ -163,6 +177,9 @@ struct Rain {
     flash_color: Color,
     puddle_color: Color,
     ripple_color: Color,
+
+    /// Día de Muertos, off on ordinary days.
+    muertos: Muertos,
 }
 
 impl Rain {
@@ -207,6 +224,7 @@ impl Rain {
             flash_color: CLASSIC_FLASH,
             puddle_color: Color::Reset,
             ripple_color: Color::Reset,
+            muertos: Muertos::new(ctx.seed),
         };
         r.wind = r.wind_base;
         r.wind_target = r.wind_base;
@@ -249,7 +267,7 @@ impl Rain {
         if self.lightning <= 0.0 {
             return f32::INFINITY;
         }
-        let mean = 60.0 / self.lightning;
+        let mean = 60.0 / (self.lightning * self.muertos.storm());
         (-(1.0 - self.rng.f32()).max(1e-6).ln() * mean).max(mean.min(3.0))
     }
 
@@ -277,11 +295,35 @@ impl Rain {
 
     fn add_splash(&mut self, x: i32, kind: Kind) {
         if self.splashes.len() < self.splash_cap {
-            self.splashes.push(Splash { x, age: 0.0, kind });
+            let petal = kind == Kind::Big && self.muertos.on() && self.muertos.splash(x);
+            self.splashes.push(Splash {
+                x,
+                age: 0.0,
+                kind,
+                petal,
+            });
         }
     }
 
+    /// Dresses up for the holiday on today (or undresses), and lets the
+    /// first lightning come soon once Día de Muertos arrives.
+    fn dress(&mut self, ctx: &Ctx) {
+        if self.muertos.set(ctx.fiesta, self.w, self.h) && self.lightning > 0.0 {
+            self.next_strike = self.next_strike.min(self.muertos.soon());
+        }
+    }
+
+    /// Which flicker of the flash is showing (0 = the first).
+    fn beat(&self) -> usize {
+        let lit = self
+            .flickers
+            .iter()
+            .filter(|&&(t0, a)| a > 0.0 && self.flash_t >= t0);
+        lit.count().saturating_sub(1)
+    }
+
     fn strike(&mut self) {
+        self.muertos.strike();
         self.flash_t = 0.0;
         let r = &mut self.rng;
         self.flickers[0] = (0.0, 1.0);
@@ -372,6 +414,7 @@ impl Rain {
         let gi = l.lean as usize;
         // Straight glyphs keep their streak upright; slanted ones follow the slope.
         let lean = if gi == 0 { 0.0 } else { s };
+        let warm = self.muertos.on();
         for d in &self.drops[self.span[li]..self.span[li + 1]] {
             let ch = if gi == 0 && d.alt {
                 l.glyphs[3]
@@ -385,7 +428,12 @@ impl Rain {
                     break;
                 }
                 let x = (d.x - lean * k as f32).floor() as i32;
-                c.set(x.rem_euclid(w), y, ch, cols[k as usize]);
+                let x = x.rem_euclid(w);
+                if warm {
+                    c.set(x, y, ch, self.muertos.warm(x, y, cols[k as usize]));
+                } else {
+                    c.set(x, y, ch, cols[k as usize]);
+                }
             }
         }
     }
@@ -404,13 +452,17 @@ impl Rain {
         }
     }
 
-    fn draw_ground(&self, c: &mut Canvas, flash: f32) {
+    fn draw_ground(&self, ctx: &Ctx, c: &mut Canvas, flash: f32) {
         let g = self.ground();
         if self.puddle {
             let pc = self.puddle_color.lerp(self.flash_color, flash * 0.5);
             for x in 0..self.w {
                 c.set(x, g, '_', pc);
             }
+        }
+        let muertos = self.muertos.on();
+        if muertos {
+            self.muertos.draw_fallen(ctx, c, flash);
         }
         let big = self.layers[0].colors[0];
         let small = self.layers[(self.nlayers / 2).min(self.nlayers - 1)].colors[0];
@@ -424,21 +476,27 @@ impl Rain {
                 }
                 Kind::Big => {
                     let col = big.lerp(self.flash_color, flash * 0.6);
+                    // A splash that throws up petals: the spray is orange.
+                    let spray = if s.petal {
+                        self.muertos.spray(s.age)
+                    } else {
+                        col
+                    };
                     match (s.age / 0.08) as i32 {
                         0 => c.set(s.x, g, '‿', col),
                         1 => {
                             c.set(s.x, g, '^', col);
-                            c.set(s.x - 1, g - 1, '.', col);
-                            c.set(s.x + 1, g - 1, '.', col);
+                            c.set(s.x - 1, g - 1, '.', spray);
+                            c.set(s.x + 1, g - 1, '.', spray);
                         }
                         2 => {
-                            c.set(s.x - 2, g - 1, '˙', col);
-                            c.set(s.x + 2, g - 1, '˙', col);
+                            c.set(s.x - 2, g - 1, '˙', spray);
+                            c.set(s.x + 2, g - 1, '˙', spray);
                             c.set(s.x, g, '.', col);
                         }
                         _ => {
-                            c.set(s.x - 2, g, '.', col);
-                            c.set(s.x + 2, g, '.', col);
+                            c.set(s.x - 2, g, '.', spray);
+                            c.set(s.x + 2, g, '.', spray);
                         }
                     }
                 }
@@ -452,6 +510,9 @@ impl Rain {
                     }
                 }
             }
+        }
+        if muertos {
+            self.muertos.draw_candles(c);
         }
     }
 
@@ -515,6 +576,8 @@ impl Rain {
                 }
         });
 
+        self.muertos.step(dt, s, speed);
+
         self.flash_t = (self.flash_t + dt).min(FLASH_LEN);
         self.next_strike -= dt;
         if self.next_strike <= 0.0 {
@@ -525,7 +588,7 @@ impl Rain {
 }
 
 impl Scene for Rain {
-    fn resize(&mut self, _ctx: &Ctx, w: u16, h: u16) {
+    fn resize(&mut self, ctx: &Ctx, w: u16, h: u16) {
         self.w = w.max(1) as i32;
         self.h = h.max(1) as i32;
         let area = (self.w * self.h) as f32;
@@ -566,6 +629,7 @@ impl Scene for Rain {
         self.splashes = Vec::with_capacity(self.splash_cap);
         self.bolt_cap = self.h as usize * 3 + 8;
         self.bolt = Vec::with_capacity(self.bolt_cap);
+        self.dress(ctx);
     }
 
     fn retheme(&mut self, ctx: &Ctx) {
@@ -590,6 +654,8 @@ impl Scene for Rain {
         };
         self.puddle_color = ctx.fade(ramp.at(0.6), 0.45);
         self.ripple_color = ramp.at(0.85);
+        self.dress(ctx);
+        self.muertos.retheme(ctx, self.flash_color);
     }
 
     fn update(&mut self, _ctx: &Ctx, dt: f32) {
@@ -616,23 +682,38 @@ impl Scene for Rain {
                 }
             }
         }
-        // Far to near, with the bolt behind the nearest layer.
+        // Far to near, with the bolt behind the nearest layer, petals at three
+        // depths among the rain and the dancers the bolt lights up in front.
+        let muertos = self.muertos.on();
+        if muertos {
+            self.muertos.draw_petals(c, 2, flash);
+        }
         for li in (0..self.nlayers).rev() {
             if li == 0 {
                 self.draw_bolt(c, flash);
+                if muertos {
+                    self.muertos.draw_petals(c, 1, flash);
+                }
             }
             self.draw_layer(c, li, flash);
         }
-        self.draw_ground(c, flash);
+        if muertos {
+            self.muertos.draw_dancers(ctx, c, flash, self.beat());
+        }
+        self.draw_ground(ctx, c, flash);
+        if muertos {
+            self.muertos.draw_petals(c, 0, flash);
+        }
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::fiesta::Fiesta;
 
     /// Runs the scene with `opts` through odd sizes, huge steps and themes.
-    fn torture(opts: &str) {
+    fn torture(opts: &str, fiesta: Fiesta) {
         let table: toml::Table = opts.parse().unwrap();
         let o = crate::scene::Opts::new(INFO.options, table);
         for (theme, bg) in [("classic", Color::Reset), ("nord", Color::Rgb(20, 20, 30))] {
@@ -642,7 +723,7 @@ mod tests {
                 opts: &o,
                 bg,
                 seed: 11,
-                fiesta: crate::fiesta::Fiesta::NONE,
+                fiesta,
             };
             let mut s = (INFO.make)(&ctx);
             for &(w, h) in &[(1u16, 1u16), (2, 3), (500, 150), (3, 1), (1, 40), (37, 11)] {
@@ -662,11 +743,97 @@ mod tests {
 
     #[test]
     fn survives_options() {
-        torture("");
-        torture(
-            "intensity = 20.0\nlayers = 6\nwind = -3.0\ngusts = 3.0\nlightning = 600.0\npuddle = true\nspeed = 20.0",
-        );
-        torture("intensity = 0.0\nlayers = 1\nsplashes = false\nlightning = 0.0");
-        torture("layers = -2\nlightning = 60.0\nlightning_bg = true\nwind = 1.0");
+        for fiesta in [Fiesta::NONE, Fiesta::of_day(11, 2), Fiesta::of_day(10, 28)] {
+            torture("", fiesta);
+            torture(
+                "intensity = 20.0\nlayers = 6\nwind = -3.0\ngusts = 3.0\nlightning = 600.0\npuddle = true\nspeed = 20.0",
+                fiesta,
+            );
+            torture(
+                "intensity = 0.0\nlayers = 1\nsplashes = false\nlightning = 0.0",
+                fiesta,
+            );
+            torture(
+                "layers = -2\nlightning = 60.0\nlightning_bg = true\nwind = 1.0",
+                fiesta,
+            );
+        }
+    }
+
+    /// What `frames` frames at 120×36 show of Día de Muertos: cells drawn in
+    /// its glyphs (petals, flowers, candles) and frames with a dancer.
+    fn holiday(ctx: &Ctx, s: &mut dyn Scene, frames: usize) -> (usize, usize) {
+        let mut c = Canvas::new(120, 36, Color::Reset);
+        let (mut cells, mut dancing) = (0, 0);
+        for _ in 0..frames {
+            s.update(ctx, 1.0 / 30.0);
+            c.clear();
+            s.draw(ctx, &mut c);
+            let ours = |cell: &&crate::render::Cell| "♦◆✿❀●◖◗•◦°█".contains(cell.ch);
+            cells += c.cells().iter().filter(ours).count();
+            if c.to_text().contains("(o.o)") {
+                dancing += 1;
+            }
+        }
+        (cells, dancing)
+    }
+
+    fn opts(lightning: f32) -> crate::scene::Opts {
+        let table: toml::Table = format!("lightning = {lightning:?}").parse().unwrap();
+        crate::scene::Opts::new(INFO.options, table)
+    }
+
+    #[test]
+    fn muertos_comes_on_its_days() {
+        let o = opts(30.0);
+        for theme in ["classic", "dracula"] {
+            let th = crate::theme::Theme::builtin(theme).unwrap();
+            for (fiesta, on) in [
+                (Fiesta::of_day(11, 2), true),
+                (Fiesta::of_day(10, 28), true),
+                (Fiesta::NONE, false),
+            ] {
+                let ctx = Ctx {
+                    theme: &th,
+                    opts: &o,
+                    bg: Color::Rgb(13, 17, 23),
+                    seed: 5,
+                    fiesta,
+                };
+                let mut s = (INFO.make)(&ctx);
+                s.resize(&ctx, 120, 36);
+                s.retheme(&ctx);
+                let (cells, dancing) = holiday(&ctx, s.as_mut(), 600);
+                assert_eq!(cells > 0, on, "{theme} {fiesta:?}: {cells} cells");
+                assert_eq!(dancing > 0, on, "{theme} {fiesta:?}: {dancing} frames");
+            }
+        }
+    }
+
+    #[test]
+    fn retheme_switches_the_holiday() {
+        let o = opts(30.0);
+        let th = crate::theme::Theme::builtin("classic").unwrap();
+        let mut ctx = Ctx {
+            theme: &th,
+            opts: &o,
+            bg: Color::Reset,
+            seed: 9,
+            fiesta: Fiesta::NONE,
+        };
+        let mut s = (INFO.make)(&ctx);
+        s.resize(&ctx, 120, 36);
+        s.retheme(&ctx);
+        assert_eq!(holiday(&ctx, s.as_mut(), 30), (0, 0));
+        ctx.fiesta = Fiesta::of_day(11, 1);
+        s.retheme(&ctx);
+        // The first strike comes soon after the holiday does.
+        let (cells, dancing) = holiday(&ctx, s.as_mut(), 300);
+        assert!(cells > 0 && dancing > 0, "{cells} {dancing}");
+        s.resize(&ctx, 90, 30);
+        assert!(holiday(&ctx, s.as_mut(), 5).0 > 0);
+        ctx.fiesta = Fiesta::NONE;
+        s.retheme(&ctx);
+        assert_eq!(holiday(&ctx, s.as_mut(), 600), (0, 0));
     }
 }
