@@ -4,7 +4,7 @@
 
 use std::f32::consts::PI;
 
-use super::art::{self, HEAD_AT, HEAD_PIVOT, TIGER};
+use super::art::{self, HEAD_AT, HEAD_PIVOT};
 use super::body::{Gait, Legs, REAR, TailPose};
 use super::jungle::{FEET, Jungle};
 use super::{Dice, Kind, Rgb, Rng};
@@ -35,6 +35,8 @@ pub enum Mood {
     Look,
     /// In the saucer's beam, or inside it.
     Carried,
+    /// Día de Muertos: standing before an ofrenda, head bowed.
+    Visit,
 }
 
 /// Speeds, in world pixels per step.
@@ -78,6 +80,10 @@ pub struct Tiger {
     /// Real seconds before it is hungry, or thirsty, again.
     pub hunger: f32,
     pub thirst: f32,
+    /// Real seconds before it next calls on an ofrenda, and where the ruin
+    /// it is at stands.
+    pub visit: f32,
+    shrine: f32,
     /// Where it is going.
     pub tx: f32,
     trot: bool,
@@ -130,6 +136,8 @@ impl Tiger {
             clock: 0.0,
             hunger: rng.rangef(15.0, 50.0),
             thirst: rng.rangef(40.0, 120.0),
+            visit: 12.0,
+            shrine: 0.0,
             tx: dir * 150.0,
             trot: false,
             prey: None,
@@ -158,11 +166,13 @@ impl Tiger {
         self.clock -= real;
         self.hunger -= real;
         self.thirst -= real;
+        self.visit -= real;
     }
 
     pub fn shift(&mut self, dx: f32) {
         self.x -= dx;
         self.tx -= dx;
+        self.shrine -= dx;
         if let Some(t) = &mut self.tree {
             t.0 -= dx;
         }
@@ -247,6 +257,13 @@ impl Jungle {
         self.tiger_effects(rng);
     }
 
+    /// The holiday is over: a tiger on its way to an ofrenda has nowhere to go.
+    pub fn undress(&mut self, rng: &mut Rng) {
+        if self.tiger.mood == Mood::Visit {
+            self.plan(rng);
+        }
+    }
+
     /// Picks what to do next, once it has got where it was going.
     fn plan(&mut self, rng: &mut Rng) {
         let (vw, _) = self.view_size();
@@ -276,6 +293,25 @@ impl Jungle {
             };
             self.tiger.tx = bank;
             self.tiger.set(Mood::Drink);
+            return;
+        }
+        // On Día de Muertos, now and then it calls on an ofrenda by the path.
+        if self.pal.fest.is_some()
+            && self.tiger.visit <= 0.0
+            && let Some(r) = self
+                .ruins(x - vw * 1.2, x + vw * 1.2)
+                .as_slice()
+                .iter()
+                .filter(|r| (r.x - x).abs() > 30.0)
+                .min_by(|a, b| (a.x - x).abs().total_cmp(&(b.x - x).abs()))
+                .copied()
+        {
+            // On the side it is on, its jaws at the doorway.
+            let side = if r.x > x { -1.0 } else { 1.0 };
+            self.tiger.shrine = r.x;
+            self.tiger.tx = r.x + side * (12.0 + JAWS);
+            self.tiger.visit = rng.rangef(60.0, 140.0) * self.set.rest_scale;
+            self.tiger.set(Mood::Visit);
             return;
         }
         let sleepy = if night { 0.04 } else { 0.16 * self.daylight };
@@ -479,6 +515,26 @@ impl Jungle {
                     }
                 }
             }
+            Mood::Visit => {
+                let t = &mut self.tiger;
+                if !t.lapping {
+                    if (t.tx - t.x).abs() < 2.0 && t.turn == 0.0 {
+                        // Face the shrine and bow to it.
+                        t.lapping = true;
+                        t.clock = rng.rangef(7.0, 12.0);
+                        t.dir = if t.shrine > t.x { 1.0 } else { -1.0 };
+                        let (hx, y) = (t.jaws(), FEET as f32 - 26.0);
+                        self.life.petals(hx, y, 10, rng);
+                    } else if steps > 30 * 40 {
+                        self.plan(rng);
+                    }
+                } else if t.clock <= 0.0 {
+                    // On its way, either way.
+                    let d = if rng.chance(0.5) { t.dir } else { -t.dir };
+                    t.tx = t.x + d * rng.rangef(140.0, 260.0);
+                    t.set(Mood::Patrol);
+                }
+            }
             Mood::Look | Mood::Carried => {}
         }
     }
@@ -542,12 +598,12 @@ impl Jungle {
             Mood::Stalk => (CREEP, 0.05),
             Mood::Charge => (RUN, 0.16),
             Mood::Fend if t.steps > 40 && t.steps < 90 => (RUN * 0.8, 0.14),
-            Mood::Drink | Mood::Mark if !t.lapping => (WALK, 0.06),
+            Mood::Drink | Mood::Mark | Mood::Visit if !t.lapping => (WALK, 0.06),
             Mood::Pounce => (t.speed, 1.0),
             _ => (0.0, 0.12),
         };
         // Slow down to stop where it is going.
-        if matches!(t.mood, Mood::Drink | Mood::Mark) && !t.lapping {
+        if matches!(t.mood, Mood::Drink | Mood::Mark | Mood::Visit) && !t.lapping {
             want = want.min(far * 0.08 + 0.08);
         }
         if river {
@@ -617,6 +673,7 @@ impl Jungle {
         let crouch = match t.mood {
             Mood::Stalk => 1.0,
             Mood::Drink if t.lapping => 0.7,
+            Mood::Visit if t.lapping => 0.3,
             Mood::Look => 0.35,
             _ => 0.0,
         };
@@ -641,6 +698,7 @@ impl Jungle {
             Mood::Drink if t.lapping => 0.85 + 0.06 * (t.steps as f32 * 0.6).sin(),
             Mood::Feed => 0.62 + 0.07 * chew,
             Mood::Look => -0.4,
+            Mood::Visit if t.lapping => 0.55 + 0.05 * (t.steps as f32 * 0.07).sin(),
             Mood::Roar | Mood::Fend if t.steps < 60 => -0.18,
             Mood::Carried => -0.3,
             _ if river => -0.15,
@@ -710,7 +768,20 @@ impl Jungle {
             Kind::Siberian => 1,
             Kind::White => 2,
         };
-        let lut = self.lut(art::TIGER_COLORS[kind]);
+        // On Día de Muertos it is an alebrije, painted from the holiday's colors.
+        let (skin, lut) = match self.pal.fest {
+            Some(dress) => {
+                #[cfg(test)]
+                {
+                    self.painted.alebrije = true;
+                }
+                (
+                    &art::ALEBRIJE_SKIN,
+                    self.lut_spirit(&dress.alebrije(t.kind)),
+                )
+            }
+            None => (&art::TIGER_SKIN, self.lut(art::TIGER_COLORS[kind])),
+        };
         let water = (t.sink > 0.05).then(|| (FEET - 2, self.water_color()));
         let feet = self.tiger.feet_y();
         let t = &self.tiger;
@@ -721,8 +792,7 @@ impl Jungle {
         self.fig.clear();
         if t.mood == Mood::Nap {
             let breath = ((self.tick / 45) % 2) as usize;
-            self.fig
-                .stamp(art::TIGER_SLEEP[breath], MID - 17, GROUND - 12);
+            self.fig.stamp(skin.sleep[breath], MID - 17, GROUND - 12);
             self.place(
                 t.x,
                 feet,
@@ -736,7 +806,7 @@ impl Jungle {
             return;
         }
         if fronting {
-            self.fig.stamp(art::TIGER_FRONT, MID - 8, GROUND - 24);
+            self.fig.stamp(skin.front, MID - 8, GROUND - 24);
             let tilt = if t.mood == Mood::Carried {
                 0.15 * (t.steps as f32 * 0.1).sin()
             } else {
@@ -803,18 +873,21 @@ impl Jungle {
             },
         };
         let head_s = if t.mouth > 0.62 {
-            art::TIGER_HEAD_ROAR
+            skin.heads[3]
         } else if t.mouth > 0.22 {
-            art::TIGER_HEAD_SNARL
+            skin.heads[2]
         } else if t.blink > 0 || t.mood == Mood::Feed {
-            art::TIGER_HEAD_BLINK
+            skin.heads[1]
         } else {
-            art::TIGER_HEAD
+            skin.heads[0]
         };
         let (head, crouch) = (t.head, t.crouch);
         let (angle, pivot) = match t.mood {
             Mood::Pounce => (t.pitch, (MID, 6)),
-            Mood::Mark if t.lapping => (REAR, (TIGER.hind.hip.0 as i32, TIGER.hind.hip.1 as i32)),
+            Mood::Mark if t.lapping => (
+                REAR,
+                (skin.build.hind.hip.0 as i32, skin.build.hind.hip.1 as i32),
+            ),
             Mood::Carried => (0.12 * (t.steps as f32 * 0.07).sin(), (MID, 6)),
             // Galloping, the body rocks from the hind legs to the fore legs.
             _ if t.gait == Gait::Gallop && t.speed > 1.5 => {
@@ -823,12 +896,12 @@ impl Jungle {
             _ => (0.0, (MID, 6)),
         };
         let fig = &mut self.fig;
-        fig.far_legs(&TIGER, legs, drop);
-        fig.near_legs(&TIGER, legs, drop);
-        if let Some(tail) = &TIGER.tail {
+        fig.far_legs(skin.build, legs, drop);
+        fig.near_legs(skin.build, legs, drop);
+        if let Some(tail) = &skin.build.tail {
             fig.tail(tail, pose);
         }
-        fig.stamp(art::TIGER_TORSO, 0, 0);
+        fig.stamp(skin.torso, skin.torso_at.0, skin.torso_at.1);
         let (hx, hy) = (
             HEAD_AT.0 + (crouch * 1.5) as i32,
             HEAD_AT.1 + (crouch * 2.5) as i32,

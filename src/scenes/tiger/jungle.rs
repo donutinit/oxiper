@@ -2,7 +2,6 @@
 //! layers, the camera, and how the part in view gets painted and projected
 //! onto the screen.
 
-use super::art::Palette;
 use super::body::{Figure, Shears};
 use super::hunter::Tiger;
 use super::life::Life;
@@ -23,15 +22,15 @@ const CAM_MARGIN: f32 = 4.0;
 /// How fast the layers scroll, the tiger's ground being 1.
 const HILL_P: f64 = 0.12;
 const FAR_P: f64 = 0.3;
-const MID_P: f64 = 0.6;
+pub const MID_P: f64 = 0.6;
 const FRONT_P: f64 = 1.3;
 /// Water comes in cells this wide: a river, a pool, or dry land.
 const WATER_CELL: i64 = 560;
 /// Big trees on the tiger's ground, and patches of tall grass.
-const TREE_CELL: i64 = 170;
+pub const TREE_CELL: i64 = 170;
 const GRASS_CELL: i64 = 60;
 /// Trees and lianas of the middle layer.
-const MID_CELL: i64 = 34;
+pub const MID_CELL: i64 = 34;
 const LIANA_CELL: i64 = 23;
 /// How long it is, nose to tail tip.
 pub const TIGER_LONG: f32 = 60.0;
@@ -136,10 +135,10 @@ pub struct Jungle {
     pub scr: Pixels,
     /// The part of the world in view, painted before projecting.
     buf: Vec<Rgb>,
-    bx: i32,
-    by: i32,
-    bw: i32,
-    bh: i32,
+    pub bx: i32,
+    pub by: i32,
+    pub bw: i32,
+    pub bh: i32,
     cols: Vec<Col>,
     /// Where local x 0 is on the endless jungle.
     pub base: i64,
@@ -172,6 +171,9 @@ pub struct Jungle {
     taps_x: Vec<Tap>,
     taps_y: Vec<Tap>,
     weights: Vec<u32>,
+    /// What the last frame painted of the holiday, for the tests.
+    #[cfg(test)]
+    pub painted: super::muertos::Painted,
 }
 
 impl Jungle {
@@ -217,6 +219,8 @@ impl Jungle {
             taps_x: vec![Tap::default(); sw as usize],
             taps_y: vec![Tap::default(); sph as usize],
             weights: Vec::new(),
+            #[cfg(test)]
+            painted: Default::default(),
         };
         // Start on dry land, away from the trees.
         while let Some(s) = j.water(j.tiger.x) {
@@ -264,8 +268,14 @@ impl Jungle {
         let eerie = self.ufo.glow();
         if eerie > 0.0 {
             let l = &mut self.light;
-            l.tint = l.tint.lerp(Rgb(170, 255, 200), 0.35 * eerie);
-            l.top = l.top.lerp(Rgb(20, 40, 36), 0.4 * eerie);
+            // Amber and plum over the marigolds, instead of the saucer's green.
+            let (tint, top) = if self.pal.fest.is_some() {
+                (Rgb(255, 206, 140), Rgb(44, 20, 40))
+            } else {
+                (Rgb(170, 255, 200), Rgb(20, 40, 36))
+            };
+            l.tint = l.tint.lerp(tint, 0.35 * eerie);
+            l.top = l.top.lerp(top, 0.4 * eerie);
         }
         let night = NIGHT.tint.luma() as f32;
         self.daylight = ((self.light.tint.luma() as f32 - night) / (255.0 - night)).clamp(0.0, 1.0);
@@ -357,7 +367,7 @@ impl Jungle {
             })
     }
 
-    fn trunk_in(&self, cell: i64) -> Option<Trunk> {
+    pub fn trunk_in(&self, cell: i64) -> Option<Trunk> {
         let (s, c) = (self.seed, cell as i32);
         if unit(c, 81, s) > 0.62 {
             return None;
@@ -443,7 +453,14 @@ impl Jungle {
     fn follow(&mut self) {
         let zoom = ZOOMS[self.set.zoom.min(ZOOMS.len() - 1)];
         let want_h = if self.ufo.wide() {
-            zoom.max(UFO_VIEW).min(WORLD_H as f32)
+            // On Día de Muertos it pulls back further, so that the skull's
+            // saucer hangs clear of the papel picado across the top.
+            let wide = if self.pal.fest.is_some() {
+                96.0
+            } else {
+                UFO_VIEW
+            };
+            zoom.max(wide).min(WORLD_H as f32)
         } else {
             zoom
         };
@@ -484,7 +501,13 @@ impl Jungle {
             want_y = want_y.min(top - CAM_MARGIN);
         }
         if let Some(top) = self.ufo.top() {
-            want_y = want_y.min(top - 2.0);
+            // The skull's saucer stands taller, and keeps clear of the flags.
+            let (tall, clear) = if self.pal.fest.is_some() {
+                (super::muertos::SAUCER_EXTRA, 14.0)
+            } else {
+                (0.0, 0.0)
+            };
+            want_y = want_y.min(top - 2.0 - tall - clear);
         }
         let want_y = want_y.max(0.0).min(room.max(0.0));
         self.cam_y += (want_y - self.cam_y) * 0.1;
@@ -560,7 +583,7 @@ impl Jungle {
 
     /// How far a layer that scrolls at `p` is shifted: the layer coordinate of
     /// local column `x` is `x + shift`.
-    fn shift(&self, v: View, p: f64) -> i64 {
+    pub fn shift(&self, v: View, p: f64) -> i64 {
         let left = self.base as f64 + v.x as f64;
         (left * p - v.x as f64).round() as i64
     }
@@ -596,19 +619,19 @@ impl Jungle {
 
     /// A theme's greens: the jungle's own under the native theme.
     #[inline]
-    fn green(&self, c: Rgb) -> Rgb {
+    pub fn green(&self, c: Rgb) -> Rgb {
         c.lerp(self.pal.green, self.pal.green_k)
     }
 
     /// `c` lit, then `k` of the way into the haze of the distance.
     #[inline]
-    fn far(&self, c: Rgb, k: f32) -> Rgb {
+    pub fn far(&self, c: Rgb, k: f32) -> Rgb {
         self.lit(c)
             .lerp(self.light.bot.lerp(self.light.top, 0.25), k)
     }
 
     /// A palette lit for the hour: letters to colors. Eyes shine at night.
-    pub fn lut(&self, pal: Palette) -> [Option<Rgb>; 128] {
+    pub fn lut(&self, pal: &[(u8, Rgb)]) -> [Option<Rgb>; 128] {
         let mut lut = [None; 128];
         let dark = 1.0 - self.daylight;
         for &(ch, c) in pal {
@@ -724,15 +747,24 @@ impl Jungle {
         self.bh = (v.y + v.h).ceil() as i32 + 1 - self.by;
         let cap_h = self.buf.len() as i32 / cap_w.max(1);
         self.bh = self.bh.min(cap_h);
+        #[cfg(test)]
+        {
+            self.painted = Default::default();
+        }
         self.paint_sky(v);
         self.paint_layers(v);
+        self.paint_papel_far(v);
         self.paint_ground();
+        self.paint_beds(false);
+        self.paint_ruins();
         self.paint_trees();
+        self.paint_papel();
         self.paint_mist(v);
         self.draw_life_back();
         self.draw_tiger();
         self.draw_life_front();
         self.paint_grass();
+        self.paint_beds(true);
         self.paint_front(v);
         self.draw_specks();
         self.draw_ufo();
@@ -1320,6 +1352,15 @@ impl Jungle {
                         let c = if r == len - 1 { tip } else { color };
                         self.put(x + dx, base - r, c);
                     }
+                    // On Día de Muertos some of the blades flower.
+                    if let Some(d) = self.pal.fest
+                        && (h >> 16) % 100 < (14.0 + 22.0 * d.level) as u32
+                    {
+                        let top = len.max(1);
+                        let f = (top - 1) as f32 / top as f32;
+                        let dx = (sway * f * f).round() as i32;
+                        self.blossom(x + dx, base - top - 1, h >> 9);
+                    }
                 }
             }
         }
@@ -1550,7 +1591,12 @@ impl Jungle {
                 self.blend_out(x, y, flake, 0.75);
             }
         } else if night > 0.05 && !self.ufo.hushed() {
-            let glow = Rgb(210, 255, 110);
+            // The fireflies of the holiday are warm, like the candles.
+            let glow = if self.pal.fest.is_some() {
+                Rgb(255, 200, 90)
+            } else {
+                Rgb(210, 255, 110)
+            };
             for i in 0..self.motes.len() {
                 let m = self.motes[i];
                 let b = night * (tick * 0.05 + m.phase).sin().max(0.0).powi(3);
@@ -1562,6 +1608,7 @@ impl Jungle {
             }
         }
         self.draw_ufo_lights(v);
+        self.glow_lights(v);
     }
 
     /// Notes as letters over the picture: z's, alarms.

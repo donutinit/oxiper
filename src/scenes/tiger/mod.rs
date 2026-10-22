@@ -9,10 +9,21 @@
 //! the haze; rivers and pools cross its path, tall grass hides it while it
 //! stalks, and the light follows the wall clock from dawn mist to fireflies.
 //!
+//! On Día de Muertos the tiger is an Oaxacan alebrije, striped and dotted in
+//! magenta, turquoise and yellow, and the jungle is dressed for the dead
+//! coming home: papel picado strung from tree to tree, cempasúchil in the
+//! grass and in beds, and by the path the ruins of a stone shrine with an
+//! ofrenda and its candles, which the tiger now and then calls on, bowing its
+//! head. The saucer becomes a calavera de azúcar with marigold lights and a
+//! beam of petals. The higher the holiday, the more of it, and every bit of it
+//! comes from the seed like the rest of the jungle, so ordinary days are
+//! exactly what they were.
+//!
 //! - `art.rs`: every sprite, drawn by hand one character per pixel: the
 //!   tiger's torso, heads (calm, blinking, snarling, roaring), its front view
-//!   and its sleep; deer, boar, peafowl, langurs, birds, the crocodile, the
-//!   bear, the dholes and the saucer; and how each animal is built.
+//!   and its sleep, and the alebrije's likenesses of them; deer, boar,
+//!   peafowl, langurs, birds, the crocodile, the bear, the dholes and the
+//!   saucer; and how each animal is built.
 //! - `body.rs`: how a four-legged animal is put together on screen: the
 //!   hand-drawn body and head, legs bent by inverse kinematics for each gait
 //!   and pose, a tail that sways, all tilted without losing a pixel.
@@ -24,6 +35,9 @@
 //!   dust, leaves, snow and fireflies.
 //! - `ufo.rs`: the saucer: it comes rarely, freezes the jungle, beams the
 //!   tiger up, and brings it back a while later.
+//! - `muertos.rs`: Día de Muertos: its colors (the holiday's own under
+//!   `classic`, the theme's otherwise), the papel picado, the marigolds, the
+//!   ruins with their ofrendas, the skull saucer and its petal beam.
 //! - `jungle.rs`: the ground, the water and the forest layers, the light,
 //!   the camera, and the projection onto the screen.
 //!
@@ -37,6 +51,7 @@ mod body;
 mod hunter;
 mod jungle;
 mod life;
+mod muertos;
 mod ufo;
 
 use crate::color::Color;
@@ -249,6 +264,8 @@ struct Pal {
     day_bot: Rgb,
     green: Rgb,
     green_k: f32,
+    /// The holiday's colors, while there is a holiday.
+    fest: Option<muertos::Dress>,
 }
 
 const DAY_TOP: Rgb = Rgb(84, 150, 214);
@@ -263,11 +280,16 @@ impl Pal {
         } else {
             (DAY_TOP, DAY_BOT)
         };
+        let fest = ctx
+            .fiesta
+            .is(crate::fiesta::Kind::Muertos)
+            .then(|| muertos::Dress::new(ctx));
         let native = Pal {
             day_top: top,
             day_bot: bot,
             green: Rgb::BLACK,
             green_k: 0.0,
+            fest,
         };
         if ctx.theme.native {
             return native;
@@ -280,6 +302,7 @@ impl Pal {
                 day_bot: mix(bot, g.at(0.9)),
                 green,
                 green_k: TINT,
+                ..native
             },
             None => native,
         }
@@ -436,6 +459,9 @@ impl Scene for TigerScene {
 
     fn retheme(&mut self, ctx: &Ctx) {
         self.jungle.pal = Pal::new(ctx, self.jungle.kind);
+        if self.jungle.pal.fest.is_none() {
+            self.jungle.undress(&mut self.rng);
+        }
         self.jungle.update_light();
         self.dirty = true;
     }
@@ -493,18 +519,23 @@ impl Scene for TigerScene {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::fiesta::Fiesta;
     use crate::scene::Opts;
     use crate::theme::{TermColors, Theme};
     use hunter::Mood;
     use ufo::Phase;
 
     fn ctx<'a>(theme: &'a Theme, opts: &'a Opts) -> Ctx<'a> {
+        fiesta_ctx(theme, opts, Fiesta::NONE)
+    }
+
+    fn fiesta_ctx<'a>(theme: &'a Theme, opts: &'a Opts, fiesta: Fiesta) -> Ctx<'a> {
         Ctx {
             theme,
             opts,
             bg: Color::Reset,
             seed: 3,
-            fiesta: crate::fiesta::Fiesta::NONE,
+            fiesta,
         }
     }
 
@@ -843,5 +874,254 @@ mod tests {
         }
         assert_eq!(off.jungle.ufo.visits, 0);
         assert!(often.jungle.ufo.visits > 0);
+    }
+
+    /// Plays a scene for `secs` seconds of 30 frames, drawing every `every`
+    /// frames, and hands each drawn frame to `f`; stops early when it says so.
+    fn play(
+        s: &mut TigerScene,
+        c: &Ctx,
+        (w, h): (u16, u16),
+        secs: u32,
+        every: u32,
+        mut f: impl FnMut(&TigerScene) -> bool,
+    ) {
+        let mut cv = Canvas::new(w, h, Color::Reset);
+        for i in 0..30 * secs {
+            s.tick(c, 1.0 / 30.0, 1.0 / 30.0);
+            if i % every == 0 {
+                cv.clear();
+                s.draw(c, &mut cv);
+                if f(s) {
+                    return;
+                }
+            }
+        }
+    }
+
+    /// The holiday's elements: the alebrije, papel picado, marigolds and, a
+    /// while along the path, an ofrenda at a ruin with its candles lit.
+    #[derive(Default, Debug)]
+    struct Seen {
+        alebrije: bool,
+        flags: u32,
+        blossoms: u32,
+        ruins: u32,
+        candles: u32,
+    }
+
+    fn seen_over(fiesta: Fiesta, theme: &Theme, kind: &str, secs: u32) -> Seen {
+        let o = opts(&format!("kind = '{kind}'\nufo = 0\nzoom = 1"));
+        let c = fiesta_ctx(theme, &o, fiesta);
+        let mut s = TigerScene::new(&c);
+        s.resize(&c, 200, 50);
+        s.retheme(&c);
+        let mut seen = Seen::default();
+        play(&mut s, &c, (200, 50), secs, 15, |s| {
+            let p = &s.jungle.painted;
+            seen.alebrije |= p.alebrije;
+            seen.flags += p.flags;
+            seen.blossoms += p.blossoms;
+            seen.ruins += p.ruins;
+            seen.candles += p.candles;
+            false
+        });
+        seen
+    }
+
+    /// At the height of the holiday and on its first day, the tiger is an
+    /// alebrije and the jungle is dressed; on an ordinary day nothing is.
+    #[test]
+    fn the_holiday_dresses_the_jungle() {
+        let theme = Theme::classic();
+        for kind in ["bengal", "siberian", "white"] {
+            for fiesta in [Fiesta::of_day(11, 2), Fiesta::of_day(10, 28)] {
+                let seen = seen_over(fiesta, &theme, kind, 150);
+                assert!(seen.alebrije, "{kind} {fiesta:?}: {seen:?}");
+                assert!(seen.flags > 0, "{kind} {fiesta:?}: {seen:?}");
+                assert!(seen.blossoms > 0, "{kind} {fiesta:?}: {seen:?}");
+                assert!(seen.ruins > 0, "{kind} {fiesta:?}: {seen:?}");
+                assert!(seen.candles > 0, "{kind} {fiesta:?}: {seen:?}");
+            }
+            let seen = seen_over(Fiesta::NONE, &theme, kind, 150);
+            assert!(!seen.alebrije, "{kind}: {seen:?}");
+            assert_eq!(
+                (seen.flags, seen.blossoms, seen.ruins, seen.candles),
+                (0, 0, 0, 0),
+                "{kind}: {seen:?}"
+            );
+        }
+    }
+
+    /// The higher the holiday, the more of it: more papel picado, and the
+    /// ofrenda gains candles as its layers pile up.
+    #[test]
+    fn the_holiday_builds_up() {
+        let theme = Theme::classic();
+        let low = seen_over(Fiesta::of_day(10, 28), &theme, "bengal", 240);
+        let high = seen_over(Fiesta::of_day(11, 2), &theme, "bengal", 240);
+        assert!(low.ruins > 0 && high.ruins > 0, "{low:?} {high:?}");
+        assert!(high.flags > low.flags, "{low:?} {high:?}");
+        assert!(high.blossoms > low.blossoms, "{low:?} {high:?}");
+        assert!(
+            high.candles * low.ruins > low.candles * high.ruins,
+            "{low:?} {high:?}"
+        );
+    }
+
+    /// Switching the holiday on and off through `retheme` dresses the jungle
+    /// and undresses it again, at once.
+    #[test]
+    fn the_holiday_comes_and_goes_with_retheme() {
+        let theme = Theme::classic();
+        let o = opts("ufo = 0\nzoom = 1");
+        let off = fiesta_ctx(&theme, &o, Fiesta::NONE);
+        let on = fiesta_ctx(&theme, &o, Fiesta::of_day(11, 2));
+        let mut s = TigerScene::new(&off);
+        s.resize(&off, 200, 50);
+        s.retheme(&off);
+        let mut cv = Canvas::new(200, 50, Color::Reset);
+        for _ in 0..3 {
+            for (c, dressed) in [(&on, true), (&off, false), (&on, true), (&off, false)] {
+                s.retheme(c);
+                for _ in 0..5 {
+                    s.tick(c, 1.0 / 30.0, 1.0 / 30.0);
+                }
+                cv.clear();
+                s.draw(c, &mut cv);
+                let p = &s.jungle.painted;
+                assert_eq!(p.alebrije, dressed, "{p:?}");
+                assert_eq!(p.flags > 0 || p.blossoms > 0, dressed, "{p:?}");
+                if !dressed {
+                    assert_eq!((p.ruins, p.candles, p.petals), (0, 0, 0), "{p:?}");
+                }
+            }
+        }
+        // A tiger on its way to an ofrenda is called off when the holiday ends.
+        s.retheme(&on);
+        s.jungle.tiger.set(Mood::Visit);
+        s.retheme(&off);
+        assert_ne!(s.jungle.tiger.mood, Mood::Visit);
+    }
+
+    /// Odd sizes, odd options and huge steps survive with the holiday on,
+    /// under classic and under other themes.
+    #[test]
+    fn the_holiday_survives_odd_sizes_and_steps() {
+        let cases = [
+            "speed = 50.0\nday = 1\nzoom = 99\nsky = false\nprey = 10.0\nkind = 'random'\nufo = 3600.0",
+            "speed = 0.0\nday = 999999999\nzoom = -4\nprey = -3.0\nkind = 'nope'\nufo = -1.0",
+            "kind = 'siberian'\nprey = 0\nufo = nan",
+            "kind = 'white'\nzoom = 6\nspeed = inf",
+        ];
+        let themes = [
+            Theme::classic(),
+            Theme::builtin("mono").unwrap(),
+            Theme::builtin("dracula").unwrap(),
+            Theme::terminal(&TermColors::default()),
+        ];
+        for case in cases {
+            let o = opts(case);
+            for theme in &themes {
+                for day in [(10, 28), (11, 2), (11, 3)] {
+                    let c = fiesta_ctx(theme, &o, Fiesta::of_day(day.0, day.1));
+                    let mut s = (INFO.make)(&c);
+                    for &(w, h) in &[(1u16, 1u16), (2, 3), (7, 2), (1, 40), (300, 90), (80, 24)] {
+                        s.resize(&c, w, h);
+                        s.retheme(&c);
+                        let mut cv = Canvas::new(w, h, Color::Reset);
+                        for dt in [0.0, f32::NAN, -1.0, f32::INFINITY, 0.05, 5.0, 1e9] {
+                            s.tick(&c, dt, 0.05);
+                            s.next_change();
+                            cv.clear();
+                            s.draw(&c, &mut cv);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /// With the holiday on the tiger now and then calls on an ofrenda: it
+    /// walks to the ruin, faces it and bows its head a while.
+    #[test]
+    fn the_tiger_calls_on_the_ofrenda() {
+        let theme = Theme::classic();
+        let o = opts("ufo = 0\nday = 60");
+        let c = fiesta_ctx(&theme, &o, Fiesta::of_day(11, 2));
+        let mut s = TigerScene::new(&c);
+        s.resize(&c, 120, 36);
+        s.retheme(&c);
+        let (mut bowed, mut walked) = (false, false);
+        for _ in 0..30 * 60 * 12 {
+            s.tick(&c, 1.0 / 30.0, 1.0 / 30.0);
+            let t = &s.jungle.tiger;
+            if t.mood == Mood::Visit {
+                walked = true;
+                if t.mouth == 0.0 && t.steps > 10 && t.speed < 0.02 {
+                    bowed = true;
+                }
+            }
+            assert!(!t.gone && t.x.is_finite());
+        }
+        assert!(walked && bowed, "walked {walked}, bowed {bowed}");
+    }
+
+    /// On an ordinary day it never does, whatever the ruins.
+    #[test]
+    fn the_tiger_calls_on_nobody_on_an_ordinary_day() {
+        let mut s = scene("ufo = 0\nday = 60", 120, 36);
+        for _ in 0..30 * 60 * 6 {
+            frame(&mut s);
+            assert_ne!(s.jungle.tiger.mood, Mood::Visit);
+        }
+    }
+
+    /// The saucer is a calavera de azúcar on Día de Muertos, and the old
+    /// one on any other day.
+    #[test]
+    fn the_saucer_wears_a_skull_on_the_holiday() {
+        let theme = Theme::classic();
+        for (fiesta, skull) in [(Fiesta::of_day(11, 2), true), (Fiesta::NONE, false)] {
+            let o = opts("ufo = 0\nday = 120");
+            let c = fiesta_ctx(&theme, &o, fiesta);
+            let mut s = TigerScene::new(&c);
+            s.resize(&c, 100, 30);
+            s.retheme(&c);
+            s.jungle.summon();
+            let mut cv = Canvas::new(100, 30, Color::Reset);
+            let mut beamed = false;
+            for _ in 0..30 * 60 {
+                s.tick(&c, 1.0 / 30.0, 1.0 / 30.0);
+                cv.clear();
+                s.draw(&c, &mut cv);
+                if s.jungle.ufo.phase == Phase::Beam {
+                    beamed = true;
+                    assert_eq!(s.jungle.painted.saucer, skull);
+                }
+            }
+            assert!(beamed);
+        }
+    }
+
+    /// The holiday's colors come from the theme, and stay told apart.
+    #[test]
+    fn the_dress_keeps_its_colors_apart() {
+        for name in crate::theme::names() {
+            let Some(theme) = Theme::builtin(name) else {
+                continue;
+            };
+            let o = opts("");
+            let c = fiesta_ctx(&theme, &o, Fiesta::of_day(11, 2));
+            let d = muertos::Dress::new(&c);
+            assert_ne!(d.rosa, d.turquesa, "{name}");
+            for kind in Kind::ALL {
+                let mut colors: Vec<Rgb> = d.alebrije(kind).iter().map(|&(_, c)| c).collect();
+                colors.sort_by_key(|c| (c.0, c.1, c.2));
+                colors.dedup();
+                assert!(colors.len() >= 10, "{name} {kind:?}: {colors:?}");
+            }
+            assert!(d.flags.iter().all(|f| *f != Rgb::BLACK), "{name}");
+        }
     }
 }

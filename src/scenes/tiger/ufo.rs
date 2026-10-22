@@ -7,6 +7,7 @@
 use super::art;
 use super::hunter::Mood;
 use super::jungle::{FEET, Jungle, View};
+use super::muertos::SAUCER;
 use super::{Dice, Rgb, Rng};
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
@@ -272,6 +273,11 @@ impl Jungle {
             return;
         }
         let (x, y, beam) = (self.ufo.x, self.ufo.y, self.ufo.beam);
+        // On Día de Muertos the beam is the amber of cempasúchil.
+        let beam_color = self
+            .pal
+            .fest
+            .map_or(Rgb(190, 255, 210), |d| d.marigold[2].lerp(d.hueso, 0.3));
         if beam > 0.0 {
             let top = (y + H) as i32;
             let tick = self.tick;
@@ -285,16 +291,31 @@ impl Jungle {
                 };
                 for xx in (x - hw).round() as i32..=(x + hw).round() as i32 {
                     let edge = 1.0 - ((xx as f32 - x).abs() / hw).powi(4);
-                    self.blend(xx, yy, Rgb(190, 255, 210), (0.28 + band) * beam * edge);
+                    self.blend(xx, yy, beam_color, (0.28 + band) * beam * edge);
                 }
             }
+            self.beam_petals(x, top, beam);
         }
         let mut lut = [None; 128];
-        for &(ch, c) in art::UFO_COLORS {
-            lut[ch as usize] = Some(c);
-        }
         let frame = ((self.tick / 8) % 2) as usize;
-        self.sprite(art::UFO[frame], x, y + H - 1.0, 1.0, &lut);
+        match self.pal.fest {
+            Some(d) => {
+                #[cfg(test)]
+                {
+                    self.painted.saucer = true;
+                }
+                for &(ch, c) in &d.saucer() {
+                    lut[ch as usize] = Some(c);
+                }
+                self.sprite(SAUCER[frame], x, y + H - 1.0, 1.0, &lut);
+            }
+            None => {
+                for &(ch, c) in art::UFO_COLORS {
+                    lut[ch as usize] = Some(c);
+                }
+                self.sprite(art::UFO[frame], x, y + H - 1.0, 1.0, &lut);
+            }
+        }
     }
 
     /// The rim lights' glow, straight onto the screen.
@@ -302,16 +323,21 @@ impl Jungle {
         if matches!(self.ufo.phase, Phase::Gone | Phase::Away) {
             return;
         }
-        let (x, y) = (self.ufo.x, self.ufo.y + 5.0);
+        // The rim lights are a row lower on the skull's saucer, and marigold.
+        let (rim, warm, hot) = match self.pal.fest {
+            Some(d) => (6.0, d.marigold[2], d.marigold[1]),
+            None => (5.0, Rgb(255, 240, 140), Rgb(255, 120, 120)),
+        };
+        let (x, y) = (self.ufo.x, self.ufo.y + rim);
         let (sx, sy) = v.to_screen(x, y);
         let r = (W / 2.0 * v.z) as i32 + 2;
         let tick = self.tick;
         for dx in -r..=r {
             if (dx + (tick / 4) as i32).rem_euclid(6) == 0 {
                 let c = if (dx / 6).rem_euclid(2) == 0 {
-                    Rgb(255, 240, 140)
+                    warm
                 } else {
-                    Rgb(255, 120, 120)
+                    hot
                 };
                 for dy in -1..=1 {
                     let a = if dy == 0 { 0.5 } else { 0.18 };

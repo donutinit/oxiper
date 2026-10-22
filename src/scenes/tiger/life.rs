@@ -162,6 +162,8 @@ enum Fleck {
     Dust,
     Spray,
     Leaf,
+    /// A marigold petal, on Día de Muertos.
+    Petal,
 }
 
 #[derive(Clone, Copy)]
@@ -320,6 +322,19 @@ impl Life {
                 (x + rng.rangef(-6.0, 6.0), y - rng.rangef(0.0, 3.0)),
                 (rng.rangef(-0.4, 0.4), rng.rangef(-0.35, -0.05)),
                 rng.range(18, 40) as u16,
+                rng.u8(..),
+            );
+        }
+    }
+
+    /// A puff of marigold petals thrown up at `(x, y)`, to drift down.
+    pub fn petals(&mut self, x: f32, y: f32, n: usize, rng: &mut Rng) {
+        for _ in 0..n {
+            self.fleck(
+                Fleck::Petal,
+                (x + rng.rangef(-5.0, 5.0), y + rng.rangef(-3.0, 3.0)),
+                (rng.rangef(-0.2, 0.2), rng.rangef(-0.5, -0.15)),
+                rng.range(90, 200) as u16,
                 rng.u8(..),
             );
         }
@@ -485,11 +500,15 @@ impl Jungle {
                 }
                 Fleck::Spray => s.vy += 0.09,
                 Fleck::Leaf => s.vx = 0.35 * (s.life as f32 * 0.07 + s.shade as f32).sin(),
+                Fleck::Petal => {
+                    s.vx = 0.3 * (s.life as f32 * 0.09 + s.shade as f32).sin();
+                    s.vy = (s.vy + 0.012).min(0.2);
+                }
             }
         }
-        self.life
-            .specks
-            .retain(|s| s.life > 0 && (s.kind != Fleck::Leaf || s.y < FEET as f32 + 4.0));
+        self.life.specks.retain(|s| {
+            s.life > 0 && (!matches!(s.kind, Fleck::Leaf | Fleck::Petal) || s.y < FEET as f32 + 4.0)
+        });
     }
 
     /// Deals animals out around the camera, and lets the far ones go.
@@ -1101,11 +1120,15 @@ impl Jungle {
             Rgb(190, 164, 120)
         });
         let spray = self.water_color().lerp(Rgb::WHITE, 0.5);
-        let leaves = [
+        let mut leaves = [
             self.lit(Rgb(110, 150, 60)),
             self.lit(Rgb(196, 160, 60)),
             self.lit(Rgb(170, 96, 44)),
         ];
+        // On Día de Muertos what falls from the trees is marigold.
+        if let Some(d) = self.pal.fest {
+            leaves = [d.marigold[1], d.marigold[2], d.marigold[0]].map(|c| self.lit(c));
+        }
         for i in 0..self.life.specks.len() {
             let s = self.life.specks[i];
             let (x, y) = (s.x.round() as i32, s.y.round() as i32);
@@ -1113,7 +1136,7 @@ impl Jungle {
             match s.kind {
                 Fleck::Dust => self.blend(x, y, dust, 0.7 * k),
                 Fleck::Spray => self.blend(x, y, spray, 0.8),
-                Fleck::Leaf => self.put(x, y, leaves[s.shade as usize % 3]),
+                Fleck::Leaf | Fleck::Petal => self.put(x, y, leaves[s.shade as usize % 3]),
             }
         }
     }

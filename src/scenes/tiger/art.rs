@@ -10,6 +10,11 @@
 //! - `E` the backs of the ears, `e` eye, `k` pupils, lips and nose leather,
 //!   `n` nose;
 //! - `m` the inside of the mouth, `t` teeth, `p` tongue.
+//!
+//! On Día de Muertos the tiger is an alebrije and wears the same letters
+//! with more of them: `S` and `T` are its magenta and turquoise stripes
+//! (`s` and `u` in shade), `Y` its yellow dots and paws (`y` in shade), `K`
+//! its deep purple lines.
 
 use super::Rgb;
 use super::body::{Build, LegSpec, TailSpec};
@@ -180,7 +185,7 @@ pub const TIGER_SLEEP: [Sprite; 2] = [
     ],
 ];
 
-const fn tiger_build(coat: u8) -> Build {
+const fn tiger_build(coat: u8, stripe: (u8, u8), paw: (u8, u8), ring: u8, tip: u8) -> Build {
     Build {
         hind: LegSpec {
             hip: (4.5, 7.5),
@@ -203,8 +208,8 @@ const fn tiger_build(coat: u8) -> Build {
         stride: 9.0,
         lift: 3.0,
         leg: (coat, b'o'),
-        stripe: Some((b'S', b's')),
-        paw: (b'W', b'w'),
+        stripe: Some(stripe),
+        paw,
         paw_w: 5,
         tail: Some(TailSpec {
             root: (1.0, 2.5),
@@ -212,14 +217,14 @@ const fn tiger_build(coat: u8) -> Build {
             w0: 3.0,
             w1: 2.0,
             coat,
-            ring: Some(b'S'),
-            tip: b'S',
+            ring: Some(ring),
+            tip,
             tip_len: 3,
         }),
     }
 }
 
-pub const TIGER: Build = tiger_build(b'O');
+pub const TIGER: Build = tiger_build(b'O', (b'S', b's'), (b'W', b'w'), b'S', b'S');
 
 /// The tiger's colors, by kind: Bengal, Siberian and white.
 pub const TIGER_COLORS: [Palette; 3] = [
@@ -269,6 +274,50 @@ pub const TIGER_COLORS: [Palette; 3] = [
         (b'p', Rgb(226, 110, 130)),
     ],
 ];
+
+/// What the tiger is drawn from: its build and all its sprites. The same
+/// letters mean the same parts in every skin, so the poses need not know
+/// which one they are drawing.
+pub struct Skin {
+    pub build: &'static Build,
+    /// Shoulders to rump, and where its top left corner sits on the body.
+    pub torso: Sprite,
+    pub torso_at: (i32, i32),
+    /// The head, mouth shut, eyes shut, snarling, roaring.
+    pub heads: [Sprite; 4],
+    pub front: Sprite,
+    pub sleep: [Sprite; 2],
+}
+
+/// The tiger as it is.
+pub const TIGER_SKIN: Skin = Skin {
+    build: &TIGER,
+    torso: TIGER_TORSO,
+    torso_at: (0, 0),
+    heads: [
+        TIGER_HEAD,
+        TIGER_HEAD_BLINK,
+        TIGER_HEAD_SNARL,
+        TIGER_HEAD_ROAR,
+    ],
+    front: TIGER_FRONT,
+    sleep: TIGER_SLEEP,
+};
+
+/// The alebrije of Día de Muertos.
+pub const ALEBRIJE_SKIN: Skin = Skin {
+    build: &ALEBRIJE,
+    torso: ALEBRIJE_TORSO,
+    torso_at: (0, -1),
+    heads: [
+        ALEBRIJE_HEAD,
+        ALEBRIJE_HEAD_BLINK,
+        ALEBRIJE_HEAD_SNARL,
+        ALEBRIJE_HEAD_ROAR,
+    ],
+    front: ALEBRIJE_FRONT,
+    sleep: [ALEBRIJE_SLEEP_0, ALEBRIJE_SLEEP_1],
+};
 
 // ----- what it hunts -----
 
@@ -747,6 +796,164 @@ pub const UFO_COLORS: Palette = &[
     (b'L', Rgb(255, 238, 120)),
     (b'l', Rgb(120, 104, 56)),
     (b'R', Rgb(150, 255, 170)),
+];
+
+// ----- Día de Muertos -----
+
+/// The alebrije's legs are banded in turquoise, its paws yellow, its tail
+/// ringed in turquoise and tipped in magenta.
+pub const ALEBRIJE: Build = tiger_build(b'O', (b'T', b'u'), (b'Y', b'y'), b'T', b'S');
+
+/// The alebrije's body: stripes of magenta and turquoise with yellow dots, and a crest of
+/// spikes along its back. Its top row is above the back, so it sits one row higher than the
+/// tiger's.
+pub const ALEBRIJE_TORSO: Sprite = &[
+    "....Y...Y...Y...Y..........",
+    "...SSS.TTT.SSS.TTToooo.....",
+    "..oSSOooTToOoSSoOoTTOoo....",
+    ".oSSOOOTTOOOSSOOOTTOOOSSo..",
+    "oOSSOYOTTOYOSSOYOTTOYOSSOY.",
+    "oSSOOOTTOOOSSOOOTTOOOSSOOOo",
+    "OSSOYOTTOYOSSOYOTTOYOSSOYOO",
+    "OSOOOOTOOOOSOOOOTOOOOSOOOOW",
+    "SOOYOTOOYOSOOYOTOOYOSOOYOWW",
+    "SOOOOTOOOOSWWWWWWWOOSOOOWWW",
+    "OOYOTOOYOWWw...wWWWWOOYOWWW",
+    ".OOOTOOOOw.......wwWWWWWWW.",
+    "..OOOOOO...........wWWWWW..",
+];
+
+/// Its head, painted the same way: brows of turquoise, a dot on the forehead, whisker dots. The
+/// four heads swap for one another like the tiger's.
+pub const ALEBRIJE_HEAD: Sprite = &[
+    "..EE..........",
+    ".ESSE.........",
+    ".EOOOooo......",
+    "oOOTTOYOoo....",
+    "OOOOSSTTTOo...",
+    "OSSOOOWWWOOo..",
+    "OOTTOOWkeWOYO.",
+    "OOOTTOOWWOOOYo",
+    "OSSOOOOOOOWWnn",
+    "OOSSWTWYWWWWWk",
+    ".OTWWTWWWYkkk.",
+    "..WWWWTWWWW...",
+    "...WWWSW......",
+    "..............",
+    "..............",
+];
+
+pub const ALEBRIJE_HEAD_BLINK: Sprite = &[
+    "..EE..........",
+    ".ESSE.........",
+    ".EOOOooo......",
+    "oOOTTOYOoo....",
+    "OOOOSSTTTOo...",
+    "OSSOOOWWWOOo..",
+    "OOTTOOWkkWOYO.",
+    "OOOTTOOWWOOOYo",
+    "OSSOOOOOOOWWnn",
+    "OOSSWTWYWWWWWk",
+    ".OTWWTWWWYkkk.",
+    "..WWWWTWWWW...",
+    "...WWWSW......",
+    "..............",
+    "..............",
+];
+
+pub const ALEBRIJE_HEAD_SNARL: Sprite = &[
+    "..............",
+    "..EE..........",
+    ".ESSEooo......",
+    "oEOTTOTOoo....",
+    "OOOOSSYOOOo...",
+    "OSSOOOWTTOOo..",
+    "OOTTOOWWWWOYO.",
+    "OOOTTOOWWOOOOo",
+    "OSSOOOOOOOWWnn",
+    "OOSSWWWWtSWWtk",
+    ".OTWWmmmmmmmk.",
+    "..WWWWtWWWt...",
+    "...WWWWWW.....",
+    "..............",
+    "..............",
+];
+
+pub const ALEBRIJE_HEAD_ROAR: Sprite = &[
+    "..............",
+    "..............",
+    ".EEEoooo......",
+    "oEWOTTTOoo....",
+    "OOOOSSYTTOo...",
+    "OSSOOOWkkOOo..",
+    "OOTTOWWWWWOYO.",
+    "OOOTTOOWWOOOYo",
+    "OSSOOOOOOOWWnn",
+    "OOSSWWWWtWWWtk",
+    ".OTWmmmmmmmm..",
+    "..WWmmpppmm...",
+    "..WWWmmmmmt...",
+    "...WWWWtWWW...",
+    "....WWWWW.....",
+];
+
+/// Face on, for the middle of a turn.
+pub const ALEBRIJE_FRONT: Sprite = &[
+    "..EE.........EE..",
+    ".ESSE.......ESSE.",
+    ".EOOOoooooooOOOE.",
+    "..OOSSTSSTTSSOO..",
+    ".OOOOOTSSTTOOOOO.",
+    ".OSSWWTTTOTWWSSO.",
+    "OOSSWkeOOOekWSSOO",
+    "OTTOOWWOOOWWOOTTO",
+    "OOSSOOOOnOOOOSSOO",
+    ".OSSOWWWnWWWOSSO.",
+    ".WOTWWWkkkWWWTOW.",
+    "..WWWWkWWWkWWWW..",
+    "...WWWWWWWWWWW...",
+    "...OOOWWWWWOOO...",
+    "..OOSSWWWWWSSOO..",
+    "..OSSOOWWWOOSSO..",
+    "..OOOOOWWWOOOOO..",
+    "..OTT.oWWWo.TTO..",
+    "..OOO.oo.oo.OOO..",
+    "..OSS.os.so.SSO..",
+    "..OOO.oo.oo.OOO..",
+    "..OTT.ww.ww.TTO..",
+    ".WWWW......WWWW..",
+    ".WWWW......WWWW..",
+];
+
+/// Asleep on its side, breathing in and out.
+pub const ALEBRIJE_SLEEP_0: Sprite = &[
+    "...................................",
+    "...................................",
+    "....oooToooSooooSoooo...EE.........",
+    "..ooOOTTOOSSOOTTOOSSOoooEWWEoo.....",
+    ".oOSSOOTTOOSSYOOSSYOOOOTOOSOOOo....",
+    "oOSSOTTOOOSSOOOTTOOOOOTOOOOOOOOo...",
+    "OSSOTTOYOOSSYOOTTYOOOOYOOOkkWOOOo..",
+    "OOSSOOOOOOOOOOOOOOOOOOTOOOWWWWWOOn.",
+    "OSSOOOWWWWWWWWWWWYOOOOYOOWWWWWWWWk.",
+    "SSOOWWWWWWWWWWWWWWWOOOOOWWSWWWkkk..",
+    "SSSOOOYOOOOYOOOOYOSSOYOOOOOSWWWWW..",
+    ".SSSSOOOOOOOOOO..WWWWOOTOOOOWWWW...",
+];
+
+pub const ALEBRIJE_SLEEP_1: Sprite = &[
+    "...................................",
+    "....oooToooSooooSoooo..............",
+    "..ooOOTTOOSSOOTTOOSSOoo.EE.........",
+    ".oOSSOOTTOOSSOOOSSOOOOooEWWEoo.....",
+    "oOSSOTTOYSSOOYOTTOYOOOTYOSOOOOo....",
+    "OSSOTTOOOOSSOOOTTOOOOOTOOOOOOOOo...",
+    "OSSOTTOYOOSSYOOTTYOOOOYOOOkkWOOOo..",
+    "OOSSOOOOOOOOOOOOOOOOOOTOOOWWWWWOOn.",
+    "OSSOOOWWWWWWWWWWWYOOOOYOOWWWWWWWWk.",
+    "SSOOWWWWWWWWWWWWWWWOOOOOWWSWWWkkk..",
+    "SSSOOOYOOOOYOOOOYOSSOYOOOOOSWWWWW..",
+    ".SSSSOOOOOOOOOO..WWWWOOTOOOOWWWW...",
 ];
 
 /// Every sprite with its palette, for the tests.
