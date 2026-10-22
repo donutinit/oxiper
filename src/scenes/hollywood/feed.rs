@@ -7,7 +7,8 @@
 //! The widget ideas (hexdump, tail of logs, errno, tree, code, ssh-keygen
 //! art...) are those of Dustin Kirkland's hollywood (Apache License 2.0).
 
-use super::{Env, Rect, Tone, Widget, babble, put};
+use super::{Env, Rect, Tone, Widget, babble, muertos, put};
+use crate::fiesta::Fiesta;
 use crate::render::{BOLD, Canvas};
 use fastrand::Rng;
 use std::collections::VecDeque;
@@ -123,6 +124,20 @@ const RUST_TYPES: &[&str] = &[
     "u8", "u16", "u32", "u64", "usize", "i32", "i64", "bool", "Vec", "String", "Result", "Option",
     "Ok", "Err", "Some", "None",
 ];
+/// What a holiday program calls its variables.
+const LOCALS_MX: &[&str] = &[
+    "pan", "copal", "vela", "alma", "flor", "sal", "petalo", "ofrenda", "nivel", "xolo", "llama",
+    "altar", "foto", "nombre",
+];
+/// Errors a holiday program can fail with.
+const ERRS_MX: &[&str] = &[
+    "SinPan",
+    "NoEsTuHora",
+    "ElXoloSeFue",
+    "VeladoraApagada",
+    "FaltaLaSal",
+    "AnimaPerdida",
+];
 const REGS: &[&str] = &[
     "rax", "rbx", "rcx", "rdx", "rsi", "rdi", "rsp", "rbp", "eax", "ebx", "ecx", "edx", "r8", "r9",
     "r10", "r11", "r12", "r13", "r14", "r15", "xmm0", "xmm1", "al", "cl",
@@ -132,8 +147,59 @@ const LOCALS: &[&str] = &[
     "salt", "rounds", "flux",
 ];
 
+/// A sentence: on Día de Muertos the Mictlán's among the ordinary ones.
+/// Returns whether it is Spanish.
+fn say(rng: &mut Rng, level: u8, mx: Fiesta, out: &mut String) -> bool {
+    if mx.on() {
+        muertos::mixed(rng, level, mx.level, out)
+    } else {
+        babble::sentence(rng, level, out);
+        false
+    }
+}
+
+/// An UPPER-CASE progress label, the Mictlán's or an ordinary one.
+fn label(rng: &mut Rng, level: u8, mx: Fiesta, out: &mut String) {
+    if mx.on() && rng.f32() < muertos::share(mx.level) {
+        muertos::progress_label(rng, level, out);
+    } else {
+        babble::progress_label(rng, level, out);
+    }
+}
+
+/// A title, the Mictlán's or an ordinary one.
+fn title(rng: &mut Rng, mx: Fiesta, out: &mut String) {
+    if mx.on() {
+        muertos::mixed_title(rng, mx.level, out);
+    } else {
+        babble::title(rng, out);
+    }
+}
+
+/// A daemon name, a holiday one half the time on Día de Muertos.
+fn daemon(rng: &mut Rng, mx: Fiesta) -> &'static str {
+    if mx.on() && rng.f32() < 0.5 * muertos::share(mx.level) {
+        babble::pick(rng, muertos::DAEMONS)
+    } else {
+        babble::pick(rng, babble::DAEMONS)
+    }
+}
+
+/// A local variable name.
+fn local(rng: &mut Rng, mx: Fiesta) -> &'static str {
+    if mx.on() && rng.f32() < muertos::share(mx.level) {
+        babble::pick(rng, LOCALS_MX)
+    } else {
+        babble::pick(rng, LOCALS)
+    }
+}
+
 /// Writes a snake_case identifier from the babble tables: "flux_capacitor".
-fn ident(rng: &mut Rng, sep: char, out: &mut String) {
+fn ident(rng: &mut Rng, sep: char, mx: Fiesta, out: &mut String) {
+    if mx.on() && rng.f32() < muertos::share(mx.level) {
+        muertos::ident(rng, sep, out);
+        return;
+    }
     let word = |list: &[&str], rng: &mut Rng, out: &mut String| {
         for ch in babble::pick(rng, list).chars() {
             out.push(if ch.is_ascii_alphanumeric() {
@@ -235,6 +301,8 @@ pub struct Feed {
     kind: FeedKind,
     rng: Rng,
     level: u8,
+    /// Día de Muertos, or `Fiesta::NONE`.
+    mx: Fiesta,
     w: usize,
     h: usize,
     lines: VecDeque<Line>,
@@ -254,7 +322,7 @@ pub struct Feed {
 }
 
 impl Feed {
-    pub fn new(kind: FeedKind, seed: u64, level: u8) -> Feed {
+    pub fn new(kind: FeedKind, seed: u64, level: u8, mx: Fiesta) -> Feed {
         let mut rng = Rng::with_seed(seed);
         let rate = match kind {
             FeedKind::Hex => 7.0,
@@ -272,6 +340,7 @@ impl Feed {
         Feed {
             kind,
             level,
+            mx,
             w: 0,
             h: 0,
             lines: VecDeque::new(),
@@ -293,8 +362,14 @@ impl Feed {
     /// Rows taken by a pinned header.
     fn header(&self) -> Option<&'static str> {
         match self.kind {
+            FeedKind::Sniffer if self.mx.on() => Some(
+                "  No.  Time      Source           Destination      Proto  Len Info (mictlan0)",
+            ),
             FeedKind::Sniffer => {
                 Some("  No.  Time      Source           Destination      Proto  Len Info")
+            }
+            FeedKind::Dna if self.mx.on() => {
+                Some("BLASTN 2.14.1+  parentesco: ANCESTROS  gap open/extend: 11/1")
             }
             FeedKind::Dna => Some("BLASTN 2.14.1+  matrix: BLOSUM62  gap open/extend: 11/1"),
             _ => None,
@@ -354,7 +429,7 @@ impl Feed {
         for b in row.iter_mut().take(self.bpr) {
             if self.blob.is_empty() && self.rng.u8(..100) < 4 {
                 self.scratch.clear();
-                babble::sentence(&mut self.rng, self.level, &mut self.scratch);
+                say(&mut self.rng, self.level, self.mx, &mut self.scratch);
                 self.blob.extend(self.scratch.bytes());
                 self.blob.push_back(0);
                 self.scratch.clear();
@@ -408,14 +483,15 @@ impl Feed {
         self.scratch.clear();
         // Narrow panes drop the host and daemon so the message has room.
         if self.w >= 64 {
-            let _ = write!(self.scratch, "node-{:02} ", self.rng.u8(1..40));
+            if self.mx.on() && self.rng.bool() {
+                let host = babble::pick(&mut self.rng, muertos::HOSTS);
+                let _ = write!(self.scratch, "{host}-{:02} ", self.rng.u8(1..40));
+            } else {
+                let _ = write!(self.scratch, "node-{:02} ", self.rng.u8(1..40));
+            }
             run(&mut prefix, Tone::Cyan, &self.scratch);
             self.scratch.clear();
-            let _ = write!(
-                self.scratch,
-                "{}[{pid}]: ",
-                babble::pick(&mut self.rng, babble::DAEMONS)
-            );
+            let _ = write!(self.scratch, "{}[{pid}]: ", daemon(&mut self.rng, self.mx));
             run(&mut prefix, Tone::Main, &self.scratch);
             self.scratch.clear();
         }
@@ -429,9 +505,9 @@ impl Feed {
         };
         run(&mut prefix, tone, lv);
         run(&mut prefix, Tone::Main, " ");
-        babble::sentence(&mut self.rng, self.level, &mut self.scratch);
+        let es = say(&mut self.rng, self.level, self.mx, &mut self.scratch);
         if self.rng.u8(..4) == 0 {
-            self.scratch.push_str(" from ");
+            self.scratch.push_str(if es { " desde " } else { " from " });
             babble::ip(&mut self.rng, &mut self.scratch);
         }
         let text = std::mem::take(&mut self.scratch);
@@ -457,17 +533,17 @@ impl Feed {
             String::new(),
             String::new(),
         );
-        ident(&mut self.rng, '_', &mut name);
-        ident(&mut self.rng, '_', &mut ty);
-        ident(&mut self.rng, '_', &mut call);
-        ident(&mut self.rng, '_', &mut call2);
-        f.push_str(babble::pick(&mut self.rng, LOCALS));
-        let v = babble::pick(&mut self.rng, LOCALS);
+        ident(&mut self.rng, '_', self.mx, &mut name);
+        ident(&mut self.rng, '_', self.mx, &mut ty);
+        ident(&mut self.rng, '_', self.mx, &mut call);
+        ident(&mut self.rng, '_', self.mx, &mut call2);
+        f.push_str(local(&mut self.rng, self.mx));
+        let v = local(&mut self.rng, self.mx);
         let n = self.rng.u32(2..4096);
         let k = self.rng.u32(1..31);
         let hex = self.rng.u32(..);
         let mut cm = String::new();
-        babble::sentence(&mut self.rng, self.level.max(1), &mut cm);
+        say(&mut self.rng, self.level.max(1), self.mx, &mut cm);
         let stmts = self.rng.usize(3..7);
         match lang {
             0 => {
@@ -510,7 +586,14 @@ impl Feed {
                 src.push(format!("    let mut {v}: u32 = ctx.{f} ^ 0x{hex:08x};"));
                 for _ in 0..stmts {
                     match self.rng.u8(..6) {
-                        0 => src.push(format!("    if a > {n} {{ return Err(Error::Overflow); }}")),
+                        0 => {
+                            let err = if self.mx.on() && self.rng.bool() {
+                                babble::pick(&mut self.rng, ERRS_MX)
+                            } else {
+                                "Overflow"
+                            };
+                            src.push(format!("    if a > {n} {{ return Err(Error::{err}); }}"))
+                        }
                         1 => {
                             src.push(format!("    for i in 0..{n} {{"));
                             src.push(format!(
@@ -583,8 +666,12 @@ impl Feed {
                 run(l, Tone::Dim, &s);
             };
             let mut err = String::new();
-            let eidx = self.rng.usize(..babble::ERRORS.len());
-            err.push_str(babble::ERRORS[eidx]);
+            if self.mx.on() && self.rng.f32() < muertos::share(self.mx.level) {
+                muertos::error(&mut self.rng, &mut err);
+            } else {
+                let eidx = self.rng.usize(..babble::ERRORS.len());
+                err.push_str(babble::ERRORS[eidx]);
+            }
             let mut l = Line::new();
             t(&mut l, ts);
             run(
@@ -595,7 +682,7 @@ impl Feed {
             self.pending.push_back(l);
             let mut l = Line::new();
             t(&mut l, ts + 0.0001);
-            let daemon = babble::pick(&mut self.rng, babble::DAEMONS);
+            let daemon = daemon(&mut self.rng, self.mx);
             run(
                 &mut l,
                 Tone::Main,
@@ -624,7 +711,7 @@ impl Feed {
                     ),
                 );
                 let mut id = String::new();
-                ident(&mut self.rng, '_', &mut id);
+                ident(&mut self.rng, '_', self.mx, &mut id);
                 run(&mut l, Tone::Cyan, &id);
                 run(
                     &mut l,
@@ -646,14 +733,19 @@ impl Feed {
             );
             self.pending.push_back(l);
         } else {
-            let (name, num, msg) = ERRNOS[self.rng.usize(..ERRNOS.len())];
+            let (name, num, msg) =
+                if self.mx.on() && self.rng.f32() < 0.6 * muertos::share(self.mx.level) {
+                    muertos::ERRNOS[self.rng.usize(..muertos::ERRNOS.len())]
+                } else {
+                    ERRNOS[self.rng.usize(..ERRNOS.len())]
+                };
             let mut l = Line::new();
             run(&mut l, Tone::Red, &format!("{name:<13}"));
             run(&mut l, Tone::Amber, &format!("{num:>3}  "));
             run(&mut l, Tone::Main, msg);
             if self.level > 0 {
                 let mut t = String::from("  \u{2014} ");
-                babble::title(&mut self.rng, &mut t);
+                title(&mut self.rng, self.mx, &mut t);
                 run(&mut l, Tone::Dim, &t);
             }
             self.pending.push_back(l);
@@ -667,7 +759,84 @@ impl Feed {
         let mut dst = String::new();
         babble::ip(&mut self.rng, &mut src);
         babble::ip(&mut self.rng, &mut dst);
-        let (proto, tone, len, info) = match self.rng.u8(..9) {
+        let special = if self.mx.on() && self.rng.f32() < 0.12 + 0.3 * self.mx.level {
+            Some(self.mx_packet())
+        } else {
+            None
+        };
+        let (proto, tone, len, info) = if let Some(packet) = special {
+            packet
+        } else {
+            self.ordinary_packet(&src, &dst)
+        };
+        let mut l = Line::new();
+        run(
+            &mut l,
+            Tone::Dim,
+            &format!("{:>5}  {:>8.4}  ", self.seq, self.clock % 1000.0),
+        );
+        run(&mut l, Tone::Main, &format!("{src:<17}{dst:<17}"));
+        run(&mut l, tone, &format!("{proto:<7}"));
+        run(&mut l, Tone::Main, &format!("{len:>4} {info}"));
+        self.pending.push_back(l);
+    }
+
+    /// A packet of the Mictlán: (protocol, tone, length, info).
+    fn mx_packet(&mut self) -> (&'static str, Tone, u16, String) {
+        let soul = muertos::soul(&mut self.rng, self.mx.level);
+        let lvl = self.rng.u8(1..10);
+        match self.rng.u8(..7) {
+            0 => (
+                "MICTLAN",
+                Tone::Green,
+                self.rng.u16(60..300),
+                format!("Alma {} cruza el nivel {lvl}", self.rng.u16(100..9999)),
+            ),
+            1 => (
+                "XOLO",
+                Tone::Cyan,
+                64,
+                format!("Handshake OK, la cola mueve {} Hz", self.rng.u8(2..9)),
+            ),
+            2 => (
+                "COPAL",
+                Tone::Amber,
+                self.rng.u16(60..200),
+                format!("Humo {} ppm, ventilacion normal", self.rng.u8(3..60)),
+            ),
+            3 => (
+                "OFRENDA",
+                Tone::Bright,
+                self.rng.u16(200..1400),
+                format!(
+                    "{soul}: {} entregado",
+                    muertos::offering(&mut self.rng, soul)
+                ),
+            ),
+            4 => (
+                "PETALO",
+                Tone::Amber,
+                self.rng.u16(60..900),
+                format!("Peticion de petalos x{}", self.rng.u16(2..900)),
+            ),
+            5 => (
+                "VELA",
+                Tone::Red,
+                self.rng.u16(60..200),
+                format!("Llama estable en el nivel {lvl}"),
+            ),
+            _ => (
+                "ALMA",
+                Tone::Green,
+                self.rng.u16(60..400),
+                format!("{soul} -> casa (ETA {} min)", self.rng.u8(1..90)),
+            ),
+        }
+    }
+
+    /// An everyday packet: (protocol, tone, length, info).
+    fn ordinary_packet(&mut self, src: &str, dst: &str) -> (&'static str, Tone, u16, String) {
+        match self.rng.u8(..9) {
             0 | 1 => {
                 let flags = [
                     "[SYN]",
@@ -693,20 +862,22 @@ impl Feed {
             }
             2 => {
                 let mut id = String::new();
-                ident(&mut self.rng, '-', &mut id);
+                ident(&mut self.rng, '-', self.mx, &mut id);
+                let domain = if self.mx.on() {
+                    "mictlan.mx"
+                } else {
+                    "example.net"
+                };
                 (
                     "DNS",
                     Tone::Cyan,
                     self.rng.u16(70..120),
-                    format!(
-                        "Standard query 0x{:04x} A {id}.example.net",
-                        self.rng.u16(..)
-                    ),
+                    format!("Standard query 0x{:04x} A {id}.{domain}", self.rng.u16(..)),
                 )
             }
             3 => {
                 let mut id = String::new();
-                ident(&mut self.rng, '_', &mut id);
+                ident(&mut self.rng, '_', self.mx, &mut id);
                 (
                     "HTTP",
                     Tone::Bright,
@@ -748,32 +919,28 @@ impl Feed {
                     self.rng.u16(8..500)
                 ),
             ),
-        };
-        let mut l = Line::new();
-        run(
-            &mut l,
-            Tone::Dim,
-            &format!("{:>5}  {:>8.4}  ", self.seq, self.clock % 1000.0),
-        );
-        run(&mut l, Tone::Main, &format!("{src:<17}{dst:<17}"));
-        run(&mut l, tone, &format!("{proto:<7}"));
-        run(&mut l, Tone::Main, &format!("{len:>4} {info}"));
-        self.pending.push_back(l);
+        }
     }
 
     fn birth_tree(&mut self) {
         if self.n > 40 {
             self.n = 0;
             let mut l = Line::new();
-            run(
-                &mut l,
-                Tone::Dim,
-                &format!(
+            let text = if self.mx.on() {
+                format!(
+                    "{} directorios, {} archivos, {} almas",
+                    self.rng.u16(40..900),
+                    self.rng.u16(300..9000),
+                    self.rng.u16(1..300)
+                )
+            } else {
+                format!(
                     "{} directories, {} files",
                     self.rng.u16(40..900),
                     self.rng.u16(300..9000)
-                ),
-            );
+                )
+            };
+            run(&mut l, Tone::Dim, &text);
             self.pending.push_back(l);
             self.depth = 0;
             return;
@@ -787,7 +954,14 @@ impl Feed {
             self.depth -= 1;
         }
         let mut name = String::new();
-        ident(&mut self.rng, '-', &mut name);
+        // Día de Muertos: an ofrenda of directories and files by their names.
+        let mx = self.mx.on() && self.rng.f32() < muertos::share(self.mx.level);
+        if mx {
+            let list = if dir { muertos::DIRS } else { muertos::FILES };
+            name.push_str(babble::pick(&mut self.rng, list));
+        } else {
+            ident(&mut self.rng, '-', self.mx, &mut name);
+        }
         let mut l = Line::new();
         let mut pre = String::new();
         for _ in 0..self.depth {
@@ -804,14 +978,22 @@ impl Feed {
             run(&mut l, Tone::Cyan, "/");
             self.depth += 1;
         } else {
-            let ext = babble::pick(&mut self.rng, EXTS);
+            let ext = if mx {
+                name.rsplit('.').next().unwrap_or("")
+            } else {
+                babble::pick(&mut self.rng, EXTS)
+            };
             let tone = match ext {
                 "key" | "pem" | "shadow" | "enc" => Tone::Red,
                 "log" | "dat" => Tone::Dim,
                 "sh" | "py" | "so" => Tone::Green,
                 _ => Tone::Main,
             };
-            run(&mut l, tone, &format!("{name}.{ext}"));
+            if mx {
+                run(&mut l, tone, &name);
+            } else {
+                run(&mut l, tone, &format!("{name}.{ext}"));
+            }
             if tone == Tone::Red && self.rng.bool() {
                 run(&mut l, Tone::Amber, "  [permission denied]");
             }
@@ -865,18 +1047,26 @@ impl Feed {
         };
         let mut l = Line::new();
         let ident_pct = mid.iter().filter(|&&c| c == b'|').count() * 100 / len;
-        let mut name = String::new();
-        ident(&mut self.rng, '_', &mut name);
-        run(
-            &mut l,
-            Tone::Bright,
-            &format!(
+        let text = if self.mx.on() {
+            // Relatives, matched by their sequences: it runs in the family.
+            format!(
+                "> {}  Puntaje={} bits  Esperado={}e-{}  Parentesco={ident_pct}%",
+                muertos::soul(&mut self.rng, self.mx.level),
+                self.rng.u16(40..900),
+                self.rng.u8(1..9),
+                self.rng.u16(5..180)
+            )
+        } else {
+            let mut name = String::new();
+            ident(&mut self.rng, '_', self.mx, &mut name);
+            format!(
                 "> {name}  Score={} bits  Expect={}e-{}  Identities={ident_pct}%",
                 self.rng.u16(40..900),
                 self.rng.u8(1..9),
                 self.rng.u16(5..180)
-            ),
-        );
+            )
+        };
+        run(&mut l, Tone::Bright, &text);
         self.pending.push_back(l);
         let mut l = Line::new();
         run(&mut l, Tone::Dim, &format!("Query {start:>7} "));
@@ -900,12 +1090,22 @@ impl Feed {
         let width = self.w.clamp(8, 64);
         if self.n == 0 {
             let mut l = Line::new();
-            run(&mut l, Tone::Amber, "-----BEGIN RSA PRIVATE KEY-----");
+            let text = if self.mx.on() {
+                "-----BEGIN LLAVE PRIVADA DEL MICTLAN-----"
+            } else {
+                "-----BEGIN RSA PRIVATE KEY-----"
+            };
+            run(&mut l, Tone::Amber, text);
             self.pending.push_back(l);
             self.n = self.rng.u32(8..22);
         } else if self.n == 1 {
             let mut l = Line::new();
-            run(&mut l, Tone::Amber, "-----END RSA PRIVATE KEY-----");
+            let text = if self.mx.on() {
+                "-----END LLAVE PRIVADA DEL MICTLAN-----"
+            } else {
+                "-----END RSA PRIVATE KEY-----"
+            };
+            run(&mut l, Tone::Amber, text);
             self.pending.push_back(l);
             let mut fp = String::from("SHA256:");
             for _ in 0..43 {
@@ -944,17 +1144,21 @@ impl Feed {
         let roll = self.rng.u8(..100);
         let mut text = String::new();
         let tone = if roll < 14 {
-            text.push_str("=== PHASE ");
+            text.push_str(if self.mx.on() {
+                "=== FASE "
+            } else {
+                "=== PHASE "
+            });
             let _ = write!(text, "{}: ", self.rng.u8(1..99));
-            babble::progress_label(&mut self.rng, self.level, &mut text);
+            label(&mut self.rng, self.level, self.mx, &mut text);
             text.push_str(" ===");
             Tone::Amber
         } else if roll < 55 {
             run(&mut prefix, Tone::Green, "[ OK ] ");
-            babble::sentence(&mut self.rng, self.level, &mut text);
+            say(&mut self.rng, self.level, self.mx, &mut text);
             Tone::Bright
         } else {
-            babble::sentence(&mut self.rng, self.level, &mut text);
+            say(&mut self.rng, self.level, self.mx, &mut text);
             Tone::Main
         };
         self.wrapped(prefix, &text, tone);
@@ -963,9 +1167,17 @@ impl Feed {
     fn birth_password(&mut self) {
         const CS: &[u8] = b"abcdefghijkmnopqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789!@#$%^&*-_=+";
         let len = self.rng.usize(10..24);
-        let pw: String = (0..len)
-            .map(|_| CS[self.rng.usize(..CS.len())] as char)
-            .collect();
+        let pw: String = if self.mx.on() && self.rng.f32() < muertos::share(self.mx.level) {
+            // A family's passwords: the name of the dog, a year, an exclamation.
+            let mut pw = String::new();
+            muertos::password(&mut self.rng, &mut pw);
+            pw
+        } else {
+            (0..len)
+                .map(|_| CS[self.rng.usize(..CS.len())] as char)
+                .collect()
+        };
+        let len = pw.chars().count();
         let mut l = Line::new();
         run(&mut l, Tone::Bright, &format!("{pw:<24}"));
         run(
@@ -981,19 +1193,34 @@ impl Feed {
         let mut l = Line::new();
         let mut ip = String::new();
         babble::ip(&mut self.rng, &mut ip);
-        run(
-            &mut l,
-            Tone::Cyan,
-            &format!("{}@{ip} ", babble::pick(&mut self.rng, USERS)),
-        );
+        let user = if self.mx.on() && self.rng.f32() < muertos::share(self.mx.level) {
+            babble::pick(&mut self.rng, muertos::USERS)
+        } else {
+            babble::pick(&mut self.rng, USERS)
+        };
+        run(&mut l, Tone::Cyan, &format!("{user}@{ip} "));
         let pw: String = (0..self.rng.usize(5..12))
             .map(|_| (b'a' + self.rng.u8(..26)) as char)
             .collect();
         run(&mut l, Tone::Main, &format!("pw:{pw} "));
-        if self.rng.u8(..100) < 88 {
-            run(&mut l, Tone::Red, "DENIED");
+        // The souls are let in more and more as the holiday builds up.
+        let denied = if self.mx.on() {
+            88 - (30.0 * self.mx.level) as u8
         } else {
-            run(&mut l, Tone::Green, "GRANTED");
+            88
+        };
+        if self.rng.u8(..100) < denied {
+            run(
+                &mut l,
+                Tone::Red,
+                if self.mx.on() { "DENEGADO" } else { "DENIED" },
+            );
+        } else {
+            run(
+                &mut l,
+                Tone::Green,
+                if self.mx.on() { "ADMITIDO" } else { "GRANTED" },
+            );
         }
         self.pending.push_back(l);
     }
@@ -1028,6 +1255,21 @@ fn camel(s: &str) -> String {
 
 impl Widget for Feed {
     fn name(&self) -> &'static str {
+        if self.mx.on() {
+            return match self.kind {
+                FeedKind::Hex => "hexdump -C /dev/ofrenda",
+                FeedKind::Log => "tail -f /var/log/mictlan.log",
+                FeedKind::Code => "less ofrenda/altar.rs",
+                FeedKind::Errno => "dmesg -w",
+                FeedKind::Sniffer => "tcpdump -i mictlan0",
+                FeedKind::Tree => "tree -a /ofrenda",
+                FeedKind::Dna => "blastn -query ancestros",
+                FeedKind::Pem => "ssh-keygen -t mictlan",
+                FeedKind::Mission => "bit\u{00e1}cora --ofrenda",
+                FeedKind::Passwords => "apg -a 1 --familiar",
+                FeedKind::Auth => "authd --mictlan",
+            };
+        }
         match self.kind {
             FeedKind::Hex => "hexdump -C /dev/mem",
             FeedKind::Log => "tail -f /var/log/syslog",

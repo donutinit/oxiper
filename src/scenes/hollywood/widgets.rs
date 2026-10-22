@@ -7,8 +7,9 @@
 
 use super::feed::{Feed, FeedKind};
 use super::map::{self, Dots};
-use super::{Env, Rect, Widget, babble, put, put_ch};
+use super::{Env, Rect, Widget, babble, muertos, put, put_ch};
 use crate::color::Color;
+use crate::fiesta::Fiesta;
 use crate::render::{BOLD, Canvas, DIM};
 use fastrand::Rng;
 use std::collections::VecDeque;
@@ -79,6 +80,7 @@ struct Proc {
 }
 
 pub struct Htop {
+    mx: Fiesta,
     rng: Rng,
     cpu: [f32; 8],
     target: [f32; 8],
@@ -90,11 +92,20 @@ pub struct Htop {
 }
 
 impl Htop {
-    pub fn new(seed: u64) -> Htop {
+    pub fn new(seed: u64, mx: Fiesta) -> Htop {
         let mut rng = Rng::with_seed(seed);
         let mut procs = Vec::new();
+        let users = if mx.on() {
+            ["root", "mictlan", "xolo", "catrina", "abuela", "nobody"]
+        } else {
+            ["root", "root", "daemon", "www-data", "neo", "nobody"]
+        };
         for _ in 0..24 {
-            let mut cmd = String::from(babble::pick(&mut rng, babble::DAEMONS));
+            let mut cmd = String::from(if mx.on() && rng.bool() {
+                babble::pick(&mut rng, muertos::DAEMONS)
+            } else {
+                babble::pick(&mut rng, babble::DAEMONS)
+            });
             if rng.bool() {
                 cmd.push_str(" --");
                 cmd.push_str(babble::pick(&mut rng, babble::MODS));
@@ -103,13 +114,14 @@ impl Htop {
             }
             procs.push(Proc {
                 pid: rng.u32(1..32768),
-                user: ["root", "root", "daemon", "www-data", "neo", "nobody"][rng.usize(..6)],
+                user: users[rng.usize(..6)],
                 cpu: rng.f32() * 30.0,
                 mem: rng.f32() * 9.0,
                 cmd,
             });
         }
         Htop {
+            mx,
             cpu: [0.3; 8],
             target: [0.3; 8],
             mem: 0.5,
@@ -124,7 +136,7 @@ impl Htop {
 
 impl Widget for Htop {
     fn name(&self) -> &'static str {
-        "htop"
+        if self.mx.on() { "htop --almas" } else { "htop" }
     }
 
     fn update(&mut self, dt: f32, _env: &Env) {
@@ -180,30 +192,45 @@ impl Widget for Htop {
             );
             y = y.max(row as i32 + 1);
         }
+        let mx = self.mx.on();
+        let (mem_label, swap_label) = if mx { ("Ofr", "Vel") } else { ("Mem", "Swp") };
         let mut t = String::new();
         let _ = write!(t, "{:.2}G/15.6G", self.mem * 15.6);
-        meter(c, r, 0, y, colw - 1, "Mem", self.mem, &t, env);
+        meter(c, r, 0, y, colw - 1, mem_label, self.mem, &t, env);
         t.clear();
         let _ = write!(t, "{:.2}G/8.00G", self.swap * 8.0);
         if two {
-            meter(c, r, colw, y, colw - 1, "Swp", self.swap, &t, env);
+            meter(c, r, colw, y, colw - 1, swap_label, self.swap, &t, env);
         } else {
             y += 1;
-            meter(c, r, 0, y, colw - 1, "Swp", self.swap, &t, env);
+            meter(c, r, 0, y, colw - 1, swap_label, self.swap, &t, env);
         }
         y += 1;
         t.clear();
         let up = self.uptime as u32;
-        let _ = write!(
-            t,
-            "Tasks: {}, {} thr; Load: {:.2}  Up {}d {:02}:{:02}",
-            200 + (up % 37),
-            900 + (up % 211),
-            self.cpu.iter().sum::<f32>() / 4.0,
-            up / 86400,
-            up / 3600 % 24,
-            up / 60 % 60
-        );
+        if mx {
+            let _ = write!(
+                t,
+                "Almas: {}, {} en tr\u{00e1}nsito; Carga: {:.2}  Arriba {}d {:02}:{:02}",
+                200 + (up % 37),
+                900 + (up % 211),
+                self.cpu.iter().sum::<f32>() / 4.0,
+                up / 86400,
+                up / 3600 % 24,
+                up / 60 % 60
+            );
+        } else {
+            let _ = write!(
+                t,
+                "Tasks: {}, {} thr; Load: {:.2}  Up {}d {:02}:{:02}",
+                200 + (up % 37),
+                900 + (up % 211),
+                self.cpu.iter().sum::<f32>() / 4.0,
+                up / 86400,
+                up / 3600 % 24,
+                up / 60 % 60
+            );
+        }
         put(c, r, 0, y, &t, pal.main, 0);
         y += 1;
         if r.h - y >= 3 {
@@ -212,7 +239,11 @@ impl Widget for Htop {
                 r,
                 0,
                 y,
-                "  PID USER      CPU%  MEM%  COMMAND",
+                if mx {
+                    "  PID USUARIO   CPU%  MEM%  COMANDO"
+                } else {
+                    "  PID USER      CPU%  MEM%  COMMAND"
+                },
                 pal.cyan,
                 BOLD,
             );
@@ -244,6 +275,7 @@ impl Widget for Htop {
 // ---------------------------------------------------------------- bandwidth
 
 pub struct Bandwidth {
+    mx: Fiesta,
     rng: Rng,
     hist: VecDeque<(f32, f32)>,
     rx: f32,
@@ -257,8 +289,9 @@ pub struct Bandwidth {
 }
 
 impl Bandwidth {
-    pub fn new(seed: u64) -> Bandwidth {
+    pub fn new(seed: u64, mx: Fiesta) -> Bandwidth {
         Bandwidth {
+            mx,
             rng: Rng::with_seed(seed),
             hist: VecDeque::new(),
             rx: 0.3,
@@ -275,7 +308,11 @@ impl Bandwidth {
 
 impl Widget for Bandwidth {
     fn name(&self) -> &'static str {
-        "bmon -p eth0"
+        if self.mx.on() {
+            "bmon -p mictlan0"
+        } else {
+            "bmon -p eth0"
+        }
     }
 
     fn resize(&mut self, w: u16, h: u16) {
@@ -292,6 +329,10 @@ impl Widget for Bandwidth {
                 0.1 + self.rng.f32() * 0.5
             };
             self.tx_t = 0.05 + self.rng.f32() * 0.3;
+            if self.mx.on() {
+                // More souls come home the higher the holiday.
+                self.rx_t *= 0.55 + 0.45 * self.mx.level;
+            }
         }
         ease(&mut self.rx, self.rx_t, dt, 4.0);
         ease(&mut self.tx, self.tx_t, dt, 4.0);
@@ -317,12 +358,21 @@ impl Widget for Bandwidth {
         let pal = &env.pal;
         let (last_rx, last_tx) = self.hist.back().copied().unwrap_or((0.0, 0.0));
         let mut t = String::new();
-        let _ = write!(
-            t,
-            "eth0  RX {:7.1} Mbit/s  TX {:7.1} Mbit/s",
-            last_rx * 940.0,
-            last_tx * 940.0
-        );
+        if self.mx.on() {
+            let _ = write!(
+                t,
+                "mictlan0  \u{2193} llegan {:7.1} almas/s  \u{2191} vuelven {:6.1} almas/s",
+                last_rx * 1840.0,
+                last_tx * 310.0
+            );
+        } else {
+            let _ = write!(
+                t,
+                "eth0  RX {:7.1} Mbit/s  TX {:7.1} Mbit/s",
+                last_rx * 940.0,
+                last_tx * 940.0
+            );
+        }
         put(c, r, 0, 0, &t, pal.bright, BOLD);
         let (pw, ph) = (self.dots.pw(), self.dots.ph());
         self.dots.clear();
@@ -348,12 +398,21 @@ impl Widget for Bandwidth {
         };
         self.dots.blit(c, body);
         t.clear();
-        let _ = write!(
-            t,
-            "peak {:.0} Mbit/s   avg {:.0} Mbit/s",
-            self.peak * 940.0,
-            self.hist.iter().map(|h| h.0).sum::<f32>() / n.max(1) as f32 * 940.0
-        );
+        if self.mx.on() {
+            let _ = write!(
+                t,
+                "pico {:.0} almas/s   prom {:.0} almas/s",
+                self.peak * 1840.0,
+                self.hist.iter().map(|h| h.0).sum::<f32>() / n.max(1) as f32 * 1840.0
+            );
+        } else {
+            let _ = write!(
+                t,
+                "peak {:.0} Mbit/s   avg {:.0} Mbit/s",
+                self.peak * 940.0,
+                self.hist.iter().map(|h| h.0).sum::<f32>() / n.max(1) as f32 * 940.0
+            );
+        }
         put(c, r, 0, r.h - 1, &t, pal.dim, 0);
     }
 }
@@ -365,9 +424,34 @@ struct Drop {
     y: f32,
     speed: f32,
     len: i32,
+    /// Día de Muertos: a word the drop spells top to bottom (or "").
+    word: &'static str,
 }
 
+/// Words that fall in the holiday's rain.
+const RAIN_WORDS: &[&str] = &[
+    "MICTLAN",
+    "CEMPASUCHIL",
+    "ABUELA",
+    "OFRENDA",
+    "CALAVERA",
+    "VELADORA",
+    "XOLO",
+    "CATRINA",
+    "COPAL",
+    "ALMAS",
+    "RECUERDO",
+    "MARIPOSA",
+    "ALEBRIJE",
+    "PANTEON",
+    "FLORES",
+    "NOVIEMBRE",
+    "PAN",
+    "SAL",
+];
+
 pub struct Rain {
+    mx: Fiesta,
     rng: Rng,
     drops: Vec<Drop>,
     h: i32,
@@ -384,8 +468,9 @@ fn hash(a: u32, b: u32) -> u32 {
 }
 
 impl Rain {
-    pub fn new(seed: u64) -> Rain {
+    pub fn new(seed: u64, mx: Fiesta) -> Rain {
         Rain {
+            mx,
             rng: Rng::with_seed(seed),
             drops: Vec::new(),
             h: 0,
@@ -394,8 +479,15 @@ impl Rain {
         }
     }
 
-    fn respawn(rng: &mut Rng, h: i32, first: bool) -> Drop {
-        let len = rng.i32(5..(h.max(8) * 2 / 3).max(7));
+    fn respawn(rng: &mut Rng, h: i32, first: bool, mx: Fiesta) -> Drop {
+        let mut len = rng.i32(5..(h.max(8) * 2 / 3).max(7));
+        // Día de Muertos: some drops spell a word, more of them the higher
+        // the holiday (drawn after the ordinary numbers).
+        let mut word = "";
+        if mx.on() && rng.f32() < 0.1 + 0.2 * mx.level {
+            word = RAIN_WORDS[rng.usize(..RAIN_WORDS.len())];
+            len = len.max(word.len() as i32 + 3);
+        }
         Drop {
             y: if first {
                 rng.f32() * (h + len) as f32 - len as f32
@@ -404,19 +496,24 @@ impl Rain {
             },
             speed: 6.0 + rng.f32() * 16.0,
             len,
+            word,
         }
     }
 }
 
 impl Widget for Rain {
     fn name(&self) -> &'static str {
-        "cmatrix -ab"
+        if self.mx.on() {
+            "cmatrix -ab --petalos"
+        } else {
+            "cmatrix -ab"
+        }
     }
 
     fn resize(&mut self, w: u16, h: u16) {
         self.h = h as i32;
         self.drops = (0..w)
-            .map(|_| Self::respawn(&mut self.rng, h as i32, true))
+            .map(|_| Self::respawn(&mut self.rng, h as i32, true, self.mx))
             .collect();
     }
 
@@ -429,7 +526,7 @@ impl Widget for Rain {
         for d in self.drops.iter_mut() {
             d.y += d.speed * dt;
             if d.y - d.len as f32 > self.h as f32 {
-                *d = Self::respawn(&mut self.rng, self.h, false);
+                *d = Self::respawn(&mut self.rng, self.h, false, self.mx);
             }
         }
     }
@@ -446,16 +543,33 @@ impl Widget for Rain {
                 let h = hash(x as u32 * 131 + row as u32, 7);
                 // A few glyphs flicker with the tick, most stay put.
                 let h2 = if h & 7 == 0 { hash(h, self.tick) } else { h };
-                let ch = if h2 % 5 == 0 {
+                let mut ch = if h2 % 5 == 0 {
                     char::from_digit(h2 / 5 % 10, 10).unwrap_or('0')
                 } else {
                     char::from_u32(0xff66 + h2 / 5 % 56).unwrap_or('?')
                 };
-                let (col, at) = if k == 0 {
+                let (mut col, mut at) = if k == 0 {
                     (pal.bright, BOLD)
                 } else {
                     (pal.ramp.at(1.0 - k as f32 / d.len as f32 * 0.85), 0)
                 };
+                if self.mx.on() {
+                    // Petals fall among the kana, flowers head the drops and
+                    // the words read from top to bottom.
+                    let wl = d.word.len() as i32;
+                    if k < wl {
+                        ch = d.word.as_bytes()[(wl - 1 - k) as usize] as char;
+                        col = pal.fade(pal.bright, k as f32 / wl as f32 * 0.35);
+                        at = BOLD;
+                    } else if k == 0 {
+                        ch = '\u{273f}';
+                        col = pal.flor.scale(1.25);
+                    } else if h2 % 9 == 0 {
+                        ch =
+                            ['\u{273f}', '\u{2740}', '\u{273e}', '\u{2741}'][(h2 / 9 % 4) as usize];
+                        col = pal.flor.lerp(col, k as f32 / d.len as f32);
+                    }
+                }
                 put_ch(c, r, x as i32, row, ch, col, at);
             }
         }
@@ -465,13 +579,16 @@ impl Widget for Rain {
 // ---------------------------------------------------------------- world map
 
 struct Arc {
-    from: usize,
-    to: usize,
+    from: (&'static str, f32, f32),
+    to: (&'static str, f32, f32),
     t: f32,
     glow: f32,
 }
 
 pub struct WorldMap {
+    mx: Fiesta,
+    /// Souls that got home (Día de Muertos).
+    home: u32,
     rng: Rng,
     land: Dots,
     fx: Dots,
@@ -481,8 +598,10 @@ pub struct WorldMap {
 }
 
 impl WorldMap {
-    pub fn new(seed: u64) -> WorldMap {
+    pub fn new(seed: u64, mx: Fiesta) -> WorldMap {
         WorldMap {
+            mx,
+            home: 100 + (seed % 900) as u32,
             rng: Rng::with_seed(seed),
             land: Dots::new(1, 1),
             fx: Dots::new(1, 1),
@@ -495,7 +614,11 @@ impl WorldMap {
 
 impl Widget for WorldMap {
     fn name(&self) -> &'static str {
-        "tracemap --live"
+        if self.mx.on() {
+            "tracemap --regreso"
+        } else {
+            "tracemap --live"
+        }
     }
 
     fn resize(&mut self, w: u16, h: u16) {
@@ -508,8 +631,17 @@ impl Widget for WorldMap {
         self.spawn -= dt;
         if self.spawn <= 0.0 && self.arcs.len() < 5 {
             self.spawn = 0.8 + self.rng.f32() * 2.0;
-            let from = self.rng.usize(..map::CITIES.len());
-            let to = (from + 1 + self.rng.usize(..map::CITIES.len() - 1)) % map::CITIES.len();
+            let (from, to) = if self.mx.on() {
+                // Souls of the whole world on their way back to Mexico.
+                (
+                    map::ORIGINS[self.rng.usize(..map::ORIGINS.len())],
+                    map::HOMES[self.rng.usize(..map::HOMES.len())],
+                )
+            } else {
+                let from = self.rng.usize(..map::CITIES.len());
+                let to = (from + 1 + self.rng.usize(..map::CITIES.len() - 1)) % map::CITIES.len();
+                (map::CITIES[from], map::CITIES[to])
+            };
             self.arcs.push(Arc {
                 from,
                 to,
@@ -520,6 +652,9 @@ impl Widget for WorldMap {
         for a in self.arcs.iter_mut() {
             if a.t < 1.0 {
                 a.t = (a.t + dt * 0.5).min(1.0);
+                if a.t >= 1.0 {
+                    self.home += 1;
+                }
             } else {
                 a.glow += dt * 0.7;
             }
@@ -544,14 +679,19 @@ impl Widget for WorldMap {
         let (pw, ph) = (self.fx.pw(), self.fx.ph());
         self.fx.clear();
         let mut status = String::new();
+        let mx = self.mx.on();
         for a in &self.arcs {
-            let (_, la, lo) = map::CITIES[a.from];
-            let (_, lb, lob) = map::CITIES[a.to];
+            let (_, la, lo) = a.from;
+            let (_, lb, lob) = a.to;
             let (x0, y0) = map::project(la, lo, pw, ph);
             let (x1, y1) = map::project(lb, lob, pw, ph);
             let lift = ((x1 - x0).abs() + (y1 - y0).abs()) * 0.25;
             let steps = 40;
-            let col = if a.glow > 0.0 { pal.red } else { pal.amber };
+            let col = match (a.glow > 0.0, mx) {
+                (true, _) => pal.red,
+                (false, true) => pal.main,
+                (false, false) => pal.amber,
+            };
             let upto = (steps as f32 * a.t) as i32;
             let (mut px, mut py) = (x0, y0);
             for i in 1..=upto {
@@ -562,21 +702,40 @@ impl Widget for WorldMap {
                 px = x;
                 py = y;
             }
-            status = format!("TRACE {} -> {}", map::CITIES[a.from].0, map::CITIES[a.to].0);
+            status = if mx {
+                format!("ALMA EN CAMINO: {} -> {}", a.from.0, a.to.0)
+            } else {
+                format!("TRACE {} -> {}", a.from.0, a.to.0)
+            };
         }
         self.fx.blit(c, body);
         for a in &self.arcs {
-            let (_, lb, lob) = map::CITIES[a.to];
+            let (_, lb, lob) = a.to;
             let (x1, y1) = map::project(lb, lob, pw, ph);
-            let ch = if a.t >= 1.0 && (a.glow * 6.0) as i32 % 2 == 0 {
-                '\u{25c9}'
-            } else {
-                '\u{25cf}'
+            let blink = a.t >= 1.0 && (a.glow * 6.0) as i32 % 2 == 0;
+            let ch = match (mx, blink) {
+                (true, true) => '\u{2740}',
+                (true, false) => '\u{273f}',
+                (false, true) => '\u{25c9}',
+                (false, false) => '\u{25cf}',
             };
-            let col = if a.t >= 1.0 { pal.red } else { pal.amber };
+            let col = if a.t >= 1.0 {
+                pal.red
+            } else if mx {
+                pal.flor
+            } else {
+                pal.amber
+            };
             put_ch(c, body, (x1 / 2.0) as i32, (y1 / 4.0) as i32, ch, col, BOLD);
         }
         put(c, r, 0, 0, &status, pal.bright, BOLD);
+        if mx {
+            let t = format!("EN CASA: {}", self.home);
+            let tw = t.chars().count() as i32;
+            if r.w >= status.chars().count() as i32 + tw + 2 {
+                put(c, r, r.w - tw, 0, &t, pal.flor, BOLD);
+            }
+        }
     }
 }
 
@@ -587,9 +746,13 @@ struct Blip {
     dist: f32,
     glow: f32,
     id: u16,
+    /// Día de Muertos: the soul's name and how long ago it got home.
+    soul: &'static str,
+    home: f32,
 }
 
 pub struct Radar {
+    mx: Fiesta,
     rng: Rng,
     dots: Dots,
     sweep: f32,
@@ -597,28 +760,50 @@ pub struct Radar {
 }
 
 impl Radar {
-    pub fn new(seed: u64) -> Radar {
+    pub fn new(seed: u64, mx: Fiesta) -> Radar {
         let mut rng = Rng::with_seed(seed);
-        let blips = (0..9)
+        // The holiday tracks more souls the higher it is.
+        let n = if mx.on() {
+            5 + (6.0 * mx.level).round() as usize
+        } else {
+            9
+        };
+        let blips = (0..n)
             .map(|_| Blip {
                 ang: rng.f32() * TAU,
                 dist: 0.15 + rng.f32() * 0.8,
                 glow: 0.0,
                 id: rng.u16(100..999),
+                soul: if mx.on() {
+                    muertos::soul(&mut rng, mx.level)
+                } else {
+                    ""
+                },
+                home: 9.0,
             })
             .collect();
         Radar {
+            mx,
             rng,
             dots: Dots::new(1, 1),
             sweep: 0.0,
             blips,
         }
     }
+
+    #[cfg(test)]
+    pub fn blips_len(&self) -> usize {
+        self.blips.len()
+    }
 }
 
 impl Widget for Radar {
     fn name(&self) -> &'static str {
-        "radar --sweep"
+        if self.mx.on() {
+            "radar-almas --sweep"
+        } else {
+            "radar --sweep"
+        }
     }
 
     fn resize(&mut self, w: u16, h: u16) {
@@ -629,6 +814,7 @@ impl Widget for Radar {
     fn update(&mut self, dt: f32, _env: &Env) {
         let prev = self.sweep;
         self.sweep = (self.sweep + dt * 1.6) % TAU;
+        let mx = self.mx.on();
         for b in self.blips.iter_mut() {
             b.glow = (b.glow - dt * 0.35).max(0.0);
             let crossed = if self.sweep >= prev {
@@ -639,6 +825,21 @@ impl Widget for Radar {
             if crossed {
                 b.glow = 1.0;
             }
+            if mx {
+                // Souls walk toward the middle, the house with the ofrenda,
+                // and a new one sets out from the edge when one gets there.
+                b.home += dt;
+                b.dist -= dt * (0.012 + 0.0004 * (b.id % 17) as f32);
+                b.ang = (b.ang + (self.rng.f32() - 0.5) * 0.02).rem_euclid(TAU);
+                if b.dist < 0.07 {
+                    b.home = 0.0;
+                    b.dist = 0.9 + self.rng.f32() * 0.08;
+                    b.ang = self.rng.f32() * TAU;
+                    b.soul = muertos::soul(&mut self.rng, self.mx.level);
+                    b.id = self.rng.u16(100..999);
+                }
+                continue;
+            }
             // Contacts drift slowly.
             b.ang = (b.ang + (self.rng.f32() - 0.5) * 0.01).rem_euclid(TAU);
             b.dist = (b.dist + (self.rng.f32() - 0.5) * 0.004).clamp(0.1, 0.95);
@@ -647,6 +848,7 @@ impl Widget for Radar {
 
     fn draw(&mut self, c: &mut Canvas, r: Rect, env: &Env) {
         let pal = &env.pal;
+        let mx = self.mx.on();
         let (pw, ph) = (self.dots.pw(), self.dots.ph());
         let (cx, cy) = (pw as f32 / 2.0, ph as f32 / 2.0);
         let rad = (cx.min(cy) - 1.0).max(2.0);
@@ -667,6 +869,8 @@ impl Widget for Radar {
             let a = self.sweep - i as f32 * 0.07;
             let col = if i == 0 {
                 pal.bright
+            } else if mx {
+                pal.fade(pal.flor, 0.15 + i as f32 * 0.1)
             } else {
                 pal.fade(pal.green, 0.15 + i as f32 * 0.1)
             };
@@ -681,17 +885,32 @@ impl Widget for Radar {
             h: r.h,
         };
         self.dots.blit(c, area);
+        if mx {
+            // The ofrenda in the middle, its candle lit.
+            let lit = (self.sweep * 2.0) as i32 % 2 == 0;
+            put_ch(
+                c,
+                area,
+                (cx / 2.0) as i32,
+                (cy / 4.0) as i32,
+                if lit { '\u{2740}' } else { '\u{273f}' },
+                pal.vela,
+                BOLD,
+            );
+        }
         for b in &self.blips {
-            if b.glow > 0.02 {
+            if b.glow > 0.02 || mx {
                 let x = cx + b.ang.cos() * b.dist * rad;
                 let y = cy + b.ang.sin() * b.dist * rad;
-                let col = pal.fade(if b.glow > 0.6 { pal.red } else { pal.amber }, 1.0 - b.glow);
+                // The souls of the holiday stay faintly in sight between sweeps.
+                let glow = if mx { b.glow.max(0.3) } else { b.glow };
+                let col = pal.fade(if glow > 0.6 { pal.red } else { pal.amber }, 1.0 - glow);
                 put_ch(
                     c,
                     area,
                     (x / 2.0) as i32,
                     (y / 4.0) as i32,
-                    '\u{25c6}',
+                    if mx { '\u{2726}' } else { '\u{25c6}' },
                     col,
                     BOLD,
                 );
@@ -699,10 +918,29 @@ impl Widget for Radar {
         }
         if r.w >= 50 {
             let x0 = rw + 1;
-            put(c, r, x0, 0, "CONTACTS", pal.cyan, BOLD);
+            if mx {
+                put(c, r, x0, 0, "ALMAS EN CAMINO", pal.cyan, BOLD);
+            } else {
+                put(c, r, x0, 0, "CONTACTS", pal.cyan, BOLD);
+            }
             for (i, b) in self.blips.iter().enumerate() {
                 let y = 2 + i as i32;
                 let col = if b.glow > 0.5 { pal.red } else { pal.main };
+                if mx {
+                    let name = b.soul;
+                    let t = if b.home < 4.0 {
+                        format!("{name:<13} EN CASA")
+                    } else {
+                        format!(
+                            "{name:<13} {:03}\u{00b0} {:4.1}",
+                            (b.ang.to_degrees() as i32 + 90).rem_euclid(360),
+                            b.dist * 40.0
+                        )
+                    };
+                    let col = if b.home < 4.0 { pal.flor } else { col };
+                    put(c, r, x0, y, &t, col, if b.home < 4.0 { BOLD } else { 0 });
+                    continue;
+                }
                 let t = format!(
                     "TGT-{} BRG {:03} RNG {:4.1}",
                     b.id,
@@ -725,13 +963,15 @@ struct Bar {
 }
 
 pub struct Progress {
+    mx: Fiesta,
     rng: Rng,
     bars: Vec<Bar>,
 }
 
 impl Progress {
-    pub fn new(seed: u64) -> Progress {
+    pub fn new(seed: u64, mx: Fiesta) -> Progress {
         Progress {
+            mx,
             rng: Rng::with_seed(seed),
             bars: Vec::new(),
         }
@@ -749,7 +989,11 @@ impl Progress {
 
 impl Widget for Progress {
     fn name(&self) -> &'static str {
-        "pv --force"
+        if self.mx.on() {
+            "pv --ofrenda"
+        } else {
+            "pv --force"
+        }
     }
 
     fn resize(&mut self, _w: u16, h: u16) {
@@ -763,7 +1007,11 @@ impl Widget for Progress {
     fn update(&mut self, dt: f32, env: &Env) {
         for b in self.bars.iter_mut() {
             if b.label.is_empty() {
-                babble::progress_label(&mut self.rng, env.level.max(1), &mut b.label);
+                if self.mx.on() && self.rng.f32() < muertos::share(self.mx.level) {
+                    muertos::progress_label(&mut self.rng, env.level.max(1), &mut b.label);
+                } else {
+                    babble::progress_label(&mut self.rng, env.level.max(1), &mut b.label);
+                }
             }
             if b.done > 0.0 {
                 b.done -= dt;
@@ -790,7 +1038,15 @@ impl Widget for Progress {
             }
             let done = b.done > 0.0;
             if done {
-                put(c, r, 0, y, "COMPLETE", pal.green, BOLD);
+                put(
+                    c,
+                    r,
+                    0,
+                    y,
+                    if self.mx.on() { "COMPLETO" } else { "COMPLETE" },
+                    pal.green,
+                    BOLD,
+                );
                 put(c, r, 9, y, &b.label, pal.dim, 0);
             } else {
                 put(c, r, 0, y, &b.label, pal.bright, BOLD);
@@ -799,7 +1055,10 @@ impl Widget for Progress {
             let filled = (b.pct / 100.0 * bw as f32) as i32;
             put(c, r, 0, y + 1, "[", pal.dim, 0);
             for x in 0..bw {
-                let (ch, col) = if x < filled {
+                let (ch, col) = if self.mx.on() && !done && x + 1 == filled {
+                    // A marigold at the head of the bar.
+                    ('\u{273f}', pal.flor)
+                } else if x < filled {
                     (
                         '\u{2588}',
                         if done {
@@ -855,7 +1114,28 @@ const SAT_NAMES: &[&str] = &[
     "MOLNIYA 1-91",
 ];
 
+/// Día de Muertos: Mexico's satellites, some real and some on their way home.
+const SAT_NAMES_MX: &[&str] = &[
+    "MORELOS-3",
+    "SATMEX-8",
+    "QUETZSAT-1",
+    "BICENTENARIO",
+    "CENTENARIO",
+    "AZTECHSAT-1",
+    "XOLO-1",
+    "MONARCA-9",
+    "CATRINA-2",
+    "ALEBRIJE-7",
+    "COPAL-4",
+    "TONATIUH-1",
+    "COATLICUE-3",
+    "ISS (ZARYA)",
+    "VELADORA-12",
+    "MICTLAN-9",
+];
+
 pub struct Satellites {
+    mx: Fiesta,
     rng: Rng,
     land: Dots,
     fx: Dots,
@@ -865,9 +1145,9 @@ pub struct Satellites {
 }
 
 impl Satellites {
-    pub fn new(seed: u64) -> Satellites {
+    pub fn new(seed: u64, mx: Fiesta) -> Satellites {
         let mut rng = Rng::with_seed(seed);
-        let mut names: Vec<&str> = SAT_NAMES.to_vec();
+        let mut names: Vec<&str> = if mx.on() { SAT_NAMES_MX } else { SAT_NAMES }.to_vec();
         rng.shuffle(&mut names);
         let sats = names
             .iter()
@@ -882,6 +1162,7 @@ impl Satellites {
             })
             .collect();
         Satellites {
+            mx,
             rng,
             land: Dots::new(1, 1),
             fx: Dots::new(1, 1),
@@ -898,7 +1179,11 @@ impl Satellites {
 
 impl Widget for Satellites {
     fn name(&self) -> &'static str {
-        "satellite-tracker"
+        if self.mx.on() {
+            "rastreador-satelital"
+        } else {
+            "satellite-tracker"
+        }
     }
 
     fn resize(&mut self, w: u16, h: u16) {
@@ -968,7 +1253,11 @@ impl Widget for Satellites {
             r,
             0,
             0,
-            "ORBITAL TRACKING  UPLINK LOCKED",
+            if self.mx.on() {
+                "RASTREO ORBITAL  ENLACE AL MICTL\u{00c1}N"
+            } else {
+                "ORBITAL TRACKING  UPLINK LOCKED"
+            },
             pal.bright,
             BOLD,
         );
@@ -1003,22 +1292,46 @@ const SYMBOLS: &[&str] = &[
     "BTC", "ETH", "DOGE", "SOL", "NULL", "SUDO", "CRON", "KRNL", "PING", "ZERO", "ECHO", "HEXA",
 ];
 
+/// Día de Muertos: the stock market of the Mictlán, (symbol, bullish): the
+/// marigold, the candle and the bread only go up as the holiday builds up.
+const SYMBOLS_MX: &[(&str, bool)] = &[
+    ("CEMPAS", true),
+    ("COPAL", false),
+    ("VELA", true),
+    ("PAN", true),
+    ("MOLE", false),
+    ("TAMAL", false),
+    ("ATOLE", false),
+    ("MEZCAL", false),
+    ("PAPEL", false),
+    ("CALAV", true),
+    ("TEJOC", false),
+    ("CA\u{00d1}A", false),
+    ("CHOCO", false),
+    ("XOLO", true),
+    ("ALEBR", false),
+    ("CATRIN", true),
+];
+
 struct Quote {
     sym: &'static str,
     price: f32,
     open: f32,
+    bull: bool,
     hist: VecDeque<f32>,
 }
 
 pub struct Ticker {
+    mx: Fiesta,
     rng: Rng,
     quotes: Vec<Quote>,
     timer: f32,
 }
 
 impl Ticker {
-    pub fn new(seed: u64) -> Ticker {
+    pub fn new(seed: u64, mx: Fiesta) -> Ticker {
         Ticker {
+            mx,
             rng: Rng::with_seed(seed),
             quotes: Vec::new(),
             timer: 0.0,
@@ -1028,10 +1341,34 @@ impl Ticker {
 
 impl Widget for Ticker {
     fn name(&self) -> &'static str {
-        "ticker --crypto"
+        if self.mx.on() {
+            "bolsa --mictlan"
+        } else {
+            "ticker --crypto"
+        }
     }
 
     fn resize(&mut self, _w: u16, h: u16) {
+        if self.mx.on() {
+            let n = (h as usize).saturating_sub(2).clamp(1, SYMBOLS_MX.len());
+            let mut syms: Vec<(&'static str, bool)> = SYMBOLS_MX.to_vec();
+            self.rng.shuffle(&mut syms);
+            self.quotes = syms
+                .into_iter()
+                .take(n)
+                .map(|(sym, bull)| {
+                    let p = 8.0 + self.rng.f32().powi(2) * 400.0;
+                    Quote {
+                        sym,
+                        price: p,
+                        open: p,
+                        bull,
+                        hist: VecDeque::from(vec![p; 12]),
+                    }
+                })
+                .collect();
+            return;
+        }
         let n = (h as usize).saturating_sub(2).clamp(1, SYMBOLS.len());
         let mut syms: Vec<&'static str> = SYMBOLS.to_vec();
         self.rng.shuffle(&mut syms);
@@ -1044,6 +1381,7 @@ impl Widget for Ticker {
                     sym,
                     price: p,
                     open: p,
+                    bull: false,
                     hist: VecDeque::from(vec![p; 12]),
                 }
             })
@@ -1056,8 +1394,14 @@ impl Widget for Ticker {
             return;
         }
         self.timer = 0.4 + self.rng.f32() * 0.4;
+        // Marigolds, candles and bread climb with the holiday.
+        let lift = if self.mx.on() {
+            0.012 * self.mx.level
+        } else {
+            0.0
+        };
         for q in self.quotes.iter_mut() {
-            q.price *= 1.0 + (self.rng.f32() - 0.5) * 0.03;
+            q.price *= 1.0 + (self.rng.f32() - 0.5) * 0.03 + if q.bull { lift } else { 0.0 };
             q.hist.push_back(q.price);
             if q.hist.len() > 12 {
                 q.hist.pop_front();
@@ -1072,7 +1416,11 @@ impl Widget for Ticker {
             r,
             0,
             0,
-            "SYMBOL      LAST     CHG%  TREND",
+            if self.mx.on() {
+                "CLAVE       \u{00da}LTIMO   CAMB%  TENDENCIA"
+            } else {
+                "SYMBOL      LAST     CHG%  TREND"
+            },
             pal.cyan,
             BOLD,
         );
@@ -1129,11 +1477,13 @@ fn glyph(ch: char) -> [u8; 5] {
         'R' => [0b110, 0b101, 0b110, 0b101, 0b101],
         'S' => [0b011, 0b100, 0b010, 0b001, 0b110],
         'T' => [0b111, 0b010, 0b010, 0b010, 0b010],
+        'O' => [0b010, 0b101, 0b101, 0b101, 0b010],
         _ => [0; 5],
     }
 }
 
 pub struct Access {
+    mx: Fiesta,
     feed: Feed,
     rng: Rng,
     /// Some(granted, seconds left) while a banner is up.
@@ -1142,10 +1492,11 @@ pub struct Access {
 }
 
 impl Access {
-    pub fn new(seed: u64, level: u8) -> Access {
+    pub fn new(seed: u64, level: u8, mx: Fiesta) -> Access {
         let mut rng = Rng::with_seed(seed ^ 0xacce55);
         Access {
-            feed: Feed::new(FeedKind::Auth, seed, level),
+            mx,
+            feed: Feed::new(FeedKind::Auth, seed, level, mx),
             wait: 2.0 + rng.f32() * 4.0,
             rng,
             banner: None,
@@ -1174,7 +1525,11 @@ impl Access {
 
 impl Widget for Access {
     fn name(&self) -> &'static str {
-        "authd"
+        if self.mx.on() {
+            "authd --mictlan"
+        } else {
+            "authd"
+        }
     }
 
     fn resize(&mut self, w: u16, h: u16) {
@@ -1194,7 +1549,13 @@ impl Widget for Access {
             None => {
                 self.wait -= dt;
                 if self.wait <= 0.0 {
-                    self.banner = Some((self.rng.u8(..10) < 4, 1.8));
+                    // The souls are let in more often the higher the holiday.
+                    let granted = if self.mx.on() {
+                        self.rng.f32() < 0.25 + 0.4 * self.mx.level
+                    } else {
+                        self.rng.u8(..10) < 4
+                    };
+                    self.banner = Some((granted, 1.8));
                 }
             }
         }
@@ -1207,17 +1568,21 @@ impl Widget for Access {
         };
         let pal = &env.pal;
         let col = if granted { pal.green } else { pal.red };
-        let (w1, w2) = if granted {
-            ("ACCESS", "GRANTED")
-        } else {
-            ("ACCESS", "DENIED")
+        let mx = self.mx.on();
+        let (w1, w2) = match (mx, granted) {
+            (true, true) => ("ACCESO", "CONCEDIDO"),
+            (true, false) => ("ACCESO", "DENEGADO"),
+            (false, true) => ("ACCESS", "GRANTED"),
+            (false, false) => ("ACCESS", "DENIED"),
         };
         // Blink in the last moments.
         let on = left > 0.5 || (left * 10.0) as i32 % 2 == 0;
         if !on {
             return;
         }
-        let sx = if r.w >= 58 { 2 } else { 1 };
+        // (The ordinary banners keep their breakpoint: DENIED is narrower than GRANTED.)
+        let wide = if mx { w2.len() as i32 * 8 + 2 } else { 58 };
+        let sx = if r.w >= wide { 2 } else { 1 };
         let bw = (w2.len() as i32 * 4 * sx + 2).min(r.w);
         let (bh, big) = if r.h >= 13 && r.w >= w2.len() as i32 * 4 + 2 {
             (13, true)
@@ -1227,10 +1592,21 @@ impl Widget for Access {
         if r.h < bh || r.w < 10 {
             return;
         }
+        // The little banner says it in one line; at the holiday it says as
+        // much of "ACCESO AL MICTLAN DENEGADO" as fits.
+        let small = if !mx {
+            format!("{w1} {w2}")
+        } else if r.w >= 32 {
+            format!("{w1} AL MICTL\u{00c1}N {w2}")
+        } else if r.w >= 22 {
+            format!("MICTL\u{00c1}N {w2}")
+        } else {
+            w2.to_string()
+        };
         let bw = if big {
             bw
         } else {
-            (w2.len() as i32 + w1.len() as i32 + 5).min(r.w)
+            (small.chars().count() as i32 + 4).min(r.w)
         };
         let bx = (r.w - bw) / 2;
         let by = (r.h - bh) / 2;
@@ -1258,9 +1634,30 @@ impl Widget for Access {
             };
             Self::word(c, sub, by + 1, w1, sx, col);
             Self::word(c, sub, by + 7, w2, sx, col);
+            if mx {
+                // Captions on the frame: where to, and what the guard says.
+                let (up, down) = if granted {
+                    (" MICTL\u{00c1}N ", " \u{00a1}PASA, TE ESPERAN! ")
+                } else {
+                    (" MICTL\u{00c1}N ", " TODAV\u{00cd}A NO TE TOCA ")
+                };
+                for (y, t) in [(by, up), (by + bh - 1, down)] {
+                    let n = t.chars().count() as i32;
+                    if n + 2 <= bw {
+                        put(c, r, bx + (bw - n) / 2, y, t, pal.bright, BOLD);
+                    }
+                }
+            }
         } else {
-            let t = format!("{w1} {w2}");
-            put(c, r, bx + (bw - t.len() as i32) / 2, by + 1, &t, col, BOLD);
+            put(
+                c,
+                r,
+                bx + (bw - small.chars().count() as i32) / 2,
+                by + 1,
+                &small,
+                col,
+                BOLD,
+            );
         }
     }
 }
@@ -1268,8 +1665,14 @@ impl Widget for Access {
 // ---------------------------------------------------------------- keygen
 
 const ART: &[u8; 17] = b" .o+=*BOX@%&#/^SE";
+/// Día de Muertos: the walk leaves flowers, one more petal each visit.
+const ART_MX: [char; 15] = [
+    ' ', '.', '\u{00b7}', ':', '+', 'x', '\u{2022}', '*', '\u{273e}', '\u{2740}', '\u{273f}',
+    '\u{2741}', '\u{2742}', '\u{273b}', '\u{2735}',
+];
 
 pub struct Keygen {
+    mx: Fiesta,
     feed: Feed,
     rng: Rng,
     field: [[u8; 17]; 9],
@@ -1282,9 +1685,10 @@ pub struct Keygen {
 }
 
 impl Keygen {
-    pub fn new(seed: u64, level: u8) -> Keygen {
+    pub fn new(seed: u64, level: u8, mx: Fiesta) -> Keygen {
         let mut k = Keygen {
-            feed: Feed::new(FeedKind::Passwords, seed, level),
+            mx,
+            feed: Feed::new(FeedKind::Passwords, seed, level, mx),
             rng: Rng::with_seed(seed ^ 0x6b657967),
             field: [[0; 17]; 9],
             pos: (8, 4),
@@ -1330,7 +1734,11 @@ impl Keygen {
 
 impl Widget for Keygen {
     fn name(&self) -> &'static str {
-        "ssh-keygen -lv"
+        if self.mx.on() {
+            "ssh-keygen -lv --altar"
+        } else {
+            "ssh-keygen -lv"
+        }
     }
 
     fn resize(&mut self, w: u16, h: u16) {
@@ -1364,7 +1772,8 @@ impl Widget for Keygen {
             self.feed.draw(c, r, env);
             return;
         }
-        let title = "[RSA 4096]";
+        let mx = self.mx.on();
+        let title = if mx { "[ALMA 4096]" } else { "[RSA 4096]" };
         let mut top = String::from("+");
         top.push_str(&"-".repeat(3));
         top.push_str(title);
@@ -1377,11 +1786,23 @@ impl Widget for Keygen {
             for x in 0..17 {
                 let n = self.field[y][x] as usize;
                 let (ch, col, at) = if (x, y) == self.pos && self.step < 64 {
-                    ('^', pal.bright, BOLD)
+                    (if mx { '\u{2726}' } else { '^' }, pal.bright, BOLD)
                 } else if (x, y) == (8, 4) {
-                    ('S', pal.amber, BOLD)
+                    // Start and end: the house and the ofrenda.
+                    (if mx { '\u{2302}' } else { 'S' }, pal.amber, BOLD)
                 } else if (x, y) == self.pos && n > 0 {
-                    ('E', pal.amber, BOLD)
+                    (if mx { '\u{2740}' } else { 'E' }, pal.amber, BOLD)
+                } else if mx {
+                    // Flowers, from white to orange to rosa as they pile up.
+                    let k = n.min(14);
+                    let col = if k < 4 {
+                        pal.dim
+                    } else if k < 9 {
+                        pal.flor
+                    } else {
+                        pal.red
+                    };
+                    (ART_MX[k], col, if n > 4 { BOLD } else { 0 })
                 } else {
                     (
                         ART[n.min(14)] as char,
@@ -1392,14 +1813,30 @@ impl Widget for Keygen {
                 put_ch(c, r, 1 + x as i32, 1 + y as i32, ch, col, at);
             }
         }
-        put(c, r, 0, 10, "+----[SHA256]-----+", pal.dim, 0);
+        put(
+            c,
+            r,
+            0,
+            10,
+            if mx {
+                "+---[PANTE\u{00d3}N]-----+"
+            } else {
+                "+----[SHA256]-----+"
+            },
+            pal.dim,
+            0,
+        );
         if r.w >= 44 {
             put(
                 c,
                 r,
                 22,
                 1,
-                "Generating public/private rsa key pair",
+                if mx {
+                    "Generando la llave de la ofrenda"
+                } else {
+                    "Generating public/private rsa key pair"
+                },
                 pal.main,
                 0,
             );
@@ -1407,9 +1844,17 @@ impl Widget for Keygen {
             for (i, b) in self.bytes.iter().enumerate() {
                 let _ = write!(fp, "{b:02x}{}", if i < 15 { ":" } else { "" });
             }
-            put(c, r, 22, 3, "Fingerprint:", pal.dim, 0);
+            put(
+                c,
+                r,
+                22,
+                3,
+                if mx { "Huella:" } else { "Fingerprint:" },
+                pal.dim,
+                0,
+            );
             put(c, r, 22, 4, &fp, pal.bright, BOLD);
-            let steps = format!("Walk {:>2}/64", self.step);
+            let steps = format!("{} {:>2}/64", if mx { "Paso" } else { "Walk" }, self.step);
             put(c, r, 22, 6, &steps, pal.amber, 0);
         }
         let sub = Rect {

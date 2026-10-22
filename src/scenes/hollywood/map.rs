@@ -263,6 +263,43 @@ pub const CITIES: &[(&str, f32, f32)] = &[
     ("SEOUL", 37.6, 127.0),
 ];
 
+/// Día de Muertos: where the souls come from (the diaspora and the world):
+/// (name, lat, lon).
+pub const ORIGINS: &[(&str, f32, f32)] = &[
+    ("LOS ANGELES", 34.1, -118.2),
+    ("CHICAGO", 41.9, -87.6),
+    ("HOUSTON", 29.8, -95.4),
+    ("NUEVA YORK", 40.7, -74.0),
+    ("MADRID", 40.4, -3.7),
+    ("PARIS", 48.9, 2.4),
+    ("BUENOS AIRES", -34.6, -58.4),
+    ("BOGOTA", 4.7, -74.1),
+    ("LA HABANA", 23.1, -82.4),
+    ("TORONTO", 43.7, -79.4),
+    ("SAN ANTONIO", 29.4, -98.5),
+    ("PHOENIX", 33.4, -112.1),
+    ("TOKIO", 35.7, 139.7),
+    ("SYDNEY", -33.9, 151.2),
+    ("BERLIN", 52.5, 13.4),
+    ("LIMA", -12.0, -77.0),
+];
+
+/// ...and the towns they come home to.
+pub const HOMES: &[(&str, f32, f32)] = &[
+    ("OAXACA", 17.1, -96.7),
+    ("PATZCUARO", 19.5, -101.6),
+    ("MORELIA", 19.7, -101.2),
+    ("MERIDA", 21.0, -89.6),
+    ("PUEBLA", 19.0, -98.2),
+    ("GUADALAJARA", 20.7, -103.3),
+    ("MIXQUIC", 19.2, -99.0),
+    ("CIUDAD DE MEXICO", 19.4, -99.1),
+    ("JANITZIO", 19.6, -101.6),
+    ("ZACATECAS", 22.8, -102.6),
+    ("TAXCO", 18.6, -99.6),
+    ("CHIAPAS", 16.7, -93.1),
+];
+
 fn inside(poly: &[(f32, f32)], x: f32, y: f32) -> bool {
     let mut c = false;
     let mut j = poly.len() - 1;

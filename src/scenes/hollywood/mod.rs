@@ -10,6 +10,24 @@
 //! times thicker (see `babble.rs`). Apache-2.0 is compatible with oxiper's
 //! GPL-3.0-only.
 //!
+//! On Día de Muertos the screen goes Mictlán: the hacker greens turn to
+//! cempasúchil, rosa mexicano, turquesa and morado, every pane hangs a string
+//! of papel picado from its title bar, the ticker along the bottom brings the
+//! headlines of the underworld ("MICTLÁN GATEWAY ONLINE", "UPLOADING
+//! PAN_DE_MUERTO.TAR.GZ") and the technobabble goes bilingual (`muertos.rs`:
+//! "sincronizando la ofrenda cuántica con el Mictlán", "marigold petals
+//! routed through the quantum firewall"). The widgets get holiday versions:
+//! a radar and a world map that track the souls coming home, a gateway with
+//! the nine levels of the Mictlán and an ofrenda database with its altar
+//! (`mictlan.rs`), a facial recognition that scans sugar skulls
+//! (`rostro.rs`), the stock market of marigolds and candles, flowers in the
+//! randomart, rain that spells MICTLAN, and "ACCESO AL MICTLÁN DENEGADO" in
+//! big letters. The higher the holiday, the more of the text is the
+//! Mictlán's, the more souls are on the move, the more candles are lit and
+//! the more flags hang from the strings; from October 31 the angelitos come
+//! home too. Ordinary days are untouched (the holiday draws on its own
+//! random numbers).
+//!
 //! Structure: the screen is a binary tree of panes (`Node`) whose leaves each
 //! own a `Widget`. Every 10 to 25 real seconds one pane splits, two panes
 //! merge, or the whole layout reshuffles. Panes tile the screen exactly; each
@@ -18,9 +36,14 @@
 mod babble;
 mod feed;
 mod map;
+mod mictlan;
+mod muertos;
+mod rostro;
+mod sprite;
 mod widgets;
 
 use crate::color::{Color, Gradient, rgb};
+use crate::fiesta::{Fiesta, Kind};
 use crate::render::{BOLD, Canvas, DIM};
 use crate::scene::{Ctx, Opt, Scene, SceneInfo, Val};
 use fastrand::Rng;
@@ -94,27 +117,73 @@ pub struct Pal {
     /// Text drawn on top of a colored background (banners, table headers).
     pub ink: Color,
     pub ramp: Gradient,
+    /// Día de Muertos: the six colors of papel picado (the theme's first six
+    /// accents unless `classic`), a marigold and a candle flame, which keep
+    /// their own hue under every theme.
+    pub picado: [Color; 6],
+    pub flor: Color,
+    pub vela: Color,
     bg: Color,
 }
+
+/// The classic palette of the Mictlán: cempasúchil text, rosa mexicano for
+/// what is denied, turquesa, amarillo and verde limón for the rest.
+const MX_RAMP: [Color; 6] = [
+    rgb(0x24104a),
+    rgb(0x7028a0),
+    rgb(0xe4007c),
+    rgb(0xff8c00),
+    rgb(0xffd200),
+    rgb(0xfff2d0),
+];
+
+/// Papel picado under `classic`: rosa mexicano, naranja, morado, turquesa,
+/// amarillo and verde limón.
+const PICADO: [Color; 6] = [
+    rgb(0xe4007c),
+    rgb(0xff8c00),
+    rgb(0x8a3cc8),
+    rgb(0x00aab8),
+    rgb(0xffd200),
+    rgb(0x8cc828),
+];
 
 impl Pal {
     fn new(ctx: &Ctx) -> Pal {
         let native = ctx.theme.native;
-        let main = if native { rgb(0x33ee66) } else { ctx.theme.fg };
+        let mx = ctx.fiesta.is(Kind::Muertos);
+        let main = match (native, mx) {
+            (true, true) => rgb(0xffa01e),
+            (true, false) => rgb(0x33ee66),
+            _ => ctx.theme.fg,
+        };
+        let pick =
+            |i: usize, plain: u32, holiday: u32| ctx.pick(i, rgb(if mx { holiday } else { plain }));
         Pal {
             main,
             dim: ctx.fade(main, 0.5),
             bright: if native {
-                rgb(0xcfffd8)
+                rgb(if mx { 0xffecb8 } else { 0xcfffd8 })
             } else {
                 ctx.pick(5, main)
             },
-            cyan: ctx.pick(4, rgb(0x33d6e8)),
-            amber: ctx.pick(2, rgb(0xffb000)),
-            red: ctx.pick(0, rgb(0xff4545)),
-            green: ctx.pick(3, rgb(0x66ff66)),
-            ink: if native { rgb(0x04110a) } else { ctx.theme.bg },
-            ramp: ctx.ramp(&[rgb(0x03140a), rgb(0x0f8a35), rgb(0x33ee66), rgb(0xd8ffe2)]),
+            cyan: pick(4, 0x33d6e8, 0x00c0cc),
+            amber: pick(2, 0xffb000, 0xffd200),
+            red: pick(0, 0xff4545, 0xf0208c),
+            green: pick(3, 0x66ff66, 0x8cc828),
+            ink: if native {
+                rgb(if mx { 0x120e28 } else { 0x04110a })
+            } else {
+                ctx.theme.bg
+            },
+            ramp: if mx {
+                ctx.ramp(&MX_RAMP)
+            } else {
+                ctx.ramp(&[rgb(0x03140a), rgb(0x0f8a35), rgb(0x33ee66), rgb(0xd8ffe2)])
+            },
+            picado: std::array::from_fn(|i| ctx.pick(i, PICADO[i])),
+            flor: rgb(0xff8c00),
+            vela: rgb(0xffd678),
             bg: ctx.bg,
         }
     }
@@ -145,6 +214,15 @@ impl Pal {
 pub struct Env {
     pub pal: Pal,
     pub level: u8,
+}
+
+/// The holiday as the screen cares about it: only Día de Muertos.
+fn holiday(ctx: &Ctx) -> Fiesta {
+    if ctx.fiesta.is(Kind::Muertos) {
+        ctx.fiesta
+    } else {
+        Fiesta::NONE
+    }
 }
 
 /// One thing running in a pane.
@@ -190,6 +268,16 @@ const MIN_H: i32 = 7;
 
 /// Widget kinds; `make_widget` builds each.
 const KINDS: usize = 19;
+/// On Día de Muertos three more: the Mictlán gateway, the ofrenda database
+/// and the facial recognition of sugar skulls.
+const KINDS_MX: usize = 22;
+const RADAR: usize = 13;
+const GATEWAY: usize = 19;
+const OFRENDA: usize = 20;
+const FACE: usize = 21;
+/// The widgets that make a screen read as Día de Muertos at a glance; every
+/// layout of the holiday keeps at least one of them.
+const SIGNATURE: [usize; 4] = [RADAR, GATEWAY, OFRENDA, FACE];
 
 struct Pane {
     rect: Rect,
@@ -408,28 +496,31 @@ fn dummy_pane() -> Pane {
     }
 }
 
-fn make_widget(kind: usize, seed: u64, level: u8) -> Box<dyn Widget> {
+fn make_widget(kind: usize, seed: u64, level: u8, mx: Fiesta) -> Box<dyn Widget> {
     use feed::{Feed, FeedKind as K};
     match kind {
-        0 => Box::new(Feed::new(K::Hex, seed, level)),
-        1 => Box::new(Feed::new(K::Log, seed, level)),
-        2 => Box::new(Feed::new(K::Code, seed, level)),
-        3 => Box::new(Feed::new(K::Errno, seed, level)),
-        4 => Box::new(Feed::new(K::Sniffer, seed, level)),
-        5 => Box::new(Feed::new(K::Tree, seed, level)),
-        6 => Box::new(Feed::new(K::Dna, seed, level)),
-        7 => Box::new(Feed::new(K::Pem, seed, level)),
-        8 => Box::new(Feed::new(K::Mission, seed, level)),
-        9 => Box::new(widgets::Htop::new(seed)),
-        10 => Box::new(widgets::Bandwidth::new(seed)),
-        11 => Box::new(widgets::Rain::new(seed)),
-        12 => Box::new(widgets::WorldMap::new(seed)),
-        13 => Box::new(widgets::Radar::new(seed)),
-        14 => Box::new(widgets::Progress::new(seed)),
-        15 => Box::new(widgets::Satellites::new(seed)),
-        16 => Box::new(widgets::Ticker::new(seed)),
-        17 => Box::new(widgets::Access::new(seed, level)),
-        _ => Box::new(widgets::Keygen::new(seed, level)),
+        0 => Box::new(Feed::new(K::Hex, seed, level, mx)),
+        1 => Box::new(Feed::new(K::Log, seed, level, mx)),
+        2 => Box::new(Feed::new(K::Code, seed, level, mx)),
+        3 => Box::new(Feed::new(K::Errno, seed, level, mx)),
+        4 => Box::new(Feed::new(K::Sniffer, seed, level, mx)),
+        5 => Box::new(Feed::new(K::Tree, seed, level, mx)),
+        6 => Box::new(Feed::new(K::Dna, seed, level, mx)),
+        7 => Box::new(Feed::new(K::Pem, seed, level, mx)),
+        8 => Box::new(Feed::new(K::Mission, seed, level, mx)),
+        9 => Box::new(widgets::Htop::new(seed, mx)),
+        10 => Box::new(widgets::Bandwidth::new(seed, mx)),
+        11 => Box::new(widgets::Rain::new(seed, mx)),
+        12 => Box::new(widgets::WorldMap::new(seed, mx)),
+        13 => Box::new(widgets::Radar::new(seed, mx)),
+        14 => Box::new(widgets::Progress::new(seed, mx)),
+        15 => Box::new(widgets::Satellites::new(seed, mx)),
+        16 => Box::new(widgets::Ticker::new(seed, mx)),
+        17 => Box::new(widgets::Access::new(seed, level, mx)),
+        GATEWAY => Box::new(mictlan::Gateway::new(seed, mx)),
+        OFRENDA => Box::new(mictlan::Ofrenda::new(seed, mx)),
+        FACE => Box::new(rostro::Face::new(seed, mx)),
+        _ => Box::new(widgets::Keygen::new(seed, level, mx)),
     }
 }
 
@@ -448,6 +539,9 @@ pub struct Hollywood {
     tape: Vec<char>,
     tape_off: f32,
     tape_buf: String,
+    /// Día de Muertos (or `Fiesta::NONE`), cached; `retheme` re-dresses the
+    /// panes when it changes.
+    fiesta: Fiesta,
 }
 
 impl Hollywood {
@@ -466,6 +560,7 @@ impl Hollywood {
                 pal: Pal::new(ctx),
                 level: o.i("babble").clamp(0, 10) as u8,
             },
+            fiesta: holiday(ctx),
             max_panes: o.i("panes").clamp(3, 12) as usize,
             reshuffle,
             speed: if speed.is_finite() {
@@ -503,36 +598,109 @@ impl Hollywood {
         }
     }
 
+    /// A widget kind: any of them, or on Día de Muertos (three more kinds) the
+    /// signature ones more often the higher the holiday.
+    fn roll_kind(&mut self) -> usize {
+        if !self.fiesta.on() {
+            return self.rng.usize(..KINDS);
+        }
+        if self.rng.f32() < 0.1 + 0.2 * self.fiesta.level {
+            SIGNATURE[self.rng.usize(..SIGNATURE.len())]
+        } else {
+            self.rng.usize(..KINDS_MX)
+        }
+    }
+
     fn new_pane(&mut self, taken: &[usize]) -> Box<Pane> {
-        let mut kind = self.rng.usize(..KINDS);
+        let mut kind = self.roll_kind();
         for _ in 0..24 {
             if !taken.contains(&kind) {
                 break;
             }
-            kind = self.rng.usize(..KINDS);
+            kind = self.roll_kind();
         }
         let seed = self.rng.u64(..);
         let mut p = Pane {
             rect: Rect::default(),
             kind,
-            widget: make_widget(kind, seed, self.env.level),
+            widget: make_widget(kind, seed, self.env.level, self.fiesta),
             title: String::new(),
             retitle: 0.0,
             age: 0.0,
             content: (u16::MAX, u16::MAX),
         };
-        Self::retitle(&mut p, &mut self.rng, self.env.level);
+        Self::retitle(&mut p, &mut self.rng, self.env.level, self.fiesta);
         Box::new(p)
     }
 
-    fn retitle(p: &mut Pane, rng: &mut Rng, level: u8) {
+    fn retitle(p: &mut Pane, rng: &mut Rng, level: u8, mx: Fiesta) {
         p.title.clear();
         p.title.push_str(p.widget.name());
         if level > 0 {
             p.title.push_str(" \u{00b7} ");
-            babble::title(rng, &mut p.title);
+            if mx.on() {
+                muertos::mixed_title(rng, mx.level, &mut p.title);
+            } else {
+                babble::title(rng, &mut p.title);
+            }
         }
         p.retitle = 8.0 + rng.f32() * 14.0;
+    }
+
+    /// Day of the dead: keeps at least one signature widget on screen by
+    /// turning the biggest pane into the Mictlán gateway if there is none.
+    fn ensure_signature(&mut self) {
+        if !self.fiesta.on() {
+            return;
+        }
+        let area = self.area();
+        let (level, mx) = (self.env.level, self.fiesta);
+        let Some(root) = &mut self.root else {
+            return;
+        };
+        let (mut have, mut biggest) = (false, 0);
+        root.each(&mut |p| {
+            have |= SIGNATURE.contains(&p.kind);
+            biggest = biggest.max(p.rect.area());
+        });
+        if have {
+            return;
+        }
+        let rng = &mut self.rng;
+        let mut done = false;
+        root.each_mut(&mut |p| {
+            if !done && p.rect.area() == biggest {
+                done = true;
+                p.kind = GATEWAY;
+                p.widget = make_widget(GATEWAY, rng.u64(..), level, mx);
+                p.content = (u16::MAX, u16::MAX);
+                Self::retitle(p, rng, level, mx);
+            }
+        });
+        root.layout(area);
+    }
+
+    /// Dresses the panes for a holiday (or undresses them): every seat gets
+    /// the widget of the new day.
+    fn dress(&mut self, mx: Fiesta) {
+        self.fiesta = mx;
+        self.tape.clear();
+        self.tape_off = 0.0;
+        let area = self.area();
+        let level = self.env.level;
+        if let Some(root) = &mut self.root {
+            let rng = &mut self.rng;
+            root.each_mut(&mut |p| {
+                if p.kind >= KINDS && !mx.on() {
+                    p.kind = rng.usize(..KINDS);
+                }
+                p.widget = make_widget(p.kind, rng.u64(..), level, mx);
+                p.content = (u16::MAX, u16::MAX);
+                Self::retitle(p, rng, level, mx);
+            });
+            root.layout(area);
+        }
+        self.ensure_signature();
     }
 
     /// Builds a fresh layout of `n` panes from `pool` (reused panes first).
@@ -559,6 +727,7 @@ impl Hollywood {
         }
         root.layout(area);
         self.root = Some(root);
+        self.ensure_signature();
     }
 
     /// Splits one of the candidate leaves (bigger ones are likelier).
@@ -611,12 +780,14 @@ impl Hollywood {
             Self::split_random(&mut root, area, &cand, pane, &mut self.rng);
             root.layout(area);
             self.root = Some(root);
+            self.ensure_signature();
         } else if roll < 65 && n > 3.min(self.max_panes) && root.mergeable() > 0 {
             let mut k = self.rng.usize(..root.mergeable());
             let keep_first = self.rng.bool();
             root.merge_nth(&mut k, keep_first);
             root.layout(area);
             self.root = Some(root);
+            self.ensure_signature();
         } else {
             // Full reshuffle: keep some widgets, replace others, new tiling.
             let mut pool = Vec::new();
@@ -636,14 +807,38 @@ impl Hollywood {
         let need = self.w.max(1) as usize + 80;
         while self.tape.len() < need {
             self.tape_buf.clear();
-            self.tape_buf.push_str("MISSION \u{25c6} ");
             let mut s = std::mem::take(&mut self.tape_buf);
-            babble::gerund_phrase(&mut self.rng, self.env.level, &mut s);
-            s.make_ascii_uppercase();
-            s.push_str("  \u{25c6}  ");
+            if self.fiesta.on() {
+                // Headlines of the Mictlán among its mission log.
+                if self.rng.f32() < 0.3 + 0.3 * self.fiesta.level {
+                    muertos::headline(&mut self.rng, &mut s);
+                } else {
+                    s.push_str("MISI\u{00d3}N \u{273f} ");
+                    let from = s.len();
+                    muertos::mixed(&mut self.rng, self.env.level, self.fiesta.level, &mut s);
+                    let up = s[from..].to_uppercase();
+                    s.truncate(from);
+                    s.push_str(&up);
+                }
+                s.push_str("  \u{273f}  ");
+            } else {
+                s.push_str("MISSION \u{25c6} ");
+                babble::gerund_phrase(&mut self.rng, self.env.level, &mut s);
+                s.make_ascii_uppercase();
+                s.push_str("  \u{25c6}  ");
+            }
             self.tape.extend(s.chars());
             self.tape_buf = s;
         }
+    }
+
+    #[cfg(test)]
+    fn kinds(&self) -> Vec<usize> {
+        let mut v = Vec::new();
+        if let Some(r) = &self.root {
+            r.each(&mut |p| v.push(p.kind));
+        }
+        v
     }
 
     #[cfg(test)]
@@ -679,6 +874,11 @@ impl Scene for Hollywood {
 
     fn retheme(&mut self, ctx: &Ctx) {
         self.env.pal = Pal::new(ctx);
+        // The holiday came or went (or moved on a day): new widgets in the seats.
+        let mx = holiday(ctx);
+        if mx != self.fiesta {
+            self.dress(mx);
+        }
     }
 
     fn update(&mut self, _ctx: &Ctx, dt: f32) {
@@ -708,13 +908,13 @@ impl Scene for Hollywood {
             self.change_layout();
             self.next_event = Self::interval(&mut self.rng, self.reshuffle);
         }
-        let level = self.env.level;
+        let (level, mx) = (self.env.level, self.fiesta);
         if let Some(r) = &mut self.root {
             let rng = &mut self.rng;
             r.each_mut(&mut |p| {
                 p.retitle -= real;
                 if p.retitle <= 0.0 {
-                    Self::retitle(p, rng, level);
+                    Self::retitle(p, rng, level, mx);
                 }
             });
         }
@@ -737,8 +937,25 @@ impl Scene for Hollywood {
                     pal.fade(pal.main, 0.45)
                 };
                 c.set(r.x, r.y, '\u{250c}', edge);
+                // Día de Muertos hangs papel picado along the title bar: a flag
+                // every third column, then every other and, at the height of
+                // the holiday, one after another, in the six colors.
+                let gap = if !self.fiesta.on() {
+                    0
+                } else if self.fiesta.level < 0.5 {
+                    3
+                } else if self.fiesta.level < 0.8 {
+                    2
+                } else {
+                    1
+                };
                 for x in 1..r.w {
-                    c.set(r.x + x, r.y, '\u{2500}', edge);
+                    if gap > 0 && (x + r.x + r.y) % gap == 0 {
+                        let k = ((x + r.x) / gap.max(1)) as usize % 6;
+                        c.set(r.x + x, r.y, '\u{25bc}', pal.picado[k]);
+                    } else {
+                        c.set(r.x + x, r.y, '\u{2500}', edge);
+                    }
                 }
                 for y in 1..r.h {
                     c.set(r.x, r.y + y, '\u{2502}', edge);
@@ -781,6 +998,8 @@ impl Scene for Hollywood {
             for (i, &ch) in self.tape.iter().take(self.w as usize).enumerate() {
                 let (col, at) = if ch == '\u{25c6}' {
                     (pal.amber, BOLD)
+                } else if ch == '\u{273f}' {
+                    (pal.flor, BOLD)
                 } else {
                     (pal.cyan, 0)
                 };
@@ -892,5 +1111,322 @@ mod tests {
                 assert!(s.pane_count() <= 4 && s.pane_count() >= 1);
             }
         });
+    }
+
+    // ------------------------------------------------------------ Día de Muertos
+
+    use crate::fiesta::Fiesta;
+
+    fn ctx_of<'a>(theme: &'a Theme, o: &'a crate::scene::Opts, fiesta: Fiesta) -> Ctx<'a> {
+        Ctx {
+            theme,
+            opts: o,
+            bg: Color::Reset,
+            seed: 11,
+            fiesta,
+        }
+    }
+
+    fn opts(src: &str) -> crate::scene::Opts {
+        crate::scene::Opts::new(INFO.options, src.parse().unwrap())
+    }
+
+    fn frame(s: &mut Hollywood, ctx: &Ctx, w: u16, h: u16) -> Canvas {
+        let mut c = Canvas::new(w, h, Color::Reset);
+        s.draw(ctx, &mut c);
+        c
+    }
+
+    fn count(c: &Canvas, ch: char) -> usize {
+        c.cells().iter().filter(|x| x.ch == ch).count()
+    }
+
+    fn text(c: &Canvas) -> String {
+        c.to_text()
+    }
+
+    /// Runs `secs` seconds of scene time at 30 fps.
+    fn run(s: &mut Hollywood, ctx: &Ctx, secs: f32) {
+        for _ in 0..(secs * 30.0) as usize {
+            s.tick(ctx, 1.0 / 30.0, 1.0 / 30.0);
+        }
+    }
+
+    #[test]
+    fn the_holiday_dresses_the_screen() {
+        let theme = Theme::classic();
+        let o = opts("");
+        for fiesta in [Fiesta::of_day(11, 2), Fiesta::of_day(10, 28)] {
+            let ctx = ctx_of(&theme, &o, fiesta);
+            let mut s = Hollywood::new(&ctx);
+            s.resize(&ctx, 140, 40);
+            run(&mut s, &ctx, 3.0);
+            let c = frame(&mut s, &ctx, 140, 40);
+            // Flowers on the tape and in the widgets, papel picado on the
+            // title bars (in the six colors), cempasúchil for the text.
+            assert!(count(&c, '\u{273f}') >= 1, "{}", text(&c));
+            assert!(count(&c, '\u{25bc}') > 6);
+            let orange = s.env.pal.main;
+            assert_eq!(orange, rgb(0xffa01e));
+            assert!(c.cells().iter().any(|x| x.fg == orange));
+            let mut flags: Vec<Color> = Vec::new();
+            for x in c.cells().iter().filter(|x| x.ch == '\u{25bc}') {
+                if !flags.contains(&x.fg) {
+                    flags.push(x.fg);
+                }
+            }
+            assert!(flags.len() >= 3, "{flags:?}");
+            assert!(s.kinds().iter().any(|k| SIGNATURE.contains(k)));
+        }
+    }
+
+    #[test]
+    fn ordinary_days_have_no_holiday() {
+        let theme = Theme::classic();
+        let o = opts("");
+        let ctx = ctx_of(&theme, &o, Fiesta::NONE);
+        let mut s = Hollywood::new(&ctx);
+        s.resize(&ctx, 140, 40);
+        run(&mut s, &ctx, 30.0);
+        let c = frame(&mut s, &ctx, 140, 40);
+        for ch in ['\u{273f}', '\u{2740}', '\u{2726}', '\u{2302}'] {
+            assert_eq!(count(&c, ch), 0, "{ch}");
+        }
+        assert_eq!(s.env.pal.main, rgb(0x33ee66));
+        assert!(s.kinds().iter().all(|&k| k < KINDS));
+        assert!(!text(&c).contains("MICTL"));
+        assert!(text(&c).lines().last().unwrap().starts_with("MISSION"));
+    }
+
+    #[test]
+    fn the_holiday_comes_and_goes_through_retheme() {
+        let theme = Theme::classic();
+        let o = opts("");
+        let ordinary = ctx_of(&theme, &o, Fiesta::NONE);
+        let first = ctx_of(&theme, &o, Fiesta::of_day(10, 28));
+        let height = ctx_of(&theme, &o, Fiesta::of_day(11, 2));
+        let mut s = Hollywood::new(&ordinary);
+        s.resize(&ordinary, 160, 48);
+        s.retheme(&ordinary);
+        run(&mut s, &ordinary, 2.0);
+        assert_eq!(count(&frame(&mut s, &ordinary, 160, 48), '\u{273f}'), 0);
+        for ctx in [&first, &height, &ordinary, &height, &ordinary] {
+            s.retheme(ctx);
+            run(&mut s, ctx, 2.0);
+            let c = frame(&mut s, ctx, 160, 48);
+            let on = ctx.fiesta.on();
+            assert_eq!(count(&c, '\u{273f}') > 0, on, "{}", text(&c));
+            assert_eq!(s.fiesta, if on { ctx.fiesta } else { Fiesta::NONE });
+            assert_eq!(s.env.pal.main == rgb(0xffa01e), on);
+            if !on {
+                assert!(s.kinds().iter().all(|&k| k < KINDS), "{:?}", s.kinds());
+            }
+        }
+        // Dressing only changes the widgets: the panes are where they were
+        // (until the layout moves on its own, which takes a few seconds).
+        let mut t = Hollywood::new(&ordinary);
+        t.resize(&ordinary, 160, 48);
+        let rects = t.rects();
+        t.retheme(&height);
+        assert_eq!(t.rects(), rects);
+        t.retheme(&ordinary);
+        assert_eq!(t.rects(), rects);
+    }
+
+    #[test]
+    fn the_holiday_grows_with_its_level() {
+        let theme = Theme::classic();
+        let o = opts("");
+        let flags = |fiesta: Fiesta| {
+            let ctx = ctx_of(&theme, &o, fiesta);
+            let mut s = Hollywood::new(&ctx);
+            s.resize(&ctx, 160, 48);
+            frame(&mut s, &ctx, 160, 48)
+        };
+        let low = count(&flags(Fiesta::of_day(10, 28)), '\u{25bc}');
+        let mid = count(&flags(Fiesta::of_day(10, 31)), '\u{25bc}');
+        let high = count(&flags(Fiesta::of_day(11, 2)), '\u{25bc}');
+        assert!(low < mid && mid < high, "{low} {mid} {high}");
+        // More souls on the radar and more crossing the nine levels.
+        let radar = |f: Fiesta| widgets::Radar::new(1, f);
+        assert!(
+            radar(Fiesta::of_day(10, 28)).blips_len() < radar(Fiesta::of_day(11, 2)).blips_len()
+        );
+        let gate = |f: Fiesta| mictlan::Gateway::new(1, f).crossing();
+        assert!(gate(Fiesta::of_day(10, 28)) < gate(Fiesta::of_day(11, 2)));
+        // And more of the text is the Mictlán's.
+        assert!(muertos::share(0.25) < muertos::share(1.0));
+    }
+
+    #[test]
+    fn the_mictlan_is_on_screen_at_every_size_and_time() {
+        let theme = Theme::classic();
+        let o = opts("reshuffle = 1");
+        for fiesta in [Fiesta::of_day(10, 28), Fiesta::of_day(11, 2)] {
+            let ctx = ctx_of(&theme, &o, fiesta);
+            for &(w, h) in &[(200u16, 60u16), (120, 36), (80, 24), (60, 20), (31, 9)] {
+                let mut s = Hollywood::new(&ctx);
+                s.resize(&ctx, w, h);
+                for step in 0..120 {
+                    s.tick(&ctx, 0.2, 1.0);
+                    assert!(
+                        s.kinds().iter().any(|k| SIGNATURE.contains(k)),
+                        "{w}x{h} step {step}: {:?}",
+                        s.kinds()
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn odd_sizes_and_huge_steps_survive_the_holiday() {
+        let o = opts("");
+        let dracula = Theme::builtin("dracula").unwrap();
+        for theme in [Theme::classic(), dracula] {
+            for fiesta in [Fiesta::of_day(11, 2), Fiesta::of_day(10, 28)] {
+                let ctx = ctx_of(&theme, &o, fiesta);
+                for &(w, h) in &[
+                    (1u16, 1u16),
+                    (2, 3),
+                    (7, 2),
+                    (30, 7),
+                    (29, 8),
+                    (45, 12),
+                    (80, 24),
+                    (200, 60),
+                    (300, 90),
+                ] {
+                    let mut s = Hollywood::new(&ctx);
+                    s.resize(&ctx, w, h);
+                    s.retheme(&ctx);
+                    for step in 0..60 {
+                        let (dt, real) = if step % 5 == 0 {
+                            (5.0, 5.0)
+                        } else {
+                            (0.05, 0.3)
+                        };
+                        s.tick(&ctx, dt, real);
+                        frame(&mut s, &ctx, w, h);
+                    }
+                    // A resize in the middle of it.
+                    s.resize(&ctx, w / 2 + 1, h / 2 + 1);
+                    frame(&mut s, &ctx, w / 2 + 1, h / 2 + 1);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn every_widget_stays_in_its_pane_on_and_off_the_holiday() {
+        let theme = Theme::classic();
+        let o = opts("");
+        let ctx = ctx_of(&theme, &o, Fiesta::of_day(11, 2));
+        let env = Env {
+            pal: Pal::new(&ctx),
+            level: 7,
+        };
+        for fiesta in [Fiesta::NONE, Fiesta::of_day(10, 28), Fiesta::of_day(11, 2)] {
+            for kind in 0..KINDS_MX {
+                if kind >= KINDS && !fiesta.on() {
+                    continue;
+                }
+                for &(w, h) in &[
+                    (1u16, 1u16),
+                    (3, 3),
+                    (12, 4),
+                    (29, 6),
+                    (44, 11),
+                    (80, 30),
+                    (120, 40),
+                ] {
+                    let mut widget = make_widget(kind, 5, 7, fiesta);
+                    widget.resize(w, h);
+                    let r = Rect {
+                        x: 3,
+                        y: 2,
+                        w: w as i32,
+                        h: h as i32,
+                    };
+                    for step in 0..40 {
+                        widget.update(if step % 9 == 0 { 0.5 } else { 0.07 }, &env);
+                        let mut c = Canvas::new(w + 8, h + 6, Color::Reset);
+                        widget.draw(&mut c, r, &env);
+                        for y in 0..c.h() as i32 {
+                            for x in 0..c.w() as i32 {
+                                let inside = x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h;
+                                if !inside {
+                                    let cell = c.get(x, y).unwrap();
+                                    assert_eq!(
+                                        cell.ch, ' ',
+                                        "kind {kind} {fiesta:?} {w}x{h} drew {:?} at {x},{y}",
+                                        cell.ch
+                                    );
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn the_tape_brings_the_brief_s_headlines() {
+        let theme = Theme::classic();
+        let o = opts("");
+        let ctx = ctx_of(&theme, &o, Fiesta::of_day(11, 2));
+        let mut s = Hollywood::new(&ctx);
+        s.resize(&ctx, 100, 30);
+        let mut seen = String::new();
+        for _ in 0..400 {
+            s.tape.clear();
+            s.feed_tape();
+            seen.extend(s.tape.iter());
+        }
+        for line in [
+            "MICTL\u{00c1}N GATEWAY ONLINE",
+            "UPLOADING PAN_DE_MUERTO.TAR.GZ",
+            "ACCESO AL MICTL\u{00c1}N DENEGADO",
+        ] {
+            assert!(seen.contains(line), "{line}");
+        }
+    }
+
+    #[test]
+    fn the_access_banner_speaks_spanish() {
+        let theme = Theme::classic();
+        let o = opts("");
+        let ctx = ctx_of(&theme, &o, Fiesta::of_day(11, 2));
+        let env = Env {
+            pal: Pal::new(&ctx),
+            level: 7,
+        };
+        let mut seen = String::new();
+        for seed in 0..40u64 {
+            let mut a = widgets::Access::new(seed, 7, ctx.fiesta);
+            a.resize(70, 20);
+            for step in 0..300 {
+                a.update(0.1, &env);
+                if step % 6 == 0 {
+                    let mut c = Canvas::new(70, 20, Color::Reset);
+                    a.draw(
+                        &mut c,
+                        Rect {
+                            x: 0,
+                            y: 0,
+                            w: 70,
+                            h: 20,
+                        },
+                        &env,
+                    );
+                    seen.push_str(&c.to_text());
+                }
+            }
+        }
+        assert!(seen.contains("TODAV\u{00cd}A NO TE TOCA"), "denied banner");
+        assert!(seen.contains("PASA, TE ESPERAN"), "granted banner");
+        assert!(seen.contains("DENEGADO") && seen.contains("MICTL\u{00c1}N"));
+        assert!(!seen.contains("ACCESS"));
     }
 }
