@@ -325,6 +325,8 @@ And each scene has its own:
 - **dog** is a xoloitzcuintle with a marigold collar, walking a path of petals to an ofrenda under
   a marigold arch; by night small souls follow it home.
 - **shark** wears calavera face paint over sunken ofrendas, with plankton glowing like embers.
+- **tiger** becomes an Oaxacan alebrije and bows its head at an ofrenda in the ruins, under papel
+  picado strung from tree to tree; the saucer that comes for it is a sugar skull.
 - **ocean** is Janitzio's night on the water: veladoras on rafts of marigolds, alebrije fish, and
   orcas and sharks in calavera paint.
 - **fire** is a field of veladoras in painted glass, aafire's flames rising from every wick, with
@@ -335,6 +337,8 @@ And each scene has its own:
   and monarchs crossing the sky (`look = "patzcuaro"` any day).
 - **constellation** gathers its stars into a calavera, La Catrina, a marigold, a monarch or a
   veladora, then lets them go.
+- **waveform** strings its waves into garlands of petals, with veladoras burning on the crests and
+  sugar skulls riding along.
 - **pipes** become garlands of papel picado with marigolds opening at the joints.
 - **rain** brings marigold petals with the drops, veladoras along the ground, and lightning that
   catches the dead dancing in the dark.
@@ -346,6 +350,9 @@ And each scene has its own:
 - **particles** carry cempasúchil blossoms and monarchs down a river of morado, rosa and turquesa.
 - **metaballs** melt colored veladora wax under flickering flames, with sugar-skull candles among
   them.
+- **hollywood** goes Mictlán: a radar tracking souls on their way home, an ofrenda database, a
+  gateway through the nine levels, face recognition that turns the living away ("TODAVÍA NO TE
+  TOCA"), and technobabble in Spanish.
 
 Under other themes the holiday takes the theme's colors, keeping only candle flames and
 marigolds their own. On any other day every scene is exactly as it always was.
