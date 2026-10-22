@@ -295,6 +295,9 @@ The aurora sends its own: Nyan Cat or sl's train crosses its sky about three tim
 From October 28 to November 3 every scene dresses up for Día de Muertos, and the holiday builds
 up the way an ofrenda does: the first petals on the 28th, the little ones (the angelitos) on the
 31st and November 1, everyone and everything on November 2, and on the 3rd the souls go back.
+
+<p align="center"><img src="assets/muertos.gif" alt="Día de Muertos in dog, tiger, aurora, fireworks, dvd and fire" width="640"></p>
+
 oxiper follows your local date; try it any day, or turn it off:
 
 ```sh
