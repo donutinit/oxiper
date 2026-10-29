@@ -16,6 +16,8 @@ pub(super) enum Piece {
     Heno,
     /// A banderita: a little flag in three stripes.
     Banderita,
+    /// A pennant of a string of bunting.
+    Pennant,
 }
 
 pub(super) struct Hung {
@@ -25,7 +27,8 @@ pub(super) struct Hung {
     /// Which color of the piece's palette.
     pub color: u8,
     /// The thread of an esfera in pixels, the width of a swag, the place of
-    /// a bulb along the string.
+    /// a bulb along the string, which string of bunting a pennant hangs from
+    /// (0 the upper, 1 the lower).
     pub len: u8,
     /// A little of its own in the way it moves.
     pub phase: f32,

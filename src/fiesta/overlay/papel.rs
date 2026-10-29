@@ -280,7 +280,7 @@ impl Overlay {
 }
 
 /// A random index below `n` (at least 3) that is not one of `avoid`.
-fn other(rng: &mut fastrand::Rng, avoid: [u8; 2], n: usize) -> u8 {
+pub(super) fn other(rng: &mut fastrand::Rng, avoid: [u8; 2], n: usize) -> u8 {
     let n = n.clamp(1, 255) as u8;
     let mut i = rng.u8(..n);
     for _ in 0..n {

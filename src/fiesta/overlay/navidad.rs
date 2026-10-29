@@ -538,7 +538,7 @@ mod tests {
         let fiesta = Fiesta::of_day(12, 24);
         let themed = after(&mut Overlay::new(100, 30), fiesta, 2.0, &nord);
         let classic = after(&mut Overlay::new(100, 30), fiesta, 2.0, &Theme::classic());
-        assert_ne!(themed.to_text(), classic.to_text());
+        assert_ne!(themed.cells(), classic.cells());
     }
 
     #[test]

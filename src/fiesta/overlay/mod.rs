@@ -51,8 +51,15 @@
 //! scraps flying out and its string falling, and a new one rises where it was.
 //! Under any theme but `classic` the balloons take the theme's colors.
 //!
+//! Día de la Revolución strings banderines (bunting) across the top: little
+//! triangular flags hanging point down from a cord of caqui that sags between
+//! its ties, in verde, blanco y rojo in that order, swaying in the breeze and
+//! darker as they turn. They keep to the top three rows. Under any theme but
+//! `classic` the tricolor is the theme's own.
+//!
 //! On an ordinary day, and on a holiday without an overlay, it draws nothing.
 
+mod bunting;
 mod cord;
 mod drift;
 mod muertos;
@@ -60,12 +67,14 @@ mod navidad;
 mod nino;
 mod papel;
 mod patrias;
+mod revolucion;
 mod ribbon;
 
 use super::{Fiesta, Kind};
 use crate::color::{Color, rgb};
 use crate::render::{Canvas, Cell};
 use crate::theme::Theme;
+use bunting::Bunting;
 use cord::Hung;
 use drift::{Fleck, Flecks};
 use navidad::Lights;
@@ -121,6 +130,7 @@ struct Look {
     flecks: Option<&'static Flecks>,
     ribbons: Option<&'static Ribbons>,
     lights: Option<&'static Lights>,
+    bunting: Option<&'static Bunting>,
     balloons: Option<&'static Balloons>,
     /// A piñata hangs from the middle of the lights.
     pinata: bool,
@@ -135,6 +145,7 @@ impl Look {
         flecks: None,
         ribbons: None,
         lights: None,
+        bunting: None,
         balloons: None,
         pinata: false,
     };
@@ -146,6 +157,7 @@ impl Look {
             Kind::Navidad => Some(navidad::look(fiesta)),
             Kind::Patrias => Some(patrias::look(fiesta)),
             Kind::Nino => Some(nino::look(fiesta)),
+            Kind::Revolucion => Some(revolucion::look(fiesta)),
             _ => None,
         }
     }
@@ -220,6 +232,9 @@ impl Overlay {
         if let Some(lights) = look.lights {
             self.hang_lights(lights, look.salt);
         }
+        if let Some(bunting) = look.bunting {
+            self.hang_bunting(bunting, look.salt);
+        }
     }
 
     /// Scatters what falls over the screen.
@@ -285,6 +300,9 @@ impl Overlay {
         }
         if let Some(papel) = look.papel {
             self.draw_papel(c, theme, papel);
+        }
+        if let Some(bunting) = look.bunting {
+            self.draw_bunting(c, theme, bunting);
         }
         if let Some(lights) = look.lights {
             self.draw_lights(c, theme, lights);
