@@ -40,7 +40,14 @@
 //! the sombrero is tipped, its brim curling up in a smile, a burst of
 //! papelitos and sparks of gold flies off and the banner reads "¡VIVA
 //! MÉXICO!".
+//!
+//! On Candelaria the logo is a tamal in its hoja de maíz, tied at both
+//! ends with a cinta that takes the colors of the Niño Dios' gown (azul,
+//! dorado, blanco) in turn, steam curling up from it. At a corner the hoja
+//! opens on the masa and a stripe of salsa roja, hojas, maíz, steam and
+//! sparks of a vela fly off, and the banner reads "¡TE TOCAN LOS TAMALES!".
 
+mod candelaria;
 mod muertos;
 mod navidad;
 mod patrias;
@@ -259,6 +266,7 @@ struct Look {
 /// The look of the day, if the holiday dresses the logo.
 fn look_for(f: Fiesta) -> Option<&'static Look> {
     match f.kind {
+        Kind::Candelaria => Some(&candelaria::LOOK),
         Kind::Muertos => Some(&muertos::LOOK),
         Kind::Navidad => Some(navidad::look(f)),
         Kind::Patrias => Some(&patrias::LOOK),
@@ -1440,6 +1448,7 @@ mod tests {
             ("rosca", Fiesta::of_day(1, 6)),
             ("mes patrio", Fiesta::of_day(9, 2)),
             ("grito", Fiesta::of_day(9, 15)),
+            ("candelaria", Fiesta::of_day(2, 2)),
         ]
     }
 
@@ -1990,5 +1999,53 @@ mod tests {
         left.sort_by_key(|c| format!("{c:?}"));
         left.dedup();
         assert_eq!(left.len(), 3, "each stripe in turn");
+    }
+
+    #[test]
+    fn candelaria_dresses_the_logo() {
+        let o = crate::scene::Opts::new(INFO.options, toml::Table::new());
+        let flame = rgb(0xffb347);
+        for theme in ["classic", "dracula"] {
+            let th = crate::theme::Theme::builtin(theme).unwrap();
+            let ctx = ctx(&th, &o, Fiesta::of_day(2, 2));
+            let mut d = dressed(&ctx, 120, 40);
+            // A tamal: hoja de maíz, tied at both ends, and steam above it.
+            for p in b"hHcs" {
+                assert!(parts(&d, &[*p]) > 0, "{}", *p as char);
+            }
+            if th.native {
+                assert_eq!(d.palette, vec![rgb(0x2a5caa), rgb(0xf2b632), rgb(0xf4f1ea)]);
+            }
+            // The steam curls: the frames take turns.
+            assert!(!d.frames.is_empty());
+            let mut now = Canvas::new(120, 40, Color::Reset);
+            d.draw(&ctx, &mut now);
+            d.clock += 0.4;
+            let mut later = Canvas::new(120, 40, Color::Reset);
+            d.draw(&ctx, &mut later);
+            assert_ne!(now.to_text(), later.to_text(), "steam rises");
+            let banner = Sprite::fit_lines(&["¡Te tocan", "los tamales!"], 120, 40);
+            assert_eq!(d.banner.cells, banner.cells);
+            // At a corner it opens: masa and salsa show.
+            assert_eq!(parts(&d, b"mr"), 0);
+            d.celebrate(0);
+            assert!(d.laugh.parts.contains(&b'm') && d.laugh.parts.contains(&b'r'));
+            let (pose, _) = d.pose(0, &d.logos[0]);
+            assert_eq!(pose.cells, d.laugh.cells);
+            // The spark of a vela keeps its flame under every theme.
+            d.bits.push(Bit {
+                x: 5.0,
+                y: 5.0,
+                vx: 0.0,
+                vy: 0.0,
+                age: 0.0,
+                ttl: 100.0,
+                phase: 0.0,
+                kind: 3,
+            });
+            let mut c = Canvas::new(120, 40, Color::Reset);
+            d.draw(&ctx, &mut c);
+            assert!(c.cells().iter().any(|cell| cell.fg == flame), "{theme}");
+        }
     }
 }
