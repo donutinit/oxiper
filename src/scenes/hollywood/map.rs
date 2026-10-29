@@ -300,6 +300,23 @@ pub const HOMES: &[(&str, f32, f32)] = &[
     ("CHIAPAS", 16.7, -93.1),
 ];
 
+/// Fiestas Patrias: where the echoes of the Grito go, the towns of the
+/// Independence: (name, lat, lon).
+pub const SITES_PATRIAS: &[(&str, f32, f32)] = &[
+    ("DOLORES HIDALGO", 21.2, -100.9),
+    ("CIUDAD DE MEXICO", 19.4, -99.1),
+    ("QUERETARO", 20.6, -100.4),
+    ("SAN MIGUEL DE ALLENDE", 20.9, -100.7),
+    ("GUANAJUATO", 21.0, -101.3),
+    ("CHILPANCINGO", 17.6, -99.5),
+    ("IGUALA", 18.3, -99.5),
+    ("APATZINGAN", 19.1, -102.4),
+    ("CUAUTLA", 18.8, -98.9),
+    ("VALLADOLID", 19.7, -101.2),
+    ("ACAMBARO", 20.0, -100.7),
+    ("MONTE DE LAS CRUCES", 19.3, -99.4),
+];
+
 fn inside(poly: &[(f32, f32)], x: f32, y: f32) -> bool {
     let mut c = false;
     let mut j = poly.len() - 1;

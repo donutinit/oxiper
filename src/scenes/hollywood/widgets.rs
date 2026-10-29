@@ -519,7 +519,7 @@ pub struct Rain {
 }
 
 #[inline]
-fn hash(a: u32, b: u32) -> u32 {
+pub(super) fn hash(a: u32, b: u32) -> u32 {
     let mut h = a.wrapping_mul(0x9e37_79b1) ^ b.wrapping_mul(0x85eb_ca6b);
     h ^= h >> 15;
     h = h.wrapping_mul(0x2c1b_3c6d);
@@ -539,6 +539,8 @@ fn rain_head(kind: Kind) -> char {
 fn rain_trail(kind: Kind, x: usize, pal: &Pal) -> Color {
     match kind {
         Kind::Navidad => [pal.green, pal.red][x % 2],
+        // The flag: verde, blanco y rojo, column by column.
+        Kind::Patrias => [pal.green, pal.bright, pal.red][x % 3],
         _ => pal.main,
     }
 }
@@ -743,11 +745,16 @@ impl Widget for WorldMap {
         if self.spawn <= 0.0 && self.arcs.len() < 5 {
             self.spawn = 0.8 + self.rng.f32() * 2.0;
             let (from, to) = if self.mx.is(Kind::Muertos) || dress(self.mx).is_some() {
-                // Souls (or greetings, or aguinaldos) of the whole world on
-                // their way back to Mexico.
+                // Souls (or greetings, or aguinaldos, or echoes of the Grito)
+                // of the whole world on their way back to Mexico.
+                let homes = if self.mx.is(Kind::Patrias) {
+                    map::SITES_PATRIAS
+                } else {
+                    map::HOMES
+                };
                 (
                     map::ORIGINS[self.rng.usize(..map::ORIGINS.len())],
-                    map::HOMES[self.rng.usize(..map::HOMES.len())],
+                    homes[self.rng.usize(..homes.len())],
                 )
             } else {
                 let from = self.rng.usize(..map::CITIES.len());
@@ -1673,6 +1680,7 @@ pub(super) fn glyph(ch: char) -> [u8; 5] {
         '8' => [0b111, 0b101, 0b111, 0b101, 0b111],
         '9' => [0b111, 0b101, 0b111, 0b001, 0b110],
         '!' => [0b010, 0b010, 0b010, 0b000, 0b010],
+        ':' => [0b000, 0b010, 0b000, 0b010, 0b000],
         '\u{00a1}' => [0b010, 0b000, 0b010, 0b010, 0b010],
         _ => [0; 5],
     }

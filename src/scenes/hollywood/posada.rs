@@ -18,12 +18,12 @@ use std::collections::VecDeque;
 use std::f32::consts::{FRAC_PI_2, PI, TAU};
 use std::fmt::Write;
 
-const BLK: [char; 8] = [
+pub(super) const BLK: [char; 8] = [
     '\u{2581}', '\u{2582}', '\u{2583}', '\u{2584}', '\u{2585}', '\u{2586}', '\u{2587}', '\u{2588}',
 ];
 
 /// Draws a line of single pixels into a sprite.
-fn pixel_line(s: &mut Sprite, x0: f32, y0: f32, x1: f32, y1: f32, col: Color) {
+pub(super) fn pixel_line(s: &mut Sprite, x0: f32, y0: f32, x1: f32, y1: f32, col: Color) {
     let n = ((x1 - x0).abs().max((y1 - y0).abs()).ceil() as i32).max(1);
     for i in 0..=n {
         let t = i as f32 / n as f32;
@@ -36,7 +36,7 @@ fn pixel_line(s: &mut Sprite, x0: f32, y0: f32, x1: f32, y1: f32, col: Color) {
 }
 
 /// "1,204": thousands with commas, the Mexican way.
-fn thousands(n: u32, out: &mut String) {
+pub(super) fn thousands(n: u32, out: &mut String) {
     let digits = n.to_string();
     let first = digits.len() % 3;
     for (i, ch) in digits.chars().enumerate() {
@@ -49,7 +49,16 @@ fn thousands(n: u32, out: &mut String) {
 
 /// A bar `[█████░░░]` of `w` cells, `frac` full.
 #[allow(clippy::too_many_arguments)]
-fn bar(c: &mut Canvas, r: Rect, x: i32, y: i32, w: i32, frac: f32, col: Color, pal: &Pal) {
+pub(super) fn bar(
+    c: &mut Canvas,
+    r: Rect,
+    x: i32,
+    y: i32,
+    w: i32,
+    frac: f32,
+    col: Color,
+    pal: &Pal,
+) {
     let filled = (frac.clamp(0.0, 1.0) * w as f32) as i32;
     for i in 0..w {
         if i < filled {
@@ -1437,6 +1446,7 @@ mod tests {
         Env {
             pal: Pal::new(&ctx),
             level: 7,
+            day: 0.0,
         }
     }
 

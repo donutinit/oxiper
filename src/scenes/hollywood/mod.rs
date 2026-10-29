@@ -49,6 +49,27 @@
 //! "SISTEMA COMPROMETIDO" and a wipe of /dev/sda1 until it owns up:
 //! "¡INOCENTE PALOMITA!" (`inocentes.rs`). Ordinary days are untouched.
 //!
+//! On the Fiestas Patrias, the mes patrio, the screen goes verde, blanco y
+//! rojo: white text, tricolor banderitas along every title bar (a flag every
+//! third column, then every other and, on the night of the Grito, one after
+//! another), headlines on the ticker ("GRITO.EXE: CUENTA REGRESIVA A LAS
+//! 23:00", "¡VIVA MÉXICO!"), and technobabble about the Grito, the campana de
+//! Dolores, the insurgentes and the pozole (`patrias.rs`) with the Himno
+//! Nacional scrolling through the logs. Five widgets are the holiday's
+//! (`grito.rs`): GRITO.EXE, a countdown to 23:00 of September 15 on the
+//! scene's own sense of the day (`Env::day`, started by the date) that says
+//! the Grito line by line when it runs out; the control panel of the campana
+//! de Dolores beside a pixel bell that swings and rings with it; the
+//! decibel meter of the ¡VIVA! the crowd answers; the route of the parade of
+//! the 16th with its contingents marching; and the history database of the
+//! Independence (Hidalgo, Allende, Josefa Ortiz de Domínguez, Morelos, 1810)
+//! with a flag waving beside it. The other widgets are renamed and re-worded
+//! (insurgentes on the radar, echoes of the Grito on the map, a market of
+//! pozole and banderas, "FALTA TU VIVA" on the access banner). Every widget
+//! follows the same clock, so the bell rings and the meter peaks when the
+//! Grito is given; the month builds up the crowd, the contingents and the
+//! flags. Ordinary days are untouched.
+//!
 //! Structure: the screen is a binary tree of panes (`Node`) whose leaves each
 //! own a `Widget`. Every 10 to 25 real seconds one pane splits, two panes
 //! merge, or the whole layout reshuffles. Panes tile the screen exactly; each
@@ -56,12 +77,14 @@
 
 mod babble;
 mod feed;
+mod grito;
 mod inocentes;
 mod lexico;
 mod map;
 mod mictlan;
 mod muertos;
 mod navidad;
+mod patrias;
 mod posada;
 mod rostro;
 mod sprite;
@@ -224,11 +247,27 @@ const NAVIDAD: Tints = Tints {
     oro: 0xf2b632,
 };
 
+/// Fiestas Patrias: blanco for the text, verde bandera and rojo for what
+/// the flag is made of, oro for the bell and the embroidery.
+const PATRIAS: Tints = Tints {
+    main: 0xf4f1ea,
+    bright: 0xffffff,
+    cyan: 0x1fb26a,
+    amber: 0xe3b023,
+    red: 0xe8283c,
+    green: 0x2fd27c,
+    ink: 0x07140d,
+    ramp: [0x06201a, 0x006847, 0xf4f1ea, 0xce1126, 0xff4a5a],
+    garland: [0x008f5d, 0xf4f1ea, 0xce1126, 0x008f5d, 0xf4f1ea, 0xce1126],
+    oro: 0xd4a017,
+};
+
 impl Tints {
     /// The colors of the day's holiday, if it is one of those.
     fn of(f: Fiesta) -> Option<&'static Tints> {
         match f.kind {
             Kind::Navidad => Some(&NAVIDAD),
+            Kind::Patrias => Some(&PATRIAS),
             _ => None,
         }
     }
@@ -327,10 +366,14 @@ impl Pal {
     }
 }
 
-/// What every widget may read: the palette and the babble level.
+/// What every widget may read: the palette, the babble level and the scene's
+/// own sense of the day.
 pub struct Env {
     pub pal: Pal,
     pub level: u8,
+    /// Seconds into the day, by the scene's clock (which runs on real time):
+    /// the Grito of the Fiestas Patrias is at 23:00 (82,800).
+    pub day: f32,
 }
 
 /// The holiday as the screen cares about it: Día de Muertos, Navidad (and
@@ -411,12 +454,22 @@ const CARTAS: usize = 23;
 const PINATA: usize = 24;
 const PONCHE: usize = 25;
 const SIGNATURE_NV: [usize; 4] = [REYES, CARTAS, PINATA, PONCHE];
+/// The Fiestas Patrias have five: GRITO.EXE with its countdown, the panel of
+/// the campana de Dolores, the decibel meter of the vivas, the route of the
+/// parade of the 16th and the history database of the Independence.
+const GRITO: usize = 26;
+const CAMPANA: usize = 27;
+const VIVAS: usize = 28;
+const DESFILE: usize = 29;
+const HISTORIA: usize = 30;
+const SIGNATURE_PT: [usize; 5] = [GRITO, CAMPANA, VIVAS, DESFILE, HISTORIA];
 
 /// The kinds of widget a holiday adds to the ordinary ones.
 fn extras(f: Fiesta) -> std::ops::Range<usize> {
     match f.kind {
         Kind::Muertos => GATEWAY..KINDS_MX,
         Kind::Navidad => REYES..PONCHE + 1,
+        Kind::Patrias => GRITO..HISTORIA + 1,
         _ => KINDS..KINDS,
     }
 }
@@ -426,6 +479,7 @@ fn signature(f: Fiesta) -> &'static [usize] {
     match f.kind {
         Kind::Muertos => &SIGNATURE,
         Kind::Navidad => &SIGNATURE_NV,
+        Kind::Patrias => &SIGNATURE_PT,
         _ => &[],
     }
 }
@@ -675,6 +729,11 @@ fn make_widget(kind: usize, seed: u64, level: u8, mx: Fiesta) -> Box<dyn Widget>
         CARTAS => Box::new(posada::Cartas::new(seed, mx)),
         PINATA => Box::new(posada::Pinata::new(seed, mx)),
         PONCHE => Box::new(posada::Ponche::new(seed, mx)),
+        GRITO => Box::new(grito::Cuenta::new(seed, mx)),
+        CAMPANA => Box::new(grito::Campana::new(seed, mx)),
+        VIVAS => Box::new(grito::Vivas::new(seed, mx)),
+        DESFILE => Box::new(grito::Desfile::new(seed, mx)),
+        HISTORIA => Box::new(grito::Historia::new(seed, mx)),
         _ => Box::new(widgets::Keygen::new(seed, level, mx)),
     }
 }
@@ -719,6 +778,7 @@ impl Hollywood {
             env: Env {
                 pal: Pal::new(ctx),
                 level: o.i("babble").clamp(0, 10) as u8,
+                day: patrias::day_start(holiday(ctx), ctx.seed),
             },
             fiesta: holiday(ctx),
             seed: ctx.seed,
@@ -860,6 +920,7 @@ impl Hollywood {
     /// the widget of the new day.
     fn dress(&mut self, mx: Fiesta) {
         self.fiesta = mx;
+        self.env.day = patrias::day_start(mx, self.seed);
         self.fool = mx.inocentes().then(|| Fool::new(self.seed));
         self.tape.clear();
         self.tape_off = 0.0;
@@ -1107,6 +1168,7 @@ impl Scene for Hollywood {
     fn tick(&mut self, ctx: &Ctx, dt: f32, real: f32) {
         self.update(ctx, dt);
         let real = real.clamp(0.0, 30.0);
+        self.env.day += real;
         if let Some(f) = &mut self.fool {
             f.tick(real);
         }
@@ -1151,7 +1213,7 @@ impl Scene for Hollywood {
                 // Día de Muertos hangs papel picado along the title bar: a flag
                 // every third column, then every other and, at the height of
                 // the holiday, one after another, in the six colors.
-                let gap = if !self.fiesta.is(Kind::Muertos) {
+                let gap = if !(self.fiesta.is(Kind::Muertos) || self.fiesta.is(Kind::Patrias)) {
                     0
                 } else if self.fiesta.level < 0.5 {
                     3
@@ -1573,6 +1635,7 @@ mod tests {
         let env = Env {
             pal: Pal::new(&ctx),
             level: 7,
+            day: 0.0,
         };
         for fiesta in [Fiesta::NONE, Fiesta::of_day(10, 28), Fiesta::of_day(11, 2)] {
             for kind in 0..KINDS_MX {
@@ -1649,6 +1712,7 @@ mod tests {
         let env = Env {
             pal: Pal::new(&ctx),
             level: 7,
+            day: 0.0,
         };
         let mut seen = String::new();
         for seed in 0..40u64 {
@@ -1904,6 +1968,7 @@ mod tests {
         let env = Env {
             pal: Pal::new(&ctx),
             level: 7,
+            day: 0.0,
         };
         for (m, d) in [(12, 12), (12, 24), (1, 2), (1, 6)] {
             let fiesta = Fiesta::of_day(m, d);
@@ -2005,6 +2070,7 @@ mod tests {
         let env = Env {
             pal: Pal::new(&ctx),
             level: 7,
+            day: 0.0,
         };
         let mut seen = String::new();
         for seed in 0..12u64 {
@@ -2092,5 +2158,306 @@ mod tests {
         assert!(s.fool.is_some());
         s.retheme(&ordinary);
         assert!(s.fool.is_none());
+    }
+
+    // ------------------------------------------------------------ Fiestas Patrias
+
+    /// The banderitas hung along the top row, where every pane has its title bar.
+    fn banderitas(c: &Canvas) -> usize {
+        (0..c.w() as i32)
+            .filter(|&x| c.get(x, 0).is_some_and(|cell| cell.ch == '\u{25bc}'))
+            .count()
+    }
+
+    /// Days across the mes patrio: the first, mid-month, the eve, the Grito and
+    /// the parade.
+    const PATRIAS_DAYS: [(u32, u32); 5] = [(9, 1), (9, 8), (9, 14), (9, 15), (9, 16)];
+
+    #[test]
+    fn patrias_dresses_the_screen() {
+        let theme = Theme::classic();
+        let o = opts("");
+        for (m, d) in PATRIAS_DAYS {
+            let ctx = ctx_of(&theme, &o, Fiesta::of_day(m, d));
+            let mut s = Hollywood::new(&ctx);
+            s.resize(&ctx, 140, 40);
+            run(&mut s, &ctx, 3.0);
+            let c = frame(&mut s, &ctx, 140, 40);
+            // Banderitas on the title bars in verde, blanco and rojo, white
+            // text, a star on the tape.
+            assert!(banderitas(&c) > 6, "{m}-{d}\n{}", text(&c));
+            let mut colors: Vec<Color> = Vec::new();
+            for x in (0..140)
+                .filter_map(|x| c.get(x, 0))
+                .filter(|x| x.ch == '\u{25bc}')
+            {
+                if !colors.contains(&x.fg) {
+                    colors.push(x.fg);
+                }
+            }
+            assert!(colors.len() >= 3, "{m}-{d} {colors:?}");
+            assert_eq!(s.env.pal.main, rgb(0xf4f1ea));
+            assert!(c.cells().iter().any(|x| x.fg == s.env.pal.main));
+            assert!(
+                text(&c).lines().last().unwrap().contains('\u{2605}'),
+                "{m}-{d}"
+            );
+            assert!(s.kinds().iter().any(|k| SIGNATURE_PT.contains(k)));
+            assert!(
+                s.kinds()
+                    .iter()
+                    .all(|k| *k < KINDS || extras(s.fiesta).contains(k))
+            );
+            assert_eq!(count(&c, '\u{273f}'), 0);
+            assert!(s.fool.is_none());
+        }
+    }
+
+    #[test]
+    fn patrias_comes_and_goes_through_retheme() {
+        let theme = Theme::classic();
+        let o = opts("");
+        let ordinary = ctx_of(&theme, &o, Fiesta::NONE);
+        let first = ctx_of(&theme, &o, Fiesta::of_day(9, 1));
+        let grito = ctx_of(&theme, &o, Fiesta::of_day(9, 15));
+        let navidad = ctx_of(&theme, &o, Fiesta::of_day(12, 24));
+        let mut s = Hollywood::new(&ordinary);
+        s.resize(&ordinary, 160, 48);
+        s.retheme(&ordinary);
+        run(&mut s, &ordinary, 2.0);
+        assert_eq!(banderitas(&frame(&mut s, &ordinary, 160, 48)), 0);
+        for ctx in [&first, &grito, &ordinary, &navidad, &grito, &ordinary] {
+            s.retheme(ctx);
+            run(&mut s, ctx, 2.0);
+            let c = frame(&mut s, ctx, 160, 48);
+            let on = ctx.fiesta.is(Kind::Patrias);
+            assert_eq!(banderitas(&c) > 0, on, "{}", text(&c));
+            assert_eq!(s.fiesta, holiday(ctx));
+            assert_eq!(s.env.pal.main == rgb(0xf4f1ea), on);
+            assert!(
+                s.kinds()
+                    .iter()
+                    .all(|k| *k < KINDS || extras(s.fiesta).contains(k))
+            );
+        }
+        // The scene's day starts a few minutes before the Grito on the 15th.
+        s.retheme(&grito);
+        assert!(s.env.day > patrias::GRITO_AT - 400.0 && s.env.day < patrias::GRITO_AT);
+        // And runs on real time only.
+        let day = s.env.day;
+        for _ in 0..20 {
+            s.tick(&grito, 5.0, 0.0);
+        }
+        assert_eq!(s.env.day, day);
+        for _ in 0..20 {
+            s.tick(&grito, 0.0, 1.0);
+        }
+        assert!((s.env.day - day - 20.0).abs() < 0.01);
+    }
+
+    #[test]
+    fn patrias_grows_with_its_level() {
+        let theme = Theme::classic();
+        let o = opts("");
+        let flags = |fiesta: Fiesta| {
+            let ctx = ctx_of(&theme, &o, fiesta);
+            let mut s = Hollywood::new(&ctx);
+            s.resize(&ctx, 160, 48);
+            banderitas(&frame(&mut s, &ctx, 160, 48))
+        };
+        let (low, mid, high) = (
+            flags(Fiesta::of_day(9, 1)),
+            flags(Fiesta::of_day(9, 12)),
+            flags(Fiesta::of_day(9, 15)),
+        );
+        assert!(low < mid && mid < high, "{low} {mid} {high}");
+        // More contingents march and the crowd is bigger.
+        let marching = |f: Fiesta| grito::Desfile::new(1, f).marching();
+        assert!(marching(Fiesta::of_day(9, 1)) < marching(Fiesta::of_day(9, 14)));
+        let radar = |f: Fiesta| widgets::Radar::new(1, f);
+        assert!(radar(Fiesta::of_day(9, 1)).blips_len() < radar(Fiesta::of_day(9, 15)).blips_len());
+    }
+
+    #[test]
+    fn the_patria_is_on_screen_at_every_size_and_time() {
+        let theme = Theme::classic();
+        let o = opts("reshuffle = 1");
+        for (m, d) in [(9, 15), (9, 3), (9, 16)] {
+            let ctx = ctx_of(&theme, &o, Fiesta::of_day(m, d));
+            for &(w, h) in &[(200u16, 60u16), (120, 36), (80, 24), (60, 20), (31, 9)] {
+                let mut s = Hollywood::new(&ctx);
+                s.resize(&ctx, w, h);
+                for step in 0..120 {
+                    s.tick(&ctx, 0.2, 1.0);
+                    assert!(
+                        s.kinds().iter().any(|k| SIGNATURE_PT.contains(k)),
+                        "{m}-{d} {w}x{h} step {step}: {:?}",
+                        s.kinds()
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn odd_sizes_and_huge_steps_survive_patrias() {
+        let o = opts("");
+        let dracula = Theme::builtin("dracula").unwrap();
+        for theme in [Theme::classic(), dracula] {
+            for (m, d) in PATRIAS_DAYS {
+                let ctx = ctx_of(&theme, &o, Fiesta::of_day(m, d));
+                for &(w, h) in &[
+                    (1u16, 1u16),
+                    (2, 3),
+                    (7, 2),
+                    (30, 7),
+                    (29, 8),
+                    (45, 12),
+                    (80, 24),
+                    (200, 60),
+                    (300, 90),
+                ] {
+                    let mut s = Hollywood::new(&ctx);
+                    s.resize(&ctx, w, h);
+                    s.retheme(&ctx);
+                    for step in 0..60 {
+                        let (dt, real) = if step % 5 == 0 {
+                            (5.0, 5.0)
+                        } else {
+                            (0.05, 0.3)
+                        };
+                        s.tick(&ctx, dt, real);
+                        frame(&mut s, &ctx, w, h);
+                    }
+                    s.resize(&ctx, w / 2 + 1, h / 2 + 1);
+                    frame(&mut s, &ctx, w / 2 + 1, h / 2 + 1);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn patrias_widgets_stay_in_their_panes() {
+        let theme = Theme::classic();
+        let o = opts("");
+        let ctx = ctx_of(&theme, &o, Fiesta::of_day(9, 15));
+        for (m, d) in [(9, 1), (9, 15), (9, 16)] {
+            let fiesta = Fiesta::of_day(m, d);
+            // The Grito itself, in the middle of it, and a morning.
+            for day in [patrias::GRITO_AT + 20.0, patrias::GRITO_AT + 40.0, 30_000.0] {
+                let env = Env {
+                    pal: Pal::new(&ctx),
+                    level: 7,
+                    day,
+                };
+                for kind in (0..KINDS).chain(extras(fiesta)) {
+                    for &(w, h) in &[
+                        (1u16, 1u16),
+                        (3, 3),
+                        (12, 4),
+                        (29, 6),
+                        (44, 11),
+                        (80, 30),
+                        (120, 40),
+                    ] {
+                        let mut widget = make_widget(kind, 5, 7, fiesta);
+                        widget.resize(w, h);
+                        let r = Rect {
+                            x: 3,
+                            y: 2,
+                            w: w as i32,
+                            h: h as i32,
+                        };
+                        for step in 0..40 {
+                            widget.update(if step % 9 == 0 { 0.5 } else { 0.07 }, &env);
+                            let mut c = Canvas::new(w + 8, h + 6, Color::Reset);
+                            widget.draw(&mut c, r, &env);
+                            for y in 0..c.h() as i32 {
+                                for x in 0..c.w() as i32 {
+                                    let inside =
+                                        x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h;
+                                    if !inside {
+                                        let cell = c.get(x, y).unwrap();
+                                        assert_eq!(
+                                            cell.ch, ' ',
+                                            "kind {kind} {m}-{d} {w}x{h} drew {:?} at {x},{y}",
+                                            cell.ch
+                                        );
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn the_tape_brings_the_grito_s_headlines() {
+        let theme = Theme::classic();
+        let o = opts("");
+        let seen = |m: u32, d: u32| {
+            let ctx = ctx_of(&theme, &o, Fiesta::of_day(m, d));
+            let mut s = Hollywood::new(&ctx);
+            s.resize(&ctx, 100, 30);
+            let mut seen = String::new();
+            for _ in 0..400 {
+                s.tape.clear();
+                s.feed_tape();
+                seen.extend(s.tape.iter());
+            }
+            seen
+        };
+        let all = seen(9, 8);
+        for line in [
+            "GRITO.EXE: CUENTA REGRESIVA A LAS 23:00",
+            "\u{00a1}VIVA M\u{00c9}XICO!",
+            "CAMPANA DE DOLORES: LISTA",
+        ] {
+            assert!(all.contains(line), "{line}");
+        }
+        assert!(seen(9, 15).contains("ESTA NOCHE: EL GRITO A LAS 23:00"));
+        assert!(seen(9, 16).contains("DESFILE MILITAR EN CURSO"));
+        assert!(!all.contains("DESFILE MILITAR EN CURSO"));
+    }
+
+    #[test]
+    fn the_himno_scrolls_through_the_log_in_september_only() {
+        let theme = Theme::classic();
+        let o = opts("");
+        let ctx = ctx_of(&theme, &o, Fiesta::of_day(9, 15));
+        let env = Env {
+            pal: Pal::new(&ctx),
+            level: 7,
+            day: 0.0,
+        };
+        let mut seen = String::new();
+        for seed in 0..20u64 {
+            let mut f = feed::Feed::new(feed::FeedKind::Log, seed, 7, ctx.fiesta);
+            f.resize(120, 40);
+            for step in 0..400 {
+                f.update(0.1, &env);
+                if step % 40 == 0 {
+                    let mut c = Canvas::new(120, 40, Color::Reset);
+                    f.draw(
+                        &mut c,
+                        Rect {
+                            x: 0,
+                            y: 0,
+                            w: 120,
+                            h: 40,
+                        },
+                        &env,
+                    );
+                    seen.push_str(&c.to_text());
+                }
+            }
+        }
+        assert!(
+            seen.contains("\u{266a} Mexicanos, al grito de guerra"),
+            "{seen}"
+        );
+        assert!(!seen.contains("Campana sobre campana"));
     }
 }

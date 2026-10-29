@@ -688,6 +688,7 @@ mod tests {
         Env {
             pal: Pal::new(&ctx),
             level: 7,
+            day: 0.0,
         }
     }
 
