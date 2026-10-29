@@ -4,6 +4,7 @@
 use std::f32::consts::TAU;
 
 use super::art::{Sprite, each_pixel, size};
+use super::gala::Gala;
 use super::life::{Group, Swimmer};
 use super::muertos::Fest;
 use super::tank::{Bit, Bubble, Crab, Weed};
@@ -50,6 +51,8 @@ pub struct Sea {
     pub manta_in: f32,
     /// Día de Muertos, when it is on.
     pub fest: Fest,
+    /// Navidad, when it is on: the trajineras and the night.
+    pub gala: Gala,
 }
 
 #[inline]
@@ -117,11 +120,15 @@ impl Sea {
             visit_in: rng.rangef(3.0, 8.0) / visits,
             manta_in: rng.rangef(6.0, 16.0) / visits,
             fest: Fest::new(fiesta, seed),
+            gala: Gala::new(fiesta, seed),
         };
         sea.build_scenery(rng);
         sea.plant(rng);
         if sea.fest.on {
             sea.dress();
+        }
+        if sea.gala.on {
+            sea.dress_gala();
         }
         if sea.lively() {
             sea.populate(rng);
@@ -143,6 +150,9 @@ impl Sea {
         self.tank(rng);
         if self.fest.on {
             self.fest_tick();
+        }
+        if self.gala.on {
+            self.gala_tick();
         }
     }
 
@@ -177,14 +187,24 @@ impl Sea {
         if fest {
             self.paint_night(t);
         }
+        let gala = self.gala.on;
+        if gala {
+            self.paint_eve(t);
+        }
         self.paint_surface(t);
         if fest {
             self.draw_altar(t);
+        }
+        if gala {
+            self.draw_gala_floor(t);
         }
         self.draw_weeds(t);
         self.draw_crab();
         if fest {
             self.draw_sinking(t);
+        }
+        if gala {
+            self.draw_gala(t);
         }
         self.draw_life(t);
         if fest {

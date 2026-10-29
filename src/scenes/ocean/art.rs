@@ -984,3 +984,136 @@ const ORCA_PAINT: Sprite = &[
     ".......................................",
     ".......................................",
 ];
+
+/// Navidad: a gorro navideño laid over a shark, an orca or a dolphin, the
+/// size of its frames: `R` for rojo nochebuena and `W` for the white of the
+/// trim and the pompom.
+pub fn hat(sp: &Species) -> Option<Sprite> {
+    match sp.role {
+        Role::Shark => Some(SHARK_HAT),
+        Role::Orca => Some(ORCA_HAT),
+        Role::Dolphin => Some(DOLPHIN_HAT),
+        _ => None,
+    }
+}
+
+const SHARK_HAT: Sprite = &[
+    "..................................",
+    ".............................RRWW.",
+    "...........................RRRRWW.",
+    "..........................RRRRR...",
+    ".........................RRRRRR...",
+    "......................WWWWWWWW....",
+    "..................................",
+    "..................................",
+    "..................................",
+    "..................................",
+    "..................................",
+];
+
+const ORCA_HAT: Sprite = &[
+    ".......................................",
+    "...............................RRRWW...",
+    ".............................RRRRRRWW..",
+    "...........................RRRRRRR.....",
+    "......................WWWWWWWWWW.......",
+    ".......................................",
+    ".......................................",
+    ".......................................",
+    ".......................................",
+    ".......................................",
+    ".......................................",
+    ".......................................",
+    ".......................................",
+    ".......................................",
+];
+
+const DOLPHIN_HAT: Sprite = &[
+    "..........................",
+    "......................RRWW",
+    "....................RRRRW.",
+    "..................WWWWWW..",
+    "..........................",
+    "..........................",
+    "..........................",
+    "..........................",
+    "..........................",
+];
+
+// Navidad: fish in rojo nochebuena and verde pino. They are drawn like the
+// others and colored from the holiday's paint (`gala::Paint::coat`): one
+// coat with a red body and green fins, another the other way round, and
+// spots of dorado on both.
+
+/// A little one, for schooling: bracts like a poinsettia's for fins and tail.
+pub const NOCHEBUENITA: Species = Species {
+    name: "nochebuenita",
+    frames: &[
+        &[
+            "....DDD...",
+            "F.F.BBBB..",
+            ".FFSBSBBkB",
+            "F.F.LLLL..",
+            "....D.D...",
+        ],
+        &[
+            "....DDD...",
+            ".F.FBBBB..",
+            "FF.SBSBBkB",
+            ".F.FLLLL..",
+            "....D.D...",
+        ],
+    ],
+    palettes: &[[
+        rgb(200, 16, 46),
+        rgb(31, 111, 58),
+        rgb(236, 150, 160),
+        rgb(242, 182, 50),
+        rgb(31, 111, 58),
+    ]],
+    role: Role::School,
+    cruise: (0.2, 0.32),
+    burst: 0.85,
+    beat: 1.0,
+};
+
+/// A big one for crossing alone: leaf-shaped bracts above and below, a tail
+/// like the flower seen from above and dorado dots for its center.
+pub const NOCHEBUENA: Species = Species {
+    name: "nochebuena",
+    frames: &[
+        &[
+            ".......D.D.....",
+            "......DDDDD....",
+            "F.F..BBBBBBB...",
+            ".FF.BBSBBBSBB..",
+            "FFFBBBBSBBBBBk.",
+            ".FF.BLLLLLLLB..",
+            "F.F..BLLLLLB...",
+            "......DDDDD....",
+            ".......D.D.....",
+        ],
+        &[
+            ".......D.D.....",
+            "......DDDDD....",
+            ".F.F.BBBBBBB...",
+            "FF..BBSBBBSBB..",
+            ".FFFBBBBSBBBBBk",
+            "FF..BLLLLLLLB..",
+            ".F.F.BLLLLLB...",
+            "......DDDDD....",
+            ".......D.D.....",
+        ],
+    ],
+    palettes: &[[
+        rgb(31, 111, 58),
+        rgb(200, 16, 46),
+        rgb(96, 160, 110),
+        rgb(242, 182, 50),
+        rgb(200, 16, 46),
+    ]],
+    role: Role::Reef,
+    cruise: (0.08, 0.4),
+    burst: 0.8,
+    beat: 1.0,
+};

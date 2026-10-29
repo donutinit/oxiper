@@ -370,11 +370,26 @@ impl Sea {
             *r = s.max(0.0).powi(3) * 0.36;
         }
         let water = self.set.water;
+        // On the holidays of the boats the day goes over to evening: the
+        // water, its light and the sky blend toward the night's.
+        let eve = self.gala.dusk;
+        let (colors, ray) = if eve > 0.0 {
+            let (d, n) = (self.pal.water, self.pal.deep);
+            (
+                [0, 1, 2].map(|i| d[i].lerp(n[i], eve)),
+                self.pal.ray.lerp(self.pal.moon, eve),
+            )
+        } else {
+            (self.pal.water, self.pal.ray)
+        };
         if water {
             for y in 0..top {
                 let k = y as f32 / top.max(1) as f32;
                 let c = if self.fest.on {
                     ramp(&self.pal.night, k * k)
+                } else if eve > 0.0 {
+                    let day = self.pal.sky[0].lerp(self.pal.sky[1], k);
+                    day.lerp(ramp(&self.pal.eve, k * k), eve)
                 } else {
                     self.pal.sky[0].lerp(self.pal.sky[1], k)
                 };
@@ -387,13 +402,13 @@ impl Sea {
         let ray_depth = depth as f32 * 0.7;
         for y in top..ph {
             let dy = y - top;
-            let base = ramp(&self.pal.water, dy as f32 / depth as f32);
+            let base = ramp(&colors, dy as f32 / depth as f32);
             let fall = (1.0 - dy as f32 / ray_depth).max(0.0);
             // Coarse steps: a cell is only resent when its level changes.
             let mut levels = [base; 8];
             if fall > 0.0 {
                 for (k, l) in levels.iter_mut().enumerate().skip(1) {
-                    *l = base.lerp(self.pal.ray, k as f32 / 14.0);
+                    *l = base.lerp(ray, k as f32 / 14.0);
                 }
             }
             let row = (y * w) as usize;
@@ -414,7 +429,10 @@ impl Sea {
 
     /// The rippling surface in three shades, so only wave edges change.
     pub fn paint_surface(&mut self, t: f32) {
-        let (top, c) = (self.surf, self.pal.surface);
+        let (top, mut c) = (self.surf, self.pal.surface);
+        if self.gala.dusk > 0.0 {
+            c = c.lerp(self.pal.glow, self.gala.dusk);
+        }
         for x in 0..self.w {
             let v = (x as f32 * 0.35 + t * 0.1).sin() + (x as f32 * 0.13 - t * 0.06).sin();
             let a = if v > 0.6 {

@@ -54,6 +54,22 @@
 //!   and orcas wear calavera paint, and there is more of it all as the
 //!   holiday comes to November 2. An ordinary day's sea is left as it was,
 //!   down to its random numbers.
+//! - `navidad.rs`, with `gala.rs` (what the holidays of the boats share),
+//!   `trajinera.rs` (the boats and the buoys) and `cohetes.rs` (fireworks):
+//!   Navidad, the Guadalupe–Reyes on the water of Xochimilco. Trajineras,
+//!   flat painted boats with a woman's name across their arch (Lupita,
+//!   Esperanza), drift across the surface in a line hung with foquitos that
+//!   blink in chase patterns, a trajinero poling at the stern and, as the
+//!   posadas climb, a piñata de siete picos swinging off each bow. Buoys
+//!   carry the Estrella de Belén. A day and night go round: by night the
+//!   stars come out, the lights glow and shine again in the water. The
+//!   castle strings foquitos between its towers, nochebuenas grow on the
+//!   sand, esferas dropped from the boats sink and settle among them, and
+//!   fish in rojo nochebuena and verde pino join the schools and cross on
+//!   their own. Sharks, orcas and dolphins wear a gorro navideño, and on
+//!   Año Nuevo fireworks burst over the water and in it. There is more of
+//!   it all as the posadas come to Nochebuena; an ordinary day's sea is
+//!   left as it was, down to its random numbers.
 //!
 //! tanim runs its tank at 20 ticks a second and moves things by pixels per
 //! tick; the sea steps at that rate on an accumulator scaled by `speed`, so
@@ -61,10 +77,14 @@
 //! clock.
 
 mod art;
+mod cohetes;
+mod gala;
 mod life;
 mod muertos;
+mod navidad;
 mod sea;
 mod tank;
+mod trajinera;
 
 use crate::color::Color;
 use crate::fiesta::{Fiesta, Kind};
@@ -197,6 +217,13 @@ struct Pal {
     /// veladora glass.
     night: [Color; 3],
     papel: [Color; 5],
+    /// The holidays that put boats on the water: the evening sky, the water
+    /// and its light at night (what the day goes over to), and the paint.
+    eve: [Color; 3],
+    deep: [Color; 3],
+    moon: Color,
+    glow: Color,
+    paint: gala::Paint,
 }
 
 const WATER_TOP: Color = art::rgb(26, 104, 160);
@@ -219,6 +246,14 @@ const NIGHT_SKY: [Color; 3] = [
     art::rgb(44, 22, 78),
     art::rgb(120, 46, 110),
 ];
+// The evening of the boats: an indigo sky with a last warm glow at the
+// horizon over water gone dark, the surface catching the moon.
+const EVE_SKY: [Color; 3] = [
+    art::rgb(8, 12, 42),
+    art::rgb(24, 30, 84),
+    art::rgb(112, 70, 110),
+];
+const EVE_GLOW: Color = art::rgb(150, 166, 220);
 const PAPEL: [Color; 5] = [
     art::rgb(228, 0, 124),
     art::rgb(255, 140, 0),
@@ -236,6 +271,7 @@ impl Pal {
             ([WATER_TOP, WATER_MID, WATER_BOT], RAY, SURFACE)
         };
         let papel = [0, 1, 2, 3, 4].map(|i| ctx.pick(i, PAPEL[i]));
+        let paint = gala::Paint::new(ctx);
         let native = Pal {
             water,
             ray,
@@ -243,6 +279,11 @@ impl Pal {
             sky: [SKY_TOP, SKY_LOW],
             night: NIGHT_SKY,
             papel,
+            eve: EVE_SKY,
+            deep: [NIGHT_TOP, NIGHT_MID, NIGHT_BOT],
+            moon: MOON,
+            glow: EVE_GLOW,
+            paint,
         };
         if ctx.theme.native {
             return native;
@@ -264,6 +305,19 @@ impl Pal {
                 tint(NIGHT_SKY[2], 0.9),
             ],
             papel,
+            eve: [
+                tint(EVE_SKY[0], 0.1),
+                tint(EVE_SKY[1], 0.5),
+                tint(EVE_SKY[2], 0.9),
+            ],
+            deep: [
+                tint(NIGHT_TOP, 0.75),
+                tint(NIGHT_MID, 0.45),
+                tint(NIGHT_BOT, 0.15),
+            ],
+            moon: tint(MOON, 0.95),
+            glow: tint(EVE_GLOW, 1.0),
+            paint,
         }
     }
 }
@@ -431,7 +485,7 @@ mod tests {
         }
     }
 
-    const ALL: [&Species; 15] = [
+    const ALL: [&Species; 17] = [
         &art::TETRA,
         &art::CLOWN,
         &art::ANGEL,
@@ -447,6 +501,8 @@ mod tests {
         &art::MANTA,
         &art::ALEBRIJITO,
         &art::ALEBRIJE,
+        &art::NOCHEBUENITA,
+        &art::NOCHEBUENA,
     ];
 
     /// Every drawing is a rectangle, all of an animal's frames are the same
@@ -478,6 +534,13 @@ mod tests {
                 assert_eq!(art::size(face), size, "{}", sp.name);
                 for ch in face.iter().flat_map(|r| r.bytes()) {
                     assert!(b".hoptym".contains(&ch), "{}: {}", sp.name, ch as char);
+                }
+            }
+            // So does the gorro navideño.
+            if let Some(hat) = art::hat(sp) {
+                assert_eq!(art::size(hat), size, "{}", sp.name);
+                for ch in hat.iter().flat_map(|r| r.bytes()) {
+                    assert!(b".RW".contains(&ch), "{}: {}", sp.name, ch as char);
                 }
             }
         }
@@ -691,6 +754,255 @@ mod tests {
                     }
                 }
             }
+        }
+    }
+
+    /// How many of Navidad's fish are swimming.
+    fn nochebuenas(s: &OceanScene) -> usize {
+        s.sea
+            .swim
+            .iter()
+            .filter(|f| f.alive && navidad::is_fish(f.sp))
+            .count()
+    }
+
+    /// The sea as pixels, to compare two seas.
+    fn pixels(s: &OceanScene) -> Vec<Color> {
+        let scr = &s.sea.scr;
+        (0..scr.ph())
+            .flat_map(|y| (0..scr.pw()).map(move |x| (x, y)))
+            .map(|(x, y)| scr.get(x, y))
+            .collect()
+    }
+
+    /// Whether any pixel of the sky is painted `c`.
+    fn sky_has(s: &OceanScene, c: Color) -> bool {
+        (0..s.sea.surf).any(|y| (0..s.sea.w).any(|x| s.sea.scr.get(x, y) == c))
+    }
+
+    /// Navidad dresses the sea from the first of the Guadalupe–Reyes to
+    /// Nochebuena: trajineras with their names and lights, the Estrella on
+    /// its buoy, nochebuenas on the floor, esferas sinking and fish in rojo
+    /// and verde, and a night that comes and goes. An ordinary day has none.
+    #[test]
+    fn navidad_dresses_the_sea() {
+        let theme = Theme::classic();
+        let opts = opts("visits = 0");
+        let mut counts = Vec::new();
+        for f in [Fiesta::of_day(12, 12), Fiesta::of_day(12, 24), Fiesta::NONE] {
+            let c = holiday(&theme, &opts, f);
+            let mut s = OceanScene::new(&c);
+            s.resize(&c, 200, 60);
+            s.retheme(&c);
+            assert_eq!(s.sea.gala.on, f.on());
+            let (mut fish, mut esferas) = (nochebuenas(&s), 0);
+            let (mut darkest, mut brightest) = (0.0f32, 1.0f32);
+            run(&c, &mut s, 20 * 240, |s| {
+                fish = fish.max(nochebuenas(s));
+                esferas = esferas.max(s.sea.gala.floor_counts().1);
+                darkest = darkest.max(s.sea.gala.dusk);
+                brightest = brightest.min(s.sea.gala.dusk);
+            });
+            let (boats, buoys) = s.sea.gala.counts();
+            let (plants, _) = s.sea.gala.floor_counts();
+            let pinatas = s.sea.gala.boats.iter().filter(|b| b.pinata).count();
+            if f.on() {
+                assert!(boats > 0 && buoys > 0 && plants > 0, "{f:?}");
+                assert!(
+                    fish > 0 && esferas > 0,
+                    "{f:?}: {fish} fish, {esferas} esferas"
+                );
+                assert!(darkest > 0.99 && brightest < 0.01, "{darkest} {brightest}");
+                for name in s.sea.gala.names() {
+                    assert!(navidad::NAMES.contains(&name));
+                }
+                // The boats are painted on the sky by day.
+                let mut cv = Canvas::new(200, 60, Color::Reset);
+                s.sea.gala.dusk = 0.0;
+                s.dirty = true;
+                s.draw(&c, &mut cv);
+                let paint = s.sea.pal.paint;
+                assert!(
+                    s.sea
+                        .gala
+                        .boats
+                        .iter()
+                        .any(|b| sky_has(&s, paint.boats[b.panel])),
+                    "{f:?}: no boats painted"
+                );
+            } else {
+                assert!(boats + buoys + plants + esferas == 0);
+                assert!(fish == 0 && darkest == 0.0, "{fish} {darkest}");
+            }
+            counts.push((boats, pinatas));
+        }
+        // More of it as the posadas climb, the piñatas most of all.
+        assert!(counts[1].0 > counts[0].0, "{counts:?}");
+        assert!(counts[0].1 == 0 && counts[1].1 == counts[1].0, "{counts:?}");
+    }
+
+    /// The first of the posadas hangs the first piñata.
+    #[test]
+    fn the_posadas_hang_a_pinata() {
+        let theme = Theme::classic();
+        let opts = opts("");
+        let c = holiday(&theme, &opts, Fiesta::of_day(12, 16));
+        let mut s = OceanScene::new(&c);
+        s.resize(&c, 200, 60);
+        s.retheme(&c);
+        assert!(s.sea.gala.posadas && s.sea.gala.boats[0].pinata);
+        let c = holiday(&theme, &opts, Fiesta::of_day(12, 13));
+        s.retheme(&c);
+        assert!(!s.sea.gala.posadas && s.sea.gala.boats.iter().all(|b| !b.pinata));
+    }
+
+    /// Every letter of every name is drawn, and the boats fit the sky.
+    #[test]
+    fn the_names_are_drawn() {
+        for c in b'A'..=b'Z' {
+            assert_ne!(trajinera::glyph(c), [0; 5], "{}", c as char);
+        }
+        for name in navidad::NAMES {
+            assert!(name.bytes().all(|c| c.is_ascii_uppercase()), "{name}");
+        }
+        for surf in 0..30 {
+            if let Some(sh) = trajinera::Shape::of(surf, 200) {
+                assert!(sh.rows() < surf, "{surf}: {sh:?}");
+                for name in navidad::NAMES {
+                    assert!(sh.width(name) > 2 * sh.gap);
+                }
+            }
+        }
+    }
+
+    /// Navidad comes and goes with `retheme`, as it does at midnight.
+    #[test]
+    fn retheme_switches_navidad() {
+        let theme = Theme::classic();
+        let opts = opts("");
+        let off = ctx(&theme, &opts);
+        let on = holiday(&theme, &opts, Fiesta::of_day(12, 20));
+        let mut s = OceanScene::new(&off);
+        s.resize(&off, 160, 50);
+        s.retheme(&off);
+        assert!(!s.sea.gala.on);
+        s.retheme(&on);
+        assert!(s.sea.gala.on && s.sea.gala.counts().0 > 0);
+        run(&on, &mut s, 200, |_| {});
+        s.retheme(&off);
+        assert!(!s.sea.gala.on && s.sea.gala.counts() == (0, 0));
+        run(&off, &mut s, 20 * 60, |s| {
+            assert_eq!(nochebuenas(s), 0);
+            assert_eq!(s.sea.gala.dusk, 0.0);
+        });
+    }
+
+    /// A holiday the sea has no dress for leaves it as on an ordinary day.
+    #[test]
+    fn an_ordinary_day_is_untouched() {
+        let theme = Theme::classic();
+        let opts = opts("");
+        let mut seas = Vec::new();
+        // Nothing, a day that is nothing, and holidays it knows nothing of.
+        for f in [
+            Fiesta::NONE,
+            Fiesta::of_day(6, 15),
+            Fiesta::of_day(2, 2),
+            Fiesta::of_day(5, 3),
+        ] {
+            let c = holiday(&theme, &opts, f);
+            let mut s = OceanScene::new(&c);
+            s.resize(&c, 160, 50);
+            s.retheme(&c);
+            run(&c, &mut s, 20 * 30, |_| {});
+            let mut cv = Canvas::new(160, 50, Color::Reset);
+            s.draw(&c, &mut cv);
+            seas.push(pixels(&s));
+        }
+        assert!(seas.windows(2).all(|p| p[0] == p[1]));
+    }
+
+    /// Navidad survives odd sizes, huge steps and another theme.
+    #[test]
+    fn navidad_survives() {
+        let themes = [Theme::classic(), Theme::builtin("dracula").unwrap()];
+        for case in [
+            "",
+            "visits = 10.0\nfish = 5.0",
+            "water = false\nsurface = false",
+        ] {
+            let opts = opts(case);
+            for theme in &themes {
+                for f in [
+                    Fiesta::of_day(12, 12),
+                    Fiesta::of_day(12, 16),
+                    Fiesta::of_day(12, 24),
+                    Fiesta::of_day(1, 6),
+                ] {
+                    let c = holiday(theme, &opts, f);
+                    let mut s = (INFO.make)(&c);
+                    for &(w, h) in &[
+                        (1u16, 1u16),
+                        (3, 2),
+                        (9, 4),
+                        (80, 24),
+                        (300, 90),
+                        (40, 12),
+                        (500, 150),
+                        (60, 20),
+                        (120, 36),
+                    ] {
+                        s.resize(&c, w, h);
+                        s.retheme(&c);
+                        let mut cv = Canvas::new(w, h, Color::Reset);
+                        for dt in [0.05, 5.0, f32::NAN, 1e9, 0.05] {
+                            s.tick(&c, dt, dt);
+                            cv.clear();
+                            s.draw(&c, &mut cv);
+                        }
+                        for _ in 0..100 {
+                            s.tick(&c, 0.5, 0.5);
+                        }
+                        cv.clear();
+                        s.draw(&c, &mut cv);
+                    }
+                }
+            }
+        }
+    }
+
+    /// Año Nuevo sends fireworks up at night, in the sky and in the water;
+    /// the other days of the Navidad have none.
+    #[test]
+    fn ano_nuevo_has_fireworks() {
+        let theme = Theme::classic();
+        let opts = opts("visits = 0");
+        for (f, works) in [
+            (Fiesta::of_day(12, 31), true),
+            (Fiesta::of_day(1, 1), true),
+            (Fiesta::of_day(12, 24), false),
+            (Fiesta::of_day(1, 6), false),
+        ] {
+            let c = holiday(&theme, &opts, f);
+            let mut s = OceanScene::new(&c);
+            s.resize(&c, 200, 60);
+            s.retheme(&c);
+            let (mut rockets, mut sparks) = (0, 0);
+            let mut by_day = 0;
+            run(&c, &mut s, 20 * 120, |s| {
+                let (r, k) = s.sea.gala.works.counts();
+                rockets = rockets.max(r);
+                sparks = sparks.max(k);
+                by_day += (s.sea.gala.dusk < 0.7 && r + k > 0) as u32;
+            });
+            assert_eq!(s.sea.gala.fireworks, works, "{f:?}");
+            if works {
+                assert!(rockets > 0 && sparks > 20, "{f:?}: {rockets} {sparks}");
+            } else {
+                assert_eq!((rockets, sparks), (0, 0), "{f:?}");
+            }
+            // Only the last of the sparks outlives the evening.
+            assert!(by_day < 80, "{by_day}");
         }
     }
 }

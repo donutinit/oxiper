@@ -350,6 +350,8 @@ impl Sea {
         let mut sp = rng.pick(&art::REEF);
         if self.fest.on && self.fest.rng.chance(0.15 + 0.25 * self.fest.level) {
             sp = &art::ALEBRIJE;
+        } else if let Some(holiday) = self.holiday_fish(false) {
+            sp = holiday;
         }
         let dir = rng.sign();
         let (sw, sh) = size(sp.frames[0]);
@@ -357,8 +359,15 @@ impl Sea {
         let x = self.entry(sw as f32 * 0.5, dir, on, rng);
         let y = rng.rangef(top, bottom);
         let mut s = self.swimmer(sp, (x, y), dir, rng);
+        let variant = if self.gala.on {
+            self.gala.rng.usize(..2)
+        } else {
+            0
+        };
         if sp.name == art::ALEBRIJE.name {
             s.colors = self.fest.rng.pick(sp.palettes);
+        } else if let Some(coat) = self.gala_coat(sp, variant) {
+            s.colors = coat;
         }
         self.swim.push(s);
     }
@@ -391,6 +400,8 @@ impl Sea {
         let alebrijes = self.fest.on && self.fest.rng.chance(0.3 + 0.3 * self.fest.level);
         if alebrijes {
             sp = &art::ALEBRIJITO;
+        } else if let Some(holiday) = self.holiday_fish(true) {
+            sp = holiday;
         }
         let n = (rng.range(8, 22) as usize).min(most);
         if n < 3 {
@@ -411,6 +422,9 @@ impl Sea {
             let mut s = self.swimmer(sp, (x, y), dir, rng);
             s.colors = if alebrijes {
                 self.fest.rng.pick(sp.palettes)
+            } else if let Some(coat) = self.gala_coat(sp, (k % 3 != 0) as usize) {
+                // A school of the holiday is mostly red, with green among it.
+                coat
             } else {
                 colors
             };
@@ -1236,6 +1250,8 @@ impl Sea {
             Role::Orca,
         ];
         let fest = self.fest.on;
+        let gala = self.gala.on;
+        let p = self.pal.paint;
         for role in ORDER {
             for i in 0..self.swim.len() {
                 let s = &self.swim[i];
@@ -1255,6 +1271,7 @@ impl Sea {
                 };
                 let at = (s.x, s.y + bob);
                 let face = art::face_paint(s.sp).filter(|_| fest && s.puffed == 0);
+                let hat = art::hat(s.sp).filter(|_| gala && s.puffed == 0);
                 let (dir, slope, act) = (s.dir, s.slope, s.act);
                 let c = s.colors;
                 let paint = move |ch: u8| match ch {
@@ -1269,6 +1286,8 @@ impl Sea {
                     b't' => muertos::TURQUESA,
                     b'y' => muertos::AMARILLO,
                     b'm' => muertos::CEMPASUCHIL[0],
+                    b'R' => p.rojo,
+                    b'W' => p.blanco,
                     _ => EYE,
                 };
                 match act {
@@ -1280,6 +1299,9 @@ impl Sea {
                 }
                 if let Some(face) = face {
                     self.sprite(face, at, dir, slope, paint);
+                }
+                if let Some(hat) = hat {
+                    self.sprite(hat, at, dir, slope, paint);
                 }
             }
         }

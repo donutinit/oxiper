@@ -301,7 +301,7 @@ impl Sea {
 
     /// Adds light `c` by `a` to what is there, as a flame lights the night;
     /// over see-through water it blends instead.
-    fn glow(&mut self, x: i32, y: i32, c: Color, a: f32) {
+    pub(super) fn glow(&mut self, x: i32, y: i32, c: Color, a: f32) {
         if x < 0 || y < 0 || x >= self.w || y >= self.ph {
             return;
         }
