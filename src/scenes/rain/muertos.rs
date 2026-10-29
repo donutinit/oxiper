@@ -380,7 +380,7 @@ impl Muertos {
         if fiesta == self.fiesta && (w, h) == (self.w, self.h) {
             return false;
         }
-        let came = fiesta.on() && !self.fiesta.on();
+        let came = fiesta.is(Kind::Muertos) && !self.fiesta.is(Kind::Muertos);
         self.fiesta = fiesta;
         self.w = w;
         self.h = h;

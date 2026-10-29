@@ -24,6 +24,7 @@ pub const INFO: Info = Info {
     name: "sl",
     start,
     fiesta: crate::fiesta::Kind::None,
+    when: super::any_day,
 };
 
 fn start(w: u16, _h: u16, rng: &mut fastrand::Rng) -> Box<dyn Egg> {

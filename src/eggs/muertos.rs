@@ -8,23 +8,9 @@
 //! mixed from its background, so the visitors belong to the theme; only the
 //! candle flame keeps its own color.
 
-use crate::color::{self, Color, rgb};
+use super::palette::Role;
+pub use super::palette::{Palette, fade};
 use crate::theme::Theme;
-
-/// How a letter is colored under a theme other than `classic`.
-#[derive(Clone, Copy)]
-enum Role {
-    /// The theme accent nearest in hue.
-    Hue,
-    /// Another letter's color, darker (below 1) or lighter (above 1).
-    Shade(u8, f32),
-    /// The theme's foreground, scaled.
-    Bone(f32),
-    /// Mixed from the theme's background (0) toward its foreground (1).
-    Ink(f32),
-    /// Its own color under every theme.
-    Keep,
-}
 
 /// Letter, color under `classic`, and role under other themes. Letters that
 /// a `Shade` refers to come before it.
@@ -68,110 +54,17 @@ const COLORS: &[(u8, u32, Role)] = &[
     (b'f', 0xff9628, Role::Keep),
 ];
 
-/// The visitors' colors under a theme, by letter.
-pub struct Palette([Color; 128]);
-
 impl Palette {
+    /// The Día de Muertos visitors' colors under a theme.
     pub fn new(theme: &Theme) -> Palette {
-        let mut pal = [Color::Reset; 128];
-        for &(ch, hex, role) in COLORS {
-            let native = rgb(hex);
-            pal[ch as usize] = if theme.native {
-                native
-            } else {
-                match role {
-                    Role::Hue => nearest(theme, native),
-                    Role::Shade(of, k) => pal[of as usize].scale(k),
-                    Role::Bone(k) => match theme.fg {
-                        Color::Rgb(..) => theme.fg.scale(k),
-                        _ => native,
-                    },
-                    Role::Ink(k) => match (theme.bg, theme.fg) {
-                        (Color::Rgb(..), Color::Rgb(..)) => theme.bg.scale(0.6).lerp(theme.fg, k),
-                        _ => native,
-                    },
-                    Role::Keep => native,
-                }
-            };
-        }
-        Palette(pal)
+        Palette::with(theme, COLORS)
     }
-
-    /// The color of a letter; `None` for letters with none.
-    #[inline]
-    pub fn get(&self, ch: u8) -> Option<Color> {
-        match self.0[ch as usize & 127] {
-            Color::Reset => None,
-            c => Some(c),
-        }
-    }
-
-    /// Fades every color toward the theme's background (see [`fade`]).
-    pub fn fade_all(&mut self, theme: &Theme, k: f32) {
-        for c in self.0.iter_mut().filter(|c| **c != Color::Reset) {
-            *c = fade(theme, *c, k);
-        }
-    }
-
-    /// The color of a letter, which must have one.
-    #[inline]
-    pub fn of(&self, ch: u8) -> Color {
-        self.0[ch as usize & 127]
-    }
-}
-
-/// Fades a color toward the theme's background (`k = 1` is gone); without a
-/// known background, darkening is the closest thing.
-pub fn fade(theme: &Theme, c: Color, k: f32) -> Color {
-    match theme.bg {
-        Color::Rgb(..) => c.lerp(theme.bg, k),
-        _ => c.scale(1.0 - k),
-    }
-}
-
-/// The theme accent nearest in hue to `c`, for a theme other than `classic`.
-fn nearest(theme: &Theme, c: Color) -> Color {
-    let Some(want) = hue(c) else {
-        return theme.fg;
-    };
-    theme
-        .colors
-        .iter()
-        .filter_map(|&t| {
-            let h = hue(t)?;
-            let d = (h - want).abs();
-            Some((d.min(360.0 - d), t))
-        })
-        .min_by(|a, b| a.0.total_cmp(&b.0))
-        .map_or_else(|| theme.pick(0, c), |(_, t)| t)
-}
-
-/// Hue in degrees; `None` for grays. Palette colors use their usual RGB.
-fn hue(c: Color) -> Option<f32> {
-    let (r, g, b) = match c {
-        Color::Rgb(r, g, b) => (r, g, b),
-        Color::Ansi(n) => color::ansi_rgb(n),
-        Color::Reset => return None,
-    };
-    let (r, g, b) = (r as f32 / 255.0, g as f32 / 255.0, b as f32 / 255.0);
-    let max = r.max(g).max(b);
-    let d = max - r.min(g).min(b);
-    if d < 0.08 {
-        return None;
-    }
-    let h = if max == r {
-        60.0 * ((g - b) / d).rem_euclid(6.0)
-    } else if max == g {
-        60.0 * ((b - r) / d + 2.0)
-    } else {
-        60.0 * ((r - g) / d + 4.0)
-    };
-    Some(h)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::color::rgb;
 
     #[test]
     fn every_letter_has_a_color_under_every_theme() {

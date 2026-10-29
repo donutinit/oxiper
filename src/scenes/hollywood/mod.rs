@@ -601,7 +601,7 @@ impl Hollywood {
     /// A widget kind: any of them, or on Día de Muertos (three more kinds) the
     /// signature ones more often the higher the holiday.
     fn roll_kind(&mut self) -> usize {
-        if !self.fiesta.on() {
+        if !self.fiesta.is(Kind::Muertos) {
             return self.rng.usize(..KINDS);
         }
         if self.rng.f32() < 0.1 + 0.2 * self.fiesta.level {
@@ -638,7 +638,7 @@ impl Hollywood {
         p.title.push_str(p.widget.name());
         if level > 0 {
             p.title.push_str(" \u{00b7} ");
-            if mx.on() {
+            if mx.is(Kind::Muertos) {
                 muertos::mixed_title(rng, mx.level, &mut p.title);
             } else {
                 babble::title(rng, &mut p.title);
@@ -650,7 +650,7 @@ impl Hollywood {
     /// Day of the dead: keeps at least one signature widget on screen by
     /// turning the biggest pane into the Mictlán gateway if there is none.
     fn ensure_signature(&mut self) {
-        if !self.fiesta.on() {
+        if !self.fiesta.is(Kind::Muertos) {
             return;
         }
         let area = self.area();
@@ -691,7 +691,7 @@ impl Hollywood {
         if let Some(root) = &mut self.root {
             let rng = &mut self.rng;
             root.each_mut(&mut |p| {
-                if p.kind >= KINDS && !mx.on() {
+                if p.kind >= KINDS && !mx.is(Kind::Muertos) {
                     p.kind = rng.usize(..KINDS);
                 }
                 p.widget = make_widget(p.kind, rng.u64(..), level, mx);
@@ -808,7 +808,7 @@ impl Hollywood {
         while self.tape.len() < need {
             self.tape_buf.clear();
             let mut s = std::mem::take(&mut self.tape_buf);
-            if self.fiesta.on() {
+            if self.fiesta.is(Kind::Muertos) {
                 // Headlines of the Mictlán among its mission log.
                 if self.rng.f32() < 0.3 + 0.3 * self.fiesta.level {
                     muertos::headline(&mut self.rng, &mut s);
@@ -940,7 +940,7 @@ impl Scene for Hollywood {
                 // Día de Muertos hangs papel picado along the title bar: a flag
                 // every third column, then every other and, at the height of
                 // the holiday, one after another, in the six colors.
-                let gap = if !self.fiesta.on() {
+                let gap = if !self.fiesta.is(Kind::Muertos) {
                     0
                 } else if self.fiesta.level < 0.5 {
                     3
@@ -1214,7 +1214,7 @@ mod tests {
             s.retheme(ctx);
             run(&mut s, ctx, 2.0);
             let c = frame(&mut s, ctx, 160, 48);
-            let on = ctx.fiesta.on();
+            let on = ctx.fiesta.is(Kind::Muertos);
             assert_eq!(count(&c, '\u{273f}') > 0, on, "{}", text(&c));
             assert_eq!(s.fiesta, if on { ctx.fiesta } else { Fiesta::NONE });
             assert_eq!(s.env.pal.main == rgb(0xffa01e), on);
@@ -1328,7 +1328,7 @@ mod tests {
         };
         for fiesta in [Fiesta::NONE, Fiesta::of_day(10, 28), Fiesta::of_day(11, 2)] {
             for kind in 0..KINDS_MX {
-                if kind >= KINDS && !fiesta.on() {
+                if kind >= KINDS && !fiesta.is(Kind::Muertos) {
                     continue;
                 }
                 for &(w, h) in &[

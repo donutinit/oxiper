@@ -17,6 +17,7 @@ pub mod mariachis;
 pub mod monarcas;
 mod muertos;
 pub mod nyan;
+pub(crate) mod palette;
 pub mod sl;
 
 use crate::color::Color;
@@ -41,6 +42,15 @@ pub struct Info {
     /// The holiday it belongs to: it only comes then, and then more often
     /// than the others. `Kind::None` comes on any day.
     pub fiesta: Kind,
+    /// Which of the holiday's days it comes on ([`any_day`] for all of
+    /// them): the Reyes Magos only from January 2, a prank only on the
+    /// Santos Inocentes.
+    pub when: fn(Fiesta) -> bool,
+}
+
+/// For [`Info::when`]: every day of its holiday.
+pub fn any_day(_: Fiesta) -> bool {
+    true
 }
 
 pub const ALL: &[&Info] = &[
@@ -212,7 +222,7 @@ impl Eggs {
         if self.active.is_some() {
             return;
         }
-        let ours = |i: &&&Info| fiesta.on() && i.fiesta == fiesta.kind;
+        let ours = |i: &&&Info| fiesta.on() && i.fiesta == fiesta.kind && (i.when)(fiesta);
         let any_day = |i: &&&Info| i.fiesta == Kind::None;
         let seasonal: Vec<&'static Info> = allowed.iter().filter(ours).copied().collect();
         let everyday: Vec<&'static Info> = allowed.iter().filter(any_day).copied().collect();
@@ -377,11 +387,13 @@ mod tests {
         name: "ordinary",
         start: |_, _, _| Box::new(Mark('o')),
         fiesta: Kind::None,
+        when: any_day,
     };
     const SEASONAL: Info = Info {
         name: "seasonal",
         start: |_, _, _| Box::new(Mark('s')),
         fiesta: Kind::Muertos,
+        when: any_day,
     };
 
     /// Which egg `e` is playing: its mark.
@@ -526,18 +538,29 @@ mod tests {
         }
     }
 
+    /// A day an egg comes on: any day for the everyday ones, its holiday's
+    /// height, or else the first of its days that it comes on.
+    pub(crate) fn its_day(info: &Info) -> Fiesta {
+        if info.fiesta == Kind::None {
+            return Fiesta::NONE;
+        }
+        let height = Fiesta::height(info.fiesta);
+        if (info.when)(height) {
+            return height;
+        }
+        (1..=12)
+            .flat_map(|m| (1..=31).map(move |d| Fiesta::of_date(2027, m, d)))
+            .find(|f| f.kind == info.fiesta && (info.when)(*f))
+            .unwrap_or_else(|| panic!("{} never comes", info.name))
+    }
+
     #[test]
     fn every_egg_finishes_in_time() {
         let t = Theme::builtin("nord").unwrap();
         for info in ALL {
             for (w, h) in [(80, 24), (200, 50), (20, 8)] {
                 let mut e = Eggs::new(w, h);
-                // A holiday's egg starts on its holiday.
-                let fiesta = Fiesta {
-                    kind: info.fiesta,
-                    level: 1.0,
-                };
-                e.start(&[info], fiesta);
+                e.start(&[info], its_day(info));
                 let mut c = Canvas::new(w, h, Color::Reset);
                 let mut secs = 0.0;
                 while e.active() {

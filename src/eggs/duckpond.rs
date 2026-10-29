@@ -18,6 +18,7 @@ pub const INFO: Info = Info {
     name: "duckpond",
     start,
     fiesta: Kind::None,
+    when: super::any_day,
 };
 
 fn start(w: u16, _h: u16, _rng: &mut fastrand::Rng) -> Box<dyn Egg> {

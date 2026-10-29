@@ -15,7 +15,7 @@
 //! CATRINA!".
 
 use crate::color::{Color, rgb};
-use crate::fiesta::Fiesta;
+use crate::fiesta::{Fiesta, Kind};
 use crate::render::{BOLD, Canvas};
 use crate::scene::{Ctx, Opt, Scene, SceneInfo, Val};
 
@@ -767,7 +767,7 @@ impl Dvd {
     /// Picks the logo and the banner for the screen, the text and the holiday.
     fn fit(&mut self) {
         let (lw, lh) = (LOGO[4].chars().count() as i32, LOGO.len() as i32);
-        let on = self.fiesta.on();
+        let on = self.fiesta.is(Kind::Muertos);
         self.laugh = Sprite::default();
         self.sprite = if !self.text.is_empty() {
             Sprite::fit_text(&self.text, self.w, self.h, 40)
@@ -867,7 +867,7 @@ impl Dvd {
         let edge_x = if left { lx + sw } else { lx - 1.0 };
         let edge_y = if top { ly + sh } else { ly - 1.0 };
         let (dx, dy) = (if left { 1.0 } else { -1.0 }, if top { 1.0 } else { -1.0 });
-        if self.fiesta.on() {
+        if self.fiesta.is(Kind::Muertos) {
             // Cempasúchil instead of sparks, and more of it as the days go by.
             let burst = self.petal_cap as f32 * (0.3 + 0.3 * self.fiesta.level);
             for _ in 0..burst as usize {
@@ -991,7 +991,7 @@ impl Dvd {
             s.vx *= 1.0 - 0.9 * dt;
         }
         self.sparks.retain(|s| s.age < s.ttl);
-        if self.fiesta.on() {
+        if self.fiesta.is(Kind::Muertos) {
             self.drift(dt);
         }
         self.party_t = (self.party_t + dt).min(PARTY);
@@ -1087,7 +1087,7 @@ impl Dvd {
 
     fn draw_counter(&self, c: &mut Canvas) {
         let mut buf = [0u8; 24];
-        let prefix: &[u8] = if self.fiesta.on() {
+        let prefix: &[u8] = if self.fiesta.is(Kind::Muertos) {
             b"esquinas: "
         } else {
             b"corners: "
@@ -1157,7 +1157,7 @@ impl Scene for Dvd {
 
     fn retheme(&mut self, ctx: &Ctx) {
         self.palette.clear();
-        let on = ctx.fiesta.on();
+        let on = ctx.fiesta.is(Kind::Muertos);
         if ctx.theme.native {
             self.palette
                 .extend_from_slice(if on { &PAPEL[..] } else { &CLASSIC[..] });
@@ -1232,7 +1232,7 @@ impl Scene for Dvd {
             let col = ctx.fade(self.palette[s.color as usize % n], k * 0.7);
             c.set(s.x.round() as i32, s.y.round() as i32, g, col);
         }
-        if self.fiesta.on() {
+        if self.fiesta.is(Kind::Muertos) {
             self.draw_petals(ctx, c);
         }
         // At a corner the skulls laugh, their jaws chattering.

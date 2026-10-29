@@ -58,7 +58,7 @@ use std::f32::consts::PI;
 
 use crate::color::{Color, ansi_rgb};
 use crate::eggs::{self, Egg};
-use crate::fiesta::Fiesta;
+use crate::fiesta::{Fiesta, Kind};
 use crate::render::{Canvas, Pixels};
 use crate::scene::{Ctx, Opt, Scene, SceneInfo, Val};
 use crate::theme::Theme;
@@ -1046,7 +1046,7 @@ impl Aurora {
         let fixed = LOOKS.iter().position(|(n, _)| *n == look);
         let which = fixed.unwrap_or_else(|| rng.usize(0..ORDINARY));
         // The holiday opens on Pátzcuaro.
-        let which = if fixed.is_none() && ctx.fiesta.on() {
+        let which = if fixed.is_none() && ctx.fiesta.is(Kind::Muertos) {
             PATZCUARO
         } else {
             which
@@ -1119,7 +1119,9 @@ impl Aurora {
     ) -> usize {
         match fixed {
             Some(i) => i,
-            None if fiesta.on() && hrng.f32() < patzcuaro_share(fiesta.level) => PATZCUARO,
+            None if fiesta.is(Kind::Muertos) && hrng.f32() < patzcuaro_share(fiesta.level) => {
+                PATZCUARO
+            }
             None if which >= ORDINARY => rng.usize(0..ORDINARY),
             None => (which + 1 + rng.usize(0..ORDINARY - 1)) % ORDINARY,
         }
@@ -1128,7 +1130,7 @@ impl Aurora {
     /// How much of the holiday has come: all of it when Pátzcuaro is asked
     /// for on another day.
     fn level(&self) -> f32 {
-        if self.fiesta.on() {
+        if self.fiesta.is(Kind::Muertos) {
             self.fiesta.level.clamp(0.0, 1.0)
         } else {
             1.0
@@ -1612,7 +1614,7 @@ impl Aurora {
             let kind = self.fiesta.kind;
             let ours = || eggs::ALL.iter().filter(move |i| i.fiesta == kind);
             let seasonal = ours().count();
-            let info = if self.fiesta.on() && seasonal > 0 && self.hrng.f32() < 0.8 {
+            let info = if self.fiesta.is(Kind::Muertos) && seasonal > 0 && self.hrng.f32() < 0.8 {
                 ours()
                     .nth(self.hrng.usize(0..seasonal))
                     .unwrap_or(&&eggs::nyan::INFO)
@@ -2036,7 +2038,7 @@ impl Scene for Aurora {
 
     fn retheme(&mut self, ctx: &Ctx) {
         if ctx.fiesta != self.fiesta {
-            let (was, now) = (self.fiesta.on(), ctx.fiesta.on());
+            let (was, now) = (self.fiesta.is(Kind::Muertos), ctx.fiesta.is(Kind::Muertos));
             self.fiesta = ctx.fiesta;
             if self.fixed.is_none() && was != now {
                 // The holiday comes or goes: fade into Pátzcuaro, or out of
@@ -2382,7 +2384,7 @@ mod tests {
             for k in 0..n {
                 a.tick(&ctx, 1.0 / 30.0, 1.0 / 30.0);
                 on += usize::from(a.which == PATZCUARO);
-                if k % 300 == 0 && !fiesta.on() {
+                if k % 300 == 0 && !fiesta.is(Kind::Muertos) {
                     a.draw(&ctx, &mut c);
                     assert_eq!(flames(&a), 0);
                 }

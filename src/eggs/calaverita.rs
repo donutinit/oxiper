@@ -31,6 +31,7 @@ pub const INFO: Info = Info {
     name: "calaverita",
     start,
     fiesta: Kind::Muertos,
+    when: super::any_day,
 };
 
 /// The verses; an empty line parts two stanzas.

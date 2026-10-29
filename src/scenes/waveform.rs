@@ -563,11 +563,12 @@ mod tests {
                     }
                     let mut c = Canvas::new(w, h, Color::Reset);
                     // The holiday on a huge screen is slow to run unoptimized: fewer frames.
-                    let (frames, every) = if fiesta.on() && w as u32 * h as u32 > 10_000 {
-                        (10, 4)
-                    } else {
-                        (40, 13)
-                    };
+                    let (frames, every) =
+                        if fiesta.is(Kind::Muertos) && w as u32 * h as u32 > 10_000 {
+                            (10, 4)
+                        } else {
+                            (40, 13)
+                        };
                     for f in 0..frames {
                         s.update(
                             &ctx,

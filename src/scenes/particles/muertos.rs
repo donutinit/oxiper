@@ -18,7 +18,7 @@ use std::f32::consts::TAU;
 
 use super::{Dots, Field, Mode};
 use crate::color::{Color, rgb};
-use crate::fiesta::Fiesta;
+use crate::fiesta::{Fiesta, Kind};
 use crate::render::Braille;
 use crate::scene::Ctx;
 
@@ -266,7 +266,7 @@ impl Muertos {
     }
 
     pub fn on(&self) -> bool {
-        self.fiesta.on()
+        self.fiesta.is(Kind::Muertos)
     }
 
     pub fn fiesta(&self) -> Fiesta {
@@ -283,7 +283,7 @@ impl Muertos {
         self.cuts.clear();
         self.monarchs.clear();
         self.toss_acc = 0.0;
-        if !fiesta.on() || w == 0 || h == 0 {
+        if !fiesta.is(Kind::Muertos) || w == 0 || h == 0 {
             return;
         }
         let level = fiesta.level.clamp(0.0, 1.0);

@@ -20,6 +20,7 @@ pub const INFO: Info = Info {
     name: "nyancat",
     start,
     fiesta: Kind::None,
+    when: super::any_day,
 };
 
 /// nyancat's 90 ms per frame.

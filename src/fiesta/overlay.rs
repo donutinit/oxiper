@@ -18,7 +18,7 @@
 //! to the top four rows (six with two strings). On an ordinary day it draws
 //! nothing.
 
-use super::Fiesta;
+use super::{Fiesta, Kind};
 use crate::color::{Color, rgb};
 use crate::render::{Canvas, Cell};
 use crate::theme::Theme;
@@ -267,7 +267,7 @@ impl Overlay {
         }
         let dt = dt.clamp(0.0, 5.0);
         self.t += dt as f64;
-        if !fiesta.on() {
+        if !fiesta.is(Kind::Muertos) {
             return;
         }
         // Hung anew every day of the holiday.
@@ -291,7 +291,7 @@ impl Overlay {
 
     /// Draws over the scene. Nothing on an ordinary day.
     pub fn draw(&self, c: &mut Canvas, theme: &Theme, fiesta: Fiesta) {
-        if !fiesta.on() {
+        if !fiesta.is(Kind::Muertos) {
             return;
         }
         let mut papel = PAPEL;
@@ -564,6 +564,8 @@ mod tests {
     const MUERTOS: Fiesta = Fiesta {
         kind: super::super::Kind::Muertos,
         level: 1.0,
+        month: 11,
+        day: 2,
     };
 
     /// A scene's frame: half blocks, text and empty cells.

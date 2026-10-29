@@ -20,6 +20,7 @@ pub const INFO: Info = Info {
     name: "mariachis",
     start,
     fiesta: Kind::Muertos,
+    when: super::any_day,
 };
 
 type Frames = [&'static [&'static str]; 2];

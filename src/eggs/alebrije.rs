@@ -22,6 +22,7 @@ pub const INFO: Info = Info {
     name: "alebrije",
     start,
     fiesta: Kind::Muertos,
+    when: super::any_day,
 };
 
 /// Facing right, without wings and tail.

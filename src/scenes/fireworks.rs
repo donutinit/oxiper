@@ -42,7 +42,7 @@
 use std::f32::consts::TAU;
 
 use crate::color::{Color, ansi_rgb, rgb};
-use crate::fiesta::Fiesta;
+use crate::fiesta::{Fiesta, Kind};
 use crate::render::{Canvas, Pixels};
 use crate::scene::{Ctx, Opt, Scene, SceneInfo, Val};
 
@@ -665,7 +665,7 @@ impl Fireworks {
         };
         let mut color = self.pal.shell_color(rng);
         let vx = rangef(rng, -0.15, 0.15);
-        if self.fiesta.on() {
+        if self.fiesta.is(Kind::Muertos) {
             // Día de Muertos: its own colors, and more calaveras, marigolds
             // and showers of petals as the holiday comes.
             let f = &mut self.frng;
@@ -805,7 +805,7 @@ impl Fireworks {
         };
         let pal = &self.pal;
         let dress = &self.dress;
-        let gold = if self.fiesta.on() {
+        let gold = if self.fiesta.is(Kind::Muertos) {
             dress.gold
         } else {
             pal.gold
@@ -1039,7 +1039,7 @@ impl Fireworks {
         self.candles.clear();
         self.copal.clear();
         let (w, ph) = (self.w, self.ph);
-        if !self.fiesta.on() || !self.show_city || w == 0 || ph < 12 {
+        if !self.fiesta.is(Kind::Muertos) || !self.show_city || w == 0 || ph < 12 {
             return;
         }
         self.tomb.resize(w * ph, 0);
@@ -1410,7 +1410,7 @@ impl Fireworks {
             self.finale -= 1;
             if self.finale == 0 {
                 self.timer = 70;
-                if self.fiesta.on() && self.rate > 0.0 {
+                if self.fiesta.is(Kind::Muertos) && self.rate > 0.0 {
                     // Once the last of the finale has faded.
                     self.gran = 45;
                 }
@@ -1418,7 +1418,7 @@ impl Fireworks {
         }
         if self.gran > 0 {
             self.gran -= 1;
-            if self.gran == 0 && self.fiesta.on() {
+            if self.gran == 0 && self.fiesta.is(Kind::Muertos) {
                 self.gran_final();
             }
         }
@@ -1781,7 +1781,7 @@ mod tests {
                         fiesta,
                     };
                     // The holiday has more to draw: fewer frames of it do.
-                    let frames = if fiesta.on() { 200 } else { 400 };
+                    let frames = if fiesta.is(Kind::Muertos) { 200 } else { 400 };
                     for (w, h) in [(80, 24), (1, 1), (2, 3), (7, 2), (300, 90)] {
                         f.resize(&ctx, w, h);
                         f.retheme(&ctx);

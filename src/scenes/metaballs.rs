@@ -634,7 +634,7 @@ impl Metaballs {
     /// How many of the balls are candles with a flame: about half of them
     /// on October 28, all of them on November 2.
     fn candles(&self) -> usize {
-        if !self.fiesta.on() {
+        if !self.fiesta.is(Kind::Muertos) {
             return 0;
         }
         let n = self.balls.len();
@@ -644,7 +644,7 @@ impl Metaballs {
     /// Is ball `i` a calavera? One from the first day; two from October 31,
     /// three on November 2 (every third ball, and at most a third of them).
     fn calavera(&self, i: usize) -> bool {
-        if !self.fiesta.on() || !i.is_multiple_of(3) {
+        if !self.fiesta.is(Kind::Muertos) || !i.is_multiple_of(3) {
             return false;
         }
         let level = self.fiesta.level;
@@ -846,16 +846,16 @@ impl Scene for Metaballs {
 
     fn retheme(&mut self, ctx: &Ctx) {
         self.fiesta = ctx.fiesta;
-        self.band = match self.fiesta.on() {
+        self.band = match self.fiesta.is(Kind::Muertos) {
             true => (0.6, 0.3),
             false => (0.5, 0.38),
         };
-        if !self.fiesta.on() {
+        if !self.fiesta.is(Kind::Muertos) {
             self.drips.clear();
         }
         self.cur = Self::slots(ctx, self.set);
         self.nxt = Self::slots(ctx, self.next);
-        if ctx.theme.native && self.fiesta.on() {
+        if ctx.theme.native && self.fiesta.is(Kind::Muertos) {
             (self.bg_top, self.bg_bot) = (NOCHE_TOP, NOCHE_BOT);
         } else if ctx.theme.native {
             (self.bg_top, self.bg_bot) = (BG_TOP, BG_BOT);
@@ -872,7 +872,7 @@ impl Scene for Metaballs {
     fn update(&mut self, _ctx: &Ctx, dt: f32) {
         if dt.is_finite() {
             self.t += dt.clamp(0.0, 5.0) * FPS * self.speed;
-            if self.fiesta.on() {
+            if self.fiesta.is(Kind::Muertos) {
                 self.melt(dt.clamp(0.0, 5.0) * self.speed);
             }
         }
@@ -938,7 +938,7 @@ impl Scene for Metaballs {
         // Gel is lit from the upper left, towards the viewer, with a white
         // highlight; candle wax from above, softer and warmer, with a sheen
         // the color of the flames.
-        let wax = self.fiesta.on();
+        let wax = self.fiesta.is(Kind::Muertos);
         let (lx, ly, lz) = match wax {
             false => (-0.45f32, -0.55f32, 0.70f32),
             true => (-0.25f32, -0.75f32, 0.62f32),

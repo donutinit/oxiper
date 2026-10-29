@@ -8,7 +8,7 @@
 //! art...) are those of Dustin Kirkland's hollywood (Apache License 2.0).
 
 use super::{Env, Rect, Tone, Widget, babble, muertos, put};
-use crate::fiesta::Fiesta;
+use crate::fiesta::{Fiesta, Kind};
 use crate::render::{BOLD, Canvas};
 use fastrand::Rng;
 use std::collections::VecDeque;
@@ -150,7 +150,7 @@ const LOCALS: &[&str] = &[
 /// A sentence: on Día de Muertos the Mictlán's among the ordinary ones.
 /// Returns whether it is Spanish.
 fn say(rng: &mut Rng, level: u8, mx: Fiesta, out: &mut String) -> bool {
-    if mx.on() {
+    if mx.is(Kind::Muertos) {
         muertos::mixed(rng, level, mx.level, out)
     } else {
         babble::sentence(rng, level, out);
@@ -160,7 +160,7 @@ fn say(rng: &mut Rng, level: u8, mx: Fiesta, out: &mut String) -> bool {
 
 /// An UPPER-CASE progress label, the Mictlán's or an ordinary one.
 fn label(rng: &mut Rng, level: u8, mx: Fiesta, out: &mut String) {
-    if mx.on() && rng.f32() < muertos::share(mx.level) {
+    if mx.is(Kind::Muertos) && rng.f32() < muertos::share(mx.level) {
         muertos::progress_label(rng, level, out);
     } else {
         babble::progress_label(rng, level, out);
@@ -169,7 +169,7 @@ fn label(rng: &mut Rng, level: u8, mx: Fiesta, out: &mut String) {
 
 /// A title, the Mictlán's or an ordinary one.
 fn title(rng: &mut Rng, mx: Fiesta, out: &mut String) {
-    if mx.on() {
+    if mx.is(Kind::Muertos) {
         muertos::mixed_title(rng, mx.level, out);
     } else {
         babble::title(rng, out);
@@ -178,7 +178,7 @@ fn title(rng: &mut Rng, mx: Fiesta, out: &mut String) {
 
 /// A daemon name, a holiday one half the time on Día de Muertos.
 fn daemon(rng: &mut Rng, mx: Fiesta) -> &'static str {
-    if mx.on() && rng.f32() < 0.5 * muertos::share(mx.level) {
+    if mx.is(Kind::Muertos) && rng.f32() < 0.5 * muertos::share(mx.level) {
         babble::pick(rng, muertos::DAEMONS)
     } else {
         babble::pick(rng, babble::DAEMONS)
@@ -187,7 +187,7 @@ fn daemon(rng: &mut Rng, mx: Fiesta) -> &'static str {
 
 /// A local variable name.
 fn local(rng: &mut Rng, mx: Fiesta) -> &'static str {
-    if mx.on() && rng.f32() < muertos::share(mx.level) {
+    if mx.is(Kind::Muertos) && rng.f32() < muertos::share(mx.level) {
         babble::pick(rng, LOCALS_MX)
     } else {
         babble::pick(rng, LOCALS)
@@ -196,7 +196,7 @@ fn local(rng: &mut Rng, mx: Fiesta) -> &'static str {
 
 /// Writes a snake_case identifier from the babble tables: "flux_capacitor".
 fn ident(rng: &mut Rng, sep: char, mx: Fiesta, out: &mut String) {
-    if mx.on() && rng.f32() < muertos::share(mx.level) {
+    if mx.is(Kind::Muertos) && rng.f32() < muertos::share(mx.level) {
         muertos::ident(rng, sep, out);
         return;
     }
@@ -362,13 +362,13 @@ impl Feed {
     /// Rows taken by a pinned header.
     fn header(&self) -> Option<&'static str> {
         match self.kind {
-            FeedKind::Sniffer if self.mx.on() => Some(
+            FeedKind::Sniffer if self.mx.is(Kind::Muertos) => Some(
                 "  No.  Time      Source           Destination      Proto  Len Info (mictlan0)",
             ),
             FeedKind::Sniffer => {
                 Some("  No.  Time      Source           Destination      Proto  Len Info")
             }
-            FeedKind::Dna if self.mx.on() => {
+            FeedKind::Dna if self.mx.is(Kind::Muertos) => {
                 Some("BLASTN 2.14.1+  parentesco: ANCESTROS  gap open/extend: 11/1")
             }
             FeedKind::Dna => Some("BLASTN 2.14.1+  matrix: BLOSUM62  gap open/extend: 11/1"),
@@ -483,7 +483,7 @@ impl Feed {
         self.scratch.clear();
         // Narrow panes drop the host and daemon so the message has room.
         if self.w >= 64 {
-            if self.mx.on() && self.rng.bool() {
+            if self.mx.is(Kind::Muertos) && self.rng.bool() {
                 let host = babble::pick(&mut self.rng, muertos::HOSTS);
                 let _ = write!(self.scratch, "{host}-{:02} ", self.rng.u8(1..40));
             } else {
@@ -587,7 +587,7 @@ impl Feed {
                 for _ in 0..stmts {
                     match self.rng.u8(..6) {
                         0 => {
-                            let err = if self.mx.on() && self.rng.bool() {
+                            let err = if self.mx.is(Kind::Muertos) && self.rng.bool() {
                                 babble::pick(&mut self.rng, ERRS_MX)
                             } else {
                                 "Overflow"
@@ -666,7 +666,7 @@ impl Feed {
                 run(l, Tone::Dim, &s);
             };
             let mut err = String::new();
-            if self.mx.on() && self.rng.f32() < muertos::share(self.mx.level) {
+            if self.mx.is(Kind::Muertos) && self.rng.f32() < muertos::share(self.mx.level) {
                 muertos::error(&mut self.rng, &mut err);
             } else {
                 let eidx = self.rng.usize(..babble::ERRORS.len());
@@ -733,12 +733,13 @@ impl Feed {
             );
             self.pending.push_back(l);
         } else {
-            let (name, num, msg) =
-                if self.mx.on() && self.rng.f32() < 0.6 * muertos::share(self.mx.level) {
-                    muertos::ERRNOS[self.rng.usize(..muertos::ERRNOS.len())]
-                } else {
-                    ERRNOS[self.rng.usize(..ERRNOS.len())]
-                };
+            let (name, num, msg) = if self.mx.is(Kind::Muertos)
+                && self.rng.f32() < 0.6 * muertos::share(self.mx.level)
+            {
+                muertos::ERRNOS[self.rng.usize(..muertos::ERRNOS.len())]
+            } else {
+                ERRNOS[self.rng.usize(..ERRNOS.len())]
+            };
             let mut l = Line::new();
             run(&mut l, Tone::Red, &format!("{name:<13}"));
             run(&mut l, Tone::Amber, &format!("{num:>3}  "));
@@ -759,7 +760,7 @@ impl Feed {
         let mut dst = String::new();
         babble::ip(&mut self.rng, &mut src);
         babble::ip(&mut self.rng, &mut dst);
-        let special = if self.mx.on() && self.rng.f32() < 0.12 + 0.3 * self.mx.level {
+        let special = if self.mx.is(Kind::Muertos) && self.rng.f32() < 0.12 + 0.3 * self.mx.level {
             Some(self.mx_packet())
         } else {
             None
@@ -863,7 +864,7 @@ impl Feed {
             2 => {
                 let mut id = String::new();
                 ident(&mut self.rng, '-', self.mx, &mut id);
-                let domain = if self.mx.on() {
+                let domain = if self.mx.is(Kind::Muertos) {
                     "mictlan.mx"
                 } else {
                     "example.net"
@@ -926,7 +927,7 @@ impl Feed {
         if self.n > 40 {
             self.n = 0;
             let mut l = Line::new();
-            let text = if self.mx.on() {
+            let text = if self.mx.is(Kind::Muertos) {
                 format!(
                     "{} directorios, {} archivos, {} almas",
                     self.rng.u16(40..900),
@@ -955,7 +956,7 @@ impl Feed {
         }
         let mut name = String::new();
         // Día de Muertos: an ofrenda of directories and files by their names.
-        let mx = self.mx.on() && self.rng.f32() < muertos::share(self.mx.level);
+        let mx = self.mx.is(Kind::Muertos) && self.rng.f32() < muertos::share(self.mx.level);
         if mx {
             let list = if dir { muertos::DIRS } else { muertos::FILES };
             name.push_str(babble::pick(&mut self.rng, list));
@@ -1047,7 +1048,7 @@ impl Feed {
         };
         let mut l = Line::new();
         let ident_pct = mid.iter().filter(|&&c| c == b'|').count() * 100 / len;
-        let text = if self.mx.on() {
+        let text = if self.mx.is(Kind::Muertos) {
             // Relatives, matched by their sequences: it runs in the family.
             format!(
                 "> {}  Puntaje={} bits  Esperado={}e-{}  Parentesco={ident_pct}%",
@@ -1090,7 +1091,7 @@ impl Feed {
         let width = self.w.clamp(8, 64);
         if self.n == 0 {
             let mut l = Line::new();
-            let text = if self.mx.on() {
+            let text = if self.mx.is(Kind::Muertos) {
                 "-----BEGIN LLAVE PRIVADA DEL MICTLAN-----"
             } else {
                 "-----BEGIN RSA PRIVATE KEY-----"
@@ -1100,7 +1101,7 @@ impl Feed {
             self.n = self.rng.u32(8..22);
         } else if self.n == 1 {
             let mut l = Line::new();
-            let text = if self.mx.on() {
+            let text = if self.mx.is(Kind::Muertos) {
                 "-----END LLAVE PRIVADA DEL MICTLAN-----"
             } else {
                 "-----END RSA PRIVATE KEY-----"
@@ -1144,7 +1145,7 @@ impl Feed {
         let roll = self.rng.u8(..100);
         let mut text = String::new();
         let tone = if roll < 14 {
-            text.push_str(if self.mx.on() {
+            text.push_str(if self.mx.is(Kind::Muertos) {
                 "=== FASE "
             } else {
                 "=== PHASE "
@@ -1167,16 +1168,17 @@ impl Feed {
     fn birth_password(&mut self) {
         const CS: &[u8] = b"abcdefghijkmnopqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789!@#$%^&*-_=+";
         let len = self.rng.usize(10..24);
-        let pw: String = if self.mx.on() && self.rng.f32() < muertos::share(self.mx.level) {
-            // A family's passwords: the name of the dog, a year, an exclamation.
-            let mut pw = String::new();
-            muertos::password(&mut self.rng, &mut pw);
-            pw
-        } else {
-            (0..len)
-                .map(|_| CS[self.rng.usize(..CS.len())] as char)
-                .collect()
-        };
+        let pw: String =
+            if self.mx.is(Kind::Muertos) && self.rng.f32() < muertos::share(self.mx.level) {
+                // A family's passwords: the name of the dog, a year, an exclamation.
+                let mut pw = String::new();
+                muertos::password(&mut self.rng, &mut pw);
+                pw
+            } else {
+                (0..len)
+                    .map(|_| CS[self.rng.usize(..CS.len())] as char)
+                    .collect()
+            };
         let len = pw.chars().count();
         let mut l = Line::new();
         run(&mut l, Tone::Bright, &format!("{pw:<24}"));
@@ -1193,7 +1195,7 @@ impl Feed {
         let mut l = Line::new();
         let mut ip = String::new();
         babble::ip(&mut self.rng, &mut ip);
-        let user = if self.mx.on() && self.rng.f32() < muertos::share(self.mx.level) {
+        let user = if self.mx.is(Kind::Muertos) && self.rng.f32() < muertos::share(self.mx.level) {
             babble::pick(&mut self.rng, muertos::USERS)
         } else {
             babble::pick(&mut self.rng, USERS)
@@ -1204,7 +1206,7 @@ impl Feed {
             .collect();
         run(&mut l, Tone::Main, &format!("pw:{pw} "));
         // The souls are let in more and more as the holiday builds up.
-        let denied = if self.mx.on() {
+        let denied = if self.mx.is(Kind::Muertos) {
             88 - (30.0 * self.mx.level) as u8
         } else {
             88
@@ -1213,13 +1215,21 @@ impl Feed {
             run(
                 &mut l,
                 Tone::Red,
-                if self.mx.on() { "DENEGADO" } else { "DENIED" },
+                if self.mx.is(Kind::Muertos) {
+                    "DENEGADO"
+                } else {
+                    "DENIED"
+                },
             );
         } else {
             run(
                 &mut l,
                 Tone::Green,
-                if self.mx.on() { "ADMITIDO" } else { "GRANTED" },
+                if self.mx.is(Kind::Muertos) {
+                    "ADMITIDO"
+                } else {
+                    "GRANTED"
+                },
             );
         }
         self.pending.push_back(l);
@@ -1255,7 +1265,7 @@ fn camel(s: &str) -> String {
 
 impl Widget for Feed {
     fn name(&self) -> &'static str {
-        if self.mx.on() {
+        if self.mx.is(Kind::Muertos) {
             return match self.kind {
                 FeedKind::Hex => "hexdump -C /dev/ofrenda",
                 FeedKind::Log => "tail -f /var/log/mictlan.log",

@@ -85,6 +85,15 @@ it always has, down to the same random numbers for the same seed. The app
 draws what every scene shares on top: the holiday's overlay
 (`crate::fiesta::Overlay`) and its visitors (eggs with `fiesta` set).
 
+There are eleven holidays (`fiesta::Kind::ALL`, calendar in
+`src/fiesta/mod.rs`), and a scene dresses only for the ones it knows: test
+`ctx.fiesta.is(Kind::Navidad)`, never `ctx.fiesta.on()`, so a holiday the
+scene has no costume for leaves it exactly as on an ordinary day. Some
+holidays have days of their own (`fiesta.date()`, and for the Navidad
+`posadas()`, `inocentes()`, `ano_nuevo()`, `reyes()`). In tests,
+`Fiesta::height(kind)` is a holiday at its height and `Fiesta::of_day(m, d)`
+or `Fiesta::of_date(y, m, d)` one of its days.
+
 ## Rules
 
 - Never panic: any size from 1×1 to 500×150, any `dt` (the stress test passes

@@ -20,6 +20,7 @@ pub const INFO: Info = Info {
     name: "catrina",
     start,
     fiesta: Kind::Muertos,
+    when: super::any_day,
 };
 
 /// Facing right. Rows 0 to 7 are the plumes, 34 on the skirt.

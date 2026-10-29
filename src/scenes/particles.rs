@@ -17,6 +17,7 @@
 use std::f32::consts::TAU;
 
 use crate::color::{Color, rgb};
+use crate::fiesta::Kind;
 use crate::render::{Braille, Canvas};
 use crate::scene::{Ctx, Opt, Scene, SceneInfo, Val};
 
@@ -829,7 +830,7 @@ impl Scene for Particles {
             let k = l as f32 / (FADE - 1) as f32;
             ctx.fade(c, k.powf(1.3) * reach)
         };
-        let fiesta = ctx.fiesta.on();
+        let fiesta = ctx.fiesta.is(Kind::Muertos);
         self.lut.clear();
         match self.mode {
             Mode::Flow | Mode::Fountain => {

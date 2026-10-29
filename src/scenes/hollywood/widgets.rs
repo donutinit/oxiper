@@ -9,7 +9,7 @@ use super::feed::{Feed, FeedKind};
 use super::map::{self, Dots};
 use super::{Env, Rect, Widget, babble, muertos, put, put_ch};
 use crate::color::Color;
-use crate::fiesta::Fiesta;
+use crate::fiesta::{Fiesta, Kind};
 use crate::render::{BOLD, Canvas, DIM};
 use fastrand::Rng;
 use std::collections::VecDeque;
@@ -95,13 +95,13 @@ impl Htop {
     pub fn new(seed: u64, mx: Fiesta) -> Htop {
         let mut rng = Rng::with_seed(seed);
         let mut procs = Vec::new();
-        let users = if mx.on() {
+        let users = if mx.is(Kind::Muertos) {
             ["root", "mictlan", "xolo", "catrina", "abuela", "nobody"]
         } else {
             ["root", "root", "daemon", "www-data", "neo", "nobody"]
         };
         for _ in 0..24 {
-            let mut cmd = String::from(if mx.on() && rng.bool() {
+            let mut cmd = String::from(if mx.is(Kind::Muertos) && rng.bool() {
                 babble::pick(&mut rng, muertos::DAEMONS)
             } else {
                 babble::pick(&mut rng, babble::DAEMONS)
@@ -136,7 +136,11 @@ impl Htop {
 
 impl Widget for Htop {
     fn name(&self) -> &'static str {
-        if self.mx.on() { "htop --almas" } else { "htop" }
+        if self.mx.is(Kind::Muertos) {
+            "htop --almas"
+        } else {
+            "htop"
+        }
     }
 
     fn update(&mut self, dt: f32, _env: &Env) {
@@ -192,7 +196,7 @@ impl Widget for Htop {
             );
             y = y.max(row as i32 + 1);
         }
-        let mx = self.mx.on();
+        let mx = self.mx.is(Kind::Muertos);
         let (mem_label, swap_label) = if mx { ("Ofr", "Vel") } else { ("Mem", "Swp") };
         let mut t = String::new();
         let _ = write!(t, "{:.2}G/15.6G", self.mem * 15.6);
@@ -308,7 +312,7 @@ impl Bandwidth {
 
 impl Widget for Bandwidth {
     fn name(&self) -> &'static str {
-        if self.mx.on() {
+        if self.mx.is(Kind::Muertos) {
             "bmon -p mictlan0"
         } else {
             "bmon -p eth0"
@@ -329,7 +333,7 @@ impl Widget for Bandwidth {
                 0.1 + self.rng.f32() * 0.5
             };
             self.tx_t = 0.05 + self.rng.f32() * 0.3;
-            if self.mx.on() {
+            if self.mx.is(Kind::Muertos) {
                 // More souls come home the higher the holiday.
                 self.rx_t *= 0.55 + 0.45 * self.mx.level;
             }
@@ -358,7 +362,7 @@ impl Widget for Bandwidth {
         let pal = &env.pal;
         let (last_rx, last_tx) = self.hist.back().copied().unwrap_or((0.0, 0.0));
         let mut t = String::new();
-        if self.mx.on() {
+        if self.mx.is(Kind::Muertos) {
             let _ = write!(
                 t,
                 "mictlan0  \u{2193} llegan {:7.1} almas/s  \u{2191} vuelven {:6.1} almas/s",
@@ -398,7 +402,7 @@ impl Widget for Bandwidth {
         };
         self.dots.blit(c, body);
         t.clear();
-        if self.mx.on() {
+        if self.mx.is(Kind::Muertos) {
             let _ = write!(
                 t,
                 "pico {:.0} almas/s   prom {:.0} almas/s",
@@ -484,7 +488,7 @@ impl Rain {
         // Día de Muertos: some drops spell a word, more of them the higher
         // the holiday (drawn after the ordinary numbers).
         let mut word = "";
-        if mx.on() && rng.f32() < 0.1 + 0.2 * mx.level {
+        if mx.is(Kind::Muertos) && rng.f32() < 0.1 + 0.2 * mx.level {
             word = RAIN_WORDS[rng.usize(..RAIN_WORDS.len())];
             len = len.max(word.len() as i32 + 3);
         }
@@ -503,7 +507,7 @@ impl Rain {
 
 impl Widget for Rain {
     fn name(&self) -> &'static str {
-        if self.mx.on() {
+        if self.mx.is(Kind::Muertos) {
             "cmatrix -ab --petalos"
         } else {
             "cmatrix -ab"
@@ -553,7 +557,7 @@ impl Widget for Rain {
                 } else {
                     (pal.ramp.at(1.0 - k as f32 / d.len as f32 * 0.85), 0)
                 };
-                if self.mx.on() {
+                if self.mx.is(Kind::Muertos) {
                     // Petals fall among the kana, flowers head the drops and
                     // the words read from top to bottom.
                     let wl = d.word.len() as i32;
@@ -614,7 +618,7 @@ impl WorldMap {
 
 impl Widget for WorldMap {
     fn name(&self) -> &'static str {
-        if self.mx.on() {
+        if self.mx.is(Kind::Muertos) {
             "tracemap --regreso"
         } else {
             "tracemap --live"
@@ -631,7 +635,7 @@ impl Widget for WorldMap {
         self.spawn -= dt;
         if self.spawn <= 0.0 && self.arcs.len() < 5 {
             self.spawn = 0.8 + self.rng.f32() * 2.0;
-            let (from, to) = if self.mx.on() {
+            let (from, to) = if self.mx.is(Kind::Muertos) {
                 // Souls of the whole world on their way back to Mexico.
                 (
                     map::ORIGINS[self.rng.usize(..map::ORIGINS.len())],
@@ -679,7 +683,7 @@ impl Widget for WorldMap {
         let (pw, ph) = (self.fx.pw(), self.fx.ph());
         self.fx.clear();
         let mut status = String::new();
-        let mx = self.mx.on();
+        let mx = self.mx.is(Kind::Muertos);
         for a in &self.arcs {
             let (_, la, lo) = a.from;
             let (_, lb, lob) = a.to;
@@ -763,7 +767,7 @@ impl Radar {
     pub fn new(seed: u64, mx: Fiesta) -> Radar {
         let mut rng = Rng::with_seed(seed);
         // The holiday tracks more souls the higher it is.
-        let n = if mx.on() {
+        let n = if mx.is(Kind::Muertos) {
             5 + (6.0 * mx.level).round() as usize
         } else {
             9
@@ -774,7 +778,7 @@ impl Radar {
                 dist: 0.15 + rng.f32() * 0.8,
                 glow: 0.0,
                 id: rng.u16(100..999),
-                soul: if mx.on() {
+                soul: if mx.is(Kind::Muertos) {
                     muertos::soul(&mut rng, mx.level)
                 } else {
                     ""
@@ -799,7 +803,7 @@ impl Radar {
 
 impl Widget for Radar {
     fn name(&self) -> &'static str {
-        if self.mx.on() {
+        if self.mx.is(Kind::Muertos) {
             "radar-almas --sweep"
         } else {
             "radar --sweep"
@@ -814,7 +818,7 @@ impl Widget for Radar {
     fn update(&mut self, dt: f32, _env: &Env) {
         let prev = self.sweep;
         self.sweep = (self.sweep + dt * 1.6) % TAU;
-        let mx = self.mx.on();
+        let mx = self.mx.is(Kind::Muertos);
         for b in self.blips.iter_mut() {
             b.glow = (b.glow - dt * 0.35).max(0.0);
             let crossed = if self.sweep >= prev {
@@ -848,7 +852,7 @@ impl Widget for Radar {
 
     fn draw(&mut self, c: &mut Canvas, r: Rect, env: &Env) {
         let pal = &env.pal;
-        let mx = self.mx.on();
+        let mx = self.mx.is(Kind::Muertos);
         let (pw, ph) = (self.dots.pw(), self.dots.ph());
         let (cx, cy) = (pw as f32 / 2.0, ph as f32 / 2.0);
         let rad = (cx.min(cy) - 1.0).max(2.0);
@@ -989,7 +993,7 @@ impl Progress {
 
 impl Widget for Progress {
     fn name(&self) -> &'static str {
-        if self.mx.on() {
+        if self.mx.is(Kind::Muertos) {
             "pv --ofrenda"
         } else {
             "pv --force"
@@ -1007,7 +1011,7 @@ impl Widget for Progress {
     fn update(&mut self, dt: f32, env: &Env) {
         for b in self.bars.iter_mut() {
             if b.label.is_empty() {
-                if self.mx.on() && self.rng.f32() < muertos::share(self.mx.level) {
+                if self.mx.is(Kind::Muertos) && self.rng.f32() < muertos::share(self.mx.level) {
                     muertos::progress_label(&mut self.rng, env.level.max(1), &mut b.label);
                 } else {
                     babble::progress_label(&mut self.rng, env.level.max(1), &mut b.label);
@@ -1043,7 +1047,11 @@ impl Widget for Progress {
                     r,
                     0,
                     y,
-                    if self.mx.on() { "COMPLETO" } else { "COMPLETE" },
+                    if self.mx.is(Kind::Muertos) {
+                        "COMPLETO"
+                    } else {
+                        "COMPLETE"
+                    },
                     pal.green,
                     BOLD,
                 );
@@ -1055,7 +1063,7 @@ impl Widget for Progress {
             let filled = (b.pct / 100.0 * bw as f32) as i32;
             put(c, r, 0, y + 1, "[", pal.dim, 0);
             for x in 0..bw {
-                let (ch, col) = if self.mx.on() && !done && x + 1 == filled {
+                let (ch, col) = if self.mx.is(Kind::Muertos) && !done && x + 1 == filled {
                     // A marigold at the head of the bar.
                     ('\u{273f}', pal.flor)
                 } else if x < filled {
@@ -1147,7 +1155,12 @@ pub struct Satellites {
 impl Satellites {
     pub fn new(seed: u64, mx: Fiesta) -> Satellites {
         let mut rng = Rng::with_seed(seed);
-        let mut names: Vec<&str> = if mx.on() { SAT_NAMES_MX } else { SAT_NAMES }.to_vec();
+        let mut names: Vec<&str> = if mx.is(Kind::Muertos) {
+            SAT_NAMES_MX
+        } else {
+            SAT_NAMES
+        }
+        .to_vec();
         rng.shuffle(&mut names);
         let sats = names
             .iter()
@@ -1179,7 +1192,7 @@ impl Satellites {
 
 impl Widget for Satellites {
     fn name(&self) -> &'static str {
-        if self.mx.on() {
+        if self.mx.is(Kind::Muertos) {
             "rastreador-satelital"
         } else {
             "satellite-tracker"
@@ -1253,7 +1266,7 @@ impl Widget for Satellites {
             r,
             0,
             0,
-            if self.mx.on() {
+            if self.mx.is(Kind::Muertos) {
                 "RASTREO ORBITAL  ENLACE AL MICTL\u{00c1}N"
             } else {
                 "ORBITAL TRACKING  UPLINK LOCKED"
@@ -1341,7 +1354,7 @@ impl Ticker {
 
 impl Widget for Ticker {
     fn name(&self) -> &'static str {
-        if self.mx.on() {
+        if self.mx.is(Kind::Muertos) {
             "bolsa --mictlan"
         } else {
             "ticker --crypto"
@@ -1349,7 +1362,7 @@ impl Widget for Ticker {
     }
 
     fn resize(&mut self, _w: u16, h: u16) {
-        if self.mx.on() {
+        if self.mx.is(Kind::Muertos) {
             let n = (h as usize).saturating_sub(2).clamp(1, SYMBOLS_MX.len());
             let mut syms: Vec<(&'static str, bool)> = SYMBOLS_MX.to_vec();
             self.rng.shuffle(&mut syms);
@@ -1395,7 +1408,7 @@ impl Widget for Ticker {
         }
         self.timer = 0.4 + self.rng.f32() * 0.4;
         // Marigolds, candles and bread climb with the holiday.
-        let lift = if self.mx.on() {
+        let lift = if self.mx.is(Kind::Muertos) {
             0.012 * self.mx.level
         } else {
             0.0
@@ -1416,7 +1429,7 @@ impl Widget for Ticker {
             r,
             0,
             0,
-            if self.mx.on() {
+            if self.mx.is(Kind::Muertos) {
                 "CLAVE       \u{00da}LTIMO   CAMB%  TENDENCIA"
             } else {
                 "SYMBOL      LAST     CHG%  TREND"
@@ -1525,7 +1538,7 @@ impl Access {
 
 impl Widget for Access {
     fn name(&self) -> &'static str {
-        if self.mx.on() {
+        if self.mx.is(Kind::Muertos) {
             "authd --mictlan"
         } else {
             "authd"
@@ -1550,7 +1563,7 @@ impl Widget for Access {
                 self.wait -= dt;
                 if self.wait <= 0.0 {
                     // The souls are let in more often the higher the holiday.
-                    let granted = if self.mx.on() {
+                    let granted = if self.mx.is(Kind::Muertos) {
                         self.rng.f32() < 0.25 + 0.4 * self.mx.level
                     } else {
                         self.rng.u8(..10) < 4
@@ -1568,7 +1581,7 @@ impl Widget for Access {
         };
         let pal = &env.pal;
         let col = if granted { pal.green } else { pal.red };
-        let mx = self.mx.on();
+        let mx = self.mx.is(Kind::Muertos);
         let (w1, w2) = match (mx, granted) {
             (true, true) => ("ACCESO", "CONCEDIDO"),
             (true, false) => ("ACCESO", "DENEGADO"),
@@ -1734,7 +1747,7 @@ impl Keygen {
 
 impl Widget for Keygen {
     fn name(&self) -> &'static str {
-        if self.mx.on() {
+        if self.mx.is(Kind::Muertos) {
             "ssh-keygen -lv --altar"
         } else {
             "ssh-keygen -lv"
@@ -1772,7 +1785,7 @@ impl Widget for Keygen {
             self.feed.draw(c, r, env);
             return;
         }
-        let mx = self.mx.on();
+        let mx = self.mx.is(Kind::Muertos);
         let title = if mx { "[ALMA 4096]" } else { "[RSA 4096]" };
         let mut top = String::from("+");
         top.push_str(&"-".repeat(3));

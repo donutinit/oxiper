@@ -15,7 +15,7 @@
 //! the pieces are drawn: the pipes grow exactly as on any other day.
 
 use crate::color::{Color, rgb};
-use crate::fiesta::Fiesta;
+use crate::fiesta::{Fiesta, Kind};
 use crate::render::{BOLD, Canvas, DIM};
 use crate::scene::{Ctx, Opt, Scene, SceneInfo, Val};
 
@@ -515,7 +515,7 @@ impl Scene for Pipes {
                 .extend((0..n).map(|i| ctx.pick(i, Color::Reset)));
         }
         self.fiesta = ctx.fiesta;
-        if self.fiesta.on() {
+        if self.fiesta.is(Kind::Muertos) {
             if self.colored && ctx.theme.native {
                 self.palette.clear();
                 self.palette.extend(PICADO);
@@ -552,7 +552,7 @@ impl Scene for Pipes {
 
     fn draw(&mut self, _ctx: &Ctx, c: &mut Canvas) {
         let w = self.w;
-        let fiesta = self.fiesta.on();
+        let fiesta = self.fiesta.is(Kind::Muertos);
         let n = if fiesta {
             self.lines.max(1)
         } else {
@@ -607,10 +607,12 @@ mod tests {
         Fiesta {
             kind: crate::fiesta::Kind::Muertos,
             level: 1.0,
+            ..Fiesta::NONE
         },
         Fiesta {
             kind: crate::fiesta::Kind::Muertos,
             level: 0.25,
+            ..Fiesta::NONE
         },
     ];
 
@@ -679,7 +681,7 @@ mod tests {
                 s.retheme(&ctx);
                 run(s.as_mut(), &ctx, 3);
                 let (flags, flowers) = dressed(s.as_mut(), &ctx);
-                if ctx.fiesta.on() {
+                if ctx.fiesta.is(Kind::Muertos) {
                     assert!(flags > 20 && flowers > 5, "{theme} {month}-{day}");
                 } else {
                     assert_eq!((flags, flowers), (0, 0), "{theme}");

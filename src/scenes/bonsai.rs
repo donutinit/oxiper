@@ -20,7 +20,7 @@
 //! and only take the colors.
 
 use crate::color::{self, Color, rgb};
-use crate::fiesta::Fiesta;
+use crate::fiesta::{self, Fiesta};
 use crate::render::{BOLD, Canvas};
 use crate::scene::{Ctx, Opt, Scene, SceneInfo, Val};
 
@@ -1566,7 +1566,7 @@ impl Scene for Bonsai {
         } else {
             Dress::themed(ctx, self.pairs[TEXT as usize])
         };
-        if !self.fiesta.on() {
+        if !self.fiesta.is(fiesta::Kind::Muertos) {
             self.petals.clear();
         }
     }
@@ -1576,7 +1576,7 @@ impl Scene for Bonsai {
     }
 
     fn tick(&mut self, _ctx: &Ctx, dt: f32, real: f32) {
-        if self.fiesta.on() {
+        if self.fiesta.is(fiesta::Kind::Muertos) {
             self.tick_fiesta(dt, real);
         }
         let mut t = (dt.max(0.0) as f64).min(86_400.0);
@@ -1619,7 +1619,7 @@ impl Scene for Bonsai {
     }
 
     fn next_change(&self) -> f32 {
-        if self.fiesta.on() {
+        if self.fiesta.is(fiesta::Kind::Muertos) {
             // candles flicker and petals fall
             return 0.0;
         }
@@ -1632,7 +1632,7 @@ impl Scene for Bonsai {
     }
 
     fn draw(&mut self, ctx: &Ctx, c: &mut Canvas) {
-        let dressed = self.fiesta.on();
+        let dressed = self.fiesta.is(fiesta::Kind::Muertos);
         if dressed {
             self.draw_talavera(c);
         } else {

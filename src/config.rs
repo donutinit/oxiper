@@ -131,7 +131,7 @@ pub const GLOBAL: &[Opt] = &[
     Opt {
         key: "fiestas",
         default: Val::S("auto"),
-        help: "Mexican holidays the scenes dress up for: auto (by the local date), none, or one to force: muertos, or muertos@MM-DD for one of its days",
+        help: "Mexican holidays the scenes dress up for: auto (by the local date), none, or one to force: navidad, candelaria, carnaval, equinoccio, judas, nino, santa-cruz, guelaguetza, patrias, muertos, revolucion; add @MM-DD for one of its days",
     },
 ];
 
