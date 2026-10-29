@@ -35,7 +35,8 @@ pub enum Mood {
     Look,
     /// In the saucer's beam, or inside it.
     Carried,
-    /// Día de Muertos: standing before an ofrenda, head bowed.
+    /// On a holiday: standing before an ofrenda or a nacimiento in the
+    /// ruins, head bowed.
     Visit,
 }
 
@@ -295,8 +296,8 @@ impl Jungle {
             self.tiger.set(Mood::Drink);
             return;
         }
-        // On Día de Muertos, now and then it calls on an ofrenda by the path.
-        if self.pal.fest.is_some()
+        // On a holiday with ruins by the path, now and then it calls on them.
+        if let Some(site) = self.pal.site()
             && self.tiger.visit <= 0.0
             && let Some(r) = self
                 .ruins(x - vw * 1.2, x + vw * 1.2)
@@ -309,7 +310,7 @@ impl Jungle {
             // On the side it is on, its jaws at the doorway.
             let side = if r.x > x { -1.0 } else { 1.0 };
             self.tiger.shrine = r.x;
-            self.tiger.tx = r.x + side * (12.0 + JAWS);
+            self.tiger.tx = r.x + side * (site.stand + JAWS);
             self.tiger.visit = rng.rangef(60.0, 140.0) * self.set.rest_scale;
             self.tiger.set(Mood::Visit);
             return;

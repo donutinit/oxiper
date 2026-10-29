@@ -89,6 +89,11 @@ impl Ufo {
     pub fn glow(&self) -> f32 {
         self.glow
     }
+
+    /// Which way it is going, in world pixels per step.
+    pub fn drift(&self) -> (f32, f32) {
+        (self.vx, self.vy)
+    }
 }
 
 impl Jungle {
@@ -273,11 +278,19 @@ impl Jungle {
             return;
         }
         let (x, y, beam) = (self.ufo.x, self.ufo.y, self.ufo.beam);
-        // On Día de Muertos the beam is the amber of cempasúchil.
-        let beam_color = self
-            .pal
-            .fest
-            .map_or(Rgb(190, 255, 210), |d| d.marigold[2].lerp(d.hueso, 0.3));
+        // On Día de Muertos the beam is the amber of cempasúchil, and at
+        // Navidad the star's gold.
+        let beam_color = if let Some(d) = self.pal.fest {
+            d.marigold[2].lerp(d.hueso, 0.3)
+        } else if let Some(d) = self.pal.navidad {
+            d.dorado.lerp(d.blanco, 0.45)
+        } else {
+            Rgb(190, 255, 210)
+        };
+        if let Some(d) = self.pal.navidad {
+            // The comet's tail streams behind it, over the jungle.
+            self.draw_estrella_tail(&d);
+        }
         if beam > 0.0 {
             let top = (y + H) as i32;
             let tick = self.tick;
@@ -295,9 +308,14 @@ impl Jungle {
                 }
             }
             self.beam_petals(x, top, beam);
+            self.beam_glints(x, top, beam);
         }
         let mut lut = [None; 128];
         let frame = ((self.tick / 8) % 2) as usize;
+        if let Some(d) = self.pal.navidad {
+            self.draw_estrella(&d);
+            return;
+        }
         match self.pal.fest {
             Some(d) => {
                 #[cfg(test)]
@@ -321,6 +339,10 @@ impl Jungle {
     /// The rim lights' glow, straight onto the screen.
     pub fn draw_ufo_lights(&mut self, v: View) {
         if matches!(self.ufo.phase, Phase::Gone | Phase::Away) {
+            return;
+        }
+        if let Some(d) = self.pal.navidad {
+            self.estrella_lights(v, &d);
             return;
         }
         // The rim lights are a row lower on the skull's saucer, and marigold.

@@ -162,7 +162,7 @@ enum Fleck {
     Dust,
     Spray,
     Leaf,
-    /// A marigold petal, on Día de Muertos.
+    /// A petal: marigold on Día de Muertos, nochebuena at Navidad.
     Petal,
 }
 
@@ -1125,9 +1125,12 @@ impl Jungle {
             self.lit(Rgb(196, 160, 60)),
             self.lit(Rgb(170, 96, 44)),
         ];
-        // On Día de Muertos what falls from the trees is marigold.
+        // On Día de Muertos what falls from the trees is marigold, and at
+        // Navidad the red and green and gold of the nochebuena.
         if let Some(d) = self.pal.fest {
             leaves = [d.marigold[1], d.marigold[2], d.marigold[0]].map(|c| self.lit(c));
+        } else if let Some(d) = self.pal.navidad {
+            leaves = [d.rojo, d.verde, d.dorado].map(|c| self.lit(c));
         }
         for i in 0..self.life.specks.len() {
             let s = self.life.specks[i];

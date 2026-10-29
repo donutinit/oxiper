@@ -173,7 +173,7 @@ pub struct Jungle {
     weights: Vec<u32>,
     /// What the last frame painted of the holiday, for the tests.
     #[cfg(test)]
-    pub painted: super::muertos::Painted,
+    pub painted: super::fiestas::Painted,
 }
 
 impl Jungle {
@@ -268,12 +268,7 @@ impl Jungle {
         let eerie = self.ufo.glow();
         if eerie > 0.0 {
             let l = &mut self.light;
-            // Amber and plum over the marigolds, instead of the saucer's green.
-            let (tint, top) = if self.pal.fest.is_some() {
-                (Rgb(255, 206, 140), Rgb(44, 20, 40))
-            } else {
-                (Rgb(170, 255, 200), Rgb(20, 40, 36))
-            };
+            let (tint, top) = self.pal.eerie();
             l.tint = l.tint.lerp(tint, 0.35 * eerie);
             l.top = l.top.lerp(top, 0.4 * eerie);
         }
@@ -453,14 +448,9 @@ impl Jungle {
     fn follow(&mut self) {
         let zoom = ZOOMS[self.set.zoom.min(ZOOMS.len() - 1)];
         let want_h = if self.ufo.wide() {
-            // On Día de Muertos it pulls back further, so that the skull's
-            // saucer hangs clear of the papel picado across the top.
-            let wide = if self.pal.fest.is_some() {
-                96.0
-            } else {
-                UFO_VIEW
-            };
-            zoom.max(wide).min(WORLD_H as f32)
+            // On a holiday it pulls back further, if its saucer is bigger or
+            // the saucer must hang clear of what is strung across the top.
+            zoom.max(self.pal.room(UFO_VIEW).wide).min(WORLD_H as f32)
         } else {
             zoom
         };
@@ -501,13 +491,9 @@ impl Jungle {
             want_y = want_y.min(top - CAM_MARGIN);
         }
         if let Some(top) = self.ufo.top() {
-            // The skull's saucer stands taller, and keeps clear of the flags.
-            let (tall, clear) = if self.pal.fest.is_some() {
-                (super::muertos::SAUCER_EXTRA, 14.0)
-            } else {
-                (0.0, 0.0)
-            };
-            want_y = want_y.min(top - 2.0 - tall - clear);
+            // A holiday's saucer may stand taller, and keep clear of the flags.
+            let room = self.pal.room(UFO_VIEW);
+            want_y = want_y.min(top - 2.0 - room.tall - room.clear);
         }
         let want_y = want_y.max(0.0).min(room.max(0.0));
         self.cam_y += (want_y - self.cam_y) * 0.1;
@@ -753,12 +739,16 @@ impl Jungle {
         }
         self.paint_sky(v);
         self.paint_layers(v);
+        self.paint_reyes(v);
         self.paint_papel_far(v);
+        self.paint_luces_far(v);
         self.paint_ground();
         self.paint_beds(false);
         self.paint_ruins();
+        self.paint_belenes();
         self.paint_trees();
         self.paint_papel();
+        self.paint_luces();
         self.paint_mist(v);
         self.draw_life_back();
         self.draw_tiger();
@@ -770,6 +760,27 @@ impl Jungle {
         self.draw_ufo();
         self.project(v);
         self.draw_lights(v);
+    }
+
+    /// Where the hills begin at the painted column `x`, a world pixel: the
+    /// ground's far edge where nothing is painted.
+    pub fn ridge(&self, x: i32) -> i32 {
+        let i = x - self.bx;
+        if i < 0 || i >= self.bw {
+            return BACK;
+        }
+        self.cols[i as usize].hill.min(BACK)
+    }
+
+    /// Is the world pixel `(x, y)` of the hills hidden behind the far forest,
+    /// the middle layer's canopy or one of its trunks?
+    pub fn behind_forest(&self, x: i32, y: i32) -> bool {
+        let i = x - self.bx;
+        if i < 0 || i >= self.bw {
+            return false;
+        }
+        let c = self.cols[i as usize];
+        y >= c.far || y < c.canopy || (c.trunk > 0 && y < BACK + 1)
     }
 
     /// The sky's color at world row `y`.
@@ -1352,14 +1363,14 @@ impl Jungle {
                         let c = if r == len - 1 { tip } else { color };
                         self.put(x + dx, base - r, c);
                     }
-                    // On Día de Muertos some of the blades flower.
-                    if let Some(d) = self.pal.fest
-                        && (h >> 16) % 100 < (14.0 + 22.0 * d.level) as u32
+                    // On a holiday of flowers some of the blades flower.
+                    if let Some(level) = self.pal.bloom_level()
+                        && (h >> 16) % 100 < (14.0 + 22.0 * level) as u32
                     {
                         let top = len.max(1);
                         let f = (top - 1) as f32 / top as f32;
                         let dx = (sway * f * f).round() as i32;
-                        self.blossom(x + dx, base - top - 1, h >> 9);
+                        self.bloom(x + dx, base - top - 1, h >> 9, false);
                     }
                 }
             }
@@ -1591,7 +1602,8 @@ impl Jungle {
                 self.blend_out(x, y, flake, 0.75);
             }
         } else if night > 0.05 && !self.ufo.hushed() {
-            // The fireflies of the holiday are warm, like the candles.
+            // The fireflies of Día de Muertos are warm, like the candles, and
+            // at Navidad they are foquitos of every color.
             let glow = if self.pal.fest.is_some() {
                 Rgb(255, 200, 90)
             } else {
@@ -1599,6 +1611,10 @@ impl Jungle {
             };
             for i in 0..self.motes.len() {
                 let m = self.motes[i];
+                let glow = match self.pal.navidad {
+                    Some(d) => d.bulbs[(m.phase * 10.0) as usize % 6],
+                    None => glow,
+                };
                 let b = night * (tick * 0.05 + m.phase).sin().max(0.0).powi(3);
                 let (x, y) = v.to_screen(m.x, m.y);
                 self.blend_out(x, y, glow, b);
@@ -1609,6 +1625,7 @@ impl Jungle {
         }
         self.draw_ufo_lights(v);
         self.glow_lights(v);
+        self.glow_belenes(v);
     }
 
     /// Notes as letters over the picture: z's, alarms.

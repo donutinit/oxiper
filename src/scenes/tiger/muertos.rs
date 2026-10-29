@@ -11,6 +11,7 @@
 //! can follow the tiger forever.
 
 use super::art::Sprite;
+use super::fiestas::by_hue;
 use super::jungle::{FEET, Jungle, MID_CELL, MID_P, TREE_CELL, View};
 use super::{Kind, Rgb, hash, rgb_of, unit};
 use crate::scene::Ctx;
@@ -48,43 +49,6 @@ pub struct Dress {
     pub deep: Rgb,
     /// The papel picado flags.
     pub flags: [Rgb; 6],
-}
-
-/// The distance between two hues, in degrees.
-fn hue_gap(a: f32, b: f32) -> f32 {
-    let d = (a - b).abs() % 360.0;
-    d.min(360.0 - d)
-}
-
-/// Hue (degrees), saturation and value of a color.
-fn hsv(c: Rgb) -> (f32, f32, f32) {
-    let (r, g, b) = (c.0 as f32 / 255.0, c.1 as f32 / 255.0, c.2 as f32 / 255.0);
-    let max = r.max(g).max(b);
-    let d = max - r.min(g).min(b);
-    let h = if d <= 0.0 {
-        0.0
-    } else if max == r {
-        60.0 * ((g - b) / d).rem_euclid(6.0)
-    } else if max == g {
-        60.0 * ((b - r) / d + 2.0)
-    } else {
-        60.0 * ((r - g) / d + 4.0)
-    };
-    (h, if max <= 0.0 { 0.0 } else { d / max }, max)
-}
-
-/// The theme's colorful accent whose hue is closest to `hue`, within `tol`
-/// degrees, and not one of `avoid`.
-fn by_hue(cols: &[Rgb], hue: f32, tol: f32, avoid: &[Rgb]) -> Option<Rgb> {
-    cols.iter()
-        .copied()
-        .filter_map(|c| {
-            let (h, s, v) = hsv(c);
-            let gap = hue_gap(h, hue);
-            (s >= 0.25 && v >= 0.3 && gap <= tol && !avoid.contains(&c)).then_some((gap, c))
-        })
-        .min_by(|a, b| a.0.total_cmp(&b.0))
-        .map(|(_, c)| c)
 }
 
 impl Dress {
@@ -224,10 +188,10 @@ impl Dress {
 }
 
 /// A candle's flame: core and edge. They keep their own hue in every theme.
-const FLAMA: (Rgb, Rgb) = (Rgb(255, 214, 120), Rgb(255, 150, 40));
+pub const FLAMA: (Rgb, Rgb) = (Rgb(255, 214, 120), Rgb(255, 150, 40));
 
 /// The stone of the ruins, by letter.
-const STONE: [(u8, Rgb); 8] = [
+pub const STONE: [(u8, Rgb); 8] = [
     (b'H', Rgb(172, 164, 142)),
     (b'G', Rgb(136, 128, 110)),
     (b'g', Rgb(96, 90, 78)),
@@ -514,15 +478,15 @@ const SWING: [f32; 9] = [0.0, 0.03, 0.1, 0.2, 0.33, 0.5, 0.68, 0.85, 1.0];
 const RUIN_CELL: i64 = 260;
 const BED_CELL: i64 = 64;
 /// A ruin's drawing: half its width, its height, and the row its stone stands on.
-const RUIN_HALF: f32 = 28.0;
-const RUIN_H: i32 = 36;
-const RUIN_FOOT: i32 = FEET - 2;
+pub const RUIN_HALF: f32 = 28.0;
+pub const RUIN_H: i32 = 36;
+pub const RUIN_FOOT: i32 = FEET - 2;
 /// How far from a ruin's middle its pillars stand, and how high they reach
 /// (the tall one and the broken one) above its foot.
-const PILLAR: f32 = 24.0;
-const PILLAR_TOP: (i32, i32) = (34, 19);
+pub const PILLAR: f32 = 24.0;
+pub const PILLAR_TOP: (i32, i32) = (34, 19);
 /// Where the doorway's ofrenda sits on the ruin's drawing.
-const OFRENDA_AT: (i32, i32) = (14, 8);
+pub const OFRENDA_AT: (i32, i32) = (14, 8);
 
 /// A ruin by the path, in local x.
 #[derive(Clone, Copy, Debug, Default)]
@@ -555,34 +519,50 @@ impl Ruins {
 
 /// A place a string of papel picado is tied to: a tree, or a ruin's pillar.
 #[derive(Clone, Copy, Default)]
-struct Anchor {
-    x: f32,
-    y: f32,
-    id: i32,
+pub struct Anchor {
+    pub x: f32,
+    pub y: f32,
+    pub id: i32,
     /// Which ruin, if it is a pillar; trees are 0.
-    ruin: i32,
+    pub ruin: i32,
+}
+
+/// How a string sags between two anchors; `row` 1 is a lower, slacker one.
+#[derive(Clone, Copy)]
+pub struct Sag {
+    from: f32,
+    len: f32,
+    ya: f32,
+    yb: f32,
+    sag: f32,
+}
+
+impl Sag {
+    pub fn new(p: Anchor, q: Anchor, row: i32) -> Sag {
+        let len = q.x - p.x;
+        let (drop, slack) = if row == 0 { (0.0, 1.0) } else { (9.0, 0.6) };
+        Sag {
+            from: p.x,
+            len,
+            ya: p.y + drop,
+            yb: q.y + drop,
+            sag: (len * 0.05).clamp(3.0, 12.0) * slack,
+        }
+    }
+
+    /// Its row at `x`.
+    pub fn at(&self, x: f32) -> f32 {
+        let t = ((x - self.from) / self.len).clamp(0.0, 1.0);
+        self.ya + (self.yb - self.ya) * t + self.sag * 4.0 * t * (1.0 - t)
+    }
 }
 
 /// The row the strings are tied to on a pole: the trees' height, about.
-const POLE_TOP: f32 = 54.0;
+pub const POLE_TOP: f32 = 54.0;
 
 /// Anchors held at once, and how far apart two may be for a string.
-const ANCHORS: usize = 32;
-const STRING_MAX: f32 = 360.0;
-
-/// What a frame painted, for the tests.
-#[cfg(test)]
-#[derive(Default, Debug)]
-pub struct Painted {
-    pub flags: u32,
-    pub blossoms: u32,
-    pub ruins: u32,
-    pub candles: u32,
-    pub petals: u32,
-    /// The tiger was painted as an alebrije, and the saucer as a skull.
-    pub alebrije: bool,
-    pub saucer: bool,
-}
+pub const ANCHORS: usize = 32;
+pub const STRING_MAX: f32 = 360.0;
 
 impl Jungle {
     // ----- ruins and their ofrendas -----
@@ -590,23 +570,27 @@ impl Jungle {
     /// The ruin of a cell of the jungle, if it has one, on dry land and clear
     /// of the big trees.
     fn ruin_in(&self, cell: i64) -> Option<Ruin> {
-        let d = self.pal.fest?;
+        let site = self.pal.site()?;
         let (s, c) = (self.seed, cell as i32);
-        if unit(c, 111, s) > 0.46 + 0.36 * d.level {
+        if unit(c, 111, s) > site.chance.0 + site.chance.1 * site.level {
             return None;
         }
-        let u = (cell * RUIN_CELL) as f64 + 46.0 + unit(c, 112, s) as f64 * (RUIN_CELL - 92) as f64;
+        // Clear of the water by two pixels, and of the trees by nine.
+        let (pad, half) = (site.half + 18.0, site.half);
+        let u = (cell * RUIN_CELL) as f64
+            + pad as f64
+            + unit(c, 112, s) as f64 * (RUIN_CELL as f32 - 2.0 * pad) as f64;
         let x = (u - self.base as f64) as f32;
-        if [x - 30.0, x, x + 30.0]
+        if [x - (half + 2.0), x, x + (half + 2.0)]
             .iter()
             .any(|&p| self.water(p).is_some())
         {
             return None;
         }
         let tree = |x: f64| ((u + x) / TREE_CELL as f64).floor() as i64;
-        for tc in tree(-70.0)..=tree(70.0) {
+        for tc in tree(-(half as f64 + 42.0))..=tree(half as f64 + 42.0) {
             if let Some(t) = self.trunk_in(tc)
-                && (t.x - x).abs() < RUIN_HALF + t.w as f32 / 2.0 + 9.0
+                && (t.x - x).abs() < half + t.w as f32 / 2.0 + 9.0
             {
                 return None;
             }
@@ -622,13 +606,14 @@ impl Jungle {
     /// cells' worth beyond.
     pub fn ruins(&self, x0: f32, x1: f32) -> Ruins {
         let mut out = Ruins::default();
-        if self.pal.fest.is_none() {
+        let Some(site) = self.pal.site() else {
             return out;
-        }
+        };
         let cell = |x: f32, pad: f64| {
             ((self.base as f64 + x as f64 + pad) / RUIN_CELL as f64).floor() as i64
         };
-        for c in cell(x0, -70.0)..=cell(x1, 70.0) {
+        let pad = site.half as f64 + 42.0;
+        for c in cell(x0, -pad)..=cell(x1, pad) {
             if let Some(r) = self.ruin_in(c) {
                 out.push(r);
             }
@@ -638,7 +623,7 @@ impl Jungle {
 
     /// A palette lit for the hour, then brought back toward its own colors
     /// by `k`: what stands in candlelight.
-    fn lut_glow(&self, pal: &[(u8, Rgb)], k: f32) -> [Option<Rgb>; 128] {
+    pub fn lut_glow(&self, pal: &[(u8, Rgb)], k: f32) -> [Option<Rgb>; 128] {
         let mut lut = [None; 128];
         for &(ch, c) in pal {
             lut[(ch & 127) as usize] = Some(self.lit(c).lerp(c, k));
@@ -660,7 +645,7 @@ impl Jungle {
     }
 
     /// Draws a sprite with its top left corner on `(x0, y0)`.
-    fn stamp(&mut self, s: Sprite, x0: i32, y0: i32, lut: &[Option<Rgb>; 128]) {
+    pub fn stamp(&mut self, s: Sprite, x0: i32, y0: i32, lut: &[Option<Rgb>; 128]) {
         for (r, row) in s.iter().enumerate() {
             for (c, ch) in row.bytes().enumerate() {
                 if let Some(col) = lut[(ch & 127) as usize] {
@@ -685,7 +670,7 @@ impl Jungle {
             self.trail(r.x, &d);
             let face = if r.flip { -1.0 } else { 1.0 };
             self.sprite(RUIN, r.x, RUIN_FOOT as f32, face, &stone);
-            self.poles(r, &d);
+            self.poles(r, [d.rosa, d.turquesa]);
             let (x0, y0) = (
                 r.x.round() as i32 - RUIN_HALF as i32 + OFRENDA_AT.0,
                 RUIN_FOOT - RUIN_H + 1 + OFRENDA_AT.1,
@@ -709,7 +694,7 @@ impl Jungle {
     }
 
     /// A bamboo pole on each pillar of a ruin, a ribbon tied at the top.
-    fn poles(&mut self, r: &Ruin, d: &Dress) {
+    pub fn poles(&mut self, r: &Ruin, ribbons: [Rgb; 2]) {
         let (tall, broken) = (PILLAR_TOP.0, PILLAR_TOP.1);
         let (left, right) = if r.flip {
             (broken, tall)
@@ -718,8 +703,8 @@ impl Jungle {
         };
         let bamboo = [Rgb(178, 150, 84), Rgb(132, 108, 60)].map(|c| self.lit(c));
         for (x, from, ribbon) in [
-            (r.x - PILLAR, left, d.rosa),
-            (r.x + PILLAR, right, d.turquesa),
+            (r.x - PILLAR, left, ribbons[0]),
+            (r.x + PILLAR, right, ribbons[1]),
         ] {
             let ix = x.round() as i32;
             let base = RUIN_FOOT - from;
@@ -750,7 +735,7 @@ impl Jungle {
     }
 
     /// A flame over the top of every candle of `layer`.
-    fn candles(&mut self, layer: Sprite, x0: i32, y0: i32, id: i32) {
+    pub fn candles(&mut self, layer: Sprite, x0: i32, y0: i32, id: i32) {
         let t = self.tick / 3;
         for (r, row) in layer.iter().enumerate() {
             for (c, ch) in row.bytes().enumerate() {
@@ -835,9 +820,20 @@ impl Jungle {
 
     // ----- marigolds -----
 
+    /// The holiday's flower with its middle at `(x, y)`, when there is one:
+    /// `big` ones are the beds', the small ones grow in the grass. `h` is its
+    /// dice.
+    pub fn bloom(&mut self, x: i32, y: i32, h: u32, big: bool) {
+        if let Some(d) = self.pal.navidad {
+            self.nochebuena(x, y, h, big, &d);
+        } else {
+            self.blossom(x, y, h);
+        }
+    }
+
     /// A blossom with its middle at `(x, y)`: a marigold for the most part,
     /// now and then a terciopelo or a puff of nube. `h` is its dice.
-    pub fn blossom(&mut self, x: i32, y: i32, h: u32) {
+    fn blossom(&mut self, x: i32, y: i32, h: u32) {
         let Some(d) = self.pal.fest else { return };
         let [dark, mid, light] = d.marigold.map(|c| self.lit(c));
         match h % 9 {
@@ -875,11 +871,11 @@ impl Jungle {
         }
     }
 
-    /// A bed of marigolds in a cell of the jungle: from, to.
+    /// A bed of flowers in a cell of the jungle: from, to.
     fn bed_in(&self, cell: i64) -> Option<(f32, f32)> {
-        let d = self.pal.fest?;
+        let level = self.pal.bloom_level()?;
         let (s, c) = (self.seed, cell as i32);
-        if unit(c, 131, s) > 0.3 + 0.35 * d.level {
+        if unit(c, 131, s) > 0.3 + 0.35 * level {
             return None;
         }
         let w = 14.0 + 18.0 * unit(c, 132, s);
@@ -891,10 +887,12 @@ impl Jungle {
         Some((a, a + w))
     }
 
-    /// The beds of marigolds: the back row stands behind the animals, the
+    /// The beds of flowers: the back row stands behind the animals, the
     /// front row, shorter, in front of their paws.
     pub fn paint_beds(&mut self, front: bool) {
-        let Some(d) = self.pal.fest else { return };
+        let Some(level) = self.pal.bloom_level() else {
+            return;
+        };
         let (bx, bw) = (self.bx, self.bw);
         let (u0, u1) = (
             self.base as f64 + bx as f64,
@@ -902,7 +900,7 @@ impl Jungle {
         );
         let leaf = self.lit(self.green(Rgb(70, 126, 48)));
         let leaf_dark = self.lit(self.green(Rgb(48, 98, 38)));
-        let thick = 0.22 + 0.2 * d.level;
+        let thick = 0.22 + 0.2 * level;
         let cells =
             (u0 / BED_CELL as f64).floor() as i64 - 1..=(u1 / BED_CELL as f64).floor() as i64 + 1;
         for cell in cells {
@@ -925,7 +923,7 @@ impl Jungle {
                     self.put(x, base - r, if r % 2 == 0 { leaf } else { leaf_dark });
                 }
                 self.put(x + 1 - 2 * ((h >> 16) & 1) as i32, base - stem / 2, leaf);
-                self.blossom(x, base - stem - 1, h >> 20);
+                self.bloom(x, base - stem - 1, h >> 20, true);
             }
         }
     }
@@ -934,7 +932,7 @@ impl Jungle {
 
     /// Everything a string may be tied to, in view and a long way beyond it,
     /// left to right: the big trees, and the pillars of the ruins.
-    fn anchors(&self, out: &mut [Anchor; ANCHORS]) -> usize {
+    pub fn anchors(&self, out: &mut [Anchor; ANCHORS]) -> usize {
         let (x0, x1) = ((self.bx - 360) as f32, (self.bx + self.bw + 360) as f32);
         let mut n = 0;
         let mut add = |a: Anchor| {
@@ -1004,13 +1002,8 @@ impl Jungle {
     /// are lost in the haze of the distance, by `haze`.
     fn string(&mut self, p: Anchor, q: Anchor, key: u32, row: i32, haze: Option<f32>, d: &Dress) {
         let len = q.x - p.x;
-        let (drop, slack) = if row == 0 { (0.0, 1.0) } else { (9.0, 0.6) };
-        let sag = (len * 0.05).clamp(3.0, 12.0) * slack;
-        let (ya, yb) = (p.y + drop, q.y + drop);
-        let y_at = |x: f32| {
-            let t = ((x - p.x) / len).clamp(0.0, 1.0);
-            ya + (yb - ya) * t + sag * 4.0 * t * (1.0 - t)
-        };
+        let sag = Sag::new(p, q, row);
+        let y_at = |x: f32| sag.at(x);
         let twine = self.shade(Rgb(214, 186, 132), haze);
         let (lo, hi) = (self.bx, self.bx + self.bw);
         for x in (p.x.ceil() as i32).max(lo)..(q.x.floor() as i32).min(hi) {
@@ -1036,7 +1029,7 @@ impl Jungle {
     }
 
     /// `c` as lit for the hour, and `haze` of the way into the distance.
-    fn shade(&self, c: Rgb, haze: Option<f32>) -> Rgb {
+    pub fn shade(&self, c: Rgb, haze: Option<f32>) -> Rgb {
         match haze {
             Some(k) => self.far(c, k),
             None => self.lit(c),

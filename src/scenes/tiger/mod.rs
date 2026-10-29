@@ -19,6 +19,16 @@
 //! comes from the seed like the rest of the jungle, so ordinary days are
 //! exactly what they were.
 //!
+//! At Navidad the jungle is strung with foquitos that blink in chase patterns
+//! from tree to tree, heno hangs from the cords and the limbs, nochebuenas
+//! flower red in the grass and in beds, and by the path stand the ruins with
+//! a nacimiento in the doorway (the Niño Dios laid in his manger from
+//! Nochebuena), farolitos lighting the way to it, which the tiger calls on,
+//! bowing its head. The saucer becomes the Estrella de Belén, a comet with a
+//! long tail and a golden beam, and from January 2 to 6 the Reyes Magos cross
+//! the hills behind on a horse, a camel and an elephant. The posadas climb to
+//! Nochebuena, and the jungle with them.
+//!
 //! - `art.rs`: every sprite, drawn by hand one character per pixel: the
 //!   tiger's torso, heads (calm, blinking, snarling, roaring), its front view
 //!   and its sleep, and the alebrije's likenesses of them; deer, boar,
@@ -35,9 +45,14 @@
 //!   dust, leaves, snow and fireflies.
 //! - `ufo.rs`: the saucer: it comes rarely, freezes the jungle, beams the
 //!   tiger up, and brings it back a while later.
+//! - `fiestas.rs`: what the holidays share: which ruins and flowers there are,
+//!   how the saucer is framed, and matching theme colors by hue.
 //! - `muertos.rs`: Día de Muertos: its colors (the holiday's own under
 //!   `classic`, the theme's otherwise), the papel picado, the marigolds, the
 //!   ruins with their ofrendas, the skull saucer and its petal beam.
+//! - `navidad.rs`: Navidad: its colors, the foquitos and heno, the
+//!   nochebuenas, the nacimientos and farolitos, the Reyes' caravan and the
+//!   comet of the Estrella de Belén.
 //! - `jungle.rs`: the ground, the water and the forest layers, the light,
 //!   the camera, and the projection onto the screen.
 //!
@@ -48,10 +63,12 @@
 
 mod art;
 mod body;
+mod fiestas;
 mod hunter;
 mod jungle;
 mod life;
 mod muertos;
+mod navidad;
 mod ufo;
 
 use crate::color::Color;
@@ -264,8 +281,9 @@ struct Pal {
     day_bot: Rgb,
     green: Rgb,
     green_k: f32,
-    /// The holiday's colors, while there is a holiday.
+    /// The holiday's colors, while there is a holiday: at most one of these.
     fest: Option<muertos::Dress>,
+    navidad: Option<navidad::Dress>,
 }
 
 const DAY_TOP: Rgb = Rgb(84, 150, 214);
@@ -284,12 +302,17 @@ impl Pal {
             .fiesta
             .is(crate::fiesta::Kind::Muertos)
             .then(|| muertos::Dress::new(ctx));
+        let navidad = ctx
+            .fiesta
+            .is(crate::fiesta::Kind::Navidad)
+            .then(|| navidad::Dress::new(ctx));
         let native = Pal {
             day_top: top,
             day_bot: bot,
             green: Rgb::BLACK,
             green_k: 0.0,
             fest,
+            navidad,
         };
         if ctx.theme.native {
             return native;
@@ -459,7 +482,7 @@ impl Scene for TigerScene {
 
     fn retheme(&mut self, ctx: &Ctx) {
         self.jungle.pal = Pal::new(ctx, self.jungle.kind);
-        if self.jungle.pal.fest.is_none() {
+        if !self.jungle.pal.visits() {
             self.jungle.undress(&mut self.rng);
         }
         self.jungle.update_light();
@@ -900,7 +923,9 @@ mod tests {
     }
 
     /// The holiday's elements: the alebrije, papel picado, marigolds and, a
-    /// while along the path, an ofrenda at a ruin with its candles lit.
+    /// while along the path, an ofrenda at a ruin with its candles lit; or
+    /// strings of foquitos and heno, nochebuenas, the layers of a nacimiento,
+    /// the Niño Dios and the Reyes.
     #[derive(Default, Debug)]
     struct Seen {
         alebrije: bool,
@@ -908,6 +933,20 @@ mod tests {
         blossoms: u32,
         ruins: u32,
         candles: u32,
+        bulbs: u32,
+        heno: u32,
+        belenes: u32,
+        ninos: u32,
+        reyes: u32,
+    }
+
+    impl Seen {
+        /// Nothing of any holiday on screen.
+        fn nothing(&self) -> bool {
+            !self.alebrije
+                && (self.flags, self.blossoms, self.ruins, self.candles) == (0, 0, 0, 0)
+                && (self.bulbs, self.heno, self.belenes, self.ninos, self.reyes) == (0, 0, 0, 0, 0)
+        }
     }
 
     fn seen_over(fiesta: Fiesta, theme: &Theme, kind: &str, secs: u32) -> Seen {
@@ -924,6 +963,11 @@ mod tests {
             seen.blossoms += p.blossoms;
             seen.ruins += p.ruins;
             seen.candles += p.candles;
+            seen.bulbs += p.bulbs;
+            seen.heno += p.heno;
+            seen.belenes += p.belenes;
+            seen.ninos += p.ninos;
+            seen.reyes += p.reyes;
             false
         });
         seen
@@ -1122,6 +1166,261 @@ mod tests {
                 assert!(colors.len() >= 10, "{name} {kind:?}: {colors:?}");
             }
             assert!(d.flags.iter().all(|f| *f != Rgb::BLACK), "{name}");
+        }
+    }
+
+    // ----- Navidad -----
+
+    /// At the height of the Navidad and on its first day, the jungle is strung with foquitos and
+    /// heno, nochebuenas flower, and a nacimiento stands in the ruins with its farolitos; on an
+    /// ordinary day none of it is there. The tiger is the tiger, whatever the kind.
+    #[test]
+    fn navidad_dresses_the_jungle() {
+        let theme = Theme::classic();
+        for kind in ["bengal", "siberian", "white"] {
+            for fiesta in [Fiesta::of_day(12, 24), Fiesta::of_day(12, 12)] {
+                let seen = seen_over(fiesta, &theme, kind, 150);
+                assert!(
+                    !seen.alebrije && seen.flags == 0,
+                    "{kind} {fiesta:?}: {seen:?}"
+                );
+                assert!(seen.bulbs > 0, "{kind} {fiesta:?}: {seen:?}");
+                assert!(seen.heno > 0, "{kind} {fiesta:?}: {seen:?}");
+                assert!(seen.blossoms > 0, "{kind} {fiesta:?}: {seen:?}");
+                assert!(seen.ruins > 0, "{kind} {fiesta:?}: {seen:?}");
+                assert!(seen.belenes > 0, "{kind} {fiesta:?}: {seen:?}");
+                assert!(seen.candles > 0, "{kind} {fiesta:?}: {seen:?}");
+            }
+            let seen = seen_over(Fiesta::NONE, &theme, kind, 150);
+            assert!(seen.nothing(), "{kind}: {seen:?}");
+        }
+    }
+
+    /// The holidays it has no costume for leave it as on an ordinary day: not one of them paints
+    /// a thing of its own over the jungle.
+    #[test]
+    fn the_other_holidays_stay_ordinary() {
+        use crate::fiesta::Kind as Day;
+        let theme = Theme::classic();
+        for kind in Day::ALL {
+            if matches!(kind, Day::Muertos | Day::Navidad) {
+                continue;
+            }
+            let fiesta = Fiesta::height(kind);
+            assert!(fiesta.is(kind), "{kind:?}");
+            let seen = seen_over(fiesta, &theme, "bengal", 90);
+            assert!(seen.nothing(), "{kind:?}: {seen:?}");
+        }
+    }
+
+    /// The posadas climb to Nochebuena: more foquitos, more of the nacimiento.
+    #[test]
+    fn navidad_builds_up() {
+        let theme = Theme::classic();
+        let low = seen_over(Fiesta::of_day(12, 12), &theme, "bengal", 240);
+        let high = seen_over(Fiesta::of_day(12, 24), &theme, "bengal", 240);
+        assert!(low.ruins > 0 && high.ruins > 0, "{low:?} {high:?}");
+        assert!(high.bulbs > low.bulbs, "{low:?} {high:?}");
+        assert!(high.blossoms > low.blossoms, "{low:?} {high:?}");
+        assert!(
+            high.candles * low.ruins > low.candles * high.ruins,
+            "{low:?} {high:?}"
+        );
+        assert!(
+            high.belenes * low.ruins > low.belenes * high.ruins,
+            "{low:?} {high:?}"
+        );
+    }
+
+    /// The Niño Dios is laid in his manger on Nochebuena and stays there to the Reyes; before
+    /// then the manger is empty.
+    #[test]
+    fn the_nino_dios_comes_at_nochebuena() {
+        let theme = Theme::classic();
+        for (month, day, nino) in [
+            (12, 16, false),
+            (12, 23, false),
+            (12, 24, true),
+            (12, 28, true),
+            (1, 3, true),
+        ] {
+            let seen = seen_over(Fiesta::of_day(month, day), &theme, "bengal", 240);
+            assert!(seen.ruins > 0, "{month}/{day}: {seen:?}");
+            assert_eq!(seen.ninos > 0, nino, "{month}/{day}: {seen:?}");
+        }
+    }
+
+    /// The Reyes Magos cross the hills from January 2 to 6, and no other day.
+    #[test]
+    fn the_reyes_cross_on_their_days() {
+        let theme = Theme::classic();
+        for (month, day, reyes) in [
+            (1, 1, false),
+            (1, 2, true),
+            (1, 4, true),
+            (1, 6, true),
+            (12, 24, false),
+            (12, 28, false),
+        ] {
+            let seen = seen_over(Fiesta::of_day(month, day), &theme, "bengal", 150);
+            assert_eq!(seen.reyes > 0, reyes, "{month}/{day}: {seen:?}");
+        }
+        // In the taiga the hills are firs, and they do not cross.
+        let seen = seen_over(Fiesta::of_day(1, 3), &theme, "siberian", 150);
+        assert_eq!(seen.reyes, 0, "{seen:?}");
+    }
+
+    /// Switching Navidad on and off through `retheme` dresses the jungle and undresses it again,
+    /// at once, and a tiger on its way to a nacimiento is called off.
+    #[test]
+    fn navidad_comes_and_goes_with_retheme() {
+        let theme = Theme::classic();
+        let o = opts("ufo = 0\nzoom = 1");
+        let off = fiesta_ctx(&theme, &o, Fiesta::NONE);
+        let on = fiesta_ctx(&theme, &o, Fiesta::of_day(12, 24));
+        let mut s = TigerScene::new(&off);
+        s.resize(&off, 200, 50);
+        s.retheme(&off);
+        let mut cv = Canvas::new(200, 50, Color::Reset);
+        for _ in 0..3 {
+            for (c, dressed) in [(&on, true), (&off, false), (&on, true), (&off, false)] {
+                s.retheme(c);
+                for _ in 0..5 {
+                    s.tick(c, 1.0 / 30.0, 1.0 / 30.0);
+                }
+                cv.clear();
+                s.draw(c, &mut cv);
+                let p = &s.jungle.painted;
+                assert_eq!(
+                    p.bulbs > 0 || p.heno > 0 || p.blossoms > 0,
+                    dressed,
+                    "{p:?}"
+                );
+                if !dressed {
+                    assert_eq!((p.ruins, p.candles, p.belenes), (0, 0, 0), "{p:?}");
+                }
+            }
+        }
+        s.retheme(&on);
+        s.jungle.tiger.set(Mood::Visit);
+        s.retheme(&off);
+        assert_ne!(s.jungle.tiger.mood, Mood::Visit);
+    }
+
+    /// Odd sizes, odd options and huge steps survive Navidad, on any of its days, under classic
+    /// and under other themes.
+    #[test]
+    fn navidad_survives_odd_sizes_and_steps() {
+        let cases = [
+            "speed = 50.0\nday = 1\nzoom = 99\nsky = false\nprey = 10.0\nkind = 'random'\nufo = 3600.0",
+            "speed = 0.0\nday = 999999999\nzoom = -4\nprey = -3.0\nkind = 'nope'\nufo = -1.0",
+            "kind = 'siberian'\nprey = 0\nufo = nan",
+            "kind = 'white'\nzoom = 6\nspeed = inf\nufo = 3600.0",
+        ];
+        let themes = [
+            Theme::classic(),
+            Theme::builtin("mono").unwrap(),
+            Theme::builtin("dracula").unwrap(),
+            Theme::terminal(&TermColors::default()),
+        ];
+        for case in cases {
+            let o = opts(case);
+            for theme in &themes {
+                for day in [(12, 12), (12, 24), (12, 28), (1, 1), (1, 3), (1, 6)] {
+                    let c = fiesta_ctx(theme, &o, Fiesta::of_day(day.0, day.1));
+                    let mut s = (INFO.make)(&c);
+                    for &(w, h) in &[(1u16, 1u16), (2, 3), (7, 2), (1, 40), (300, 90), (80, 24)] {
+                        s.resize(&c, w, h);
+                        s.retheme(&c);
+                        let mut cv = Canvas::new(w, h, Color::Reset);
+                        for dt in [0.0, f32::NAN, -1.0, f32::INFINITY, 0.05, 5.0, 1e9] {
+                            s.tick(&c, dt, 0.05);
+                            s.next_change();
+                            cv.clear();
+                            s.draw(&c, &mut cv);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /// With Navidad on the tiger now and then calls on a nacimiento: it walks to the ruin, faces
+    /// it and bows its head a while.
+    #[test]
+    fn the_tiger_calls_on_the_nacimiento() {
+        let theme = Theme::classic();
+        let o = opts("ufo = 0\nday = 60");
+        let c = fiesta_ctx(&theme, &o, Fiesta::of_day(12, 24));
+        let mut s = TigerScene::new(&c);
+        s.resize(&c, 120, 36);
+        s.retheme(&c);
+        let (mut bowed, mut walked) = (false, false);
+        for _ in 0..30 * 60 * 12 {
+            s.tick(&c, 1.0 / 30.0, 1.0 / 30.0);
+            let t = &s.jungle.tiger;
+            if t.mood == Mood::Visit {
+                walked = true;
+                if t.mouth == 0.0 && t.steps > 10 && t.speed < 0.02 {
+                    bowed = true;
+                }
+            }
+            assert!(!t.gone && t.x.is_finite());
+        }
+        assert!(walked && bowed, "walked {walked}, bowed {bowed}");
+    }
+
+    /// The saucer is the Estrella de Belén at Navidad: a comet with a long tail, and no skull.
+    #[test]
+    fn the_saucer_is_a_comet_at_navidad() {
+        let theme = Theme::classic();
+        for (fiesta, comet, skull) in [
+            (Fiesta::of_day(12, 24), true, false),
+            (Fiesta::of_day(11, 2), false, true),
+            (Fiesta::NONE, false, false),
+        ] {
+            let o = opts("ufo = 0\nday = 120");
+            let c = fiesta_ctx(&theme, &o, fiesta);
+            let mut s = TigerScene::new(&c);
+            s.resize(&c, 100, 30);
+            s.retheme(&c);
+            s.jungle.summon();
+            let mut cv = Canvas::new(100, 30, Color::Reset);
+            let mut beamed = false;
+            for _ in 0..30 * 60 {
+                s.tick(&c, 1.0 / 30.0, 1.0 / 30.0);
+                cv.clear();
+                s.draw(&c, &mut cv);
+                if s.jungle.ufo.phase == Phase::Beam {
+                    beamed = true;
+                    assert_eq!(s.jungle.painted.comet, comet);
+                    assert_eq!(s.jungle.painted.saucer, skull);
+                }
+            }
+            assert!(beamed);
+        }
+    }
+
+    /// Navidad's colors come from the theme, and stay told apart.
+    #[test]
+    fn the_navidad_dress_keeps_its_colors_apart() {
+        for name in crate::theme::names() {
+            let Some(theme) = Theme::builtin(name) else {
+                continue;
+            };
+            let o = opts("");
+            let c = fiesta_ctx(&theme, &o, Fiesta::of_day(12, 24));
+            let d = navidad::Dress::new(&c);
+            assert_ne!(d.rojo, d.verde, "{name}");
+            let mut colors: Vec<Rgb> = d.bulbs.to_vec();
+            colors.sort_by_key(|c| (c.0, c.1, c.2));
+            colors.dedup();
+            assert!(colors.len() >= 4, "{name}: {colors:?}");
+            let mut belen: Vec<Rgb> = d.belen().iter().map(|&(_, c)| c).collect();
+            belen.sort_by_key(|c| (c.0, c.1, c.2));
+            belen.dedup();
+            assert!(belen.len() >= 12, "{name}: {belen:?}");
+            assert!(d.bulbs.iter().all(|c| *c != Rgb::BLACK), "{name}");
         }
     }
 }
