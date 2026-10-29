@@ -67,6 +67,14 @@
 //! street, swaying, and some masts fly a big flag with the águila on the
 //! nopal. More puestos, more strands and more flags as September goes by to
 //! the Grito, when the first strand is strung with bombillas too.
+//!
+//! On Día del Niño the dog plays, by day. It chases a pelota (stripes of
+//! rojo, amarillo and azul that turn as it rolls) and nudges it along with
+//! its nose, a few minutes at a time with rests between; a papalote flies
+//! above it on a string tied to its collar, a diamond of four colors with a
+//! tail of bows, tilting in the wind and sinking while the dog naps; and
+//! trompos spin on the ground, their stripes blurring, wobbling as they
+//! tire, falling over until another is thrown.
 
 use std::f32::consts::PI;
 
@@ -749,6 +757,19 @@ const TIERRA: Rgb = Rgb(176, 140, 96);
 /// Seeds the Fiestas Patrias' own dice.
 const PATRIAS_SEED: u64 = 0x0050_4154_5249_4153;
 
+// Día del Niño.
+/// The toys: rojo, amarillo, azul, verde and naranja.
+const JUGUETES: [Rgb; 5] = [
+    Rgb(232, 50, 42),
+    Rgb(255, 210, 0),
+    Rgb(31, 122, 224),
+    Rgb(47, 184, 74),
+    Rgb(255, 140, 0),
+];
+const MADERA: Rgb = Rgb(192, 138, 74);
+/// Seeds the Día del Niño's own dice.
+const NINO_SEED: u64 = 0x004E_494E_4F04_3000;
+
 /// A scrap of papel picado, 5 by 5: `#` is paper, `.` a cut-out.
 const PAPEL: Sprite = &["#####", "#.#.#", ".###.", "#.#.#", "#.#.#"];
 
@@ -771,6 +792,8 @@ enum State {
     Nap,
     Sniff,
     Chase,
+    /// Día del Niño: running after the pelota.
+    Play,
 }
 
 #[derive(Clone, Copy)]
@@ -1609,6 +1632,164 @@ impl Patrias {
     }
 }
 
+/// A pelota: it rolls along the ground, bounces and spins.
+struct Ball {
+    x: f32,
+    /// Height above the ground.
+    h: f32,
+    vx: f32,
+    vy: f32,
+    /// How far round it has turned, in stripes' widths.
+    spin: f32,
+}
+
+/// A trompo, spinning where it was thrown and falling when it tires.
+struct Trompo {
+    x: f32,
+    age: u32,
+    /// How long it spins; it lies where it fell for a while after.
+    life: u32,
+    /// Which three of the toy colors its stripes are.
+    color: usize,
+}
+
+/// Steps a trompo lies where it fell before a new one is thrown.
+const FALLEN: u32 = 80;
+/// Steps a trompo wobbles before it falls.
+const WOBBLE: u32 = 80;
+
+/// Día del Niño in the meadow: the dog plays. It chases a pelota and
+/// nudges it along with its nose, a papalote flies above it on a string
+/// from its collar, and trompos spin on the ground.
+struct Nino {
+    ball: Ball,
+    trompos: Vec<Trompo>,
+    /// Where the papalote is (the middle of its diamond).
+    kite: (f32, f32),
+    /// How many bows its tail has.
+    bows: usize,
+    /// How high above the ground it flies.
+    alt: f32,
+    /// Steps until the dog feels like playing again.
+    cool: u32,
+    /// Rojo, amarillo, azul, verde and naranja.
+    toys: [Rgb; 5],
+    rng: Rng,
+}
+
+impl Nino {
+    /// The holiday for this world, if it is on.
+    fn of(ctx: &Ctx, m: &Meadow) -> Option<Nino> {
+        ctx.fiesta.is(Kind::Nino).then(|| {
+            Nino::new(
+                ctx,
+                m.w,
+                m.ground,
+                m.view_h,
+                m.dog.x + SPRITE_W as f32 / 2.0,
+            )
+        })
+    }
+
+    fn new(ctx: &Ctx, w: i32, ground: i32, view_h: f32, dog_cx: f32) -> Nino {
+        let level = ctx.fiesta.level.clamp(0.0, 1.0);
+        let mut rng = Rng::with_seed(ctx.seed ^ NINO_SEED);
+        let alt = (0.45 * view_h).clamp(24.0, 40.0);
+        let trompos = (0..1 + (level >= 0.5) as usize)
+            .map(|i| Trompo {
+                // The first one is spinning not far from the dog.
+                x: if i == 0 {
+                    (dog_cx + rng.rangef(-50.0, 50.0))
+                        .min(w as f32 - 6.0)
+                        .max(6.0)
+                } else {
+                    rng.rangef(0.0, w as f32)
+                },
+                age: if i == 0 { 0 } else { rng.range(0, 200) as u32 },
+                life: rng.range(300, 600) as u32,
+                color: rng.range(0, 5) as usize,
+            })
+            .collect();
+        Nino {
+            ball: Ball {
+                x: (dog_cx + 40.0).min((w - 8) as f32).max(8.0),
+                h: 0.0,
+                vx: 0.0,
+                vy: 0.0,
+                spin: 0.0,
+            },
+            trompos,
+            kite: (dog_cx, ground as f32 - alt),
+            bows: 5 + (4.0 * level) as usize,
+            alt,
+            cool: 40,
+            toys: themed(ctx, JUGUETES, 0),
+            rng,
+        }
+    }
+
+    /// Sets the pelota off from the dog's nose, `dir` the way it faces.
+    fn nudge(&mut self, dir: f32) {
+        self.ball.vx = dir * self.rng.rangef(1.3, 2.4);
+        self.ball.vy = self.rng.rangef(1.6, 2.6);
+    }
+
+    /// One step of the toys: the pelota rolls, bounces off the ends of the
+    /// world and slows down; the trompos spin and fall and are thrown again
+    /// near the dog; the papalote follows the dog on its string, lower
+    /// while it naps.
+    fn step(&mut self, dog_cx: f32, dir: f32, nap: bool, w: f32, ground: f32, tick: u32) {
+        self.cool = self.cool.saturating_sub(1);
+        let b = &mut self.ball;
+        b.x += b.vx;
+        if b.h > 0.0 || b.vy > 0.0 {
+            b.h += b.vy;
+            b.vy -= 0.25;
+            if b.h <= 0.0 {
+                b.h = 0.0;
+                if b.vy < -0.6 {
+                    b.vy = -b.vy * 0.6;
+                    b.vx *= 0.85;
+                } else {
+                    b.vy = 0.0;
+                }
+            }
+        } else {
+            b.vx *= 0.97;
+            if b.vx.abs() < 0.03 {
+                b.vx = 0.0;
+            }
+        }
+        if b.x < 4.0 {
+            b.x = 4.0;
+            b.vx = b.vx.abs() * 0.8;
+        } else if b.x > w - 4.0 {
+            b.x = (w - 4.0).max(4.0);
+            b.vx = -b.vx.abs() * 0.8;
+        }
+        b.spin = (b.spin + b.vx * 0.9).rem_euclid(5.1);
+        for t in self.trompos.iter_mut() {
+            t.age += 1;
+            if t.age >= t.life + FALLEN {
+                // Another one is thrown near the dog.
+                t.x = (dog_cx + self.rng.rangef(-70.0, 70.0))
+                    .min(w - 6.0)
+                    .max(6.0);
+                t.age = 0;
+                t.life = self.rng.range(300, 600) as u32;
+                t.color = self.rng.range(0, 5) as usize;
+            }
+        }
+        let t = tick as f32;
+        let want = (
+            dog_cx - dir * 12.0 + 7.0 * (t * 0.021).sin(),
+            ground - self.alt + if nap { 9.0 } else { 0.0 } + 3.0 * (t * 0.033).sin(),
+        );
+        self.kite.0 += (want.0 - self.kite.0) * 0.05;
+        self.kite.1 += (want.1 - self.kite.1) * 0.05;
+    }
+}
+
 /// What part of the world is on screen: top-left corner in world pixels and
 /// screen pixels per world pixel.
 #[derive(Clone, Copy)]
@@ -1765,6 +1946,8 @@ struct Meadow {
     navidad: Option<Navidad>,
     /// The Fiestas Patrias, when they are on: a tianguis in the meadow.
     patrias: Option<Patrias>,
+    /// Día del Niño, when it is on: the dog plays with its toys.
+    nino: Option<Nino>,
     /// Rows of the meadow where no grass grows for the holiday's street.
     street: Option<(i32, i32)>,
     /// What the dog wears.
@@ -1905,6 +2088,7 @@ impl Meadow {
             xolo: false,
             navidad: None,
             patrias: None,
+            nino: None,
             street: None,
             wear: Wear::Bare,
         };
@@ -1918,6 +2102,7 @@ impl Meadow {
         self.xolo = self.muertos.is_some();
         self.navidad = Navidad::of(ctx, self);
         self.patrias = Patrias::of(ctx, self);
+        self.nino = Nino::of(ctx, self);
         self.street = match (&self.navidad, &self.patrias) {
             (Some(nv), _) => Some(nv.cleared(self.ground, self.fence)),
             (_, Some(pa)) => Some(pa.cleared(self.fence)),
@@ -2038,6 +2223,18 @@ impl Meadow {
         }
         if let Some(nv) = &mut self.navidad {
             nv.step(self.w as f32);
+        }
+        if let Some(ni) = &mut self.nino {
+            let cx = self.dog.x + SPRITE_W as f32 / 2.0;
+            let nap = self.dog.state == State::Nap;
+            ni.step(
+                cx,
+                self.dog.dir,
+                nap,
+                self.w as f32,
+                self.ground as f32,
+                self.tick,
+            );
         }
         for z in self.zs.iter_mut() {
             z.age += 1;
@@ -2199,6 +2396,28 @@ impl Meadow {
                     None => (d.state, d.timer) = (State::Stand, 30),
                 }
             }
+            State::Play => match self.nino.as_mut() {
+                // Run after the pelota and nudge it along with the nose.
+                Some(n) => {
+                    let center = d.x + SPRITE_W as f32 / 2.0;
+                    if (n.ball.x - center).abs() > 6.0 {
+                        d.dir = if n.ball.x >= center { 1.0 } else { -1.0 };
+                    }
+                    d.x = (d.x + d.dir * 1.5).clamp(lo, hi);
+                    let head = d.x + if d.dir > 0.0 { 19.0 } else { 2.0 };
+                    if d.hop == 0.0 && n.ball.h < 6.0 && (n.ball.x - head).abs() < 5.0 {
+                        d.vy = 2.0;
+                        d.hop = 0.1;
+                        n.nudge(d.dir);
+                    }
+                    d.timer = d.timer.saturating_sub(1);
+                    if d.timer == 0 {
+                        n.cool = n.rng.range(160, 420) as u32;
+                        (d.state, d.timer, d.turn) = (State::Stand, 30, false);
+                    }
+                }
+                None => (d.state, d.timer) = (State::Stand, 20),
+            },
             _ => {
                 if d.state == State::Nap && d.anim.is_multiple_of(30) {
                     let hx = if d.dir > 0.0 { 17.0 } else { 4.0 };
@@ -2246,6 +2465,14 @@ impl Meadow {
                 b.flee = d.dir;
                 b.speed = 0.85;
             }
+        }
+        // On Día del Niño, by day, a rested dog goes after the pelota.
+        if matches!(d.state, State::Stand | State::Sit | State::Sniff)
+            && self.daylight() > 0.5
+            && let Some(n) = &mut self.nino
+            && n.cool == 0
+        {
+            (d.state, d.timer, d.turn) = (State::Play, n.rng.range(300, 600) as u32, false);
         }
         self.dog = d;
     }
@@ -2319,6 +2546,7 @@ impl Meadow {
         if let Some(pa) = &pa {
             self.draw_tianguis(pa);
         }
+        let ni = self.nino.take();
         let split = self.blades.partition_point(|b| b.y < self.ground);
         let mu = self.muertos.take();
         match &mu {
@@ -2330,6 +2558,9 @@ impl Meadow {
                 self.draw_dog();
                 self.draw_blades(split, self.blades.len(), None);
                 self.draw_butterfly();
+                if let Some(ni) = &ni {
+                    self.draw_juguetes(ni);
+                }
             }
             Some(mu) => {
                 // The petals lie on the ground; the ofrenda stands just
@@ -2350,6 +2581,7 @@ impl Meadow {
         self.muertos = mu;
         self.navidad = nv;
         self.patrias = pa;
+        self.nino = ni;
     }
 
     fn draw_sun_moon(&mut self) {
@@ -2539,7 +2771,7 @@ impl Meadow {
         let a = d.anim;
         let x = self.xolo;
         match d.state {
-            State::Run | State::Chase => {
+            State::Run | State::Chase | State::Play => {
                 let f = (a / 2 % 4) as usize;
                 (
                     if x { XOLO_RUN[f] } else { RUN[f] },
@@ -3249,6 +3481,158 @@ impl Meadow {
         }
     }
 
+    // ----- Día del Niño -----
+
+    /// Where the string of the papalote ties to the dog: its collar.
+    fn collar(&self) -> (i32, i32) {
+        let d = &self.dog;
+        let (sprite, bob) = self.sprite();
+        let bottom = self.ground - d.hop.round() as i32 + bob;
+        let top = bottom - sprite.len() as i32 + 1;
+        let (rx, ry) = sprite
+            .iter()
+            .enumerate()
+            .find_map(|(ry, row)| {
+                row.bytes()
+                    .position(|c| c == b'c')
+                    .map(|rx| (rx as i32, ry as i32))
+            })
+            .unwrap_or((15, 1));
+        let sx = if d.dir > 0.0 { rx } else { SPRITE_W - 1 - rx };
+        (d.x.round() as i32 + sx, top + ry)
+    }
+
+    /// The toys: the pelota, the trompos and the papalote on its string.
+    fn draw_juguetes(&mut self, ni: &Nino) {
+        for t in &ni.trompos {
+            self.draw_trompo(ni, t);
+        }
+        self.draw_pelota(ni);
+        self.draw_papalote(ni);
+    }
+
+    /// The pelota: a ball in stripes of rojo, amarillo and azul that turn
+    /// as it rolls, with a shadow that fades as it bounces up.
+    fn draw_pelota(&mut self, ni: &Nino) {
+        let b = &ni.ball;
+        let (cx, cy) = (b.x.round() as i32, self.ground - b.h.round() as i32);
+        for dx in -2..=2 {
+            self.blend(
+                cx + dx,
+                self.ground + 3,
+                Rgb::BLACK,
+                0.3 / (1.0 + b.h * 0.15),
+            );
+        }
+        for dy in -2..=2i32 {
+            for dx in -2..=2i32 {
+                if dx * dx + dy * dy > 5 {
+                    continue;
+                }
+                let u = dx as f32 + dy as f32 * 0.6 + b.spin;
+                let band = (u / 1.7).floor().rem_euclid(3.0) as usize;
+                let c = ni.toys[band];
+                let c = if (dx, dy) == (-1, -1) {
+                    c.lerp(Rgb::WHITE, 0.45)
+                } else {
+                    c
+                };
+                self.put(cx + dx, cy + dy, self.shade(c));
+            }
+        }
+    }
+
+    /// A trompo, its stripes blurring as it spins and leaning over more as it
+    /// tires, or lying where it fell.
+    fn draw_trompo(&mut self, ni: &Nino, t: &Trompo) {
+        let gy = self.ground + 6;
+        let x = t.x.round() as i32;
+        let (wood, tip) = (self.shade(MADERA), self.shade(Rgb(70, 66, 64)));
+        if t.age < t.life {
+            let left = (t.life - t.age) as f32;
+            let lean = if left < WOBBLE as f32 {
+                (1.0 - left / WOBBLE as f32) * 2.0
+            } else {
+                0.0
+            };
+            let x = x + (lean * (t.age as f32 * 0.6).sin()).round() as i32;
+            self.put(x, gy - 5, wood);
+            for (row, half) in [1, 2, 2, 1].into_iter().enumerate() {
+                let c = ni.toys[(t.color + row + (self.tick / 2) as usize) % 3];
+                for dx in -half..=half {
+                    let c = if dx == -half {
+                        c.lerp(Rgb::WHITE, 0.3)
+                    } else {
+                        c
+                    };
+                    self.put(x + dx, gy - 4 + row as i32, self.shade(c));
+                }
+            }
+            self.put(x, gy, tip);
+            // The dust it stirs up.
+            if (self.tick / 2).is_multiple_of(2) {
+                for dx in [-3, 3] {
+                    self.blend(x + dx, gy, TIERRA, 0.5);
+                }
+            }
+        } else {
+            self.put(x - 3, gy - 1, wood);
+            self.put(x + 3, gy - 1, tip);
+            for dx in -2..=2i32 {
+                let c = ni.toys[(t.color + (dx + 2) as usize / 2) % 3];
+                let rows: &[i32] = if dx.abs() == 2 { &[-1] } else { &[-2, -1, 0] };
+                for &dy in rows {
+                    self.put(x + dx, gy + dy, self.shade(c));
+                }
+            }
+        }
+    }
+
+    /// The papalote: a diamond of four colors on a cross of sticks, tilting
+    /// in the wind, a tail of bows below it, and a string down to the dog's
+    /// collar.
+    fn draw_papalote(&mut self, ni: &Nino) {
+        let t = self.tick as f32;
+        let (kx, ky) = (ni.kite.0.round() as i32, ni.kite.1.round() as i32);
+        let tilt = (t * 0.06).sin() * 1.6;
+        let skew = |dy: i32| (tilt * dy as f32 / 5.0).round() as i32;
+        // The string, sagging a little.
+        let (ax, ay) = self.collar();
+        let (bx, by) = (kx + skew(5), ky + 6);
+        let n = (bx - ax).abs().max((by - ay).abs()).max(1);
+        let string = self.shade(Rgb(236, 236, 230));
+        for s in 0..=n {
+            let u = s as f32 / n as f32;
+            let x = ax as f32 + (bx - ax) as f32 * u;
+            let y = ay as f32 + (by - ay) as f32 * u + 2.0 * (PI * u).sin();
+            self.blend(x.round() as i32, y.round() as i32, string, 0.75);
+        }
+        // Its tail first, so the kite stays on top.
+        for j in 1..=ni.bows as i32 {
+            let sway = (2.4 * (t * 0.17 + j as f32 * 0.8).sin() * j as f32 / ni.bows as f32).round()
+                as i32;
+            let (tx, ty) = (bx + sway, by + 2 * j - 1);
+            self.put(tx, ty, string);
+            self.put(tx, ty - 1, string);
+            if j % 2 == 0 {
+                let c = self.shade(ni.toys[j as usize % 5]);
+                self.put(tx - 1, ty, c);
+                self.put(tx + 1, ty, c);
+            }
+        }
+        let sticks = self.shade(MADERA);
+        for dy in -5..=5i32 {
+            for dx in -(5 - dy.abs())..=5 - dy.abs() {
+                let c = if dx == 0 || dy == 0 {
+                    sticks
+                } else {
+                    self.shade(ni.toys[(dx < 0) as usize + 2 * (dy < 0) as usize])
+                };
+                self.put(kx + dx + skew(dy), ky + dy, c);
+            }
+        }
+    }
+
     // ----- what the dog wears -----
 
     /// The dog's trunk in its sprite, as (first row, last row, first column,
@@ -3910,7 +4294,7 @@ mod tests {
         let mut s = DogScene::new(&c);
         s.resize(&c, 100, 30);
         let mut cv = Canvas::new(100, 30, Color::Reset);
-        let mut seen = [false; 6];
+        let mut seen = [false; 7];
         for _ in 0..30 * 60 * 3 {
             s.tick(&c, 1.0 / 30.0, 1.0 / 30.0);
             let d = s.m.dog;
@@ -4084,6 +4468,7 @@ mod tests {
             Fiesta::of_day(11, 2),
             Fiesta::of_day(12, 20),
             Fiesta::height(Kind::Patrias),
+            Fiesta::height(Kind::Nino),
         ] {
             let c = holiday(&theme, &opts, fiesta);
             for t in [0.0, 0.5] {
@@ -4126,7 +4511,6 @@ mod tests {
             Kind::Carnaval,
             Kind::Equinoccio,
             Kind::Judas,
-            Kind::Nino,
             Kind::SantaCruz,
             Kind::Guelaguetza,
             Kind::Revolucion,
@@ -4435,6 +4819,187 @@ mod tests {
         assert!(a == again && a != later);
     }
 
+    /// A meadow dressed for Día del Niño, on a fine morning.
+    fn playground(seed: u64) -> (Meadow, Rng) {
+        let theme = Theme::classic();
+        let opts = Opts::new(INFO.options, toml::Table::new());
+        let c = holiday(&theme, &opts, Fiesta::height(Kind::Nino));
+        let mut rng = Rng::with_seed(seed);
+        let set = Settings {
+            sky: true,
+            butterflies: true,
+            zoom: 2,
+            nap_scale: 1.0,
+        };
+        let mut m = Meadow::new(120, 36, &mut rng, Pal::new(&c), set);
+        m.dress(&c);
+        m.t = 0.4;
+        m.update_sky();
+        (m, rng)
+    }
+
+    /// On Día del Niño the meadow has a pelota, a papalote and trompos, in
+    /// the toy colors; the dog is as it always is. On an ordinary day, none
+    /// of it.
+    #[test]
+    fn nino_dresses_the_playground() {
+        let theme = Theme::classic();
+        let opts = Opts::new(INFO.options, toml::Table::new());
+        let c = holiday(&theme, &opts, Fiesta::height(Kind::Nino));
+        let mut s = DogScene::new(&c);
+        s.resize(&c, 160, 48);
+        s.retheme(&c);
+        let mut cv = Canvas::new(160, 48, Color::Reset);
+        s.m.t = 0.4;
+        s.m.update_sky();
+        s.tick(&c, 0.05, 0.05);
+        s.draw(&c, &mut cv);
+        let ni = s.m.nino.as_ref().expect("dressed");
+        assert!(!ni.trompos.is_empty() && s.m.wear == Wear::Bare && s.m.street.is_none());
+        // The kite has all four of its colors, the pelota's stripes are among them.
+        for c in &JUGUETES[..4] {
+            assert!(painted(&s.m, *c), "{c:?} missing");
+        }
+        assert!(painted(&s.m, MADERA));
+
+        let c = ctx(&theme, &opts);
+        let mut s = DogScene::new(&c);
+        s.resize(&c, 160, 48);
+        let mut cv = Canvas::new(160, 48, Color::Reset);
+        s.draw(&c, &mut cv);
+        assert!(s.m.nino.is_none());
+        assert!(!painted(&s.m, MADERA) && !painted(&s.m, JUGUETES[2]));
+    }
+
+    /// The holiday comes and goes through `dress` (what `retheme` does when
+    /// the day changes). Playing changes what the dog does, so the frames
+    /// cannot match an ordinary day's afterwards, but the dog stops playing
+    /// the moment the toys are gone, and they are gone from the picture.
+    #[test]
+    fn nino_comes_and_goes() {
+        let (mut m, mut rng) = playground(2);
+        assert!(m.nino.is_some());
+        let mut played = false;
+        for _ in 0..4000 {
+            m.dog.nap -= STEP as f32;
+            m.update(&mut rng);
+            played |= m.dog.state == State::Play;
+        }
+        assert!(played);
+        let theme = Theme::classic();
+        let opts = Opts::new(INFO.options, toml::Table::new());
+        m.dress(&ctx(&theme, &opts));
+        assert!(m.nino.is_none());
+        for _ in 0..4000 {
+            m.dog.nap -= STEP as f32;
+            m.update(&mut rng);
+            assert!(m.dog.state != State::Play);
+        }
+        m.draw();
+        assert!(!painted(&m, MADERA) && !painted(&m, JUGUETES[2]));
+    }
+
+    /// By day the dog goes after the pelota, over and over, with rests
+    /// between: it runs to it, nudges it with its nose and the pelota rolls
+    /// and bounces away, never out of the world.
+    #[test]
+    fn the_dog_chases_the_pelota() {
+        let (mut m, mut rng) = playground(9);
+        let start = m.nino.as_ref().unwrap().ball.x;
+        let (mut plays, mut nudges, mut far, mut close) = (0, 0, 0.0f32, f32::MAX);
+        let mut last = (State::Stand, 0.0);
+        for _ in 0..8000 {
+            m.dog.nap -= STEP as f32;
+            m.update(&mut rng);
+            if m.dog.state == State::Play && last.0 != State::Play {
+                plays += 1;
+            }
+            let b = &m.nino.as_ref().unwrap().ball;
+            assert!(
+                b.x.is_finite() && (0.0..=m.w as f32).contains(&b.x),
+                "ball at {}",
+                b.x
+            );
+            assert!((0.0..40.0).contains(&b.h), "ball at height {}", b.h);
+            if b.vx != last.1 && b.vy > 1.5 {
+                nudges += 1;
+            }
+            last = (m.dog.state, b.vx);
+            far = far.max((b.x - start).abs());
+            if m.dog.state == State::Play {
+                let head = m.dog.x + if m.dog.dir > 0.0 { 19.0 } else { 2.0 };
+                close = close.min((b.x - head).abs());
+            }
+        }
+        assert!(plays >= 2, "the dog played {plays} times");
+        assert!(nudges >= 4, "{nudges} nudges");
+        assert!(far > 20.0, "the pelota never went far: {far}");
+        assert!(close < 6.0, "the dog never reached the pelota");
+    }
+
+    /// Trompos spin, wobble, fall and are thrown again.
+    #[test]
+    fn the_trompos_spin_and_fall() {
+        let (mut m, mut rng) = playground(5);
+        let (mut falls, mut throws) = (0, 0);
+        let mut ages: Vec<u32> = m
+            .nino
+            .as_ref()
+            .unwrap()
+            .trompos
+            .iter()
+            .map(|t| t.age)
+            .collect();
+        for _ in 0..3000 {
+            m.dog.nap -= STEP as f32;
+            m.update(&mut rng);
+            let ni = m.nino.as_ref().unwrap();
+            for (t, age) in ni.trompos.iter().zip(ages.iter_mut()) {
+                assert!(t.x.is_finite() && t.x >= 0.0 && t.x <= m.w as f32);
+                if *age < t.life && t.age >= t.life {
+                    falls += 1;
+                }
+                if t.age < *age {
+                    throws += 1;
+                }
+                *age = t.age;
+            }
+        }
+        assert!(falls >= 2 && throws >= 2, "{falls} falls, {throws} throws");
+    }
+
+    /// The papalote flies above the dog, on a string from its collar, and
+    /// stays up in the sky and near the dog, whatever the dog does.
+    #[test]
+    fn the_papalote_flies_above_the_dog() {
+        let (mut m, mut rng) = playground(3);
+        for _ in 0..6000 {
+            m.dog.nap -= STEP as f32;
+            m.update(&mut rng);
+            let (kx, ky) = m.nino.as_ref().unwrap().kite;
+            let cx = m.dog.x + SPRITE_W as f32 / 2.0;
+            assert!(ky < (m.ground - 12) as f32, "the papalote is down at {ky}");
+            assert!(
+                (kx - cx).abs() < 60.0,
+                "the papalote is {} from the dog",
+                kx - cx
+            );
+        }
+        // The collar is somewhere on the dog in every pose.
+        for state in [
+            State::Run,
+            State::Stand,
+            State::Sit,
+            State::Nap,
+            State::Sniff,
+            State::Play,
+        ] {
+            m.dog.state = state;
+            let (ax, ay) = m.collar();
+            assert!(ax >= 0 && ax < m.w && ay > 0 && ay < m.ground);
+        }
+    }
+
     /// Odd sizes, steps and options survive with the holiday on, under the
     /// native theme and another.
     #[test]
@@ -4455,6 +5020,7 @@ mod tests {
                     Fiesta::of_day(9, 14),
                     Fiesta::height(Kind::Patrias),
                     Fiesta::of_day(9, 16),
+                    Fiesta::height(Kind::Nino),
                 ] {
                     let c = holiday(theme, &opts, fiesta);
                     let mut s = (INFO.make)(&c);
