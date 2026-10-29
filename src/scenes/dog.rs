@@ -57,6 +57,16 @@
 //! dark: José with his lantern, María on the burro, children with candles and
 //! luces de bengala. Lights, farolitos, nacimientos, pots and peregrinos come
 //! as the days go by toward Nochebuena. Like Muertos it rolls its own dice.
+//!
+//! During the Fiestas Patrias the dog wears a little sombrero de charro (brown
+//! and gold) and a sarape in the tricolor, and the meadow becomes a tianguis
+//! on packed earth: puestos under awnings striped verde, blanco y rojo, each
+//! with its vendor, a jar of banderas and one of rehiletes (the pinwheels
+//! spin), rehiletes pinned to the back and a bombilla that glows by night.
+//! Strands of papel picado in the three colors hang between masts over the
+//! street, swaying, and some masts fly a big flag with the águila on the
+//! nopal. More puestos, more strands and more flags as September goes by to
+//! the Grito, when the first strand is strung with bombillas too.
 
 use std::f32::consts::PI;
 
@@ -727,6 +737,32 @@ const BURRO: Sprite = &[
     "..d..d...d..d.",
 ];
 
+// Fiestas Patrias.
+const VERDE_BANDERA: Rgb = Rgb(0, 104, 71);
+const ROJO_BANDERA: Rgb = Rgb(206, 17, 38);
+const AGUILA: Rgb = Rgb(122, 74, 30);
+const NOPAL: Rgb = Rgb(79, 138, 42);
+const ORO: Rgb = Rgb(212, 160, 23);
+/// The clay of the vendors' jars and the tierra of the tianguis.
+const BARRO: Rgb = Rgb(170, 88, 52);
+const TIERRA: Rgb = Rgb(176, 140, 96);
+/// Seeds the Fiestas Patrias' own dice.
+const PATRIAS_SEED: u64 = 0x0050_4154_5249_4153;
+
+/// A scrap of papel picado, 5 by 5: `#` is paper, `.` a cut-out.
+const PAPEL: Sprite = &["#####", "#.#.#", ".###.", "#.#.#", "#.#.#"];
+
+/// A vendor behind the counter, 6 by 13: `h` her hat, `s` her face, `c` her
+/// shirt.
+const VENDEDOR: Sprite = &[
+    "..hh..", "hhhhhh", ".ssss.", ".ssss.", ".cccc.", "cccccc", "cccccc", "cccccc", "cccccc",
+    "cccccc", "cccccc", "cccccc", "cccccc",
+];
+
+/// A puesto's width between its poles, and how far apart the puestos stand.
+const PUESTO_W: i32 = 26;
+const PUESTO_PITCH: i32 = 34;
+
 #[derive(Clone, Copy, PartialEq)]
 enum State {
     Run,
@@ -1077,7 +1113,12 @@ impl Muertos {
 /// A holiday's colors: its own under `classic`, the theme's accents (the
 /// `first`th on) under any other theme.
 fn themed<const N: usize>(ctx: &Ctx, native: [Rgb; N], first: usize) -> [Rgb; N] {
-    std::array::from_fn(|i| rgb_of(ctx.pick(first + i, col(native[i]))).unwrap_or(native[i]))
+    themed_at(ctx, native, std::array::from_fn(|i| first + i))
+}
+
+/// Like [`themed`], with the theme's accent for each color picked by hand.
+fn themed_at<const N: usize>(ctx: &Ctx, native: [Rgb; N], at: [usize; N]) -> [Rgb; N] {
+    std::array::from_fn(|i| rgb_of(ctx.pick(at[i], col(native[i]))).unwrap_or(native[i]))
 }
 
 /// What the dog wears for a holiday.
@@ -1086,12 +1127,18 @@ enum Wear {
     Bare,
     /// A suéter navideño: rojo, verde and cream.
     Sueter([Rgb; 3]),
+    /// A sarape in verde, blanco and rojo, and a sombrero de charro with
+    /// its crown and its gold trim.
+    Charro([Rgb; 5]),
 }
 
 impl Wear {
     fn of(ctx: &Ctx) -> Wear {
         if ctx.fiesta.is(Kind::Navidad) {
             Wear::Sueter(themed(ctx, [ROJO_NOCHEBUENA, VERDE_PINO, BLANCO], 6))
+        } else if ctx.fiesta.is(Kind::Patrias) {
+            let native = [VERDE_BANDERA, BLANCO, ROJO_BANDERA, AGUILA, ORO];
+            Wear::Charro(themed_at(ctx, native, [3, 0, 6, 5, 4]))
         } else {
             Wear::Bare
         }
@@ -1447,6 +1494,121 @@ impl Navidad {
     }
 }
 
+/// A puesto of the tianguis: a stall under a striped awning selling banderas
+/// and rehiletes.
+struct Puesto {
+    /// Its left pole.
+    x: i32,
+    /// The color of its tablecloth, an index into the tricolor.
+    cloth: usize,
+    /// Dice for the vendor's looks.
+    seed: u32,
+}
+
+/// The Fiestas Patrias in the meadow, laid out for one world: a row of
+/// puestos on packed earth, strands of papel picado hung between masts, and
+/// big flags flying from some of them.
+struct Patrias {
+    /// The row where the puestos stand.
+    base: i32,
+    puestos: Vec<Puesto>,
+    /// The masts the strands hang from, and whether each flies a big flag.
+    masts: Vec<(i32, bool)>,
+    /// How many strands of papel picado hang between the masts.
+    strands: i32,
+    /// The bombillas of the puestos and, at the height of the holiday, of
+    /// the first strand.
+    bulbs: Vec<(i32, i32)>,
+    /// Verde, blanco and rojo.
+    tri: [Rgb; 3],
+}
+
+impl Patrias {
+    /// The holiday for this world, if it is on.
+    fn of(ctx: &Ctx, m: &Meadow) -> Option<Patrias> {
+        ctx.fiesta
+            .is(Kind::Patrias)
+            .then(|| Patrias::new(ctx, m.w, m.fence))
+    }
+
+    fn new(ctx: &Ctx, w: i32, fence: i32) -> Patrias {
+        let level = ctx.fiesta.level.clamp(0.0, 1.0);
+        let mut rng = Rng::with_seed(ctx.seed ^ PATRIAS_SEED);
+        let base = fence + 4;
+        let tri = themed_at(ctx, [VERDE_BANDERA, BLANCO, ROJO_BANDERA], [3, 0, 6]);
+        // Stalls in slots across the street, a mast in the gap between
+        // two slots; more of the slots are taken as the month goes by, and
+        // the middle one always is.
+        let mut x = -rng.range(0, PUESTO_PITCH);
+        let mut slots = Vec::new();
+        let mut masts = vec![x - 3];
+        while x < w + PUESTO_PITCH {
+            slots.push(x);
+            masts.push(x + PUESTO_PITCH - 3);
+            x += PUESTO_PITCH;
+        }
+        let mut puestos = Vec::new();
+        for (i, &sx) in slots.iter().enumerate() {
+            if i == slots.len() / 2 || rng.f32() < 0.35 + 0.65 * level {
+                puestos.push(Puesto {
+                    x: sx + 2,
+                    cloth: rng.range(0, 3) as usize,
+                    seed: rng.u32(..),
+                });
+            }
+        }
+        let masts: Vec<(i32, bool)> = masts
+            .into_iter()
+            .enumerate()
+            .map(|(i, x)| (x, i % 2 == 1 && rng.f32() < 0.3 + 0.7 * level))
+            .collect();
+        let strands = 1 + (2.4 * level) as i32;
+        let mut pa = Patrias {
+            base,
+            puestos,
+            masts,
+            strands,
+            bulbs: Vec::new(),
+            tri,
+        };
+        let mut bulbs: Vec<(i32, i32)> = pa
+            .puestos
+            .iter()
+            .flat_map(|p| [(p.x + 7, base - 21), (p.x + 19, base - 21)])
+            .collect();
+        if level >= 0.9 {
+            for pair in pa.masts.windows(2) {
+                let (xa, xb) = (pair[0].0, pair[1].0);
+                bulbs.extend(
+                    (xa + 4..xb - 2)
+                        .step_by(7)
+                        .map(|x| (x, pa.strand_y(0, xa, xb, x) + 1)),
+                );
+            }
+        }
+        pa.bulbs = bulbs;
+        pa
+    }
+
+    /// The rows of the meadow the tianguis covers, which the grass leaves clear.
+    fn cleared(&self, fence: i32) -> (i32, i32) {
+        (fence + 1, self.base + 5)
+    }
+
+    /// The row of strand `j` at `x`, between the masts at `xa` and `xb`: it
+    /// sags in the middle.
+    fn strand_y(&self, j: i32, xa: i32, xb: i32, x: i32) -> i32 {
+        let t = (x - xa) as f32 / (xb - xa).max(1) as f32;
+        self.base - 51 + 6 * j + (3.0 * 4.0 * t * (1.0 - t)) as i32
+    }
+
+    /// Two colors for a rehilete's blades.
+    fn pair(&self, i: usize) -> (Rgb, Rgb) {
+        let t = &self.tri;
+        [(t[0], t[2]), (t[2], t[1]), (t[1], t[0]), (ORO, t[2])][i % 4]
+    }
+}
+
 /// What part of the world is on screen: top-left corner in world pixels and
 /// screen pixels per world pixel.
 #[derive(Clone, Copy)]
@@ -1601,6 +1763,8 @@ struct Meadow {
     xolo: bool,
     /// Navidad, when it is on: a street of houses stands in the meadow.
     navidad: Option<Navidad>,
+    /// The Fiestas Patrias, when they are on: a tianguis in the meadow.
+    patrias: Option<Patrias>,
     /// Rows of the meadow where no grass grows for the holiday's street.
     street: Option<(i32, i32)>,
     /// What the dog wears.
@@ -1740,6 +1904,7 @@ impl Meadow {
             muertos: None,
             xolo: false,
             navidad: None,
+            patrias: None,
             street: None,
             wear: Wear::Bare,
         };
@@ -1752,10 +1917,12 @@ impl Meadow {
         self.muertos = Muertos::of(ctx, self);
         self.xolo = self.muertos.is_some();
         self.navidad = Navidad::of(ctx, self);
-        self.street = self
-            .navidad
-            .as_ref()
-            .map(|nv| nv.cleared(self.ground, self.fence));
+        self.patrias = Patrias::of(ctx, self);
+        self.street = match (&self.navidad, &self.patrias) {
+            (Some(nv), _) => Some(nv.cleared(self.ground, self.fence)),
+            (_, Some(pa)) => Some(pa.cleared(self.fence)),
+            _ => None,
+        };
         self.wear = Wear::of(ctx);
     }
 
@@ -2148,6 +2315,10 @@ impl Meadow {
         if let Some(nv) = &nv {
             self.draw_street(nv);
         }
+        let pa = self.patrias.take();
+        if let Some(pa) = &pa {
+            self.draw_tianguis(pa);
+        }
         let split = self.blades.partition_point(|b| b.y < self.ground);
         let mu = self.muertos.take();
         match &mu {
@@ -2178,6 +2349,7 @@ impl Meadow {
         }
         self.muertos = mu;
         self.navidad = nv;
+        self.patrias = pa;
     }
 
     fn draw_sun_moon(&mut self) {
@@ -2454,6 +2626,9 @@ impl Meadow {
                 };
                 self.put(x0 + sx, top + ry as i32, c);
             }
+        }
+        if let Wear::Charro([.., crown, trim]) = self.wear {
+            self.draw_sombrero(crown, trim, x0, top);
         }
     }
 
@@ -2771,6 +2946,10 @@ impl Meadow {
             self.draw_navidad_lights(&nv, v, night);
             self.navidad = Some(nv);
         }
+        if let Some(pa) = self.patrias.take() {
+            self.draw_patrias_lights(&pa, v, night);
+            self.patrias = Some(pa);
+        }
     }
 
     /// The sleeping dog's z's, as letters over the picture.
@@ -2868,6 +3047,208 @@ impl Meadow {
         x >= -r && y >= -r && x <= self.sw + r && y <= self.sph + r
     }
 
+    // ----- Fiestas Patrias -----
+
+    /// The tianguis: packed earth, the puestos, the masts with their strands
+    /// of papel picado and the big flags.
+    fn draw_tianguis(&mut self, pa: &Patrias) {
+        let (w, b) = (self.w, pa.base);
+        let tierra = [TIERRA, TIERRA.scale(0.9), TIERRA.scale(1.08)].map(|c| self.shade(c));
+        for y in b + 1..=b + 5 {
+            for x in 0..w {
+                self.put(x, y, tierra[(hash(x, y, 0x7157) % 3) as usize]);
+            }
+        }
+        for pu in &pa.puestos {
+            self.draw_puesto(pa, pu);
+        }
+        let mast = self.shade(POST);
+        for &(mx, _) in &pa.masts {
+            self.fill(mx, b - 54, 1, 57, mast);
+        }
+        // Strands of papel picado, swaying a little in the wind.
+        let cord = self.shade(Rgb(214, 204, 180));
+        let tick = self.tick as f32;
+        for j in 0..pa.strands {
+            for (k, pair) in pa.masts.windows(2).enumerate() {
+                let (xa, xb) = (pair[0].0, pair[1].0);
+                for x in xa..=xb {
+                    self.put(x, pa.strand_y(j, xa, xb, x), cord);
+                }
+                let (mut x, mut i) = (xa + 3, 0);
+                while x + 5 < xb {
+                    let y = pa.strand_y(j, xa, xb, x + 2) + 1;
+                    let c = self.shade(pa.tri[(i + j as usize + k) % 3]);
+                    let sway =
+                        ((tick * 0.07 + x as f32 * 0.21 + j as f32).sin() * 1.3).round() as i32;
+                    for (ry, row) in PAPEL.iter().enumerate() {
+                        for (rx, ch) in row.bytes().enumerate() {
+                            if ch == b'#' {
+                                let dx = if ry >= 2 { sway } else { 0 };
+                                self.put(x + rx as i32 + dx, y + ry as i32, c);
+                            }
+                        }
+                    }
+                    x += 6;
+                    i += 1;
+                }
+            }
+        }
+        for &(mx, flag) in &pa.masts {
+            if flag {
+                self.draw_bandera(pa, mx + 1, b - 54);
+            }
+        }
+    }
+
+    /// A big flag flying from a mast, 12 by 7: tricolor with the águila on
+    /// the nopal at its heart, rippling more the further it is from the mast.
+    fn draw_bandera(&mut self, pa: &Patrias, x: i32, y: i32) {
+        let t = self.tick as f32;
+        let (aguila, nopal, oro) = (self.shade(AGUILA), self.shade(NOPAL), self.shade(ORO));
+        for col in 0..12 {
+            let wave = (t * 0.14 + col as f32 * 0.55).sin() * col as f32 / 12.0 * 1.4;
+            let dy = wave.round() as i32;
+            // The folds darken a little.
+            let fold = 1.0 - 0.14 * wave.abs();
+            let c = self.shade(pa.tri[col as usize / 4]).scale(fold);
+            for row in 0..7 {
+                let c = match (col, row) {
+                    (5 | 6, 2 | 3) => aguila,
+                    (5 | 6, 4) => nopal,
+                    (5, 1) => oro,
+                    _ => c,
+                };
+                self.put(x + col, y + row + dy, c);
+            }
+        }
+    }
+
+    /// A rehilete, a pinwheel on its stick, whose blades are at `phase` of
+    /// their turn: the four of them at right angles, then at the diagonals,
+    /// with the colors swapped half way round.
+    fn rehilete(&mut self, x: i32, y: i32, phase: u32, (a, b): (Rgb, Rgb)) {
+        let (a, b) = if phase & 2 == 0 { (a, b) } else { (b, a) };
+        let (a, b) = (self.shade(a), self.shade(b));
+        for d in 1..=2 {
+            if phase & 1 == 0 {
+                self.put(x, y - d, a);
+                self.put(x, y + d, a);
+                self.put(x - d, y, b);
+                self.put(x + d, y, b);
+            } else {
+                self.put(x - d, y - d, a);
+                self.put(x + d, y + d, a);
+                self.put(x + d, y - d, b);
+                self.put(x - d, y + d, b);
+            }
+        }
+        self.put(x, y, self.shade(ORO));
+    }
+
+    /// A little flag on a stick, 3 by 3, with a gold dot for the escudo.
+    fn bandera_chica(&mut self, pa: &Patrias, x: i32, y: i32) {
+        for (i, c) in pa.tri.iter().enumerate() {
+            self.fill(x + i as i32, y, 1, 3, self.shade(*c));
+        }
+        self.put(x + 1, y + 1, self.shade(ORO));
+    }
+
+    /// A puesto: a counter with jars of banderas and rehiletes, rehiletes
+    /// pinned to the back, a bombilla under the awning and the vendor.
+    fn draw_puesto(&mut self, pa: &Patrias, pu: &Puesto) {
+        let (b, x0, h) = (pa.base, pu.x, pu.seed);
+        let wood = self.shade(POST);
+        self.fill(
+            x0 + 1,
+            b - 22,
+            PUESTO_W - 2,
+            13,
+            self.shade(Rgb(92, 66, 48)),
+        );
+        self.fill(x0, b - 28, 1, 29, wood);
+        self.fill(x0 + PUESTO_W - 1, b - 28, 1, 29, wood);
+        // The awning in stripes of the tricolor, with a scalloped valance.
+        for x in x0 - 1..x0 + PUESTO_W + 1 {
+            let c = self.shade(pa.tri[((x - x0 + 3) / 3 % 3) as usize]);
+            self.fill(x, b - 28, 1, 5, c);
+            if (x - x0).rem_euclid(3) < 2 {
+                self.put(x, b - 23, c);
+            }
+        }
+        for (i, dx) in [3, 7, 18, 22].into_iter().enumerate() {
+            let phase = self.tick / 3 + i as u32 + (h & 3);
+            self.rehilete(x0 + dx, b - 17, phase, pa.pair(i + (h >> 2) as usize));
+        }
+        for dx in [7, 19] {
+            self.put(x0 + dx, b - 22, self.shade(Rgb(40, 30, 24)));
+            let bulb = self.candlelit(Rgb(255, 226, 140));
+            self.put(x0 + dx, b - 21, bulb);
+            self.put(x0 + dx, b - 20, bulb.scale(0.8));
+        }
+        let skin = [PIEL, Rgb(186, 130, 92), Rgb(150, 100, 70)][(h >> 4) as usize % 3];
+        let shirt = [
+            Rgb(236, 226, 200),
+            Rgb(190, 60, 50),
+            Rgb(70, 120, 170),
+            Rgb(210, 170, 60),
+        ][(h >> 8) as usize % 4];
+        self.stamp(VENDEDOR, x0 + 10, b - 22, false, 1.0, |ch| match ch {
+            b'h' => Some((CANA, false)),
+            b's' => Some((skin, false)),
+            b'c' => Some((shirt, false)),
+            _ => None,
+        });
+        // The counter, with a tablecloth in one of the three colors.
+        let cloth = pa.tri[pu.cloth];
+        self.fill(x0 + 1, b - 9, PUESTO_W - 2, 1, self.shade(WOOD));
+        self.fill(x0 + 1, b - 8, PUESTO_W - 2, 9, self.shade(cloth));
+        self.fill(
+            x0 + 1,
+            b - 6,
+            PUESTO_W - 2,
+            1,
+            self.shade(cloth.lerp(Rgb::WHITE, 0.35)),
+        );
+        self.fill(x0 + 1, b, PUESTO_W - 2, 1, self.shade(cloth.scale(0.7)));
+        // A jar of banderas on the left of the counter, one of rehiletes on
+        // the right.
+        let (clay, stick) = (self.shade(BARRO), self.shade(CANA));
+        self.fill(x0 + 3, b - 12, 5, 3, clay);
+        self.fill(x0 + 19, b - 12, 5, 3, clay);
+        for (dx, ht) in [(4, 7), (6, 5)] {
+            self.fill(x0 + dx, b - 12 - ht, 1, ht, stick);
+            self.bandera_chica(pa, x0 + dx + 1, b - 12 - ht);
+        }
+        for (i, (dx, ht)) in [(20, 6), (22, 4)].into_iter().enumerate() {
+            self.fill(x0 + dx, b - 12 - ht, 1, ht, stick);
+            let phase = self.tick / 2 + i as u32 + ((h >> 6) & 3);
+            self.rehilete(
+                x0 + dx,
+                b - 14 - ht,
+                phase,
+                pa.pair(i + 2 + (h >> 10) as usize),
+            );
+        }
+    }
+
+    /// The bombillas' glow, straight onto the screen.
+    fn draw_patrias_lights(&mut self, pa: &Patrias, v: View, night: f32) {
+        let k = ((night - 0.2) / 0.5).clamp(0.0, 1.0);
+        if k <= 0.0 {
+            return;
+        }
+        let tick = self.tick as f32;
+        for (i, &(bx, by)) in pa.bulbs.iter().enumerate() {
+            let r = 2.5 + 2.0 * v.z;
+            let (x, y) = v.to_screen(bx as f32 + 0.5, by as f32 + 0.5);
+            if self.visible(x, y, r.ceil() as i32) {
+                let flicker = 0.9 + 0.1 * (tick * 0.5 + i as f32 * 2.3).sin();
+                self.glow(x, y, r, Rgb(255, 214, 120), 0.5 * k * flicker);
+            }
+        }
+    }
+
     // ----- what the dog wears -----
 
     /// The dog's trunk in its sprite, as (first row, last row, first column,
@@ -2881,14 +3262,27 @@ impl Meadow {
         }
     }
 
+    /// The dog's head in its sprite, as (top row, middle column, how far a
+    /// hat's brim reaches either side): where a sombrero goes.
+    fn head(&self) -> (i32, i32, i32, i32) {
+        match self.dog.state {
+            State::Sniff => (6, 18, 1, 4),
+            State::Sit | State::Nap => (0, 15, 4, 4),
+            _ => (0, 17, 4, 4),
+        }
+    }
+
     /// What the dog wears over the sprite pixel `ch` at column `rx`, row
-    /// `ry`, if anything: the suéter navideño has a green band with cream
-    /// stitches, a dotted red body and a cream hem and collar.
+    /// `ry`, if anything. The suéter navideño has a green band with cream
+    /// stitches, a dotted red body and a cream hem and collar; the sarape is
+    /// striped verde, blanco y rojo, flag-wise, with a fringe along its hem.
     fn worn(&self, ch: u8, rx: i32, ry: i32) -> Option<Rgb> {
-        let Wear::Sueter([red, green, cream]) = self.wear else {
+        if self.wear == Wear::Bare {
             return None;
-        };
-        if ch == b'c' {
+        }
+        if let Wear::Sueter([_, _, cream]) = self.wear
+            && ch == b'c'
+        {
             return Some(cream);
         }
         let (r0, r1, c0, c1) = self.trunk();
@@ -2897,18 +3291,57 @@ impl Meadow {
             return None;
         }
         let j = rx - c0;
-        Some(match ry - r0 {
-            _ if ry == r1 => cream,
-            1 => {
-                if j % 2 == 0 {
-                    cream
-                } else {
-                    green
+        match self.wear {
+            Wear::Sueter([red, green, cream]) => Some(match ry - r0 {
+                _ if ry == r1 => cream,
+                1 => {
+                    if j % 2 == 0 {
+                        cream
+                    } else {
+                        green
+                    }
                 }
+                2 if j % 3 == 1 => cream,
+                _ => red,
+            }),
+            Wear::Charro([verde, blanco, rojo, ..]) => {
+                // Green on the left of the screen whichever way it faces.
+                let k = (j / 3).min(2);
+                let k = if self.dog.dir > 0.0 { k } else { 2 - k };
+                Some(if ry == r1 && j % 2 == 0 {
+                    blanco
+                } else {
+                    [verde, blanco, rojo][k as usize]
+                })
             }
-            2 if j % 3 == 1 => cream,
-            _ => red,
-        })
+            Wear::Bare => None,
+        }
+    }
+
+    /// The sombrero de charro: a tall crown with a gold band over a wide
+    /// brim turned up at its ends, three rows above the head.
+    fn draw_sombrero(&mut self, crown: Rgb, trim: Rgb, x0: i32, top: i32) {
+        let (hy, hx, l, r) = self.head();
+        let flip = self.dog.dir <= 0.0;
+        let (crown, trim) = (self.shade(crown), self.shade(trim));
+        let y = top + hy;
+        let at = |dx: i32| {
+            x0 + if flip {
+                SPRITE_W - 1 - (hx + dx)
+            } else {
+                hx + dx
+            }
+        };
+        for dx in -1..=1 {
+            self.put(at(dx), y - 3, crown);
+            self.put(at(dx), y - 2, trim);
+        }
+        for dx in -l..=r {
+            let c = if dx == -l || dx == r { trim } else { crown };
+            self.put(at(dx), y - 1, c);
+        }
+        self.put(at(-l), y - 2, trim);
+        self.put(at(r), y - 2, trim);
     }
 
     // ----- Navidad -----
@@ -3647,7 +4080,11 @@ mod tests {
     fn the_holiday_keeps_a_see_through_sky_empty() {
         let theme = Theme::classic();
         let opts = Opts::new(INFO.options, "sky = false".parse().unwrap());
-        for fiesta in [Fiesta::of_day(11, 2), Fiesta::of_day(12, 20)] {
+        for fiesta in [
+            Fiesta::of_day(11, 2),
+            Fiesta::of_day(12, 20),
+            Fiesta::height(Kind::Patrias),
+        ] {
             let c = holiday(&theme, &opts, fiesta);
             for t in [0.0, 0.5] {
                 let mut s = DogScene::new(&c);
@@ -3692,7 +4129,6 @@ mod tests {
             Kind::Nino,
             Kind::SantaCruz,
             Kind::Guelaguetza,
-            Kind::Patrias,
             Kind::Revolucion,
         ] {
             let c = holiday(&theme, &opts, Fiesta::height(kind));
@@ -3843,6 +4279,162 @@ mod tests {
         assert!(laps >= 1, "the procession never came round");
     }
 
+    /// Through the mes patrio the dog wears a sombrero de charro and a
+    /// sarape, and the meadow has a tianguis with its puestos, its strands of
+    /// papel picado and its flags; more of it as the days go by to the Grito.
+    /// On an ordinary day, none of it.
+    #[test]
+    fn patrias_dresses_the_tianguis() {
+        let theme = Theme::classic();
+        let opts = Opts::new(INFO.options, toml::Table::new());
+        let mut counts = Vec::new();
+        for fiesta in [Fiesta::of_day(9, 1), Fiesta::height(Kind::Patrias)] {
+            let c = holiday(&theme, &opts, fiesta);
+            let mut s = DogScene::new(&c);
+            s.resize(&c, 160, 48);
+            s.retheme(&c);
+            let mut cv = Canvas::new(160, 48, Color::Reset);
+            s.m.t = 0.4;
+            s.m.update_sky();
+            s.tick(&c, 0.05, 0.05);
+            s.draw(&c, &mut cv);
+            let pa = s.m.patrias.as_ref().expect("dressed");
+            assert!(matches!(s.m.wear, Wear::Charro(_)));
+            assert!(!pa.puestos.is_empty() && !pa.bulbs.is_empty() && s.m.street.is_some());
+            for c in [VERDE_BANDERA, BLANCO, ROJO_BANDERA, ORO, AGUILA, BARRO] {
+                assert!(painted(&s.m, c), "{fiesta:?}: {c:?} missing");
+            }
+            // The sarape is striped in the three colors.
+            let sarape = [VERDE_BANDERA, BLANCO, ROJO_BANDERA];
+            let stripes: Vec<_> = (5..=13).map(|x| s.m.worn(b'B', x, 6)).collect();
+            assert!(
+                sarape.iter().all(|&c| stripes.contains(&Some(c))),
+                "{stripes:?}"
+            );
+            counts.push((
+                pa.puestos.len(),
+                pa.strands,
+                pa.masts.iter().filter(|m| m.1).count(),
+            ));
+        }
+        let (early, full) = (counts[0], counts[1]);
+        assert!(
+            full.0 > early.0 && full.1 > early.1 && full.2 >= early.2,
+            "{counts:?}"
+        );
+
+        let c = ctx(&theme, &opts);
+        let mut s = DogScene::new(&c);
+        s.resize(&c, 160, 48);
+        let mut cv = Canvas::new(160, 48, Color::Reset);
+        s.draw(&c, &mut cv);
+        assert!(s.m.patrias.is_none() && s.m.street.is_none() && s.m.wear == Wear::Bare);
+        assert!(!painted(&s.m, VERDE_BANDERA) && !painted(&s.m, ROJO_BANDERA));
+    }
+
+    #[test]
+    fn patrias_comes_and_goes() {
+        comes_and_goes(Fiesta::of_day(9, 15), |m| {
+            m.patrias.is_some() && m.street.is_some() && m.wear != Wear::Bare
+        });
+    }
+
+    /// The sombrero sits on the dog's head in every pose, and the sarape on
+    /// its back, whichever way it faces.
+    #[test]
+    fn the_charro_wears_its_sombrero_in_every_pose() {
+        let theme = Theme::classic();
+        let opts = Opts::new(INFO.options, toml::Table::new());
+        let c = holiday(&theme, &opts, Fiesta::height(Kind::Patrias));
+        let mut s = DogScene::new(&c);
+        s.resize(&c, 160, 48);
+        let m = &mut s.m;
+        let Wear::Charro([.., crown, trim]) = m.wear else {
+            panic!("no sombrero")
+        };
+        for state in [
+            State::Run,
+            State::Stand,
+            State::Sit,
+            State::Nap,
+            State::Sniff,
+            State::Chase,
+        ] {
+            for dir in [1.0, -1.0] {
+                m.dog.state = state;
+                m.dog.dir = dir;
+                m.dog.x = 40.0;
+                m.draw();
+                // The crown and the gold band stand over the middle of the head.
+                let (sprite, bob) = m.sprite();
+                let top = m.ground - m.dog.hop.round() as i32 + bob - sprite.len() as i32 + 1;
+                let (hy, hx, _, _) = m.head();
+                let sx = if dir > 0.0 { hx } else { SPRITE_W - 1 - hx };
+                let at = |dy: i32| m.px[((top + hy + dy) * m.w + 40 + sx) as usize];
+                assert!(
+                    at(-3) == m.shade(crown) && at(-2) == m.shade(trim),
+                    "{dir} {}",
+                    state as usize
+                );
+                let (_, _, c0, c1) = m.trunk();
+                let k: Vec<_> = (c0..=c1).filter_map(|x| m.worn(b'B', x, 6)).collect();
+                if matches!(state, State::Run | State::Stand | State::Chase) {
+                    assert_eq!(k.len(), 9);
+                    // Green on the left of the screen, red on the right.
+                    let left = if dir > 0.0 { k[0] } else { k[8] };
+                    let right = if dir > 0.0 { k[8] } else { k[0] };
+                    assert!(left == VERDE_BANDERA && right == ROJO_BANDERA);
+                }
+            }
+        }
+    }
+
+    /// A rehilete turns: its four phases are four different pinwheels.
+    #[test]
+    fn the_rehiletes_spin() {
+        let theme = Theme::classic();
+        let opts = Opts::new(INFO.options, toml::Table::new());
+        let c = holiday(&theme, &opts, Fiesta::height(Kind::Patrias));
+        let mut s = DogScene::new(&c);
+        s.resize(&c, 100, 30);
+        let m = &mut s.m;
+        let mut seen: Vec<Vec<Rgb>> = Vec::new();
+        for phase in 0..4 {
+            m.px.fill(Rgb::BLACK);
+            m.rehilete(10, 10, phase, (VERDE_BANDERA, ROJO_BANDERA));
+            seen.push(
+                (8..=12)
+                    .flat_map(|y| (8..=12).map(move |x| (x, y)))
+                    .map(|(x, y)| m.px[(y * m.w + x) as usize])
+                    .collect(),
+            );
+        }
+        for i in 0..4 {
+            for j in i + 1..4 {
+                assert!(seen[i] != seen[j], "phases {i} and {j} look alike");
+            }
+        }
+    }
+
+    /// The strands of papel picado sway in the wind: the same strands look
+    /// different a moment later, and the same moment looks the same twice.
+    #[test]
+    fn the_papel_picado_sways() {
+        let theme = Theme::classic();
+        let opts = Opts::new(INFO.options, toml::Table::new());
+        let c = holiday(&theme, &opts, Fiesta::height(Kind::Patrias));
+        let mut s = DogScene::new(&c);
+        s.resize(&c, 160, 48);
+        let (w, b) = (s.m.w, s.m.patrias.as_ref().unwrap().base);
+        let mut strands = |tick: u32| {
+            s.m.tick = tick;
+            s.m.draw();
+            s.m.px[(((b - 51) * w) as usize)..(((b - 34) * w) as usize)].to_vec()
+        };
+        let (a, again, later) = (strands(0), strands(0), strands(40));
+        assert!(a == again && a != later);
+    }
+
     /// Odd sizes, steps and options survive with the holiday on, under the
     /// native theme and another.
     #[test]
@@ -3859,6 +4451,10 @@ mod tests {
                     Fiesta::of_day(12, 20),
                     Fiesta::height(Kind::Navidad),
                     Fiesta::of_day(1, 6),
+                    Fiesta::of_day(9, 1),
+                    Fiesta::of_day(9, 14),
+                    Fiesta::height(Kind::Patrias),
+                    Fiesta::of_day(9, 16),
                 ] {
                     let c = holiday(theme, &opts, fiesta);
                     let mut s = (INFO.make)(&c);
