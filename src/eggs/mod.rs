@@ -9,16 +9,21 @@
 //! eggs never change what `record`, `snap` and `bench` produce. Those never
 //! roll for an egg; only the interactive loop does (or a forced rate).
 
+pub mod aguila;
 pub mod alebrije;
 pub mod calaverita;
 pub mod catrina;
 pub mod duckpond;
+pub mod grito;
+pub mod jarabe;
 pub mod mariachis;
 pub mod monarcas;
 mod muertos;
 pub mod nyan;
 pub(crate) mod palette;
+mod patrias;
 pub mod sl;
+mod stage;
 
 use crate::color::Color;
 use crate::fiesta::{Fiesta, Kind};
@@ -62,6 +67,9 @@ pub const ALL: &[&Info] = &[
     &alebrije::INFO,
     &mariachis::INFO,
     &calaverita::INFO,
+    &grito::INFO,
+    &jarabe::INFO,
+    &aguila::INFO,
 ];
 
 /// An `egg_rate` at or above this plays an egg at once, again and again, and
@@ -506,6 +514,44 @@ mod tests {
         }
     }
 
+    /// A holiday's visitors come on its days (here: from its first to its
+    /// last), and never on an ordinary day or another holiday.
+    fn keep_to(names: &[&str], kind: Kind, days: &[(u32, u32)]) {
+        let elsewhere = [(6, 15), (8, 20), (11, 2), (12, 24), (11, 20), (9, 15)];
+        for name in names {
+            let info = ALL.iter().find(|i| i.name == *name).unwrap();
+            assert_eq!(info.fiesta, kind, "{name}");
+            let mut e = Eggs::new(80, 24);
+            e.start(&[info], Fiesta::NONE);
+            assert!(!e.active(), "{name} came on an ordinary day");
+            for (m, d) in elsewhere {
+                let day = Fiesta::of_day(m, d);
+                if day.kind == kind {
+                    continue;
+                }
+                let mut e = Eggs::new(80, 24);
+                e.start(&[info], day);
+                assert!(!e.active(), "{name} came on {m}-{d}");
+            }
+            for &(m, d) in days {
+                let mut e = Eggs::new(80, 24);
+                e.start(&[info], Fiesta::of_day(m, d));
+                assert!(e.active(), "{name} on {m}-{d}");
+            }
+        }
+    }
+
+    /// The Fiestas Patrias visitors come during the mes patrio, from the
+    /// first of September to the night of the Grito and the parade after it.
+    #[test]
+    fn the_visitors_keep_to_patrias() {
+        keep_to(
+            &["grito", "jarabe", "aguila"],
+            Kind::Patrias,
+            &[(9, 1), (9, 15), (9, 16)],
+        );
+    }
+
     /// Any egg survives tiny and huge screens and long steps, under any theme.
     #[test]
     fn eggs_survive_odd_sizes_and_huge_steps() {
@@ -523,7 +569,7 @@ mod tests {
                     }
                     // The visitors are done within 30 s at any size (the
                     // scheduler cuts the others short).
-                    if info.fiesta == Kind::Muertos {
+                    if info.fiesta != Kind::None {
                         let mut secs = 0.0;
                         while !e.done() && secs <= 30.0 {
                             e.update(0.25);
