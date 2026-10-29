@@ -25,6 +25,7 @@ mod equinoccio;
 pub mod grito;
 pub mod inocente;
 pub mod jarabe;
+pub mod judas;
 pub mod juguetes;
 pub mod kukulcan;
 pub mod loteria;
@@ -40,6 +41,7 @@ mod patrias;
 mod pen;
 pub mod pinata;
 pub mod posada;
+mod quema;
 mod revolucion;
 pub mod reyes;
 mod santacruz;
@@ -107,6 +109,7 @@ pub const ALL: &[&Info] = &[
     &cruz::INFO,
     &chinelos::INFO,
     &comparsa::INFO,
+    &judas::INFO,
 ];
 
 /// An `egg_rate` at or above this plays an egg at once, again and again, and

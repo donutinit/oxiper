@@ -38,6 +38,21 @@ impl Xf {
             flip: false,
         }
     }
+
+    /// Where a point of the art (a column and row of the art as it is
+    /// before any mirroring, in art `w` pixels wide) lands on the screen.
+    pub fn map(&self, w: f32, (ax, ay): (f32, f32)) -> (f32, f32) {
+        let ax = if self.flip { w - ax } else { ax };
+        let (dx, dy) = (
+            (ax - self.pivot.0) * self.scale.0,
+            (ay - self.pivot.1) * self.scale.1,
+        );
+        let (sin, cos) = self.rot.sin_cos();
+        (
+            self.at.0 + dx * cos - dy * sin,
+            self.at.1 + dx * sin + dy * cos,
+        )
+    }
 }
 
 /// Draws pixel art (as for [`sprite`](super::sprite): `.` and spaces are see
@@ -241,6 +256,38 @@ mod tests {
         for xf in [turned, Xf::new(-40, -9, 3.0), Xf::new(7, 3, 0.25)] {
             blit(&mut c, &art, xf, |r| r * 9, |_| Some(rgb(0)));
         }
+    }
+
+    /// A point of the art lands where the art is drawn, however it is
+    /// scaled, turned and mirrored.
+    #[test]
+    fn map_follows_the_art() {
+        let xf = Xf {
+            pivot: (1.0, 1.0),
+            at: (10.0, 10.0),
+            scale: (2.0, 2.0),
+            rot: 0.0,
+            flip: false,
+        };
+        assert_eq!(xf.map(4.0, (1.0, 1.0)), (10.0, 10.0));
+        assert_eq!(xf.map(4.0, (3.0, 2.0)), (14.0, 12.0));
+        // A quarter turn clockwise takes what is to the right below.
+        let turned = Xf {
+            rot: std::f32::consts::FRAC_PI_2,
+            ..xf
+        };
+        let (x, y) = turned.map(4.0, (3.0, 1.0));
+        assert!(
+            (x - 10.0).abs() < 1e-4 && (y - 14.0).abs() < 1e-4,
+            "{x} {y}"
+        );
+        // Mirrored art has its left edge at the right.
+        let mirrored = Xf {
+            pivot: (3.0, 1.0),
+            flip: true,
+            ..xf
+        };
+        assert_eq!(mirrored.map(4.0, (1.0, 1.0)), (10.0, 10.0));
     }
 
     #[test]
