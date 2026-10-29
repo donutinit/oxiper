@@ -2,7 +2,9 @@
 //! on aafire's flames.
 //!
 //! Each holiday is a [`Piece`]: the Navidad's fogata at a posada with an olla
-//! of ponche steaming over it (`navidad.rs`), and the rest as they come. A
+//! of ponche steaming over it (`navidad.rs`), the fogón of the Grito with its
+//! pozolera, its comal and its luces de bengala (`patrias.rs`), and the rest
+//! as they come. A
 //! piece sets its things out for the screen (`layout`), says where the fire's
 //! fuel burns (`fuel`) and how high its flames reach, and draws: first what
 //! stays behind the flames (steam), then the vessels and the like, over which
@@ -16,9 +18,10 @@
 //! fire's random numbers on ordinary days are untouched.
 
 mod navidad;
+mod patrias;
 
 use super::{FP, PAD};
-use crate::color::Color;
+use crate::color::{Color, rgb};
 use crate::fiesta::{Fiesta, Kind};
 use crate::render::{Canvas, Pixels};
 use crate::scene::Ctx;
@@ -168,6 +171,7 @@ impl Fogon {
             let seed = self.seed ^ SALT;
             self.piece = match kind {
                 Kind::Navidad => Some(Box::new(navidad::Posada::new(seed))),
+                Kind::Patrias => Some(Box::new(patrias::Grito::new(seed))),
                 _ => None,
             };
         }
@@ -321,6 +325,15 @@ fn cool(heat: &mut [u16], stride: usize, y: i32, x0: i32, x1: i32, keep: f32) {
     for v in &mut heat[at + lo..at + hi] {
         *v = (*v as f32 * keep) as u16;
     }
+}
+
+/// A hash of three small numbers, for dither that needs no dice.
+#[inline]
+fn hash(a: i32, b: i32, c: u32) -> u32 {
+    let mut h = (a as u32).wrapping_mul(0x9e37_79b1) ^ (b as u32).wrapping_mul(0x85eb_ca6b) ^ c;
+    h ^= h >> 15;
+    h = h.wrapping_mul(0x2c1b_3c6d);
+    h ^ (h >> 13)
 }
 
 /// A disc of radius `r` around (`cx`, `cy`).
@@ -512,6 +525,94 @@ impl Steam {
                 _ => '.',
             };
             c.set(x, y, ch, ctx.fade(col, 1.0 - alpha * 0.8));
+        }
+    }
+}
+
+#[derive(Clone, Copy)]
+struct Spark {
+    x: f32,
+    y: f32,
+    vx: f32,
+    vy: f32,
+    age: f32,
+    life: f32,
+    /// Its colors: 0 white-gold, 1 red and gold, 2 an ember.
+    hue: u8,
+}
+
+/// Sparks flying from luces de bengala and the like, in a pool that never
+/// grows: when it is full, no more sparks come.
+pub(super) struct Sparks {
+    rng: fastrand::Rng,
+    v: Vec<Spark>,
+}
+
+/// The colors a spark of each hue goes through as it burns out.
+const SPARK_COLORS: [[u32; 4]; 3] = [
+    [0xfffbe8, 0xffd23b, 0xff8c1a, 0x8a2a08],
+    [0xffd23b, 0xff4a3a, 0xc02020, 0x601010],
+    [0xff8a1a, 0xff5a10, 0xa02a08, 0x400e04],
+];
+
+impl Sparks {
+    fn new(seed: u64) -> Sparks {
+        Sparks {
+            rng: fastrand::Rng::with_seed(seed),
+            v: Vec::new(),
+        }
+    }
+
+    fn clear(&mut self) {
+        self.v.clear();
+    }
+
+    /// Makes room for `n` sparks at once.
+    fn reserve(&mut self, n: usize) {
+        self.v.reserve_exact(n);
+    }
+
+    /// A spark leaves (`x`, `y`) in a random direction at up to `speed`
+    /// pixels a second.
+    fn spawn(&mut self, x: f32, y: f32, speed: f32, hue: u8) {
+        if self.v.len() >= self.v.capacity() {
+            return;
+        }
+        let a = self.rng.f32() * std::f32::consts::TAU;
+        let s = speed * (0.3 + 0.7 * self.rng.f32());
+        let life = if hue == 2 { 0.8 } else { 0.3 } + self.rng.f32() * 0.5;
+        self.v.push(Spark {
+            x,
+            y,
+            vx: a.cos() * s,
+            vy: a.sin() * s - speed * 0.15,
+            age: 0.0,
+            life,
+            hue,
+        });
+    }
+
+    fn update(&mut self, dt: f32) {
+        self.v.retain_mut(|s| {
+            s.age += dt;
+            // They fall, and the air slows them.
+            s.vy += if s.hue == 2 { 18.0 } else { 45.0 } * dt;
+            let drag = (1.0 - 1.4 * dt).max(0.0);
+            s.vx *= drag;
+            s.vy *= drag;
+            s.x += s.vx * dt;
+            s.y += s.vy * dt;
+            s.age < s.life
+        });
+    }
+
+    fn draw(&self, px: &mut Pixels) {
+        for s in &self.v {
+            let k = (s.age / s.life).clamp(0.0, 1.0) * 3.0;
+            let i = (k as usize).min(2);
+            let stops = &SPARK_COLORS[s.hue as usize % 3];
+            let col = rgb(stops[i]).lerp(rgb(stops[i + 1]), k - i as f32);
+            px.set(s.x.round() as i32, s.y.round() as i32, col);
         }
     }
 }
