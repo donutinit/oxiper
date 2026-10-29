@@ -13,6 +13,27 @@
 //! path home that thickens as the days go by. A corner hit throws a burst
 //! of blossoms and petals, and the banner reads "¡YA SE LO LLEVÓ LA
 //! CATRINA!".
+//!
+//! Each holiday that dresses the logo is a [`Look`] in a file of its own:
+//! pixel art at a few sizes, how its parts are colored (the holiday's colors
+//! under `classic`, the theme's otherwise), what it does and says at a corner
+//! and what it sheds and throws.
+//!
+//! In the Navidad the logo is a piñata de siete picos, each pico in a papel
+//! de china color that changes on every bounce, hanging from its rope. It
+//! sheds colación as it goes, more as the posadas climb to Nochebuena, and
+//! the candy lies along the bottom row for a while. At a corner somebody
+//! swings the stick: the piñata lurches three times ("¡DALE, DALE, DALE!"),
+//! bursts into candy and fruit (tejocotes, mandarinas, cañas, cacahuates,
+//! caramelos), and a new piñata comes. On the Santos Inocentes it slows down
+//! as it nears a corner and misses it by a cell: "¡INOCENTE PALOMITA!". On
+//! Año Nuevo the banner is "¡FELIZ AÑO NUEVO!" and grapes, confetti and
+//! sparks of gold come out of it. From January 2 to 6 the logo is a rosca de
+//! reyes, with more candied fruit on it as the Reyes come closer; at a
+//! corner the muñeco shows in its hole: "¡TE SALIÓ EL MUÑECO!".
+
+mod muertos;
+mod navidad;
 
 use crate::color::{Color, rgb};
 use crate::fiesta::{Fiesta, Kind};
@@ -74,165 +95,165 @@ const CLASSIC: [Color; 8] = [
     rgb(0xff3fb4),
 ];
 
-/// Día de Muertos: the icing cycles through papel picado colors, ordered so
-/// that each one and the one three places on (the eye flowers) contrast.
-const PAPEL: [Color; 6] = [
-    rgb(0xe4007c), // rosa mexicano
-    rgb(0xff8c00), // naranja
-    rgb(0x7028a0), // morado
-    rgb(0xffd200), // amarillo
-    rgb(0x00aab8), // turquesa
-    rgb(0x8cc828), // verde limón
-];
-const HUESO: Color = rgb(0xf4eee2);
-/// Cempasúchil and terciopelo, in pairs a tumbling petal alternates between.
-const MARIGOLD: [Color; 6] = [
-    rgb(0xff8c00),
-    rgb(0xd66200),
-    rgb(0xffaa1e),
-    rgb(0xffc83c),
-    rgb(0xb00048),
-    rgb(0xd61e64),
-];
-const LEAF: Color = rgb(0x4e9a28);
+// What the logo becomes on a holiday. Each holiday has a `Look` (in its own
+// file): pixel art at a few sizes, how its parts are colored, the banner it
+// shows at a corner and what it sheds and throws.
 
-/// The sugar skulls, one char per pixel and two pixel rows per cell: `w`
-/// bone, `i` icing (the bounce color), `j` the eye flowers' petals, `.`
-/// nothing. A cell never holds two colors: where bone meets icing in one,
-/// the bone half stays dark, which outlines the icing.
-const CALAVERA: [&str; 24] = [
-    "..........wwwwwwwww..........",
-    ".......wwwwwwwwwwwwwww.......",
-    ".....wwwwwwwwwwwwwwwwwww.....",
-    "....wwwwwwwwwwwwwwwwwwwww....",
-    "...wwwiiiiiiiiiiiiiiiiiwww...",
-    "..wwwii...ii.iii.i...iiiwww..",
-    "..wwwii.ii.i.iii.i.ii.iiwww..",
-    ".wwwwii.ii.ii.i.ii.ii.iiwwww.",
-    ".wwwwii...iiii.iii...iiiwwww.",
-    ".wwwwwiiiiiiiiiiiiiiiiiwwwww.",
-    ".ww.......wwwwwwwww.......ww.",
-    "ww....j....wwwwwww....j....ww",
-    "ww...jjj...wwwwwww...jjj...ww",
-    "ww..jjijj..wwwwwww..jjijj..ww",
-    "ww..jjijj..wwwwwww..jjijj..ww",
-    "ww...jjj...wwwwwww...jjj...ww",
-    ".ww...j...wwiiwiiww...j...ww.",
-    ".www.....wwwiiiiiwww.....www.",
-    ".wwjwiwjwwwwwiiiwwwwwjwiwjww.",
-    "..wwwwwwwwwwwwiwwwwwwwwwwww..",
-    "...www.w.w.w.w.w.w.w.w.www...",
-    "...www.w.w.w.w.w.w.w.w.www...",
-    "....wwwwwwwwwwwwwwwwwwwww....",
-    "......wwwwwwwwwwwwwwwww......",
-];
-const CALAVERITA: [&str; 20] = [
-    "......wwwwwww......",
-    "...wwwwwwwwwwwww...",
-    "..wiiiiiiiiiiiiiw..",
-    ".wii..ii.i.ii..iiw.",
-    ".wii.i.i.i.ii.i.iw.",
-    ".wii.i.i.i.ii.i.iw.",
-    ".wii..iii.iii..iiw.",
-    ".wwiiiiiiiiiiiiiww.",
-    ".ww....wwwww....ww.",
-    "ww..jj..www..jj..ww",
-    "ww.jiij.www.jiij.ww",
-    "ww.jiij.www.jiij.ww",
-    ".w..jj..w.w..jj..w.",
-    ".ww....ww.ww....ww.",
-    ".wjwwwwwwwwwwwwwjw.",
-    "..wwwwwwwwwwwwwww..",
-    "...w.w.w.w.w.w.w...",
-    "...w.w.w.w.w.w.w...",
-    "....wwwwwwwwwww....",
-    "......wwwwwww......",
-];
-const CALAQUITA: [&str; 10] = [
-    "...wwwww...",
-    ".wwwwwwwww.",
-    ".wiiiiiiiw.",
-    "wwiiiiiiiww",
-    "w...www...w",
-    "w.j.www.j.w",
-    "w...w.w...w",
-    ".wwwwwwwww.",
-    "..w.w.w.w..",
-    "...wwwww...",
-];
-
-/// A sugar skull: its pixel art, the rows that replace its last ones when
-/// it laughs (the mouth open), and its crown.
-struct Skull {
-    art: &'static [&'static str],
-    laugh: &'static [&'static str],
-    crown: Option<&'static Crown>,
+/// How a part of a logo is colored; the pictures give each of their pixel
+/// letters one.
+#[derive(Clone, Copy)]
+enum Tint {
+    /// Keeps its own color under every theme (the marigolds).
+    Own(Color),
+    /// Its own color under `classic`, the theme's text color otherwise.
+    Ink(Color),
+    /// Its own color under `classic`, the theme's text color faded otherwise.
+    Dim(Color),
+    /// Its own color under `classic`, accent `i` of the theme otherwise.
+    Accent(usize, Color),
+    /// The logo's bounce color, that many places on in the palette.
+    Cycle(u8),
+    /// The bounce color from the middle of the palette: the one that contrasts
+    /// with `Cycle(0)`.
+    Across,
 }
 
-const SKULLS: [Skull; 3] = [
-    Skull {
-        art: &CALAVERA,
-        laugh: &[
-            "...www.w.w.w.w.w.w.w.w.www...",
-            "...ww...................ww...",
-            "....ww.w.w.w.w.w.w.w.w.ww....",
-            "......wwwwwwwwwwwwwwwww......",
-        ],
-        crown: Some(&CROWN),
-    },
-    Skull {
-        art: &CALAVERITA,
-        laugh: &[
-            "...w.w.w.w.w.w.w...",
-            "...w...........w...",
-            "....w.w.w.w.w.w....",
-            "......wwwwwww......",
-        ],
-        crown: Some(&CROWNLET),
-    },
-    Skull {
-        art: &CALAQUITA,
-        laugh: &["..w.....w..", "...wwwww..."],
-        crown: None,
-    },
-];
+/// What a logo does when it hits a corner.
+#[derive(Clone, Copy, PartialEq)]
+enum React {
+    /// Its reaction picture and the plain one alternate, a laugh.
+    Chatter,
+    /// Its reaction picture shows for a moment.
+    Hold,
+    /// It shakes at each "¡dale!", bursts, and comes back whole: its
+    /// reaction picture is what is left of it.
+    Pop,
+}
 
-/// A crown of flowers for a skull: the shape of one flower (`x` marks it),
-/// where each one sits (center column, top pixel row, counting two rows
-/// above the skull; and its color: `o` cempasúchil, `y` light cempasúchil,
-/// `r` terciopelo) in the order they come as the holiday builds up, and
-/// the leaves (`g`) of the full crown.
-struct Crown {
-    flower: &'static [&'static str],
-    flowers: &'static [(i32, i32, u8)],
+/// A logo's picture at one size, one char per pixel and two pixel rows per
+/// cell, `.` for nothing, every other letter but `k` a part (see
+/// `Look::parts`; `k` marks the holes of a solid logo). A
+/// cell holds one color: where two share it, the one that is not `Look::back`
+/// wins, or else the lower pixel.
+struct Size {
+    /// The frames, as many as the logo has (a spinning top, steam rising);
+    /// they are as big as each other.
+    frames: &'static [&'static [&'static str]],
+    /// The rows that replace the last rows of the first frame while it reacts
+    /// to a corner; none for a logo that does not change.
+    react: &'static [&'static str],
+    trim: Option<&'static Trim>,
+}
+
+/// What dresses a logo more as the holiday builds up: pieces of the same
+/// shape in the places they take, in the order they come, one, then three,
+/// then all of them.
+struct Trim {
+    /// One piece, where `x` is the piece's own letter and any other letter
+    /// itself.
+    piece: &'static [&'static str],
+    /// Where each sits (center column, top pixel row) and its letter.
+    pieces: &'static [(i32, i32, u8)],
+    /// Single pixels (column, row) only the full trim has, of letter `leaf`.
     leaves: &'static [(i32, i32)],
+    leaf: u8,
+    /// Pixel rows the trim adds above the picture, once there are pieces.
+    above: i32,
 }
 
-const CROWN: Crown = Crown {
-    flower: &[".xxx.", "xxxxx", "xxxxx", ".xxx."],
-    flowers: &[
-        (8, 2, b'o'),
-        (14, 0, b'y'),
-        (20, 2, b'o'),
-        (3, 4, b'r'),
-        (25, 4, b'r'),
-    ],
-    leaves: &[(11, 2), (17, 2), (5, 3), (23, 3)],
-};
-const CROWNLET: Crown = Crown {
-    flower: &[".x.", "xxx", "xxx", ".x."],
-    flowers: &[
-        (5, 0, b'o'),
-        (9, 0, b'y'),
-        (13, 0, b'o'),
-        (2, 2, b'r'),
-        (16, 2, b'r'),
-    ],
-    leaves: &[(7, 1), (11, 1)],
-};
+/// What a bit is made of: the two faces it shows as it tumbles, and how fast
+/// it falls.
+struct BitKind {
+    glyphs: [char; 2],
+    tints: [Tint; 2],
+    /// Rows per second it ends up falling at.
+    fall: f32,
+}
 
-/// The corner banner on Día de Muertos.
-const LLEVO: [&str; 2] = ["¡Ya se lo llevó", "la Catrina!"];
+impl BitKind {
+    const fn new(glyphs: [char; 2], tints: [Tint; 2], fall: f32) -> BitKind {
+        BitKind {
+            glyphs,
+            tints,
+            fall,
+        }
+    }
+}
+
+/// How the air treats a bit.
+struct Air {
+    /// How fast what a burst gave it is spent, per second.
+    drag: f32,
+    /// How fast it comes to its falling speed, per second.
+    settle: f32,
+    /// A pull down on top of that, rows per second squared.
+    gravity: f32,
+    /// How far it sways, columns per second.
+    sway: f32,
+}
+
+/// What a logo sheds as it goes and throws at a corner: bits that fall and
+/// lie along the bottom row for a while.
+struct Fall {
+    kinds: &'static [BitKind],
+    /// Picks the kind of a new bit, thrown at a corner (true) or shed on the
+    /// way (false); the random numbers are the holiday's own.
+    pick: fn(&mut fastrand::Rng, bool) -> u8,
+    /// How many bits can be about, per logo (up to three).
+    cap: usize,
+    /// Seconds a fallen bit lies at the start of the holiday and at its
+    /// height.
+    lie: (f32, f32),
+    /// Bits shed per second by each logo: at the start of the holiday, and
+    /// what its height adds.
+    shed: (f32, f32),
+    /// The share of the room for bits that a corner throws: likewise.
+    burst: (f32, f32),
+    /// How fast a thrown bit flies: the least, and what chance adds.
+    speed: (f32, f32),
+    /// Seconds a bit stays in the air, thrown and shed: the least, and what
+    /// chance adds.
+    ttl: ((f32, f32), (f32, f32)),
+    air: Air,
+}
+
+impl Fall {
+    fn kind(&self, k: u8) -> &BitKind {
+        &self.kinds[k as usize % self.kinds.len()]
+    }
+}
+
+/// What the logo is on a holiday.
+struct Look {
+    /// Its pictures, the biggest first.
+    sizes: &'static [Size],
+    /// How each letter of the pictures is colored.
+    parts: &'static [(u8, Tint)],
+    /// The letter that gives way where two parts share a cell.
+    back: u8,
+    /// Do the empty pixels inside the picture hide what passes behind?
+    solid: bool,
+    /// What the bounce color cycles through under `classic`.
+    classic: &'static [Color],
+    /// The corner banner, a line to a row.
+    banner: &'static [&'static str],
+    react: React,
+    /// Frames per second, when it has more than one.
+    beat: f32,
+    fall: Fall,
+    /// The banner of a near miss: if set, the logo now and then slows near a
+    /// corner and misses it by a cell.
+    joke: Option<&'static [&'static str]>,
+}
+
+/// The look of the day, if the holiday dresses the logo.
+fn look_for(f: Fiesta) -> Option<&'static Look> {
+    match f.kind {
+        Kind::Muertos => Some(&muertos::LOOK),
+        Kind::Navidad => Some(navidad::look(f)),
+        _ => None,
+    }
+}
 
 /// 5×5 block font: one byte per row, bit 4 is the leftmost pixel.
 const FONT: &[(char, [u8; 5])] = &[
@@ -317,6 +338,7 @@ fn glyph_es(ch: char) -> Option<[u8; 5]> {
     match ch {
         '¡' => Some([0x04, 0x00, 0x04, 0x04, 0x04]),
         'ó' | 'Ó' => Some([0x02, 0x0e, 0x11, 0x11, 0x0e]),
+        'ñ' | 'Ñ' => Some([0x0a, 0x19, 0x15, 0x13, 0x11]),
         _ => glyph(ch),
     }
 }
@@ -521,33 +543,38 @@ impl Sprite {
         s
     }
 
-    /// A sugar skull from its pixel art, laughing or not, crowned with as
-    /// many flowers as the holiday has brought by `level`.
-    fn calavera(skull: &Skull, laughing: bool, level: f32) -> Sprite {
-        let (art, crown) = (skull.art, skull.crown);
+    /// A logo from the pixel art of a look at one size: its frame number
+    /// `frame`, or its reaction to a corner, with as much of the trim as the
+    /// holiday has brought by `level`.
+    fn pixels(look: &Look, size: &Size, frame: usize, reacting: bool, level: f32) -> Sprite {
+        let art = size.frames[frame];
+        let trim = size.trim;
         let w = art.iter().map(|l| l.len()).max().unwrap_or(0);
-        let open = art.len().saturating_sub(skull.laugh.len());
-        let blooms = match crown {
+        let open = art.len().saturating_sub(size.react.len());
+        let pieces = match trim {
             None => 0,
-            Some(c) if level < 0.4 => c.flowers.len().min(1),
-            Some(c) if level < 0.75 => c.flowers.len().min(3),
-            Some(c) => c.flowers.len(),
+            Some(t) if level < 0.4 => t.pieces.len().min(1),
+            Some(t) if level < 0.75 => t.pieces.len().min(3),
+            Some(t) => t.pieces.len(),
         };
-        // Two pixel rows above the skull for the crown.
-        let top = if blooms > 0 { 2 } else { 0 };
+        // Pixel rows above the picture for the trim.
+        let top = match trim {
+            Some(t) if pieces > 0 => t.above.max(0) as usize,
+            _ => 0,
+        };
         let ph = art.len() + top;
         let mut px = vec![b'.'; w * ph];
         for (y, &l) in art.iter().enumerate() {
-            let l = if laughing && y >= open {
-                skull.laugh[y - open]
+            let l = if reacting && y >= open {
+                size.react[y - open]
             } else {
                 l
             };
-            // Holes inside the skull (`k`) hide what passes behind it.
+            // Holes inside a solid logo (`k`) hide what passes behind it.
             let first = l.bytes().position(|b| b != b'.').unwrap_or(0);
             let last = l.bytes().rposition(|b| b != b'.').unwrap_or(0);
             for (x, b) in l.bytes().enumerate() {
-                let inside = b == b'.' && (first..=last).contains(&x);
+                let inside = look.solid && b == b'.' && (first..=last).contains(&x);
                 px[(y + top) * w + x] = if inside { b'k' } else { b };
             }
         }
@@ -556,24 +583,25 @@ impl Sprite {
                 px[y as usize * w + x as usize] = b;
             }
         };
-        if let Some(c) = crown {
-            if blooms == c.flowers.len() {
-                for &(x, y) in c.leaves {
-                    put(x, y, b'g');
+        if let Some(t) = trim {
+            if pieces == t.pieces.len() {
+                for &(x, y) in t.leaves {
+                    put(x, y, t.leaf);
                 }
             }
-            let fw = c.flower.first().map_or(0, |l| l.len()) as i32;
-            for &(cx, y0, b) in &c.flowers[..blooms] {
-                for (dy, l) in c.flower.iter().enumerate() {
+            let pw = t.piece.first().map_or(0, |l| l.len()) as i32;
+            for &(cx, y0, b) in &t.pieces[..pieces] {
+                for (dy, l) in t.piece.iter().enumerate() {
                     for (dx, ch) in l.bytes().enumerate() {
                         if ch != b'.' {
-                            put(cx - fw / 2 + dx as i32, y0 + dy as i32, b);
+                            let ch = if ch == b'x' { b } else { ch };
+                            put(cx - pw / 2 + dx as i32, y0 + dy as i32, ch);
                         }
                     }
                 }
             }
         }
-        // Two pixels per cell; where two colors share one, the bone gives
+        // Two pixels per cell; where two colors share one, the base gives
         // way, or else the lower pixel.
         let h = ph.div_ceil(2);
         let mut s = Sprite {
@@ -594,7 +622,7 @@ impl Sprite {
                     b = b'.';
                 }
                 if t != b'.' && b != b'.' && t != b {
-                    if t == b'w' {
+                    if t == look.back {
                         t = b'.';
                     } else {
                         b = b'.';
@@ -615,18 +643,10 @@ impl Sprite {
     }
 }
 
-/// How a sugar skull is painted: its bone, its crown and the petals it
-/// sheds. The icing and the eye flowers come from the logo's color.
+/// A bit of the holiday falling: a marigold petal, a piece of candy,
+/// confetti.
 #[derive(Clone, Copy)]
-struct Dress {
-    bone: Color,
-    marigold: [Color; 6],
-    leaf: Color,
-}
-
-/// A marigold petal, or a whole blossom, drifting down.
-#[derive(Clone, Copy)]
-struct Petal {
+struct Bit {
     x: f32,
     y: f32,
     vx: f32,
@@ -635,33 +655,16 @@ struct Petal {
     ttl: f32,
     /// Where it is in its sway and tumble.
     phase: f32,
-    /// Which pair of `Dress::marigold` it tumbles between.
-    shade: u8,
-    bloom: bool,
+    /// Which of `Fall::kinds` it is.
+    kind: u8,
 }
 
-/// A petal lying on the bottom row, part of the path.
+/// A bit lying on the bottom row, part of the path.
 #[derive(Clone, Copy, Default)]
 struct Fallen {
     /// Seconds left; 0 when nothing lies here.
     life: f32,
-    shade: u8,
-    bloom: bool,
-}
-
-/// Seconds a fallen petal stays at the start of the holiday, and at its
-/// height.
-const LIE: (f32, f32) = (14.0, 45.0);
-const PETAL_GLYPHS: [char; 2] = ['◖', '◗'];
-const BLOOM_GLYPHS: [char; 2] = ['✿', '❀'];
-
-/// A petal's pair of shades: mostly cempasúchil, some terciopelo.
-fn petal_shade(r: &mut fastrand::Rng) -> u8 {
-    match r.u8(..20) {
-        0..=8 => 0,
-        9..=16 => 1,
-        _ => 2,
-    }
+    kind: u8,
 }
 
 struct Logo {
@@ -672,6 +675,9 @@ struct Logo {
     color: usize,
     since_bounce: f32,
     since_corner: f32,
+    /// It is on its way to miss a corner by a cell, for a joke.
+    jest: bool,
+    since_jest: f32,
 }
 
 #[derive(Clone, Copy)]
@@ -688,6 +694,12 @@ struct Spark {
 const SPARK_GLYPHS: [char; 5] = ['✦', '✧', '*', '+', '·'];
 /// How long the "CORNER!" celebration lasts.
 const PARTY: f32 = 2.4;
+/// Seconds after a corner that a logo that bursts open does, three hits of
+/// the stick in, and how long what is left of it hangs there.
+const POP: f32 = 1.1;
+const BROKEN: f32 = 0.8;
+/// Seconds between a logo's jokes.
+const JEST_EVERY: f32 = 12.0;
 
 struct Dvd {
     rng: fastrand::Rng,
@@ -700,28 +712,34 @@ struct Dvd {
     w: i32,
     h: i32,
     sprite: Sprite,
-    /// The sugar skull laughing at a corner (empty when there is none).
+    /// The rest of the frames of a logo that has several (`sprite` is the
+    /// first).
+    frames: Vec<Sprite>,
+    /// The logo reacting to a corner (empty when it has no reaction).
     laugh: Sprite,
     banner: Sprite,
+    /// The banner of a near miss (empty when there are none).
+    joke: Sprite,
     logos: Vec<Logo>,
     sparks: Vec<Spark>,
     spark_cap: usize,
     corners: u32,
-    /// Seconds since the last corner hit.
+    /// Seconds since the last corner hit, and since the last near miss.
     party_t: f32,
+    joke_t: f32,
     clock: f32,
 
     palette: Vec<Color>,
     counter_dim: Color,
 
-    /// The holiday the logo is dressed for.
+    /// The holiday the logo is dressed for, and what it dresses it as.
     fiesta: Fiesta,
+    look: Option<&'static Look>,
     /// The holiday's own randomness, so ordinary days draw the same numbers.
     frng: fastrand::Rng,
-    dress: Dress,
-    petals: Vec<Petal>,
-    petal_cap: usize,
-    /// Petals owed to the trail, carried over between steps.
+    bits: Vec<Bit>,
+    bit_cap: usize,
+    /// Bits owed to the trail, carried over between steps.
     shed: f32,
     /// What lies on the bottom row, per column.
     floor: Vec<Fallen>,
@@ -740,25 +758,24 @@ impl Dvd {
             w: 1,
             h: 1,
             sprite: Sprite::default(),
+            frames: Vec::new(),
             laugh: Sprite::default(),
             banner: Sprite::default(),
+            joke: Sprite::default(),
             logos: Vec::new(),
             sparks: Vec::new(),
             spark_cap: 0,
             corners: 0,
             party_t: PARTY,
+            joke_t: PARTY,
             clock: 0.0,
             palette: CLASSIC.to_vec(),
             counter_dim: Color::Reset,
             fiesta: Fiesta::NONE,
+            look: None,
             frng: fastrand::Rng::with_seed(ctx.seed ^ 0x6361_6c61_7665_7261),
-            dress: Dress {
-                bone: HUESO,
-                marigold: MARIGOLD,
-                leaf: LEAF,
-            },
-            petals: Vec::new(),
-            petal_cap: 0,
+            bits: Vec::new(),
+            bit_cap: 0,
             shed: 0.0,
             floor: Vec::new(),
         }
@@ -767,12 +784,15 @@ impl Dvd {
     /// Picks the logo and the banner for the screen, the text and the holiday.
     fn fit(&mut self) {
         let (lw, lh) = (LOGO[4].chars().count() as i32, LOGO.len() as i32);
-        let on = self.fiesta.is(Kind::Muertos);
+        self.look = look_for(self.fiesta);
+        self.frames.clear();
         self.laugh = Sprite::default();
+        self.joke = Sprite::default();
         self.sprite = if !self.text.is_empty() {
             Sprite::fit_text(&self.text, self.w, self.h, 40)
-        } else if on {
-            let (s, laugh) = self.calavera();
+        } else if let Some(look) = self.look {
+            let (s, frames, laugh) = self.costume(look);
+            self.frames = frames;
             self.laugh = laugh;
             s
         } else if lw + 6 <= self.w && lh + 3 <= self.h {
@@ -780,37 +800,52 @@ impl Dvd {
         } else {
             Sprite::fit_text("DVD", self.w, self.h, 40)
         };
-        self.banner = if on {
-            Sprite::fit_lines(&LLEVO, self.w, self.h)
-        } else {
-            Sprite::fit_text("CORNER!", self.w, self.h, 50)
+        self.banner = match self.look {
+            Some(look) => Sprite::fit_lines(look.banner, self.w, self.h),
+            None => Sprite::fit_text("CORNER!", self.w, self.h, 50),
         };
-        self.petals.clear();
+        if let Some(lines) = self.look.and_then(|look| look.joke) {
+            self.joke = Sprite::fit_lines(lines, self.w, self.h);
+        }
+        for l in self.logos.iter_mut() {
+            l.jest = false;
+        }
+        self.bits.clear();
         self.floor.clear();
-        if on {
-            self.petal_cap = 300 * self.count.min(3);
-            self.petals.reserve(self.petal_cap);
+        if let Some(look) = self.look {
+            self.bit_cap = look.fall.cap * self.count.min(3);
+            self.bits.reserve(self.bit_cap);
             self.floor.resize(self.w as usize, Fallen::default());
         }
     }
 
-    /// The biggest sugar skull that leaves room to bounce, and the same
-    /// skull laughing.
-    fn calavera(&self) -> (Sprite, Sprite) {
+    /// The biggest picture of the look that leaves room to bounce, its other
+    /// frames, and the picture reacting to a corner (none when it does not).
+    fn costume(&self, look: &Look) -> (Sprite, Vec<Sprite>, Sprite) {
         let level = self.fiesta.level;
-        for (i, skull) in SKULLS.iter().enumerate() {
-            let s = Sprite::calavera(skull, false, level);
-            let room = match i {
-                0 => s.w + 6 <= self.w && s.h * 2 <= self.h,
-                1 => s.w + 4 <= self.w && s.h + 4 <= self.h,
-                _ => s.w + 2 <= self.w && s.h + 2 <= self.h,
+        for (i, size) in look.sizes.iter().enumerate() {
+            let s = Sprite::pixels(look, size, 0, false, level);
+            let room = if i + 1 == look.sizes.len() {
+                s.w + 2 <= self.w && s.h + 2 <= self.h
+            } else if i == 0 {
+                s.w + 6 <= self.w && s.h * 2 <= self.h
+            } else {
+                s.w + 4 <= self.w && s.h + 4 <= self.h
             };
             if room {
-                return (s, Sprite::calavera(skull, true, level));
+                let frames = (1..size.frames.len())
+                    .map(|k| Sprite::pixels(look, size, k, false, level))
+                    .collect();
+                let laugh = if size.react.is_empty() {
+                    Sprite::default()
+                } else {
+                    Sprite::pixels(look, size, 0, true, level)
+                };
+                return (s, frames, laugh);
             }
         }
         let dvd = Sprite::fit_text("DVD", self.w, self.h, 40);
-        (dvd, Sprite::default())
+        (dvd, Vec::new(), Sprite::default())
     }
 
     fn max_x(&self) -> f32 {
@@ -835,9 +870,24 @@ impl Dvd {
     fn plan(&mut self, i: usize) {
         let (mx, my) = (self.max_x(), self.max_y());
         let base = self.speed;
+        let joker = self.look.is_some_and(|look| look.joke.is_some()) && !self.assist;
         let l = &mut self.logos[i];
         let sy = if l.vy < 0.0 { -1.0 } else { 1.0 };
         l.vy = sy * base;
+        if joker && l.since_jest > JEST_EVERY && mx > 0.0 && my >= 3.0 && base > 0.0 {
+            // Aim at a corner, but stop a row short of it: the same bend as
+            // the assist, for a joke. Not every leg has the room for it.
+            let dist_x = if l.vx > 0.0 { mx - l.x } else { l.x };
+            let travel = base * dist_x / l.vx.abs().max(1e-3);
+            let d0 = if l.vy > 0.0 { my - l.y } else { l.y };
+            let k = ((travel - d0 + 1.0) / my).round().max(0.0);
+            let run = d0 + k * my - 1.0;
+            if travel >= 1.0 && run > 1.0 && (0.86..=1.14).contains(&(run / travel)) {
+                l.vy = sy * base * run / travel;
+                l.jest = true;
+            }
+            return;
+        }
         if !self.assist || mx <= 0.0 || my <= 0.0 || base <= 0.0 || self.rng.f32() > 0.5 {
             return;
         }
@@ -867,11 +917,16 @@ impl Dvd {
         let edge_x = if left { lx + sw } else { lx - 1.0 };
         let edge_y = if top { ly + sh } else { ly - 1.0 };
         let (dx, dy) = (if left { 1.0 } else { -1.0 }, if top { 1.0 } else { -1.0 });
-        if self.fiesta.is(Kind::Muertos) {
-            // Cempasúchil instead of sparks, and more of it as the days go by.
-            let burst = self.petal_cap as f32 * (0.3 + 0.3 * self.fiesta.level);
+        if let Some(look) = self.look {
+            // The holiday's bits instead of sparks, and more of them as the
+            // days go by; a logo that bursts open does it a moment later.
+            if look.react == React::Pop {
+                return;
+            }
+            let f = &look.fall;
+            let burst = self.bit_cap as f32 * (f.burst.0 + f.burst.1 * self.fiesta.level);
             for _ in 0..burst as usize {
-                if self.petals.len() >= self.petal_cap {
+                if self.bits.len() >= self.bit_cap {
                     break;
                 }
                 let r = &mut self.frng;
@@ -881,17 +936,16 @@ impl Dvd {
                     (edge_x, ly + r.f32() * sh)
                 };
                 let a = r.f32() * std::f32::consts::FRAC_PI_2;
-                let v = 3.0 + r.f32() * r.f32() * 24.0;
-                self.petals.push(Petal {
+                let v = f.speed.0 + r.f32() * r.f32() * f.speed.1;
+                self.bits.push(Bit {
                     x,
                     y,
                     vx: dx * a.cos() * v * 2.0,
                     vy: dy * a.sin() * v - 2.0,
                     age: 0.0,
-                    ttl: 5.0 + r.f32() * 6.0,
+                    ttl: f.ttl.0.0 + r.f32() * f.ttl.0.1,
                     phase: r.f32() * std::f32::consts::TAU,
-                    shade: petal_shade(r),
-                    bloom: r.f32() < 0.4,
+                    kind: (f.pick)(r, true),
                 });
             }
             return;
@@ -923,16 +977,60 @@ impl Dvd {
         }
     }
 
+    /// A logo bursting open: its bits fly out of its middle in every
+    /// direction, `share` of what a corner throws.
+    fn burst(&mut self, i: usize, share: f32) {
+        let Some(look) = self.look else {
+            return;
+        };
+        let f = &look.fall;
+        let l = &self.logos[i];
+        let (sw, sh) = (self.sprite.w as f32, self.sprite.h as f32);
+        let (cx, cy) = (l.x + sw * 0.5, l.y + sh * 0.5);
+        let n = self.bit_cap as f32 * share * (f.burst.0 + f.burst.1 * self.fiesta.level);
+        for _ in 0..n as usize {
+            if self.bits.len() >= self.bit_cap {
+                break;
+            }
+            let r = &mut self.frng;
+            let a = r.f32() * std::f32::consts::TAU;
+            let v = f.speed.0 + r.f32() * r.f32() * f.speed.1;
+            self.bits.push(Bit {
+                x: cx + (r.f32() - 0.5) * sw * 0.4,
+                y: cy + (r.f32() - 0.5) * sh * 0.4,
+                vx: a.cos() * v * 2.0,
+                vy: a.sin() * v - 5.0,
+                age: 0.0,
+                ttl: f.ttl.0.0 + r.f32() * f.ttl.0.1,
+                phase: r.f32() * std::f32::consts::TAU,
+                kind: (f.pick)(r, true),
+            });
+        }
+    }
+
     fn step(&mut self, dt: f32) {
         let (mx, my) = (self.max_x(), self.max_y());
+        let pops = self.look.is_some_and(|look| look.react == React::Pop);
         for i in 0..self.logos.len() {
             let (mut bx, mut by) = (false, false);
+            let bursts;
             {
                 let l = &mut self.logos[i];
                 l.since_bounce += dt;
+                let before = l.since_corner;
                 l.since_corner += dt;
+                l.since_jest = (l.since_jest + dt).min(1e6);
+                bursts = pops && before < POP && l.since_corner >= POP;
+                // Nearing the corner it is about to miss, a logo slows down.
+                let mv = if l.jest && mx > 0.0 {
+                    let dist_x = if l.vx > 0.0 { mx - l.x } else { l.x };
+                    let s = (dist_x / l.vx.abs().max(1e-3) / 1.6).clamp(0.0, 1.0);
+                    dt * (0.25 + 0.75 * s * s * (3.0 - 2.0 * s))
+                } else {
+                    dt
+                };
                 if mx > 0.0 {
-                    l.x += l.vx * dt;
+                    l.x += l.vx * mv;
                     if l.x < 0.0 {
                         l.x = -l.x;
                         l.vx = l.vx.abs();
@@ -945,7 +1043,7 @@ impl Dvd {
                     l.x = l.x.clamp(0.0, mx);
                 }
                 if my > 0.0 {
-                    l.y += l.vy * dt;
+                    l.y += l.vy * mv;
                     if l.y < 0.0 {
                         l.y = -l.y;
                         l.vy = l.vy.abs();
@@ -957,6 +1055,9 @@ impl Dvd {
                     }
                     l.y = l.y.clamp(0.0, my);
                 }
+            }
+            if bursts {
+                self.burst(i, 1.0);
             }
             if !(bx || by) {
                 continue;
@@ -978,6 +1079,15 @@ impl Dvd {
                 self.logos[i].since_corner = 0.0;
                 self.celebrate(i);
             }
+            if bx && self.logos[i].jest {
+                // The corner it missed by a row: "¡Inocente palomita!".
+                self.logos[i].jest = false;
+                self.logos[i].since_jest = 0.0;
+                if !corner {
+                    self.joke_t = 0.0;
+                    self.burst(i, 0.3);
+                }
+            }
             if bx {
                 self.plan(i);
             }
@@ -991,51 +1101,51 @@ impl Dvd {
             s.vx *= 1.0 - 0.9 * dt;
         }
         self.sparks.retain(|s| s.age < s.ttl);
-        if self.fiesta.is(Kind::Muertos) {
-            self.drift(dt);
+        if let Some(look) = self.look {
+            self.drift(&look.fall, dt);
         }
         self.party_t = (self.party_t + dt).min(PARTY);
+        self.joke_t = (self.joke_t + dt).min(PARTY);
         self.clock = (self.clock + dt) % 3600.0;
     }
 
-    /// Día de Muertos: the skulls shed petals from their trailing side, and
-    /// the petals drift down, swaying, to lie on the bottom row.
-    fn drift(&mut self, dt: f32) {
+    /// The logos shed bits from their trailing side, and the bits drift down
+    /// (or fall, if they are heavy) to lie on the bottom row.
+    fn drift(&mut self, f: &Fall, dt: f32) {
         let level = self.fiesta.level;
         let (sw, sh) = (self.sprite.w as f32, self.sprite.h as f32);
-        self.shed += dt * (0.8 + 3.6 * level) * self.logos.len().min(3) as f32;
+        self.shed += dt * (f.shed.0 + f.shed.1 * level) * self.logos.len().min(3) as f32;
         while self.shed >= 1.0 {
             self.shed -= 1.0;
-            if self.petals.len() >= self.petal_cap || self.logos.is_empty() {
+            if self.bits.len() >= self.bit_cap || self.logos.is_empty() {
                 continue;
             }
             let r = &mut self.frng;
             let l = &self.logos[r.usize(..self.logos.len())];
             let back = if l.vx > 0.0 { l.x } else { l.x + sw - 1.0 };
-            self.petals.push(Petal {
+            self.bits.push(Bit {
                 x: back + (r.f32() - 0.5) * 2.0,
                 y: l.y + r.f32() * sh,
                 vx: -l.vx.signum() * (0.5 + r.f32() * 2.0),
                 vy: r.f32() * 1.5,
                 age: 0.0,
-                ttl: 10.0 + r.f32() * 8.0,
+                ttl: f.ttl.1.0 + r.f32() * f.ttl.1.1,
                 phase: r.f32() * std::f32::consts::TAU,
-                shade: petal_shade(r),
-                bloom: r.f32() < 0.12,
+                kind: (f.pick)(r, false),
             });
         }
         let (w, floor_y) = (self.w as f32, (self.h - 1) as f32);
-        let lie = LIE.0 + (LIE.1 - LIE.0) * level;
+        let lie = f.lie.0 + (f.lie.1 - f.lie.0) * level;
         let floor = &mut self.floor;
-        let drag = (1.0 - 1.6 * dt).max(0.0);
-        self.petals.retain_mut(|p| {
+        let drag = (1.0 - f.air.drag * dt).max(0.0);
+        self.bits.retain_mut(|p| {
             p.age += dt;
-            // The burst spends itself, then the petals fall like petals do:
-            // slowly, swaying, blossoms a little faster.
+            // The burst spends itself, then the bits fall the way their kind
+            // does: petals slowly and swaying, candy with some weight.
             p.vx *= drag;
-            let fall = if p.bloom { 3.2 } else { 2.2 };
-            p.vy += (fall - p.vy) * (1.2 * dt).min(1.0);
-            let sway = (p.age * 1.9 + p.phase).sin() * 2.4;
+            let fall = f.kind(p.kind).fall;
+            p.vy += (fall - p.vy) * (f.air.settle * dt).min(1.0) + f.air.gravity * dt;
+            let sway = (p.age * 1.9 + p.phase).sin() * f.air.sway;
             p.x += (p.vx + sway) * dt;
             p.y += p.vy * dt;
             if p.y >= floor_y {
@@ -1043,8 +1153,7 @@ impl Dvd {
                 if (0.0..w).contains(&x) {
                     floor[x as usize] = Fallen {
                         life: lie * (0.7 + 0.3 * (p.phase / std::f32::consts::TAU)),
-                        shade: p.shade,
-                        bloom: p.bloom,
+                        kind: p.kind,
                     };
                 }
                 return false;
@@ -1053,41 +1162,88 @@ impl Dvd {
         });
     }
 
-    /// The petals in the air and the path they make on the bottom row.
-    fn draw_petals(&self, ctx: &Ctx, c: &mut Canvas) {
-        let m = &self.dress.marigold;
-        for (x, f) in self.floor.iter().enumerate() {
-            if f.life <= 0.0 {
+    /// The color of a tint for a logo whose bounce color is `base`.
+    fn tint(&self, ctx: &Ctx, tint: Tint, base: usize) -> Color {
+        let n = self.palette.len().max(1);
+        match tint {
+            Tint::Own(c) => c,
+            Tint::Ink(c) if ctx.theme.native => c,
+            Tint::Ink(_) => ctx.theme.fg,
+            Tint::Dim(c) if ctx.theme.native => c,
+            Tint::Dim(_) => ctx.fade(ctx.theme.fg, 0.45),
+            Tint::Accent(i, c) => ctx.pick(i, c),
+            Tint::Cycle(k) => self.palette[(base + k as usize) % n],
+            Tint::Across => self.palette[(base + n / 2) % n],
+        }
+    }
+
+    /// The bits in the air and the path they make on the bottom row.
+    fn draw_bits(&self, ctx: &Ctx, c: &mut Canvas, f: &Fall) {
+        for (x, fl) in self.floor.iter().enumerate() {
+            if fl.life <= 0.0 {
                 continue;
             }
-            // Lying petals face up or down by where they fell.
-            let side = (x * 7 + f.shade as usize).is_multiple_of(3);
-            let g = if f.bloom {
-                BLOOM_GLYPHS[side as usize]
-            } else {
-                PETAL_GLYPHS[side as usize]
-            };
-            let col = m[f.shade as usize * 2 + side as usize];
-            let col = ctx.fade(col, (1.0 - f.life / 4.0).clamp(0.0, 1.0));
-            c.set(x as i32, self.h - 1, g, col);
+            // Lying bits face up or down by where they fell.
+            let side = (x * 7 + fl.kind as usize % 3).is_multiple_of(3) as usize;
+            let kind = f.kind(fl.kind);
+            let col = self.tint(ctx, kind.tints[side], 0);
+            let col = ctx.fade(col, (1.0 - fl.life / 4.0).clamp(0.0, 1.0));
+            c.set(x as i32, self.h - 1, kind.glyphs[side], col);
         }
-        for p in &self.petals {
-            // A petal tumbles: its two faces, in two shades, take turns.
+        for p in &self.bits {
+            // A bit tumbles: its two faces take turns.
             let face = ((p.age * 2.6 + p.phase) as i32 & 1) as usize;
-            let g = if p.bloom {
-                BLOOM_GLYPHS[face]
-            } else {
-                PETAL_GLYPHS[face]
-            };
-            let col = m[p.shade as usize * 2 + face];
+            let kind = f.kind(p.kind);
+            let col = self.tint(ctx, kind.tints[face], 0);
             let k = ((p.age / p.ttl - 0.75) * 4.0).clamp(0.0, 1.0);
-            c.set(p.x.round() as i32, p.y.round() as i32, g, ctx.fade(col, k));
+            c.set(
+                p.x.round() as i32,
+                p.y.round() as i32,
+                kind.glyphs[face],
+                ctx.fade(col, k),
+            );
         }
+    }
+
+    /// The picture logo `i` shows now, and how many columns it is shaken
+    /// aside.
+    fn pose(&self, i: usize, l: &Logo) -> (&Sprite, i32) {
+        let Some(look) = self.look else {
+            return (&self.sprite, 0);
+        };
+        let t = self.party_t;
+        let reacts = !self.laugh.parts.is_empty();
+        match look.react {
+            // At a corner the skulls laugh, their jaws chattering.
+            React::Chatter if reacts && t < 1.8 && (t * 9.0) as i32 % 2 == 1 => {
+                return (&self.laugh, 0);
+            }
+            React::Hold if reacts && t < 1.8 => return (&self.laugh, 0),
+            React::Pop if reacts => {
+                let s = l.since_corner;
+                if (POP..POP + BROKEN).contains(&s) {
+                    return (&self.laugh, 0);
+                }
+                // Three hits of the stick, each one a lurch to the side.
+                let hit = s * 3.0 / POP;
+                if s < POP && hit.fract() < 0.5 {
+                    return (&self.sprite, if hit as i32 % 2 == 0 { 1 } else { -1 });
+                }
+            }
+            _ => {}
+        }
+        if !self.frames.is_empty() && look.beat > 0.0 {
+            let k = ((self.clock * look.beat) as usize + i) % (self.frames.len() + 1);
+            if k > 0 {
+                return (&self.frames[k - 1], 0);
+            }
+        }
+        (&self.sprite, 0)
     }
 
     fn draw_counter(&self, c: &mut Canvas) {
         let mut buf = [0u8; 24];
-        let prefix: &[u8] = if self.fiesta.is(Kind::Muertos) {
+        let prefix: &[u8] = if self.look.is_some() {
             b"esquinas: "
         } else {
             b"corners: "
@@ -1148,6 +1304,8 @@ impl Scene for Dvd {
                 color: self.rng.usize(..n),
                 since_bounce: 1.0,
                 since_corner: 10.0,
+                jest: false,
+                since_jest: 100.0,
             };
             self.logos.push(l);
         }
@@ -1157,10 +1315,9 @@ impl Scene for Dvd {
 
     fn retheme(&mut self, ctx: &Ctx) {
         self.palette.clear();
-        let on = ctx.fiesta.is(Kind::Muertos);
         if ctx.theme.native {
-            self.palette
-                .extend_from_slice(if on { &PAPEL[..] } else { &CLASSIC[..] });
+            let classic = look_for(ctx.fiesta).map_or(&CLASSIC[..], |look| look.classic);
+            self.palette.extend_from_slice(classic);
             self.counter_dim = ctx.fade(rgb(0xb0b0b0), 0.45);
         } else {
             let n = ctx.theme.colors.len().max(1);
@@ -1168,12 +1325,6 @@ impl Scene for Dvd {
                 .extend((0..n).map(|i| ctx.pick(i, Color::Reset)));
             self.counter_dim = ctx.fade(ctx.theme.fg, 0.45);
         }
-        // The bone is the theme's own ink; the marigolds keep their hue.
-        self.dress.bone = if ctx.theme.native {
-            HUESO
-        } else {
-            ctx.theme.fg
-        };
         if ctx.fiesta != self.fiesta {
             // The holiday came or went (or moved on a day): dress again.
             self.fiesta = ctx.fiesta;
@@ -1206,9 +1357,14 @@ impl Scene for Dvd {
 
     fn draw(&mut self, ctx: &Ctx, c: &mut Canvas) {
         let n = self.palette.len().max(1);
-        if self.party_t < PARTY {
+        // The banner of a corner, or of a near miss.
+        let (t, b) = if self.party_t < PARTY {
+            (self.party_t, &self.banner)
+        } else {
+            (self.joke_t, &self.joke)
+        };
+        if t < PARTY {
             // Blink fast at first, then hold and fade out.
-            let t = self.party_t;
             let on = t > 1.2 || (t * 7.0) as i32 % 2 == 0;
             if on {
                 let col = self.palette[(t * 9.0) as usize % n];
@@ -1217,7 +1373,6 @@ impl Scene for Dvd {
                 } else {
                     col
                 };
-                let b = &self.banner;
                 b.draw(c, (self.w - b.w) / 2, (self.h - b.h) / 2, col, BOLD);
             }
         }
@@ -1232,31 +1387,20 @@ impl Scene for Dvd {
             let col = ctx.fade(self.palette[s.color as usize % n], k * 0.7);
             c.set(s.x.round() as i32, s.y.round() as i32, g, col);
         }
-        if self.fiesta.is(Kind::Muertos) {
-            self.draw_petals(ctx, c);
+        if let Some(look) = self.look {
+            self.draw_bits(ctx, c, &look.fall);
         }
-        // At a corner the skulls laugh, their jaws chattering.
-        let t = self.party_t;
-        let laughing = t < 1.8 && (t * 9.0) as i32 % 2 == 1 && !self.laugh.parts.is_empty();
-        let skull = if laughing { &self.laugh } else { &self.sprite };
-        for l in &self.logos {
-            let (x, y) = (l.x.round() as i32, l.y.round() as i32);
-            let icing = self.palette[l.color % n];
-            if skull.parts.is_empty() {
-                self.sprite.draw(c, x, y, icing, 0);
+        for (i, l) in self.logos.iter().enumerate() {
+            let (pose, shake) = self.pose(i, l);
+            let (x, y) = (l.x.round() as i32 + shake, l.y.round() as i32);
+            let base = l.color % n;
+            let Some(look) = self.look.filter(|_| !pose.parts.is_empty()) else {
+                self.sprite.draw(c, x, y, self.palette[base], 0);
                 continue;
-            }
-            // The eye flowers take the color across the palette.
-            let petal = self.palette[(l.color + n / 2) % n];
-            let d = &self.dress;
-            skull.draw_parts(c, x, y, |part| match part {
-                b'i' => icing,
-                b'j' => petal,
-                b'o' => d.marigold[0],
-                b'y' => d.marigold[3],
-                b'r' => d.marigold[4],
-                b'g' => d.leaf,
-                _ => d.bone,
+            };
+            pose.draw_parts(c, x, y, |part| {
+                let tint = look.parts.iter().find(|(p, _)| *p == part);
+                self.tint(ctx, tint.map_or(Tint::Ink(Color::Reset), |t| t.1), base)
             });
         }
         // A HUD on top of everything, so a corner hit never hides it.
@@ -1268,7 +1412,22 @@ impl Scene for Dvd {
 
 #[cfg(test)]
 mod tests {
+    use super::muertos::HUESO;
     use super::*;
+
+    /// A day of every look the logo has, as the holidays are dressed so far.
+    fn days() -> Vec<(&'static str, Fiesta)> {
+        vec![
+            ("muertos", Fiesta::of_day(11, 2)),
+            ("muertos, early", Fiesta::of_day(10, 28)),
+            ("navidad", Fiesta::height(Kind::Navidad)),
+            ("posadas", Fiesta::of_day(12, 16)),
+            ("inocentes", Fiesta::of_day(12, 28)),
+            ("año nuevo", Fiesta::of_day(12, 31)),
+            ("reyes", Fiesta::of_day(1, 3)),
+            ("rosca", Fiesta::of_day(1, 6)),
+        ]
+    }
 
     /// Runs the scene with `opts` through odd sizes, huge steps and themes.
     fn torture(opts: &str, fiesta: Fiesta) {
@@ -1302,7 +1461,9 @@ mod tests {
 
     #[test]
     fn survives_options() {
-        for fiesta in [Fiesta::NONE, Fiesta::of_day(11, 2), Fiesta::of_day(10, 28)] {
+        let mut every = vec![Fiesta::NONE];
+        every.extend(days().iter().map(|d| d.1));
+        for fiesta in every {
             torture("", fiesta);
             torture("count = 64\nspeed = 500.0\ncorner_assist = true", fiesta);
             torture(
@@ -1341,20 +1502,57 @@ mod tests {
     }
 
     #[test]
-    fn skulls_line_up() {
-        for skull in &SKULLS {
-            let w = skull.art[0].len();
-            for l in skull.art.iter().chain(skull.laugh) {
-                assert_eq!(l.len(), w, "{l}");
+    fn banners_are_all_in_the_font() {
+        for (_, f) in days() {
+            let look = look_for(f).unwrap();
+            for line in look.banner.iter().chain(look.joke.into_iter().flatten()) {
+                for ch in line.chars().filter(|c| *c != ' ') {
+                    assert!(glyph_es(ch).is_some(), "{ch} in {line}");
+                }
             }
-            assert!(skull.laugh.len() < skull.art.len());
-            for level in [0.25, 0.6, 1.0] {
-                let s = Sprite::calavera(skull, false, level);
-                let laugh = Sprite::calavera(skull, true, level);
-                assert_eq!((s.w, s.h), (laugh.w, laugh.h));
-                assert_eq!(s.cells.len(), s.parts.len());
-                assert_ne!(s.cells, laugh.cells);
+        }
+    }
+
+    #[test]
+    fn pictures_line_up() {
+        for (day, f) in days() {
+            let look = look_for(f).unwrap();
+            assert!(!look.classic.is_empty() && !look.fall.kinds.is_empty());
+            assert!(
+                look.parts.iter().all(|p| p.0 != b'k' && p.0 != b'.'),
+                "{day}"
+            );
+            for size in look.sizes {
+                let w = size.frames[0][0].len();
+                for l in size.frames.iter().flat_map(|f| f.iter()).chain(size.react) {
+                    assert_eq!(l.len(), w, "{day}: {l}");
+                }
+                for f in size.frames {
+                    assert_eq!(f.len(), size.frames[0].len(), "{day}");
+                }
+                assert!(size.react.len() <= size.frames[0].len(), "{day}");
+                for level in [0.25, 0.6, 1.0] {
+                    let s = Sprite::pixels(look, size, 0, false, level);
+                    assert_eq!(s.cells.len(), s.parts.len());
+                    if !size.react.is_empty() {
+                        let laugh = Sprite::pixels(look, size, 0, true, level);
+                        assert_eq!((s.w, s.h), (laugh.w, laugh.h), "{day}");
+                        assert_ne!(s.cells, laugh.cells, "{day}");
+                    }
+                    // Every letter of the art is a part with a color.
+                    for &p in s.parts.iter().filter(|p| **p != 0 && **p != b'k') {
+                        assert!(look.parts.iter().any(|q| q.0 == p), "{day}: {}", p as char);
+                    }
+                }
             }
+            // The sizes get smaller, and each fits a screen the one before
+            // does not.
+            let w: Vec<i32> = look
+                .sizes
+                .iter()
+                .map(|s| Sprite::pixels(look, s, 0, false, 1.0).w)
+                .collect();
+            assert!(w.windows(2).all(|p| p[0] > p[1]), "{day}: {w:?}");
         }
     }
 
@@ -1378,6 +1576,14 @@ mod tests {
         c
     }
 
+    /// A scene dressed for `f`, on a `w`×`h` screen.
+    fn dressed(ctx: &Ctx, w: u16, h: u16) -> Dvd {
+        let mut d = Dvd::new(ctx);
+        d.resize(ctx, w, h);
+        d.retheme(ctx);
+        d
+    }
+
     fn bones(c: &Canvas, bone: Color) -> usize {
         c.cells().iter().filter(|cell| cell.fg == bone).count()
     }
@@ -1385,6 +1591,11 @@ mod tests {
     fn flowers(d: &Dvd) -> usize {
         let crown = *b"oyr";
         d.sprite.parts.iter().filter(|p| crown.contains(p)).count()
+    }
+
+    /// How many pixels of a logo are of these parts.
+    fn parts(d: &Dvd, of: &[u8]) -> usize {
+        d.sprite.parts.iter().filter(|p| of.contains(p)).count()
     }
 
     #[test]
@@ -1396,20 +1607,18 @@ mod tests {
             let mut crowns = Vec::new();
             for f in [Fiesta::of_day(10, 28), Fiesta::of_day(11, 2)] {
                 let ctx = ctx(&th, &o, f);
-                let mut d = Dvd::new(&ctx);
-                d.resize(&ctx, 120, 36);
-                d.retheme(&ctx);
+                let mut d = dressed(&ctx, 120, 36);
                 assert!(!d.sprite.parts.is_empty(), "a sugar skull");
                 crowns.push(flowers(&d));
                 let c = play(&mut d, &ctx, 20.0);
                 assert!(bones(&c, bone) > 100, "{theme}");
-                assert!(!d.petals.is_empty(), "petals fall from it");
+                assert!(!d.bits.is_empty(), "petals fall from it");
                 assert!(d.floor.iter().any(|f| f.life > 0.0), "and lie on the floor");
                 // A corner: a burst of petals, the skull laughs, the banner.
-                let before = d.petals.len();
+                let before = d.bits.len();
                 d.celebrate(0);
-                assert!(d.petals.len() > before + 20);
-                let banner = Sprite::fit_lines(&LLEVO, 120, 36);
+                assert!(d.bits.len() > before + 20);
+                let banner = Sprite::fit_lines(muertos::LOOK.banner, 120, 36);
                 assert_eq!((d.banner.h, &d.banner.cells), (7, &banner.cells));
                 let c = play(&mut d, &ctx, 0.5);
                 assert!(c.to_text().contains("esquinas: "));
@@ -1419,21 +1628,32 @@ mod tests {
         }
     }
 
+    /// Dates that were ordinary before the other holidays came.
+    const ORDINARY: [(u32, u32); 3] = [(6, 15), (8, 20), (3, 5)];
+
     #[test]
     fn ordinary_days_stay_plain() {
         let o = crate::scene::Opts::new(INFO.options, toml::Table::new());
         let th = crate::theme::Theme::builtin("classic").unwrap();
-        let ctx = ctx(&th, &o, Fiesta::NONE);
-        let mut d = Dvd::new(&ctx);
-        d.resize(&ctx, 120, 36);
-        d.retheme(&ctx);
-        assert!(d.sprite.parts.is_empty() && d.laugh.cells.is_empty());
-        assert_eq!(d.sprite.w, LOGO[4].chars().count() as i32);
-        d.celebrate(0);
-        let c = play(&mut d, &ctx, 1.0);
-        assert_eq!(bones(&c, HUESO), 0);
-        assert!(d.petals.is_empty() && d.floor.is_empty() && !d.sparks.is_empty());
-        assert!(c.to_text().contains("corners: 1"));
+        let mut plain = vec![Fiesta::NONE];
+        plain.extend(ORDINARY.iter().map(|&(m, d)| Fiesta::of_day(m, d)));
+        // And a holiday that has no costume yet is as plain as any day.
+        plain.extend([
+            Fiesta::height(Kind::Equinoccio),
+            Fiesta::height(Kind::SantaCruz),
+        ]);
+        for f in plain {
+            let ctx = ctx(&th, &o, f);
+            let mut d = dressed(&ctx, 120, 36);
+            assert!(d.sprite.parts.is_empty() && d.laugh.cells.is_empty());
+            assert_eq!(d.sprite.w, LOGO[4].chars().count() as i32);
+            assert_eq!(d.palette, CLASSIC.to_vec());
+            d.celebrate(0);
+            let c = play(&mut d, &ctx, 1.0);
+            assert_eq!(bones(&c, HUESO), 0);
+            assert!(d.bits.is_empty() && d.floor.is_empty() && !d.sparks.is_empty());
+            assert!(c.to_text().contains("corners: 1"));
+        }
     }
 
     #[test]
@@ -1441,23 +1661,252 @@ mod tests {
         let o = crate::scene::Opts::new(INFO.options, toml::Table::new());
         let th = crate::theme::Theme::builtin("classic").unwrap();
         let plain = ctx(&th, &o, Fiesta::NONE);
-        let muertos = ctx(&th, &o, Fiesta::of_day(11, 1));
-        let mut d = Dvd::new(&plain);
-        d.resize(&plain, 100, 30);
-        d.retheme(&plain);
-        play(&mut d, &plain, 2.0);
-        d.retheme(&muertos);
-        assert!(!d.sprite.parts.is_empty());
-        assert_eq!(d.palette, PAPEL.to_vec());
-        let c = play(&mut d, &muertos, 3.0);
-        assert!(bones(&c, HUESO) > 50 && !d.petals.is_empty());
-        for l in &d.logos {
-            assert!(l.x <= d.max_x() && l.y <= d.max_y());
+        for (day, f) in days() {
+            let holiday = ctx(&th, &o, f);
+            let look = look_for(f).unwrap();
+            let mut d = dressed(&plain, 100, 30);
+            play(&mut d, &plain, 2.0);
+            d.retheme(&holiday);
+            assert!(!d.sprite.parts.is_empty(), "{day}");
+            assert_eq!(d.palette, look.classic.to_vec(), "{day}");
+            let c = play(&mut d, &holiday, 3.0);
+            assert!(c.cells().iter().any(|cell| cell.ch != ' '), "{day}");
+            for l in &d.logos {
+                assert!(l.x <= d.max_x() && l.y <= d.max_y());
+            }
+            d.retheme(&plain);
+            assert!(d.sprite.parts.is_empty() && d.bits.is_empty() && d.floor.is_empty());
+            assert_eq!(d.palette, CLASSIC.to_vec(), "{day}");
+            let c = play(&mut d, &plain, 1.0);
+            assert_eq!(bones(&c, HUESO), 0);
         }
-        d.retheme(&plain);
-        assert!(d.sprite.parts.is_empty() && d.petals.is_empty() && d.floor.is_empty());
-        assert_eq!(d.palette, CLASSIC.to_vec());
-        let c = play(&mut d, &plain, 1.0);
-        assert_eq!(bones(&c, HUESO), 0);
+    }
+
+    /// The days the holiday moves from one look to another: the logo is
+    /// dressed again when the date changes.
+    #[test]
+    fn the_navidad_changes_its_look_by_the_day() {
+        let o = crate::scene::Opts::new(INFO.options, toml::Table::new());
+        let th = crate::theme::Theme::builtin("classic").unwrap();
+        let eve = ctx(&th, &o, Fiesta::of_day(12, 24));
+        let reyes = ctx(&th, &o, Fiesta::of_day(1, 3));
+        let mut d = dressed(&eve, 120, 36);
+        let pinata = d.sprite.cells.clone();
+        d.retheme(&reyes);
+        assert_ne!(d.sprite.cells, pinata, "a rosca now");
+        assert_eq!(d.palette, navidad::look(reyes.fiesta).classic.to_vec());
+        d.retheme(&eve);
+        assert_eq!(d.sprite.cells, pinata, "a piñata again");
+    }
+
+    #[test]
+    fn navidad_dresses_the_logo() {
+        let o = crate::scene::Opts::new(INFO.options, toml::Table::new());
+        for theme in ["classic", "dracula"] {
+            let th = crate::theme::Theme::builtin(theme).unwrap();
+            let ctx = ctx(&th, &o, Fiesta::height(Kind::Navidad));
+            let mut d = dressed(&ctx, 120, 40);
+            // Seven picos, a ball and a rope.
+            for p in b"abcdefghr" {
+                assert!(parts(&d, &[*p]) > 0, "{}", *p as char);
+            }
+            let c = play(&mut d, &ctx, 20.0);
+            let col = |cell: &crate::render::Cell| cell.fg != Color::Reset && cell.ch != ' ';
+            assert!(c.cells().iter().filter(|cell| col(cell)).count() > 100);
+            assert!(!d.bits.is_empty() || d.floor.iter().any(|f| f.life > 0.0));
+            // Under classic, the picos wear papel de china.
+            if th.native {
+                assert!(c.cells().iter().any(|cell| cell.fg == rgb(0xe4007c)));
+            }
+            let banner = Sprite::fit_lines(&["¡Dale, dale,", "dale!"], 120, 40);
+            assert_eq!(d.banner.cells, banner.cells);
+            assert_eq!(d.banner.h, 11);
+            assert!(play(&mut d, &ctx, 0.5).to_text().contains("esquinas: "));
+        }
+    }
+
+    #[test]
+    fn the_pinata_bursts_at_the_third_dale() {
+        let o = crate::scene::Opts::new(INFO.options, toml::Table::new());
+        let th = crate::theme::Theme::builtin("classic").unwrap();
+        let ctx = ctx(&th, &o, Fiesta::height(Kind::Navidad));
+        let mut d = dressed(&ctx, 120, 40);
+        d.bits.clear();
+        d.shed = 0.0;
+        d.celebrate(0);
+        d.logos[0].since_corner = 0.0;
+        assert!(d.bits.is_empty(), "nothing flies out yet");
+        let whole = d.sprite.cells.clone();
+        // The stick lands three times, each a lurch to the side...
+        let mut lurches = 0;
+        let mut was = false;
+        for _ in 0..30 {
+            d.step(1.0 / 30.0);
+            let (pose, shake) = d.pose(0, &d.logos[0]);
+            assert_eq!(pose.cells, whole, "still whole");
+            lurches += (shake != 0 && !was) as i32;
+            was = shake != 0;
+        }
+        assert_eq!(lurches, 3);
+        assert!(d.bits.len() < 10, "{}", d.bits.len());
+        // ...and then it bursts into candy and fruit, and what is left of
+        // it hangs there for a moment before a new one comes.
+        for _ in 0..8 {
+            d.step(1.0 / 30.0);
+        }
+        assert!(d.bits.len() > 30, "{}", d.bits.len());
+        assert_eq!(d.pose(0, &d.logos[0]).0.cells, d.laugh.cells);
+        assert_ne!(d.laugh.cells, whole);
+        for _ in 0..40 {
+            d.step(1.0 / 30.0);
+        }
+        assert_eq!(d.pose(0, &d.logos[0]).0.cells, whole, "a fresh piñata");
+    }
+
+    #[test]
+    fn candy_falls_and_lies_on_the_floor() {
+        let o = crate::scene::Opts::new(INFO.options, toml::Table::new());
+        let th = crate::theme::Theme::builtin("classic").unwrap();
+        let ctx = ctx(&th, &o, Fiesta::height(Kind::Navidad));
+        let mut d = dressed(&ctx, 100, 30);
+        d.burst(0, 1.0);
+        let thrown = d.bits.len();
+        assert!(thrown > 20);
+        let kinds: std::collections::HashSet<u8> = d.bits.iter().map(|b| b.kind).collect();
+        assert!(kinds.len() >= 4, "{kinds:?}: candy, fruit and more");
+        for _ in 0..(6.0 * 30.0) as usize {
+            d.tick(&ctx, 1.0 / 30.0, 1.0 / 30.0);
+        }
+        assert!(d.floor.iter().filter(|f| f.life > 0.0).count() > 10);
+        // The candy lying there goes after a while.
+        for _ in 0..(40.0 * 30.0) as usize {
+            d.tick(&ctx, 1.0 / 30.0, 1.0 / 30.0);
+            d.bits.clear();
+        }
+        assert!(d.floor.iter().all(|f| f.life <= 0.0));
+    }
+
+    #[test]
+    fn the_posadas_bring_more_candy() {
+        let o = crate::scene::Opts::new(INFO.options, toml::Table::new());
+        let th = crate::theme::Theme::builtin("classic").unwrap();
+        let mut seen = Vec::new();
+        for day in [16, 24] {
+            let ctx = ctx(&th, &o, Fiesta::of_day(12, day));
+            let mut d = dressed(&ctx, 100, 30);
+            let mut shed = 0;
+            for _ in 0..(60.0 * 30.0) as usize {
+                d.tick(&ctx, 1.0 / 30.0, 1.0 / 30.0);
+                shed += d.bits.len() + d.floor.iter().filter(|f| f.life > 0.0).count();
+            }
+            seen.push(shed);
+        }
+        assert!(seen[1] > seen[0] * 3 / 2, "{seen:?}");
+    }
+
+    #[test]
+    fn reyes_brings_the_rosca() {
+        let o = crate::scene::Opts::new(INFO.options, toml::Table::new());
+        let th = crate::theme::Theme::builtin("classic").unwrap();
+        let mut jewels = Vec::new();
+        for day in [2, 6] {
+            let ctx = ctx(&th, &o, Fiesta::of_day(1, day));
+            let mut d = dressed(&ctx, 120, 36);
+            assert!(
+                parts(&d, b"b") > 100 && parts(&d, b"s") > 20,
+                "bread and sugar"
+            );
+            jewels.push(parts(&d, b"jlm"));
+            let banner = Sprite::fit_lines(&["¡Te salió", "el muñeco!"], 120, 36);
+            assert_eq!(d.banner.cells, banner.cells);
+            // At a corner the muñeco shows in the hole.
+            assert_eq!(parts(&d, b"p"), 0);
+            d.celebrate(0);
+            let mut c = Canvas::new(120, 36, Color::Reset);
+            d.draw(&ctx, &mut c);
+            assert!(!d.laugh.parts.is_empty());
+            assert!(d.laugh.parts.contains(&b'p') && d.laugh.parts.contains(&b'q'));
+            assert!(c.cells().iter().any(|cell| cell.fg == rgb(0xf2c4a0)));
+        }
+        // More of the candied fruit as the days go by.
+        assert!(jewels[0] > 0 && jewels[1] > jewels[0], "{jewels:?}");
+    }
+
+    #[test]
+    fn ano_nuevo_says_so() {
+        let o = crate::scene::Opts::new(INFO.options, toml::Table::new());
+        let th = crate::theme::Theme::builtin("classic").unwrap();
+        for (m, day) in [(12, 31), (1, 1)] {
+            let ctx = ctx(&th, &o, Fiesta::of_day(m, day));
+            let mut d = dressed(&ctx, 120, 36);
+            let banner = Sprite::fit_lines(&["¡Feliz Año", "Nuevo!"], 120, 36);
+            assert_eq!(d.banner.cells, banner.cells);
+            // Grapes, confetti and sparks of gold, not only candy.
+            d.burst(0, 1.0);
+            assert!(d.bits.iter().any(|b| b.kind == 0 || b.kind == 2));
+            assert_eq!(d.look.map(|l| l.fall.kinds.len()), Some(4));
+        }
+    }
+
+    #[test]
+    fn on_the_santos_inocentes_it_misses_a_corner_by_a_cell() {
+        let o = crate::scene::Opts::new(INFO.options, toml::Table::new());
+        let th = crate::theme::Theme::builtin("classic").unwrap();
+        let ctx = ctx(&th, &o, Fiesta::of_day(12, 28));
+        let mut d = dressed(&ctx, 100, 30);
+        assert!(!d.joke.cells.is_empty());
+        let joke = Sprite::fit_lines(&["¡Inocente", "palomita!"], 100, 30);
+        assert_eq!(d.joke.cells, joke.cells);
+        let (mx, my) = (d.max_x(), d.max_y());
+        let (mut jokes, mut slowed) = (0, false);
+        let mut was = d.joke_t;
+        for _ in 0..(300.0 * 30.0) as usize {
+            let before = d.logos[0].x;
+            d.step(1.0 / 30.0);
+            if d.logos[0].jest {
+                let l = &d.logos[0];
+                // Near the wall it crawls.
+                let to_wall = if l.vx > 0.0 { mx - l.x } else { l.x };
+                slowed |= to_wall < 3.0 && (l.x - before).abs() < 0.5 * l.vx.abs() / 30.0;
+            }
+            if d.joke_t < was {
+                // The wall it just bounced off, and a row from a corner.
+                let l = &d.logos[0];
+                assert!(l.x < 1.0 || l.x > mx - 1.0, "{}", l.x);
+                let gap = l.y.min(my - l.y);
+                assert!((0.7..1.4).contains(&gap), "a cell from the corner: {gap}");
+                jokes += 1;
+            }
+            was = d.joke_t;
+        }
+        assert!(jokes >= 5, "{jokes} jokes");
+        assert!(slowed, "it slows down as it nears the corner");
+        assert_eq!(d.corners, 0, "and never gets there");
+        // The banner shows for a moment.
+        d.joke_t = 0.1;
+        d.party_t = PARTY;
+        let mut c = Canvas::new(100, 30, Color::Reset);
+        d.draw(&ctx, &mut c);
+        assert!(c.cells().iter().filter(|cell| cell.ch == '█').count() > 100);
+    }
+
+    #[test]
+    fn other_days_never_play_the_joke() {
+        let o = crate::scene::Opts::new(INFO.options, toml::Table::new());
+        let th = crate::theme::Theme::builtin("classic").unwrap();
+        for f in [
+            Fiesta::of_day(12, 27),
+            Fiesta::of_day(12, 24),
+            Fiesta::of_day(1, 3),
+            Fiesta::NONE,
+        ] {
+            let ctx = ctx(&th, &o, f);
+            let mut d = dressed(&ctx, 100, 30);
+            assert!(d.joke.cells.is_empty());
+            for _ in 0..(120.0 * 30.0) as usize {
+                d.step(1.0 / 30.0);
+                assert!(d.joke_t >= PARTY && !d.logos[0].jest);
+            }
+        }
     }
 }
