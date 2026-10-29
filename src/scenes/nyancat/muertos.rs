@@ -11,12 +11,8 @@
 //! carries, monarch butterflies flying along from October 31, and from
 //! November 1 a crown of flowers on the cat's head.
 
-use super::frames::{FRAME_HEIGHT, FRAME_WIDTH};
+use super::costume::{Painter, Plain, corner, eye, share, spot, stamp};
 use crate::color::{self, Color};
-use crate::render::Pixels;
-
-/// A frame, one byte per pixel.
-pub(super) type Plain = [[u8; FRAME_WIDTH]; FRAME_HEIGHT];
 
 /// The holiday's colors under `classic`, per pixel character. Icing (`R`,
 /// `T`, `A`, `G`, `M`) and the papel picado take the theme's colors under
@@ -81,15 +77,6 @@ const BREAD: [&[u8; 17]; 13] = [
     b"__S__h_S_________",
 ];
 
-/// Where the left eye's highlight is in a (stripped) frame.
-pub(super) fn eye(f: &Plain) -> Option<(i32, i32)> {
-    f.iter().enumerate().find_map(|(y, row)| {
-        row.iter()
-            .position(|&c| c == b'.')
-            .map(|x| (x as i32, y as i32))
-    })
-}
-
 /// A stripped frame dressed for the holiday.
 pub(super) fn dress(f: &Plain) -> Plain {
     let mut out = *f;
@@ -108,14 +95,7 @@ pub(super) fn dress(f: &Plain) -> Plain {
 
     // The bread: a cross of bones with the ball where they meet, on the part
     // of the pop-tart the head leaves in sight.
-    let (mut bx, mut by) = (FRAME_WIDTH as i32, FRAME_HEIGHT as i32);
-    for (y, row) in f.iter().enumerate() {
-        if let Some(x) = row.iter().position(|&c| c == b'@') {
-            bx = bx.min(x as i32);
-            by = by.min(y as i32);
-        }
-    }
-    if by < FRAME_HEIGHT as i32 {
+    if let Some((bx, by)) = corner(f) {
         stamp(&mut out, bx, by, &BREAD, |c| matches!(c, b'C' | b'S'));
     }
 
@@ -123,44 +103,6 @@ pub(super) fn dress(f: &Plain) -> Plain {
         stamp(&mut out, ex - 4, ey - 5, &FACE, |c| c != b',');
     }
     out
-}
-
-/// Stamps `art` with its corner at (x, y) over the pixels `over` accepts;
-/// `_` keeps what is there.
-fn stamp<const W: usize>(
-    out: &mut Plain,
-    x: i32,
-    y: i32,
-    art: &[&[u8; W]],
-    over: impl Fn(u8) -> bool,
-) {
-    for (j, line) in art.iter().enumerate() {
-        for (i, &ch) in line.iter().enumerate() {
-            let (px, py) = (x + i as i32, y + j as i32);
-            if ch == b'_' || px < 0 || py < 0 {
-                continue;
-            }
-            if let Some(p) = out
-                .get_mut(py as usize)
-                .and_then(|row| row.get_mut(px as usize))
-                && over(*p)
-            {
-                *p = ch;
-            }
-        }
-    }
-}
-
-/// Is this pixel one of the papel picado's (the rainbow's) bands?
-#[inline]
-pub(super) fn is_band(ch: u8) -> bool {
-    matches!(ch, b'>' | b'&' | b'+' | b'#' | b'=' | b';')
-}
-
-/// Is this pixel part of the cat (not sky, not the trail)?
-#[inline]
-pub(super) fn is_solid(ch: u8) -> bool {
-    ch != b',' && !is_band(ch)
 }
 
 /// The cut-outs of one flag of papel picado: eight columns (one step of
@@ -209,26 +151,13 @@ const CUTS: [[&[u8; 8]; 16]; 2] = [
 /// Is the papel picado cut out at cat pixel (x, y)? `f` and `flip` are the
 /// frame on screen, as for `sample`.
 pub(super) fn cut(f: &Plain, flip: bool, x: i32, y: i32) -> bool {
-    let (flag, u, up) = if x < 0 {
-        // The trail `sample` generates: 2 - x counts columns away from the frame.
-        let m = 2 - x as i64;
-        let up = ((m % 16) / 8 == 1) != flip;
-        (m.div_euclid(8), 7 - m.rem_euclid(8), up)
-    } else {
-        let up = f[24][(x as usize).min(FRAME_WIDTH - 1)] == b'>';
-        (
-            -1 - (x as i64 - 2).div_euclid(8),
-            (x as i64 - 2).rem_euclid(8),
-            up,
-        )
-    };
-    let k = y - 23 + up as i32 - 2;
-    if k < 0 {
+    let s = spot(f, flip, x, y);
+    if s.k < 0 {
         return false;
     }
-    CUTS[flag.rem_euclid(2) as usize]
-        .get(k as usize)
-        .is_some_and(|line| line[u as usize] == b'#')
+    CUTS[s.flag.rem_euclid(2) as usize]
+        .get(s.k as usize)
+        .is_some_and(|line| line[s.u] == b'#')
 }
 
 /// The six stages of a cempasúchil, in place of the six of a star: a bud,
@@ -436,54 +365,7 @@ impl Field {
     }
 }
 
-/// How many of `n` things have come at `level`: none up to `from`, all of
-/// them at the holiday's height.
-fn share(n: usize, level: f32, from: f32) -> usize {
-    let k = ((level - from) / (1.0 - from)).clamp(0.0, 1.0);
-    ((n as f32 * k).ceil() as usize).min(n)
-}
-
-/// Paints the holiday's sprites in cat pixels: the marigolds where the stars
-/// are, petals and monarchs behind the cat, its crown.
-pub(super) struct Painter<'a> {
-    pub px: &'a mut Pixels,
-    pub pal: &'a [Color; 128],
-    pub ox: i32,
-    pub oy: i32,
-    pub s: i32,
-}
-
 impl Painter<'_> {
-    /// Paints cat pixel (x, y) with `ch` unless the cat is there.
-    #[inline]
-    pub fn put(&mut self, solid: &impl Fn(i32, i32) -> bool, x: i32, y: i32, ch: u8) {
-        if solid(x, y) {
-            return;
-        }
-        let c = self.pal[ch as usize & 127];
-        let s = self.s;
-        self.px.fill_rect(self.ox + x * s, self.oy + y * s, s, s, c);
-    }
-
-    /// Paints `art` centered on cat pixel (x, y), where `solid` allows; `.`
-    /// is empty.
-    pub fn sprite<const W: usize>(
-        &mut self,
-        solid: &impl Fn(i32, i32) -> bool,
-        cx: i32,
-        cy: i32,
-        art: &[&[u8; W]],
-    ) {
-        let (hx, hy) = (W as i32 / 2, art.len() as i32 / 2);
-        for (j, line) in art.iter().enumerate() {
-            for (i, &ch) in line.iter().enumerate() {
-                if ch != b'.' {
-                    self.put(solid, cx + i as i32 - hx, cy + j as i32 - hy, ch);
-                }
-            }
-        }
-    }
-
     /// Everything but the marigolds, at animation tick `k` (kept well away
     /// from overflowing by the caller): petals behind
     /// whatever is `filled` (the cat, the papel picado but its cut-outs),
@@ -550,6 +432,7 @@ impl Painter<'_> {
 
 #[cfg(test)]
 mod tests {
+    use super::super::costume::is_band;
     use super::super::frames::FRAMES;
     use super::super::strip_stars;
     use super::*;
