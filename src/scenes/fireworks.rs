@@ -69,6 +69,18 @@
 //! cartón, and after a while a new one is hung. The shells burn in cartón
 //! rojo, yellow and white-gold, with the odd cohete.
 //!
+//! On the Guelaguetza the city becomes the street of a calenda: colonial
+//! facades in the greens, ocres and rosas of the cantera with lit windows,
+//! strings of lights in the colors of Oaxacan embroidery and a crowd with
+//! banderitas. Marmotas, great paper globes lit from inside and twirled on
+//! poles, bob above the crowd as the calenda drifts along; toritos, bull
+//! frames of papel and cane, run along the ground spitting sparks from the
+//! cohetes on their backs and from their horns, turning round beyond the
+//! edges of the screen; and a castillo is lit now and then, its wheels
+//! spinning tier by tier and a flor of sparks bursting from its crown. The
+//! shells burn in the colors of the embroidery, some as flores. More
+//! marmotas, toritos, lights and flores as the Lunes del Cerro comes.
+//!
 //! MIT License
 //!
 //! Copyright (c) 2026 Santiago Sánchez
@@ -191,6 +203,8 @@ enum Shell {
     Cohete,
     /// Día de la Santa Cruz: the cross hung with papel flowers.
     Cruz,
+    /// Guelaguetza: a flor of Oaxacan embroidery.
+    Flor,
     /// Carnaval: a mask with a plume, drawn in sparks.
     Mascara,
     /// Carnaval: a shower of confetti, tumbling in every color as it falls.
@@ -214,6 +228,7 @@ impl Shell {
                 | Shell::Aguila
                 | Shell::Cruz
                 | Shell::Mascara
+                | Shell::Flor
                 | Shell::Text(_)
         )
     }
@@ -464,6 +479,8 @@ const CRUZ_SEED: u64 = 0x6372_757a_2033_6d79;
 const CARNAVAL_SEED: u64 = 0x6361_726e_6176_616c;
 /// And the quema de Judas's.
 const JUDAS_SEED: u64 = 0x6a75_6461_7320_3737;
+/// And the Guelaguetza's.
+const GUELAGUETZA_SEED: u64 = 0x6775_656c_6167_7565;
 
 // Navidad under `classic`; the shell colors are brightened to burn in the
 // night sky.
@@ -500,6 +517,14 @@ const JU_ROJO: V3 = c8(255, 64, 60);
 const JU_AMARILLO: V3 = c8(255, 210, 60);
 const JU_ORO: V3 = c8(255, 228, 160);
 const JU_BLANCO: V3 = c8(255, 247, 228);
+// The Guelaguetza under `classic`: the colors of Oaxacan embroidery,
+// brightened for the sky.
+const GU_GRANA: V3 = c8(230, 40, 60);
+const GU_AMARILLO: V3 = c8(255, 208, 30);
+const GU_VERDE: V3 = c8(50, 200, 100);
+const GU_ROSA: V3 = c8(255, 40, 150);
+const GU_MORADO: V3 = c8(170, 80, 230);
+const GU_TURQUESA: V3 = c8(30, 210, 220);
 const ROJO_NOCHEBUENA: V3 = c8(200, 16, 46);
 const VERDE_PINO: V3 = c8(31, 111, 58);
 /// Series lights (foquitos): rojo, verde, azul, amarillo, rosa, naranja.
@@ -583,6 +608,30 @@ impl Fest {
                 // Verde, blanco y rojo, with oro between.
                 vec![
                     PA_VERDE, PA_VERDE, SH_BLANCO, SH_BLANCO, PA_ROJO, PA_ROJO, PA_ORO,
+                ],
+            ),
+            (true, Kind::Guelaguetza) => (
+                GU_GRANA,
+                GU_VERDE,
+                GU_AMARILLO,
+                SH_BLANCO,
+                [
+                    GU_GRANA,
+                    GU_AMARILLO,
+                    GU_VERDE,
+                    GU_ROSA,
+                    GU_MORADO,
+                    GU_TURQUESA,
+                ],
+                // Every color of the embroidery, and white.
+                vec![
+                    GU_GRANA,
+                    GU_AMARILLO,
+                    GU_VERDE,
+                    GU_ROSA,
+                    GU_MORADO,
+                    GU_TURQUESA,
+                    SH_BLANCO,
                 ],
             ),
             (true, Kind::Judas) => (
@@ -692,6 +741,10 @@ impl Fest {
         };
         let shape = match kind {
             Kind::SantaCruz => [gold, hues[0], hues[1], hues[2], hues[3], white, gold, gold],
+            // The embroidered flower: its petals through the colors.
+            Kind::Guelaguetza => [
+                hues[0], hues[1], hues[2], hues[3], hues[4], hues[5], white, gold,
+            ],
             // The mask: rosa, oro and the feathers in turquesa, morado,
             // limón and amarillo.
             Kind::Carnaval => [
@@ -719,11 +772,20 @@ impl Fest {
                 shape,
                 hues,
                 stone,
-                wall: [
-                    mix(stone, c8(230, 200, 140), 0.3),
-                    mix(stone, c8(220, 110, 120), 0.25),
-                    mix(stone, c8(90, 140, 200), 0.25),
-                ],
+                wall: if kind == Kind::Guelaguetza {
+                    // The cantera of Oaxaca: green, ocre and rosa.
+                    [
+                        mix(stone, hues[2], 0.22),
+                        mix(stone, hues[1], 0.26),
+                        mix(stone, hues[3], 0.22),
+                    ]
+                } else {
+                    [
+                        mix(stone, c8(230, 200, 140), 0.3),
+                        mix(stone, c8(220, 110, 120), 0.25),
+                        mix(stone, c8(90, 140, 200), 0.25),
+                    ]
+                },
                 ground: mix(stone, c8(110, 90, 80), 0.4),
                 window: scale(FLAMA, 0.7),
                 roof: scale(ROJO_NOCHEBUENA, 0.6),
@@ -822,6 +884,14 @@ const MARIGOLD: &[Stroke] = &[
     Stroke::Line(0.0, 0.98, 0.06, 1.75, 4),
     Stroke::Line(0.03, 1.4, -0.32, 1.18, 4),
     Stroke::Line(-0.32, 1.18, -0.06, 1.28, 4),
+];
+
+/// A flor of Oaxacan embroidery: two rings of petals around a heart.
+const FLOR: &[Stroke] = &[
+    Stroke::Leaf(0.0, 0.0, 1.0, 0.2, 8, 0.0, 3),
+    Stroke::Leaf(0.0, 0.0, 0.68, 0.24, 8, 0.0625, 1),
+    Stroke::Bloom(0.0, 0.0, 0.3, 0.3, 8.0, 4),
+    Stroke::Arc(0.0, 0.0, 0.1, 0.0, 1.0, 5),
 ];
 
 /// The flowered cross of the Santa Cruz: its beams in dorado, a papel flower
@@ -1047,6 +1117,20 @@ const AGUILA: &[&str] = &[
     "   222222224444444433333333   ",
     "    222222224444444433333333  ",
     "   222222224444444433333333   ",
+];
+
+/// A torito, the bull frame of the calenda, facing right: `0` its papel
+/// rojo, `1` the dark of its tail and the cohetes' frame, `2` yellow (horns,
+/// trim, the cohetes), `3` its eye.
+const TORITO: &[&str] = &[
+    "    22222  2     ",
+    "    11111  22 2  ",
+    "   0000000 22 22 ",
+    " 002020202000022 ",
+    " 10000000000000  ",
+    " 122222222220003 ",
+    "100000000000000 1",
+    "1          0000  ",
 ];
 
 /// A Judas of cartonería, a devil with horns, hands raised and a belt of
@@ -1306,6 +1390,10 @@ enum Role {
     /// A Judas of cartonería hung across the street over the skyline: lit
     /// on Sábado de Gloria, it spins throwing rockets and bursts.
     Judas,
+    /// A torito of the calenda, a bull frame running spitting sparks.
+    Torito,
+    /// A marmota of the calenda, a big paper globe on a pole.
+    Marmota,
 }
 
 /// Something that moves in the scenery, drawn over it every frame.
@@ -1629,6 +1717,16 @@ impl Fireworks {
             } else if roll < mascara + confeti + 0.14 + 0.12 * level {
                 shell = Shell::Serpentina;
             }
+        } else if self.fiesta.is(Kind::Guelaguetza) {
+            // The Guelaguetza: the colors of the embroidery, and more flores
+            // as the Lunes del Cerro comes.
+            let f = &mut self.frng;
+            let level = self.fiesta.level.clamp(0.0, 1.0);
+            color = self.fest.shells[f.usize(0..self.fest.shells.len())];
+            if f.f32() < 0.08 + 0.2 * level {
+                shell = Shell::Flor;
+                (x, vy) = fit_shape(w, hh, x, apex);
+            }
         } else if self.fiesta.is(Kind::Judas) {
             // The quema de Judas: cartón rojo and yellow, white-gold sparks,
             // and the odd cohete.
@@ -1676,6 +1774,7 @@ impl Fireworks {
             || self.fiesta.is(Kind::SantaCruz)
             || self.fiesta.is(Kind::Carnaval)
             || self.fiesta.is(Kind::Judas)
+            || self.fiesta.is(Kind::Guelaguetza)
     }
 
     /// Does this holiday end a finale with a gran final?
@@ -1685,6 +1784,7 @@ impl Fireworks {
             || self.fiesta.is(Kind::Patrias)
             || self.fiesta.is(Kind::SantaCruz)
             || self.fiesta.is(Kind::Carnaval)
+            || self.fiesta.is(Kind::Guelaguetza)
     }
 
     /// The holiday's gran final, a big shaped shell between two smaller
@@ -1712,6 +1812,8 @@ impl Fireworks {
             (Shell::Cruz, Shell::Multi, self.fest.gold)
         } else if self.fiesta.is(Kind::Carnaval) {
             (Shell::Mascara, Shell::Serpentina, self.fest.gold)
+        } else if self.fiesta.is(Kind::Guelaguetza) {
+            (Shell::Flor, Shell::Multi, self.fest.gold)
         } else {
             return;
         };
@@ -2071,6 +2173,7 @@ impl Fireworks {
             | Shell::Aguila
             | Shell::Cruz
             | Shell::Mascara
+            | Shell::Flor
             | Shell::Text(_) => {}
             Shell::Confeti => {
                 // Bits of paper in every color: light, so they tumble down
@@ -2173,6 +2276,7 @@ impl Fireworks {
             Shell::Nochebuena => (NOCHEBUENA, ft.shape),
             Shell::Campana => (CAMPANA, ft.shape),
             Shell::Cruz => (CRUZ_SHAPE, ft.shape),
+            Shell::Flor => (FLOR, ft.shape),
             _ => (
                 MARIGOLD,
                 [
@@ -2320,6 +2424,7 @@ impl Fireworks {
         self.build_obras();
         self.build_carnaval();
         self.build_judas();
+        self.build_calenda();
     }
 
     /// Carnaval keeps the city and strings colored lights along some of its
@@ -3340,6 +3445,260 @@ impl Fireworks {
         }
     }
 
+    /// Lays out the street of the calenda that stands in for the city during
+    /// the Guelaguetza: colonial facades in the colors of the cantera with
+    /// lit windows, strings of lights in the Oaxacan colors, a dense crowd
+    /// with banderitas, and what moves through it: marmotas bobbing above
+    /// the crowd, toritos running along the ground spitting sparks, and a
+    /// castillo waiting to be lit. The layout depends only on the seed and
+    /// the size; the level decides how many lights, strings, marmotas and
+    /// toritos there are and how thick the crowd is.
+    fn build_calenda(&mut self) {
+        let (w, ph) = (self.w, self.ph);
+        if !self.fiesta.is(Kind::Guelaguetza) || !self.show_city || w == 0 || ph < 12 {
+            return;
+        }
+        self.town.resize(w * ph, 0);
+        self.town_col.resize(w * ph, [0.0; 3]);
+        let rng = &mut fastrand::Rng::with_seed(self.seed ^ GUELAGUETZA_SEED);
+        let level = self.fiesta.level.clamp(0.0, 1.0);
+        let lit = 0.3 + 0.7 * level;
+        let k = (ph / 50).clamp(1, 3);
+        let ground = (if ph >= 40 { 2 } else { 1 }) * k;
+        let gy = ph - ground;
+        self.lay_ground(rng, gy);
+        let mut tops = vec![gy as i32; w];
+        self.facades(rng, (0, w), gy, k, lit, &mut tops);
+        // Strings of lights from roof to roof, more as the days go by.
+        let wi = w as i32;
+        for s in 0..1 + (level * 2.0).round() as usize {
+            let a = rng.i32(0..wi / 2 + 1);
+            let b = (a + rng.i32(wi / 5..wi / 2 + 1)).min(wi - 1);
+            let ends = ((a, tops[a as usize] - 1), (b, tops[b as usize] - 1));
+            let sag = (b - a) as f32 * 0.12;
+            self.hang_lights(
+                ends.0,
+                ends.1,
+                sag,
+                4 * k as i32,
+                1 + (s % 2) as u8,
+                lit,
+                rng,
+            );
+        }
+        self.crowd(rng, gy, k, 0.45 + 0.55 * level, 0.08 + 0.14 * level);
+        let base = gy as f32 - 3.0 * k as f32;
+        // The marmotas, drifting along with the calenda.
+        let marmotas = ((w / 40).clamp(2, 6) as f32 * (0.5 + 0.5 * level)).round() as usize;
+        for i in 0..marmotas.max(1) {
+            self.actors.push(Actor {
+                role: Role::Marmota,
+                x: w as f32 * (i as f32 + rng.f32()) / marmotas.max(1) as f32,
+                y: base,
+                size: k as f32,
+                state: 0,
+                left: 0,
+                seed: rng.f32() * TAU,
+            });
+        }
+        // The castillo, to be lit.
+        if w >= 70 && ph >= 36 {
+            self.actors.push(Actor {
+                role: Role::Castillo,
+                x: (w * 87 / 100) as f32,
+                y: gy as f32,
+                size: (ph as f32 * 0.42).clamp(16.0, 110.0),
+                state: 0,
+                left: rng.i32(150..300),
+                seed: rng.f32() * TAU,
+            });
+        }
+        // The toritos run in front of everything.
+        if w >= 30 {
+            for _ in 0..1 + (level * 2.0).round() as usize {
+                self.actors.push(Actor {
+                    role: Role::Torito,
+                    x: rng.f32() * w as f32,
+                    y: gy as f32,
+                    size: k as f32,
+                    state: rng.u8(0..2),
+                    left: 0,
+                    seed: rng.f32() * TAU,
+                });
+            }
+        }
+    }
+
+    /// A torito runs along the ground, turning round beyond the edges of the
+    /// screen after a pause, spitting sparks from the cohetes on its back
+    /// and from its horns.
+    fn run_torito(&mut self, a: &mut Actor) {
+        let k = a.size;
+        let dir = if a.state == 0 { 1.0 } else { -1.0 };
+        if a.left > 0 {
+            a.left -= 1;
+            return;
+        }
+        a.x += dir * (0.5 + 0.2 * a.seed.sin()) * k.sqrt();
+        let edge = 20.0 * k;
+        if (dir > 0.0 && a.x > self.w as f32 + edge) || (dir < 0.0 && a.x < -edge) {
+            a.state ^= 1;
+            a.left = self.frng.i32(60..200);
+            return;
+        }
+        let ft = &self.fest;
+        let ink = [ft.gold, ft.white, ft.hues[1], ft.hues[3]];
+        let f = &mut self.frng;
+        if self.ps.len() + self.born.len() + 8 >= MAX_PARTICLES {
+            return;
+        }
+        // A fountain of sparks from its back, trailing behind it...
+        for _ in 0..2 {
+            if f.f32() < 0.8 {
+                let life = rangef(f, 20.0, 34.0);
+                self.born.push(P {
+                    x: a.x - dir * 2.0 * k,
+                    y: a.y - 8.0 * k,
+                    vx: -dir * rangef(f, 0.2, 0.7) + rangef(f, -0.2, 0.2),
+                    vy: rangef(f, -1.2, -0.5),
+                    life,
+                    max: life,
+                    color: ink[f.usize(0..4)],
+                    drag: 0.95,
+                    grav: SPARK_G * 0.8,
+                    flags: 0,
+                    shell: Shell::Sphere,
+                });
+            }
+        }
+        // ...and a few thrown ahead from the horns.
+        if f.f32() < 0.5 {
+            let life = rangef(f, 14.0, 24.0);
+            self.born.push(P {
+                x: a.x + dir * 7.0 * k,
+                y: a.y - 8.0 * k,
+                vx: dir * rangef(f, 0.4, 1.0),
+                vy: rangef(f, -0.5, 0.1),
+                life,
+                max: life,
+                color: ink[f.usize(0..4)],
+                drag: 0.93,
+                grav: SPARK_G,
+                flags: 0,
+                shell: Shell::Sphere,
+            });
+        }
+    }
+
+    /// The marmotas drift along with the calenda, wrapping round the edges.
+    fn drift_marmota(&mut self, a: &mut Actor) {
+        a.x += 0.08 * a.size;
+        if a.x > self.w as f32 + 8.0 * a.size {
+            a.x = -8.0 * a.size;
+        }
+    }
+
+    /// A marmota: a great paper globe lit from inside, panels in the
+    /// Oaxacan colors turning as it is twirled on its pole, bobbing above
+    /// the crowd on its carrier's shoulders.
+    fn draw_marmota(&mut self, a: &Actor) {
+        let k = a.size.max(1.0);
+        let t = self.frame as f32;
+        let r = 4.0 * k;
+        let bob = (t * 0.12 + a.seed).sin() * 1.4 * k;
+        let (cx, base) = (a.x + (t * 0.05 + a.seed).sin() * 0.8 * k, a.y);
+        let cy = base - 6.0 * k - r + bob;
+        let ft = &self.fest;
+        let (hues, pole, dark) = (ft.hues, scale(ft.cane, 0.6), ft.dark);
+        // The pole and the carrier's head under it.
+        for y in (cy + r) as i32..base as i32 {
+            self.px.set(cx.round() as i32, y, to_color(pole));
+        }
+        let (hx, hy) = (cx.round() as i32 - k as i32, base as i32);
+        for (dx, dy) in (0..2 * k as i32).flat_map(|i| (0..3 * k as i32).map(move |j| (i, j))) {
+            self.px.set(hx + dx, hy + dy, to_color(dark));
+        }
+        // The globe: panels run round it, shifting as it spins.
+        let spin = t * 0.07 + a.seed;
+        let ri = r.ceil() as i32;
+        for dy in -ri..=ri {
+            for dx in -ri..=ri {
+                let (u, v) = (dx as f32 / r, dy as f32 / r);
+                let d2 = u * u + v * v;
+                if d2 > 1.0 {
+                    continue;
+                }
+                let lon = u.clamp(-1.0, 1.0).asin() + spin;
+                let panel = ((lon / (PI / 3.0)).floor() as i32).rem_euclid(6) as usize;
+                let band = v.abs() < 0.2;
+                let c = if band { ft.gold } else { hues[panel] };
+                // Lit from within: the middle glows, the rim is deeper.
+                let glow = 0.5 + 0.5 * (1.0 - d2).sqrt();
+                self.px.set(
+                    (cx + dx as f32).round() as i32,
+                    (cy + dy as f32).round() as i32,
+                    to_color(scale(c, 0.5 + 0.5 * glow)),
+                );
+            }
+        }
+        // A tuft of streamers below it.
+        for (i, dx) in [-1.0, 0.0, 1.0].into_iter().enumerate() {
+            let len = (2.0 + i as f32) * k;
+            for s in 0..len as i32 {
+                self.px.set(
+                    (cx + dx * k).round() as i32,
+                    (cy + r) as i32 + s,
+                    to_color(scale(hues[(i * 2) % 6], 0.8)),
+                );
+            }
+        }
+    }
+
+    /// A torito: a bull of cane and papel on a runner's legs, charging along
+    /// the ground, facing the way it runs.
+    fn draw_torito(&mut self, a: &Actor) {
+        if a.left > 0 {
+            return;
+        }
+        let k = a.size.round().max(1.0) as i32;
+        let dir = if a.state == 0 { 1 } else { -1 };
+        let ft = &self.fest;
+        let colors = [ft.red, ft.dark, ft.hues[1], ft.white];
+        let (x, ground) = (a.x.round() as i32, a.y.round() as i32);
+        let top = ground - (3 + TORITO.len() as i32) * k;
+        let cols = TORITO[0].len() as i32;
+        for (sy, row) in TORITO.iter().enumerate() {
+            for (sx, ch) in row.bytes().enumerate() {
+                let Some(&c) = colors.get(ch.wrapping_sub(b'0') as usize) else {
+                    continue;
+                };
+                // The art faces right; mirror it when it runs left.
+                let col = if dir > 0 {
+                    sx as i32
+                } else {
+                    cols - 1 - sx as i32
+                };
+                for (dx, dy) in (0..k).flat_map(|i| (0..k).map(move |j| (i, j))) {
+                    self.px.set(
+                        x + (col - cols / 2) * k + dx,
+                        top + sy as i32 * k + dy,
+                        to_color(scale(c, 0.9)),
+                    );
+                }
+            }
+        }
+        // The runner's legs, one forward and one back, taking turns.
+        let step = (self.frame / 3) as i32 % 2;
+        let leg = to_color(ft.dark);
+        for (i, lx) in [-3, 3].into_iter().enumerate() {
+            let reach = if (i as i32 + step) % 2 == 0 { 1 } else { -1 };
+            for s in 0..3 * k {
+                self.px
+                    .set(x + lx * k + reach * s / 2, ground - 3 * k + s, leg);
+            }
+        }
+    }
+
     /// Hangs the Judases of the quema across the street: each from a rope
     /// strung between two poles on the rooftops, high over the skyline. On
     /// Viernes Santo they only hang; on Sábado de Gloria each is lit in its
@@ -3607,6 +3966,8 @@ impl Fireworks {
             match a.role {
                 Role::Castillo => self.burn_castillo(&mut a),
                 Role::Judas => self.burn_judas(&mut a),
+                Role::Torito => self.run_torito(&mut a),
+                Role::Marmota => self.drift_marmota(&mut a),
                 _ => {}
             }
             self.actors[k] = a;
@@ -3615,7 +3976,11 @@ impl Fireworks {
 
     /// The shell that crowns a castillo as its last tier burns out.
     fn crown(&self) -> Shell {
-        Shell::Tricolor
+        if self.fiesta.is(Kind::Guelaguetza) {
+            Shell::Flor
+        } else {
+            Shell::Tricolor
+        }
     }
 
     /// One step in the life of a castillo: it waits to be lit, then its
@@ -3707,6 +4072,8 @@ impl Fireworks {
                 Role::Bell => self.draw_bell(&a),
                 Role::Castillo => self.draw_castillo(&a),
                 Role::Judas => self.draw_judas(&a),
+                Role::Torito => self.draw_torito(&a),
+                Role::Marmota => self.draw_marmota(&a),
             }
         }
     }
@@ -4468,6 +4835,7 @@ mod tests {
                     Fiesta::of_day(5, 3),
                     Fiesta::height(Kind::Carnaval),
                     Fiesta::height(Kind::Judas),
+                    Fiesta::height(Kind::Guelaguetza),
                 ] {
                     let (mut f, o) = make(v, &theme);
                     let ctx = Ctx {
@@ -4584,6 +4952,7 @@ mod tests {
             Shell::Mascara,
             Shell::Confeti,
             Shell::Serpentina,
+            Shell::Flor,
         ] {
             assert!(!shells.contains(&s), "{shells:?}");
         }
@@ -4624,6 +4993,7 @@ mod tests {
             Shell::Aguila,
             Shell::Cruz,
             Shell::Mascara,
+            Shell::Flor,
             Shell::Text(FELIZ_ANO),
             Shell::Text(VIVA_MEXICO),
         ] {
@@ -4848,7 +5218,16 @@ mod tests {
     /// The pixel pictures are rectangles.
     #[test]
     fn pictures_are_rectangles() {
-        for art in [KIOSCO, ABETO, NOCHEBUENA_POT, AGUILA, CRUZ, MASCARA, JUDAS] {
+        for art in [
+            KIOSCO,
+            ABETO,
+            NOCHEBUENA_POT,
+            AGUILA,
+            CRUZ,
+            MASCARA,
+            JUDAS,
+            TORITO,
+        ] {
             let w = art[0].chars().count();
             assert!(art.iter().all(|r| r.chars().count() == w), "{art:?}");
         }
@@ -5341,6 +5720,141 @@ mod tests {
                 f.draw(&ctx, &mut c);
             }
         }
+    }
+
+    /// The Guelaguetza turns the city into the street of the calenda: marmotas
+    /// bobbing, toritos running spitting sparks, a castillo to light, and
+    /// flores of embroidery among the shells.
+    #[test]
+    fn guelaguetza_dresses_up() {
+        for theme in [Theme::classic(), Theme::builtin("dracula").unwrap()] {
+            let fiesta = Fiesta::height(Kind::Guelaguetza);
+            assert!(fiesta.is(Kind::Guelaguetza));
+            let (mut f, o) = make("", &theme);
+            holiday(&mut f, &theme, &o, fiesta);
+            let count = |f: &Fireworks, r: Role| f.actors.iter().filter(|a| a.role == r).count();
+            assert!(count(&f, Role::Marmota) >= 2, "{}", theme.name);
+            assert!(count(&f, Role::Torito) >= 1 && count(&f, Role::Castillo) == 1);
+            assert!(!f.bulbs.is_empty() && f.town.contains(&1));
+            let (mut flores, mut spat) = (false, 0);
+            for _ in 0..3000 {
+                f.step();
+                flores |=
+                    f.ps.iter()
+                        .any(|p| p.flags & ROCKET != 0 && p.shell == Shell::Flor);
+                // Sparks born right by a torito as it runs.
+                for a in f.actors.iter().filter(|a| a.role == Role::Torito) {
+                    spat += f
+                        .born
+                        .iter()
+                        .filter(|p| (p.x - a.x).abs() < 12.0 && (p.y - a.y).abs() < 14.0)
+                        .count();
+                }
+            }
+            assert!(flores && spat > 200, "{flores} {spat}");
+        }
+    }
+
+    /// A torito runs the width of the street and turns round beyond its
+    /// edges; the marmotas drift and come round again.
+    #[test]
+    fn toritos_run_and_marmotas_drift() {
+        let theme = Theme::classic();
+        let (mut f, o) = make("", &theme);
+        holiday(&mut f, &theme, &o, Fiesta::height(Kind::Guelaguetza));
+        let torito = |f: &Fireworks| {
+            f.actors
+                .iter()
+                .position(|a| a.role == Role::Torito)
+                .unwrap()
+        };
+        let marmota = |f: &Fireworks| {
+            f.actors
+                .iter()
+                .position(|a| a.role == Role::Marmota)
+                .unwrap()
+        };
+        let (t, m) = (torito(&f), marmota(&f));
+        let (mut lo, mut hi, mut turned) = (f32::MAX, f32::MIN, 0);
+        let (mut mlo, mut mhi) = (f32::MAX, f32::MIN);
+        let mut state = f.actors[t].state;
+        for _ in 0..4000 {
+            f.step();
+            let a = f.actors[t];
+            (lo, hi) = (lo.min(a.x), hi.max(a.x));
+            if a.state != state {
+                state = a.state;
+                turned += 1;
+            }
+            let b = f.actors[m];
+            (mlo, mhi) = (mlo.min(b.x), mhi.max(b.x));
+        }
+        assert!(
+            lo < 0.0 && hi > f.w as f32 && turned >= 2,
+            "{lo} {hi} {turned}"
+        );
+        // The marmota went off one side and came back on the other.
+        assert!(mlo < 0.0 && mhi > f.w as f32 - 8.0, "{mlo} {mhi}");
+    }
+
+    /// More marmotas and toritos towards the Lunes del Cerro; the street
+    /// comes and goes with the holiday and fits any size; the castillo is
+    /// crowned by a flor here, a tricolor ring on the Fiestas Patrias.
+    #[test]
+    fn guelaguetza_comes_and_goes() {
+        let theme = Theme::classic();
+        let (mut f, o) = make("", &theme);
+        holiday(&mut f, &theme, &o, Fiesta::of_date(2027, 7, 17));
+        let before = f.actors.len();
+        assert!(before > 0 && f.fiesta.level < 1.0);
+        assert_eq!(f.crown(), Shell::Flor);
+        holiday(&mut f, &theme, &o, Fiesta::height(Kind::Guelaguetza));
+        assert!(f.actors.len() > before, "{before} {}", f.actors.len());
+        holiday(&mut f, &theme, &o, Fiesta::of_day(9, 15));
+        assert_eq!(f.crown(), Shell::Tricolor);
+        holiday(&mut f, &theme, &o, Fiesta::NONE);
+        assert!(f.actors.is_empty() && f.bulbs.is_empty() && f.town.is_empty());
+        let (mut f, o) = make("skyline = false", &theme);
+        holiday(&mut f, &theme, &o, Fiesta::height(Kind::Guelaguetza));
+        assert!(f.actors.is_empty());
+        let (mut f, o) = make("", &theme);
+        let ctx = Ctx {
+            theme: &theme,
+            opts: &o,
+            bg: Color::Reset,
+            seed: 3,
+            fiesta: Fiesta::height(Kind::Guelaguetza),
+        };
+        for (w, h) in [
+            (1, 1),
+            (3, 6),
+            (29, 12),
+            (30, 12),
+            (70, 20),
+            (80, 24),
+            (200, 60),
+            (500, 150),
+        ] {
+            f.resize(&ctx, w, h);
+            f.retheme(&ctx);
+            let mut c = Canvas::new(w, h, Color::Reset);
+            for _ in 0..40 {
+                f.update(&ctx, 1.0 / 30.0);
+                f.draw(&ctx, &mut c);
+            }
+        }
+    }
+
+    /// The Guelaguetza's gran final is a flor between two multicolor shells.
+    #[test]
+    fn gran_final_is_a_flor() {
+        let theme = Theme::classic();
+        let (mut f, o) = make("", &theme);
+        holiday(&mut f, &theme, &o, Fiesta::height(Kind::Guelaguetza));
+        f.born.clear();
+        f.gran_final();
+        let shells: Vec<Shell> = f.born.iter().map(|p| p.shell).collect();
+        assert_eq!(shells, [Shell::Flor, Shell::Multi, Shell::Multi]);
     }
 
     /// With the sky transparent nothing is painted before the first launch,
