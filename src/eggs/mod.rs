@@ -15,6 +15,7 @@ pub mod alebrije;
 pub mod calaverita;
 mod candelaria;
 pub mod catrina;
+pub mod cruz;
 pub mod duckpond;
 mod equinoccio;
 pub mod grito;
@@ -37,6 +38,7 @@ pub mod pinata;
 pub mod posada;
 mod revolucion;
 pub mod reyes;
+mod santacruz;
 pub mod sl;
 mod stage;
 pub mod tamalero;
@@ -98,6 +100,7 @@ pub const ALL: &[&Info] = &[
     &kukulcan::INFO,
     &juguetes::INFO,
     &loteria::INFO,
+    &cruz::INFO,
 ];
 
 /// An `egg_rate` at or above this plays an egg at once, again and again, and
