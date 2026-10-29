@@ -110,9 +110,9 @@ impl Dress {
 /// dark of the sockets and the stitches, `c` and `y` a marigold, and `r`,
 /// `y`, `t`, `g`, `p` the icing.
 pub struct Paint {
-    x: i32,
-    y: i32,
-    rows: Sprite,
+    pub x: i32,
+    pub y: i32,
+    pub rows: Sprite,
 }
 
 impl Paint {
@@ -168,24 +168,56 @@ pub fn face(kind: Kind) -> Face {
 pub struct Dab {
     paint: &'static Paint,
     lut: [Option<Rgb>; 128],
-    /// The whale shark's pale spots become confetti.
-    spots: bool,
+    /// The whale shark's pale spots become confetti, in these colors.
+    spots: Option<&'static [u8]>,
+    /// The letters of the shark that always show through: the eyes, the open
+    /// mouth.
+    keep: &'static [u8],
+    /// For a holiday that builds its paint up, whether the capital letters
+    /// of the paint, the ones for later, are on yet.
+    later: Option<bool>,
 }
 
 impl Dab {
+    /// The paint for one drawing, with `lut` for its colors, `spots` for the
+    /// colors the whale shark's spots turn to (if they do), `keep` for the
+    /// letters it leaves alone and `later` for how far it is built up.
+    pub fn new(
+        paint: &'static Paint,
+        lut: [Option<Rgb>; 128],
+        spots: Option<&'static [u8]>,
+        keep: &'static [u8],
+        later: Option<bool>,
+    ) -> Dab {
+        Dab {
+            paint,
+            lut,
+            spots,
+            keep,
+            later,
+        }
+    }
+
     /// The paint over letter `ch` at `(c, r)` of the drawing, if any. The
     /// eyes and the open mouth always show through.
     #[inline]
     pub fn over(&self, c: usize, r: usize, ch: u8) -> Option<Rgb> {
-        if matches!(ch, b'e' | b'h' | b'm' | b'M' | b't') {
+        if self.keep.contains(&ch) {
             return None;
         }
-        let p = self.paint.at(c as i32, r as i32);
+        let mut p = self.paint.at(c as i32, r as i32);
+        if let Some(on) = self.later
+            && p.is_ascii_uppercase()
+        {
+            p = if on { p.to_ascii_lowercase() } else { b'.' };
+        }
         if p != b'.' {
             return self.lut[(p & 127) as usize];
         }
-        if self.spots && ch == b'o' {
-            return self.lut[ICING_KEYS[(c * 3 + r * 7) / 2 % 5] as usize];
+        if let Some(keys) = self.spots
+            && ch == b'o'
+        {
+            return self.lut[keys[(c * 3 + r * 7) / 2 % keys.len()] as usize];
         }
         None
     }
@@ -890,11 +922,8 @@ impl Sea {
                 lut[ch as usize] = d.color(ch).map(|c| self.shade(c, y, 0.08));
             }
         }
-        Dab {
-            paint,
-            lut,
-            spots: self.shark.kind == Kind::WhaleShark,
-        }
+        let spots = (self.shark.kind == Kind::WhaleShark).then_some(&ICING_KEYS[..]);
+        Dab::new(paint, lut, spots, b"ehmMt", None)
     }
 
     /// How the holiday colors a fleck of light.

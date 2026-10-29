@@ -22,6 +22,7 @@
 //!   projection onto the screen.
 //! - `muertos.rs`: Día de Muertos, below.
 //! - `navidad.rs`: Navidad, below.
+//! - `patrias.rs`: the Fiestas Patrias, below.
 //!
 //! On Día de Muertos the shark wears calavera face paint (a sugar skull's
 //! white face, marigold eye sockets, a stitched grin, gill slits in papel
@@ -39,6 +40,15 @@
 //! de Belén thatched in heno, strung with foquitos and lit by farolitos. The
 //! further into the posadas, the more of all of it.
 //!
+//! On the Fiestas Patrias the shark wears tricolor face paint (the flag on
+//! its cheeks, the eagle on the white, its gill slits in verde, blanco y
+//! rojo), the plankton glows in the same three colors, flagpoles stand sunk
+//! in the sand where the ofrendas would, their flags rippling in the current
+//! and banderitas strung from them, and once in a while a vaquita marina,
+//! Mexico's own tiny porpoise, passes by. The mes patrio builds up to the
+//! Grito: more flagpoles, more banderitas, the paint on the gills, the
+//! vaquita more often and then with her calf.
+//!
 //! The only things done to the sprites at run time are tilting and bending
 //! them (whole pixels moved, none lost or doubled) and lighting them. The
 //! world steps 30 times a second on an accumulator scaled by `speed`, while
@@ -51,6 +61,7 @@ mod hunter;
 mod life;
 mod muertos;
 mod navidad;
+mod patrias;
 mod sea;
 mod water;
 
@@ -362,6 +373,7 @@ struct Settings {
 struct Dressing {
     muertos: Option<muertos::Dress>,
     navidad: Option<navidad::Dress>,
+    patrias: Option<patrias::Dress>,
 }
 
 impl Dressing {
@@ -369,6 +381,7 @@ impl Dressing {
         Dressing {
             muertos: muertos::Dress::of(ctx),
             navidad: navidad::Dress::of(ctx),
+            patrias: patrias::Dress::of(ctx),
         }
     }
 }

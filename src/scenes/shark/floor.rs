@@ -56,9 +56,10 @@ impl Sea {
     }
 
     /// Whether a holiday has a sunken spot on the floor's cell at local
-    /// columns `x0..x0 + w`, which then stays bare.
+    /// columns `x0..x0 + w` (an ofrenda, a portal, a flagpole), which then
+    /// stays bare.
     fn sunken_on(&self, x0: i32, w: i32) -> bool {
-        self.ofrenda_on(x0, w) || self.portal_on(x0, w)
+        self.ofrenda_on(x0, w) || self.portal_on(x0, w) || self.flagpole_on(x0, w)
     }
 
     /// What grows and lies on the floor: kelp standing in the haze on the
@@ -96,7 +97,7 @@ impl Sea {
         for c in lo.div_euclid(CELL as i64) as i32..=hi.div_euclid(CELL as i64) as i32 {
             let x0 = c * CELL - shift as i32;
             // On a holiday the sand is cleared for its sunken spots: the
-            // ofrendas, the portales.
+            // ofrendas, the portales, the flagpoles.
             if self.sunken_on(x0, CELL) {
                 continue;
             }

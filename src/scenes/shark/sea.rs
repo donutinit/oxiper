@@ -6,6 +6,7 @@ use super::hunter::Shark;
 use super::life::Life;
 use super::muertos::Muertos;
 use super::navidad::Navidad;
+use super::patrias::Patrias;
 use super::water::{self, Col, RAY_LEVELS, SandRow};
 use super::{
     Dice, Dressing, KEY, Light, Pal, Rgb, Rng, STEP, Settings, WORLD_H, ZOOMS, col, keys, noise,
@@ -115,6 +116,8 @@ pub struct Sea {
     pub muertos: Option<Muertos>,
     /// Navidad, when it is on.
     pub navidad: Option<Navidad>,
+    /// The Fiestas Patrias, when they are on.
+    pub patrias: Option<Patrias>,
 }
 
 impl Sea {
@@ -164,6 +167,7 @@ impl Sea {
             weights: Vec::new(),
             muertos: None,
             navidad: None,
+            patrias: None,
         };
         let (vw, vh) = sea.view_size();
         let (bw, bh) = (vw.ceil() as usize + 3, vh.ceil() as usize + 3);
@@ -187,6 +191,7 @@ impl Sea {
     pub fn wear(&mut self, dressing: Dressing) {
         self.dress(dressing.muertos);
         self.dress_navidad(dressing.navidad);
+        self.dress_patrias(dressing.patrias);
     }
 
     pub fn cam(&self) -> (f32, f32) {
@@ -283,6 +288,7 @@ impl Sea {
         self.update_life(rng);
         self.update_muertos();
         self.update_navidad();
+        self.update_patrias();
         self.follow();
         self.rebase();
     }
@@ -369,6 +375,9 @@ impl Sea {
         if let Some(n) = &mut self.navidad {
             n.shift(shift);
         }
+        if let Some(p) = &mut self.patrias {
+            p.shift(shift);
+        }
     }
 
     pub fn view(&self) -> View {
@@ -453,6 +462,7 @@ impl Sea {
         self.paint_floor(v);
         self.paint_ofrendas();
         self.paint_navidad();
+        self.paint_patrias();
         self.draw_life_behind();
         self.draw_shark();
         self.draw_life_front();

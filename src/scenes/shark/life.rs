@@ -564,6 +564,7 @@ impl Sea {
 
     pub fn draw_life_behind(&mut self) {
         self.draw_visitors();
+        self.draw_vaquitas();
         self.draw_lanterns();
         self.draw_jellies(false);
         self.draw_schools(false);
@@ -759,11 +760,20 @@ impl Sea {
     /// and strength.
     fn fiesta_mote(&self, i: usize, near: f32, phase: f32) -> Option<(Rgb, f32)> {
         self.navidad_mote(i, near, phase)
+            .or_else(|| self.patrias_mote(i, near, phase))
+    }
+
+    /// The color jellyfish `i` glows at night on a holiday.
+    fn fiesta_jelly(&self, i: usize) -> Option<Rgb> {
+        match self.jelly_glow(i) {
+            Some((c, _)) => Some(c),
+            None => self.patrias_lamp(i + 1),
+        }
     }
 
     /// The color of the lights lanternfish `i` carries on a holiday.
     fn fiesta_lamp(&self, i: usize) -> Option<Rgb> {
-        self.navidad_lamp(i)
+        self.navidad_lamp(i).or_else(|| self.patrias_lamp(i))
     }
 
     /// Marine snow and flecks of light, straight onto the screen: one pixel
@@ -828,7 +838,7 @@ impl Sea {
                 let j = self.life.jellies[i];
                 let (sx, sy) = v.to_screen(j.x, j.y + 2.0);
                 let glow = dark * (0.35 + 0.25 * (j.phase).sin());
-                let jelly = self.jelly_glow(i).map_or(jelly, |(c, _)| c);
+                let jelly = self.fiesta_jelly(i).unwrap_or(jelly);
                 self.blend_out(sx, sy, jelly, glow);
             }
         }
@@ -838,7 +848,10 @@ impl Sea {
             let fade = (f.life as f32 / f.span as f32).min(1.0);
             match f.kind {
                 Speck::Spark => {
-                    let c = self.fleck_color(f.kind).unwrap_or(Rgb(120, 255, 220));
+                    let c = self
+                        .fleck_color(f.kind)
+                        .or_else(|| self.patrias_fleck(f.span))
+                        .unwrap_or(Rgb(120, 255, 220));
                     self.blend_out(sx, sy, c, 0.9 * fade)
                 }
                 Speck::Scale => {
@@ -849,7 +862,10 @@ impl Sea {
                 }
                 Speck::Plankton => {
                     let c = Rgb(200, 236, 200).mul(tint.lerp(Rgb::WHITE, 0.3));
-                    let c = self.fleck_color(f.kind).unwrap_or(c);
+                    let c = self
+                        .fleck_color(f.kind)
+                        .or_else(|| self.patrias_fleck(f.span))
+                        .unwrap_or(c);
                     self.blend_out(sx, sy, c, 0.55 * fade);
                 }
                 Speck::Foam => {

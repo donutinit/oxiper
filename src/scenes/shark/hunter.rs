@@ -5,7 +5,8 @@ use std::f32::consts::{PI, TAU};
 
 use super::art::{self, Kind, Rig, Sprite, TAIL_W};
 use super::life::Speck;
-use super::muertos::{self, Dab};
+use super::muertos::{self, Dab, Paint};
+use super::patrias;
 use super::sea::{SURF, Sea};
 use super::{Dice, Rgb, Rng};
 
@@ -653,8 +654,15 @@ impl Sea {
         for &(ch, c) in rig.palette {
             lut[ch as usize] = Some(self.shade(c, s.y as i32, 0.08));
         }
-        // On Día de Muertos, calavera face paint.
-        let paint = self.muertos.is_some().then(|| muertos::face(s.kind));
+        // On Día de Muertos, calavera face paint; on the Fiestas Patrias, the
+        // tricolor.
+        let paint = if self.muertos.is_some() {
+            Some(muertos::face(s.kind))
+        } else if self.patrias.is_some() {
+            Some(patrias::face(s.kind))
+        } else {
+            None
+        };
         if s.turn > 0.0 {
             let p = s.turn;
             let (sprite, face) = if p < 0.16 {
@@ -675,20 +683,29 @@ impl Sea {
                     } else {
                         s.pitch
                     };
-                    let dab =
-                        paint.map(|f| self.dab(if sp == rig.front { f.front } else { f.quarter }));
+                    let dab = paint
+                        .map(|f| self.face_dab(if sp == rig.front { f.front } else { f.quarter }));
                     self.draw_whole(sp, &lut, face, pitch, dab.as_ref());
                 }
                 None => {
-                    let dab = paint.map(|f| self.dab(f.side));
+                    let dab = paint.map(|f| self.face_dab(f.side));
                     self.draw_side(&lut, face, dab.as_ref());
                 }
             }
         } else {
-            let dab = paint.map(|f| self.dab(f.side));
+            let dab = paint.map(|f| self.face_dab(f.side));
             self.draw_side(&lut, s.dir, dab.as_ref());
         }
         self.draw_riders();
+    }
+
+    /// The face paint of whichever holiday is on, for one of the drawings.
+    fn face_dab(&self, paint: &'static Paint) -> Dab {
+        if self.patrias.is_some() {
+            self.patrias_dab(paint)
+        } else {
+            self.dab(paint)
+        }
     }
 
     /// Where a sprite of width `w` is put, facing `face`, tilted by `pitch`.
