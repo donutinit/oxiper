@@ -52,12 +52,20 @@
 //! corner it spins three times as fast for a moment while canicas, estrellas
 //! and caramelos shoot out of it and bounce down to lie along the bottom
 //! row, and the banner reads "¡FELIZ DÍA DEL NIÑO!".
+//!
+//! On the Día de la Revolución the logo is a wide sombrero of manta over two
+//! crossed cananas, brass cartuchos in their straps, with a band that is
+//! rojo or verde, whichever way the last bounce went, making the tricolor
+//! with the hat. At a corner the sombrero is raised, its brim curling up
+//! and the brass gleaming, confeti, sparks of brass and the dust of the road
+//! fly off, and the banner reads "¡TIERRA Y LIBERTAD!".
 
 mod candelaria;
 mod muertos;
 mod navidad;
 mod nino;
 mod patrias;
+mod revolucion;
 
 use crate::color::{Color, rgb};
 use crate::fiesta::{Fiesta, Kind};
@@ -280,6 +288,7 @@ fn look_for(f: Fiesta) -> Option<&'static Look> {
         Kind::Navidad => Some(navidad::look(f)),
         Kind::Nino => Some(&nino::LOOK),
         Kind::Patrias => Some(&patrias::LOOK),
+        Kind::Revolucion => Some(&revolucion::LOOK),
         _ => None,
     }
 }
@@ -1466,6 +1475,7 @@ mod tests {
             ("grito", Fiesta::of_day(9, 15)),
             ("candelaria", Fiesta::of_day(2, 2)),
             ("niño", Fiesta::of_day(4, 30)),
+            ("revolución", Fiesta::of_day(11, 20)),
         ]
     }
 
@@ -2104,6 +2114,43 @@ mod tests {
             assert!(d.bits.len() > 20);
             d.clock = 0.0;
             assert!(play(&mut d, &ctx, 0.5).to_text().contains("esquinas: 1"));
+        }
+    }
+
+    #[test]
+    fn the_revolucion_raises_a_sombrero_over_cananas() {
+        let o = crate::scene::Opts::new(INFO.options, toml::Table::new());
+        for theme in ["classic", "nord"] {
+            let th = crate::theme::Theme::builtin(theme).unwrap();
+            let ctx = ctx(&th, &o, Fiesta::of_day(11, 20));
+            let mut d = dressed(&ctx, 120, 44);
+            // A hat with its band, and the straps with brass in them.
+            for p in b"fdvsb" {
+                assert!(parts(&d, &[*p]) > 0, "{}", *p as char);
+            }
+            assert_eq!(parts(&d, b"B"), 0);
+            let banner = Sprite::fit_lines(&["¡Tierra y", "Libertad!"], 120, 44);
+            assert_eq!(d.banner.cells, banner.cells);
+            if th.native {
+                // The band is rojo or verde, a bounce after a bounce, on the
+                // manta of the hat.
+                assert_eq!(d.palette, vec![rgb(0xce1126), rgb(0x006847)]);
+                let mut seen = Vec::new();
+                for color in 0..2 {
+                    d.logos[0].color = color;
+                    let mut c = Canvas::new(120, 44, Color::Reset);
+                    d.draw(&ctx, &mut c);
+                    assert!(c.cells().iter().any(|cell| cell.fg == rgb(0xefe6cf)));
+                    assert!(c.cells().iter().any(|cell| cell.fg == rgb(0x8b7d5b)));
+                    seen.push(c.cells().iter().any(|cell| cell.fg == d.palette[color]));
+                }
+                assert_eq!(seen, [true, true]);
+            }
+            // At a corner the sombrero is raised and the brass gleams.
+            d.celebrate(0);
+            assert!(d.laugh.parts.contains(&b'B'));
+            assert_ne!(d.laugh.cells, d.sprite.cells);
+            assert!(d.bits.len() > 20);
         }
     }
 }
