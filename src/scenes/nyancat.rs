@@ -20,11 +20,17 @@
 //! string of foquitos blinking in chase patterns; the stars are piñatas that
 //! burst into colación and the counter is a posada's. On the Santos
 //! Inocentes the cat flies backwards.
+//!
+//! On the Fiestas Patrias (`nyancat/patrias.rs`) the pop-tart is a chile en
+//! nogada and the cat wears a sombrero de charro; the rainbow is the flag,
+//! with its escudo, the stars are luces de bengala, and banderitas and
+//! papelitos fill the sky as the month goes, until the Grito.
 
 mod costume;
 pub(crate) mod frames;
 mod muertos;
 mod navidad;
+mod patrias;
 
 use frames::{FRAME_HEIGHT, FRAME_WIDTH, FRAMES, Frame};
 
@@ -209,6 +215,8 @@ enum Dress {
     Navidad {
         reyes: bool,
     },
+    /// The mes patrio: a chile en nogada, a sombrero, the flag.
+    Patrias,
 }
 
 /// Seeds the holiday's own randomness, apart from the scene's.
@@ -382,7 +390,7 @@ impl Scene for Nyancat {
         self.field.layout(&mut rng, x0, x0 + self.star_span, y0, y1);
         let mut rng = fastrand::Rng::with_seed(self.seed ^ FIESTA_SEED);
         self.drift
-            .layout(&mut rng, x0, x0 + self.star_span, y0, y1, [110, 450]);
+            .layout(&mut rng, x0, x0 + self.star_span, y0, y1, [110, 300]);
     }
 
     fn retheme(&mut self, ctx: &Ctx) {
@@ -433,6 +441,8 @@ impl Scene for Nyancat {
             Dress::Navidad {
                 reyes: fiesta.reyes(),
             }
+        } else if fiesta.is(Kind::Patrias) {
+            Dress::Patrias
         } else {
             Dress::None
         };
@@ -446,6 +456,7 @@ impl Scene for Nyancat {
                     .iter()
                     .map(|f| match dress {
                         Dress::Navidad { reyes } => navidad::dress(f, reyes),
+                        Dress::Patrias => patrias::dress(f),
                         _ => muertos::dress(f),
                     })
                     .collect();
@@ -460,6 +471,7 @@ impl Scene for Nyancat {
             let rainbow = (!native).then(|| theme_rainbow(ctx.theme));
             match dress {
                 Dress::Navidad { .. } => navidad::palette(&mut hp, rainbow),
+                Dress::Patrias => patrias::palette(&mut hp, rainbow, self.star_color),
                 _ => {
                     muertos::palette(&mut hp, rainbow);
                     if native {
@@ -516,6 +528,7 @@ impl Scene for Nyancat {
             Dress::None => {}
             Dress::Muertos => return self.draw_muertos(c, i, flip),
             Dress::Navidad { .. } => return self.draw_navidad(c, i, flip),
+            Dress::Patrias => return self.draw_patrias(c, i, flip),
         }
         let f = &self.frames[i];
         self.px.clear();
@@ -666,6 +679,35 @@ impl Nyancat {
         self.draw_counter(c);
     }
 
+    /// The animation dressed for the Fiestas Patrias, frame `i`.
+    fn draw_patrias(&mut self, c: &mut Canvas, i: usize, flip: bool) {
+        let (level, k) = (self.level, self.ticks as i64 & 0xffff_ffff);
+        self.paint(i, flip, |f, x, y, ch| patrias::flag(f, flip, x, y, ch));
+
+        // Sparklers where the stars are, then papelitos and banderitas, behind the cat.
+        let shift = self.star_shift(k);
+        let f = &self.dressed[i];
+        let solid = |x: i32, y: i32| costume::is_solid(sample(f, flip, x, y));
+        let filled = |x: i32, y: i32| sample(f, flip, x, y) != b',';
+        let mut p = Painter {
+            px: &mut self.px,
+            pal: &self.holiday_pal,
+            ox: self.ox,
+            oy: self.oy,
+            s: self.scale,
+            mirror: false,
+        };
+        for (n, st) in self.stars.iter().enumerate() {
+            let cx = self.star_lo + (st.x - self.star_lo - shift).rem_euclid(self.star_span);
+            let stage = (st.phase as i64 + st.dir as i64 * (k % 6)).rem_euclid(6) as usize;
+            patrias::star(&mut p, &solid, n, cx, st.y, stage);
+        }
+        patrias::sky(&mut p, &self.drift, level, k, &filled);
+        patrias::sombrero(&mut p, self.eyes[i]);
+        self.px.blit(c);
+        self.draw_counter(c);
+    }
+
     /// nyancat's counter on the bottom line, in Spanish for the holiday.
     fn draw_counter(&self, c: &mut Canvas) {
         if self.anim_rows() < self.h {
@@ -687,6 +729,7 @@ impl Nyancat {
                     ("¡Llevas ", seconds, " segundos buscando al muñeco!")
                 }
                 Dress::Navidad { .. } => ("¡Llevas ", seconds, " segundos de posada!"),
+                Dress::Patrias => ("¡Llevas ", seconds, " segundos gritando VIVA MÉXICO!"),
             };
             let len = (before.chars().count() + num.len() + after.chars().count()) as i32;
             let x = ((self.w as i32 - len) / 2).max(0);
@@ -1167,6 +1210,88 @@ mod tests {
             (1, 3),
             (1, 6),
         ]);
+    }
+
+    #[test]
+    fn dresses_up_for_patrias() {
+        use crate::fiesta::Fiesta;
+        use crate::theme::Theme;
+        let theme = Theme::classic();
+        let gray = color::rgb(0x999999);
+        let verde = color::rgb(0x006847);
+        let blanco = color::rgb(0xf4f1ea);
+        let rojo = color::rgb(0xce1126);
+        let cafe = color::rgb(0x7a4a1e);
+        let oro = color::rgb(0xd4a017);
+        let tan = color::rgb(0xffcd98);
+        let pink = color::rgb(0xffa9ff);
+        let rainbow = [0xff1900, 0xff9a00, 0xfff000, 0x28dc00, 0x0090ff, 0x6844ff].map(color::rgb);
+        for day in [(9, 1), (9, 10), (9, 15), (9, 16)] {
+            let c = frame(&theme, Fiesta::of_day(day.0, day.1), 120, 36, 2.0);
+            // The flag for a trail, a chile en nogada, a sombrero; the cat is itself.
+            for col in [verde, blanco, rojo, cafe, oro, gray] {
+                assert!(count(&c, col) > 8, "{day:?} {col:?}");
+            }
+            assert_eq!(count(&c, tan) + count(&c, pink), 0, "{day:?}");
+            for col in rainbow {
+                assert_eq!(count(&c, col), 0, "{day:?}");
+            }
+            let text = c.to_text();
+            assert!(text.contains("segundos gritando VIVA MÉXICO!"), "{text}");
+            // The trail runs to the left of the cat.
+            let (l, r) = halves(&c, verde);
+            assert!(l > r, "{day:?}");
+        }
+        // An ordinary day has none of it.
+        let c = frame(&theme, Fiesta::of_day(6, 15), 120, 36, 2.0);
+        assert!(count(&c, gray) > 30);
+        for col in [verde, rojo, cafe, oro] {
+            assert_eq!(count(&c, col), 0);
+        }
+        assert!(c.to_text().contains("You have nyaned for 2 seconds!"));
+        // Other themes color the flag and the sparks, not the sombrero.
+        let spark = color::rgb(0x1f9d5b);
+        assert!(count(&frame(&theme, Fiesta::of_day(9, 15), 120, 36, 2.0), spark) > 0);
+        let nord = Theme::builtin("nord").unwrap();
+        let c = frame(&nord, Fiesta::of_day(9, 15), 120, 36, 2.0);
+        assert_eq!(count(&c, spark), 0);
+        assert!(count(&c, cafe) > 8);
+    }
+
+    #[test]
+    fn patrias_builds_up_through_the_month() {
+        use crate::fiesta::Fiesta;
+        use crate::theme::Theme;
+        let theme = Theme::classic();
+        // Banderitas and papelitos in the sky, on the first and on the Grito.
+        let small = [0x1f9d5b, 0xe0263a].map(color::rgb);
+        let lit = |day: (u32, u32)| {
+            (0..40)
+                .map(|i| {
+                    let c = frame(
+                        &theme,
+                        Fiesta::of_day(day.0, day.1),
+                        160,
+                        48,
+                        1.0 + i as f32 * 0.2,
+                    );
+                    small.iter().map(|&col| count(&c, col)).sum::<usize>()
+                })
+                .sum::<usize>()
+        };
+        assert!(lit((9, 1)) < lit((9, 15)));
+    }
+
+    #[test]
+    fn the_patrias_come_and_go_through_retheme() {
+        for day in [(9, 1), (9, 15)] {
+            comes_and_goes(day);
+        }
+    }
+
+    #[test]
+    fn the_patrias_survive_anything() {
+        survives(&[(9, 1), (9, 8), (9, 15), (9, 16)]);
     }
 
     #[test]
