@@ -59,6 +59,16 @@
 //! the finale is a mask between two serpentinas. More of them each day from
 //! Thursday to Martes de Carnaval.
 //!
+//! On the quema de Judas the city stays and cartonería Judases hang across
+//! the street over the skyline, each from a rope strung between two poles
+//! on the rooftops: red devils with horns, a black suit and a belt of
+//! fireworks, swaying a little. On Viernes Santo they only hang. On Sábado
+//! de Gloria they are lit one after the other: a fuse climbs the body, the
+//! Judas spins faster and faster (seen edge on as it turns) throwing
+//! rockets that trail sparks and crackle, bursts and falls apart in bits of
+//! cartón, and after a while a new one is hung. The shells burn in cartón
+//! rojo, yellow and white-gold, with the odd cohete.
+//!
 //! MIT License
 //!
 //! Copyright (c) 2026 Santiago Sánchez
@@ -452,6 +462,8 @@ const PATRIAS_SEED: u64 = 0x7061_7472_6961_7321;
 const CRUZ_SEED: u64 = 0x6372_757a_2033_6d79;
 /// And Carnaval's.
 const CARNAVAL_SEED: u64 = 0x6361_726e_6176_616c;
+/// And the quema de Judas's.
+const JUDAS_SEED: u64 = 0x6a75_6461_7320_3737;
 
 // Navidad under `classic`; the shell colors are brightened to burn in the
 // night sky.
@@ -482,6 +494,12 @@ const CA_LIMON: V3 = c8(160, 230, 50);
 const CA_AMARILLO: V3 = c8(255, 214, 20);
 const CA_NARANJA: V3 = c8(255, 140, 30);
 const CA_ORO: V3 = c8(255, 204, 51);
+// The quema de Judas under `classic`: cartón rojo and white-gold sparks,
+// brightened for the sky; the black of the suit is lifted so it shows.
+const JU_ROJO: V3 = c8(255, 64, 60);
+const JU_AMARILLO: V3 = c8(255, 210, 60);
+const JU_ORO: V3 = c8(255, 228, 160);
+const JU_BLANCO: V3 = c8(255, 247, 228);
 const ROJO_NOCHEBUENA: V3 = c8(200, 16, 46);
 const VERDE_PINO: V3 = c8(31, 111, 58);
 /// Series lights (foquitos): rojo, verde, azul, amarillo, rosa, naranja.
@@ -527,6 +545,8 @@ struct Fest {
     /// Tabique (the red brick) and varilla (the rebar) of a building site.
     brick: V3,
     steel: V3,
+    /// The black of a Judas's suit, lifted to show against the night.
+    dark: V3,
 }
 
 impl Fest {
@@ -563,6 +583,30 @@ impl Fest {
                 // Verde, blanco y rojo, with oro between.
                 vec![
                     PA_VERDE, PA_VERDE, SH_BLANCO, SH_BLANCO, PA_ROJO, PA_ROJO, PA_ORO,
+                ],
+            ),
+            (true, Kind::Judas) => (
+                JU_ROJO,
+                JU_AMARILLO,
+                JU_ORO,
+                JU_BLANCO,
+                [
+                    JU_ROJO,
+                    JU_AMARILLO,
+                    JU_ROJO,
+                    JU_AMARILLO,
+                    JU_BLANCO,
+                    JU_ROJO,
+                ],
+                // Cartón rojo and yellow, with white-gold sparks.
+                vec![
+                    JU_ROJO,
+                    JU_ROJO,
+                    JU_ROJO,
+                    JU_AMARILLO,
+                    JU_AMARILLO,
+                    JU_ORO,
+                    JU_BLANCO,
                 ],
             ),
             (true, Kind::SantaCruz) => (
@@ -689,6 +733,7 @@ impl Fest {
                 cane: c8(201, 178, 107),
                 brick: TABIQUE,
                 steel: VARILLA,
+                dark: c8(64, 60, 70),
             }
         } else {
             Fest {
@@ -714,6 +759,7 @@ impl Fest {
                 cane: mix(stone, gold, 0.6),
                 brick: mix(stone, red, 0.5),
                 steel: mix(stone, white, 0.4),
+                dark: mix(stone, white, 0.25),
             }
         }
     }
@@ -1003,6 +1049,29 @@ const AGUILA: &[&str] = &[
     "   222222224444444433333333   ",
 ];
 
+/// A Judas of cartonería, a devil with horns, hands raised and a belt of
+/// fireworks: `0` its cartón rojo, `1` the black suit, `2` yellow (eyes,
+/// horn tips, belt), `3` white (teeth).
+const JUDAS: &[&str] = &[
+    "  2       2  ",
+    "  0       0  ",
+    "  00 000000  ",
+    "   0000000   ",
+    "   0000000   ",
+    "   0220022   ",
+    "   0000000   ",
+    "   0000000   ",
+    "00  333333  0",
+    "011111111 110",
+    " 111112111111",
+    "   11111111  ",
+    "   2222222   ",
+    "   1111111   ",
+    "    11  11   ",
+    "    11  11   ",
+    "    0 0 0 0  ",
+];
+
 /// A carnival mask with a plume: `0` its rosa, `1` the golden trim and
 /// sequins, `2`, `3`, `4` and `5` the feathers in turquesa, morado, limón
 /// and amarillo, `7` a pearl on the brow.
@@ -1234,6 +1303,9 @@ enum Role {
     Bell,
     /// A castillo: a tower of fireworks wheels that burns tier by tier.
     Castillo,
+    /// A Judas of cartonería hung across the street over the skyline: lit
+    /// on Sábado de Gloria, it spins throwing rockets and bursts.
+    Judas,
 }
 
 /// Something that moves in the scenery, drawn over it every frame.
@@ -1376,7 +1448,7 @@ struct Fireworks {
     candles: Vec<Candle>,
     /// Lights that blink in the town.
     bulbs: Vec<Bulb>,
-    /// What moves in the town: flags, a bell, a castillo.
+    /// What moves in the scenery: flags, a bell, a castillo, Judases.
     actors: Vec<Actor>,
     /// Building sites cohetes go up from (pixel x).
     sites: Vec<i32>,
@@ -1557,6 +1629,15 @@ impl Fireworks {
             } else if roll < mascara + confeti + 0.14 + 0.12 * level {
                 shell = Shell::Serpentina;
             }
+        } else if self.fiesta.is(Kind::Judas) {
+            // The quema de Judas: cartón rojo and yellow, white-gold sparks,
+            // and the odd cohete.
+            let f = &mut self.frng;
+            color = self.fest.shells[f.usize(0..self.fest.shells.len())];
+            if f.f32() < 0.2 {
+                shell = Shell::Cohete;
+                color = self.fest.white;
+            }
         } else if self.fiesta.is(Kind::SantaCruz) {
             // Día de la Santa Cruz: the colors of the papel flowers, and
             // cohetes whistling up from the building sites.
@@ -1594,6 +1675,7 @@ impl Fireworks {
             || self.fiesta.is(Kind::Patrias)
             || self.fiesta.is(Kind::SantaCruz)
             || self.fiesta.is(Kind::Carnaval)
+            || self.fiesta.is(Kind::Judas)
     }
 
     /// Does this holiday end a finale with a gran final?
@@ -2237,6 +2319,7 @@ impl Fireworks {
         self.build_zocalo();
         self.build_obras();
         self.build_carnaval();
+        self.build_judas();
     }
 
     /// Carnaval keeps the city and strings colored lights along some of its
@@ -3257,12 +3340,274 @@ impl Fireworks {
         }
     }
 
+    /// Hangs the Judases of the quema across the street: each from a rope
+    /// strung between two poles on the rooftops, high over the skyline. On
+    /// Viernes Santo they only hang; on Sábado de Gloria each is lit in its
+    /// turn.
+    fn build_judas(&mut self) {
+        let (w, ph) = (self.w, self.ph);
+        if !self.fiesta.is(Kind::Judas) || !self.show_city || w < 20 || ph < 16 {
+            return;
+        }
+        let rng = &mut fastrand::Rng::with_seed(self.seed ^ JUDAS_SEED);
+        let k = (ph / 60).clamp(1, 3);
+        let n = (w / (30 * k)).clamp(1, 6);
+        for i in 0..n {
+            let slot = w as f32 / n as f32;
+            // Ropes at different heights, the Judases hanging over the
+            // skyline.
+            let rope = ph as f32 * rangef(rng, 0.36, 0.5);
+            self.actors.push(Actor {
+                role: Role::Judas,
+                x: slot * (i as f32 + 0.5) + rangef(rng, -slot * 0.1, slot * 0.1),
+                y: rope,
+                size: k as f32,
+                state: 0,
+                left: rng.i32(60..300),
+                seed: rng.f32() * TAU,
+            });
+        }
+    }
+
+    /// One step in the life of a Judas: it hangs (swaying) until it is lit,
+    /// a fuse climbs its body, it spins faster and faster throwing rockets
+    /// that trail sparks and crackle, bursts and falls apart in bits of
+    /// cartón, and a new one is hung after a while. Only on Sábado de Gloria;
+    /// on Viernes Santo it hangs.
+    fn burn_judas(&mut self, a: &mut Actor) {
+        let k = a.size;
+        let (cx, top) = (a.x, a.y + 5.0 * k);
+        let (jh, level) = (17.0 * k, self.fiesta.level);
+        a.left -= 1;
+        let room = self.ps.len() + self.born.len() + 64 < MAX_PARTICLES;
+        let ft = &self.fest;
+        let (red, yellow, white, gold, dark) = (ft.red, ft.hues[1], ft.white, ft.gold, ft.dark);
+        let f = &mut self.frng;
+        match a.state {
+            0 => {
+                if level >= 0.9 && a.left <= 0 {
+                    a.state = 1;
+                    a.left = 30;
+                }
+            }
+            1 => {
+                // The fuse climbs from the feet to the head, spitting.
+                let u = a.left as f32 / 30.0;
+                if room {
+                    for _ in 0..2 {
+                        let life = rangef(f, 8.0, 16.0);
+                        self.born.push(P {
+                            x: cx + rangef(f, -0.5, 0.5),
+                            y: top + jh * u,
+                            vx: rangef(f, -0.3, 0.3),
+                            vy: rangef(f, -0.5, 0.0),
+                            life,
+                            max: life,
+                            color: if f.bool() { gold } else { white },
+                            drag: 0.92,
+                            grav: SPARK_G,
+                            flags: 0,
+                            shell: Shell::Sphere,
+                        });
+                    }
+                }
+                if a.left <= 0 {
+                    a.state = 2;
+                    a.left = 100;
+                }
+            }
+            2 => {
+                // Spinning, it throws a rocket every few steps.
+                if a.left % 3 == 0 && room {
+                    let (sa, ca) = rangef(f, 0.0, TAU).sin_cos();
+                    let speed = rangef(f, 0.7, 1.3);
+                    let life = rangef(f, 24.0, 42.0);
+                    self.born.push(P {
+                        x: cx + rangef(f, -3.0, 3.0) * k,
+                        y: top + rangef(f, 0.0, jh),
+                        vx: ca * speed,
+                        vy: sa * speed - 0.25,
+                        life,
+                        max: life,
+                        color: [gold, red, white, yellow][f.usize(0..4)],
+                        drag: 0.97,
+                        grav: 0.014,
+                        flags: TRAIL | CRACKLE,
+                        shell: Shell::Sphere,
+                    });
+                }
+                if room {
+                    let life = rangef(f, 8.0, 14.0);
+                    self.born.push(P {
+                        x: cx + rangef(f, -5.0, 5.0) * k,
+                        y: top + rangef(f, 0.0, jh),
+                        vx: rangef(f, -0.4, 0.4),
+                        vy: rangef(f, -0.4, 0.2),
+                        life,
+                        max: life,
+                        color: gold,
+                        drag: 0.9,
+                        grav: SPARK_G,
+                        flags: 0,
+                        shell: Shell::Sphere,
+                    });
+                }
+                if a.left <= 0 {
+                    a.state = 3;
+                }
+            }
+            3 => {
+                // It bursts into rockets and falls apart in bits of cartón.
+                let at = (cx, top + jh * 0.4);
+                for _ in 0..28 {
+                    if !room {
+                        break;
+                    }
+                    let life = rangef(f, 70.0, 110.0);
+                    self.born.push(P {
+                        x: at.0 + rangef(f, -5.0, 5.0) * k,
+                        y: at.1 + rangef(f, -6.0, 6.0) * k,
+                        vx: rangef(f, -0.7, 0.7),
+                        vy: rangef(f, -0.9, 0.2),
+                        life,
+                        max: life,
+                        color: [red, yellow, dark][f.usize(0..3)],
+                        drag: 0.96,
+                        grav: SPARK_G,
+                        flags: PETAL,
+                        shell: Shell::Sphere,
+                    });
+                }
+                let bang = P {
+                    x: at.0,
+                    y: at.1,
+                    vx: 0.0,
+                    vy: 0.0,
+                    life: 1.0,
+                    max: 1.0,
+                    color: red,
+                    drag: 1.0,
+                    grav: 0.0,
+                    flags: ROCKET,
+                    shell: Shell::Multi,
+                };
+                self.burst(&bang);
+                a.state = 4;
+                a.left = self.frng.i32(150..320);
+            }
+            _ => {
+                // The rope hangs empty until a new Judas is hung.
+                if a.left <= 0 {
+                    a.state = 0;
+                    a.left = self.frng.i32(180..480);
+                }
+            }
+        }
+    }
+
+    /// A Judas over the street: its rope between two poles on the rooftops,
+    /// the devil hanging from it, spinning (seen edge on as it turns) and
+    /// flashing while it burns.
+    fn draw_judas(&mut self, a: &Actor) {
+        let k = a.size.round().max(1.0) as i32;
+        let ph = self.ph as i32;
+        let ft = &self.fest;
+        let (cane, red, yellow) = (ft.cane, ft.red, ft.hues[1]);
+        let (dark, white) = (ft.dark, ft.white);
+        let (rope_c, pole_c) = (to_color(scale(cane, 0.8)), to_color(scale(cane, 0.5)));
+        let span = 22 * k;
+        let (xl, xr) = (a.x.round() as i32 - span / 2, a.x.round() as i32 + span / 2);
+        let ry = a.y.round() as i32;
+        // Poles from the rooftops, and the rope sagging between them.
+        for x in [xl, xr] {
+            let roof = usize::try_from(x)
+                .ok()
+                .and_then(|x| self.skyline.get(x))
+                .map_or(ph, |&r| r);
+            for y in ry..roof {
+                self.px.set(x, y, pole_c);
+            }
+        }
+        let sag = 2 * k;
+        for x in xl..=xr {
+            let u = (x - xl) as f32 / span as f32;
+            self.px.set(
+                x,
+                ry + (sag as f32 * 4.0 * u * (1.0 - u)).round() as i32,
+                rope_c,
+            );
+        }
+        if a.state == 4 {
+            return;
+        }
+        // The Judas hangs from the middle of the rope: sways while it hangs,
+        // turns round as it burns.
+        let t = self.frame as f32;
+        let spinning = a.state == 2;
+        let spent = (100 - a.left).max(0) as f32;
+        let turn = a.seed + 0.2 * spent + 0.004 * spent * spent;
+        let squash = if spinning { turn.cos() } else { 1.0 };
+        let sway = if spinning {
+            0.0
+        } else {
+            (t * 0.07 + a.seed).sin() * 0.8 * k as f32
+        };
+        let (cx, head) = (a.x + sway, ry + sag + 3 * k);
+        for y in ry + sag..head {
+            self.px.set(cx.round() as i32, y, rope_c);
+        }
+        // It flashes white-hot as it burns.
+        let hot = if a.state >= 1 {
+            0.5 * (t * 1.9).sin().powi(2)
+        } else {
+            0.0
+        };
+        let colors = [
+            mix(scale(red, 0.85), white, hot),
+            mix(dark, white, hot),
+            mix(yellow, white, hot),
+            white,
+        ];
+        let bw = ((squash.abs() * k as f32).round() as i32).max(1);
+        for (sy, row) in JUDAS.iter().enumerate() {
+            for (sx, ch) in row.bytes().enumerate() {
+                let Some(&c) = colors.get(ch.wrapping_sub(b'0') as usize) else {
+                    continue;
+                };
+                if ch == b' ' {
+                    continue;
+                }
+                let x = cx + (sx as f32 - 6.0) * squash * k as f32;
+                for dy in 0..k {
+                    for dx in 0..bw {
+                        self.px.set(
+                            x.round() as i32 + dx,
+                            head + sy as i32 * k + dy,
+                            to_color(c),
+                        );
+                    }
+                }
+            }
+        }
+        // The fuse, a bright spark climbing the body.
+        if a.state == 1 {
+            let u = a.left as f32 / 30.0;
+            self.px.set(
+                a.x.round() as i32,
+                head + (17.0 * k as f32 * u) as i32,
+                to_color(mix(self.fest.gold, white, 0.6)),
+            );
+        }
+    }
+
     /// Moves the scenery's actors one step.
     fn act(&mut self) {
         for k in 0..self.actors.len() {
             let mut a = self.actors[k];
-            if a.role == Role::Castillo {
-                self.burn_castillo(&mut a);
+            match a.role {
+                Role::Castillo => self.burn_castillo(&mut a),
+                Role::Judas => self.burn_judas(&mut a),
+                _ => {}
             }
             self.actors[k] = a;
         }
@@ -3361,6 +3706,7 @@ impl Fireworks {
                 Role::Flag => self.draw_flag(&a),
                 Role::Bell => self.draw_bell(&a),
                 Role::Castillo => self.draw_castillo(&a),
+                Role::Judas => self.draw_judas(&a),
             }
         }
     }
@@ -4121,6 +4467,7 @@ mod tests {
                     Fiesta::of_day(9, 15),
                     Fiesta::of_day(5, 3),
                     Fiesta::height(Kind::Carnaval),
+                    Fiesta::height(Kind::Judas),
                 ] {
                     let (mut f, o) = make(v, &theme);
                     let ctx = Ctx {
@@ -4501,7 +4848,7 @@ mod tests {
     /// The pixel pictures are rectangles.
     #[test]
     fn pictures_are_rectangles() {
-        for art in [KIOSCO, ABETO, NOCHEBUENA_POT, AGUILA, CRUZ, MASCARA] {
+        for art in [KIOSCO, ABETO, NOCHEBUENA_POT, AGUILA, CRUZ, MASCARA, JUDAS] {
             let w = art[0].chars().count();
             assert!(art.iter().all(|r| r.chars().count() == w), "{art:?}");
         }
@@ -4902,6 +5249,98 @@ mod tests {
         }
         assert!(turned > 1.0, "{turned} from {x0} {y0}");
         assert!(ribbon);
+    }
+
+    /// On Sábado de Gloria each Judas is lit in its turn: a fuse climbs it,
+    /// it spins throwing rockets that crackle, bursts in bits of cartón and
+    /// a new one is hung.
+    #[test]
+    fn judas_burns_on_sabado_de_gloria() {
+        for theme in [Theme::classic(), Theme::builtin("dracula").unwrap()] {
+            let fiesta = Fiesta::height(Kind::Judas);
+            assert!(fiesta.is(Kind::Judas) && fiesta.level >= 0.9);
+            let (mut f, o) = make("", &theme);
+            holiday(&mut f, &theme, &o, fiesta);
+            let judases = f.actors.iter().filter(|a| a.role == Role::Judas).count();
+            assert!(judases >= 2, "{judases}");
+            let (mut states, mut rockets, mut bits) = (Vec::new(), false, false);
+            for _ in 0..5000 {
+                f.step();
+                for a in f.actors.iter().filter(|a| a.role == Role::Judas) {
+                    if !states.contains(&a.state) {
+                        states.push(a.state);
+                    }
+                }
+                rockets |= f.ps.iter().any(|p| p.flags == TRAIL | CRACKLE);
+                bits |= f.ps.iter().any(|p| p.flags & PETAL != 0);
+            }
+            states.sort();
+            assert_eq!(states, [0, 1, 2, 3, 4], "{}", theme.name);
+            assert!(rockets && bits);
+        }
+    }
+
+    /// On Viernes Santo the Judases only hang; the town and the rest of the
+    /// show are those of the quema, and it all comes and goes with the
+    /// holiday.
+    #[test]
+    fn judas_only_hangs_on_viernes_santo() {
+        let theme = Theme::classic();
+        let (mut f, o) = make("", &theme);
+        let friday = Fiesta::of_date(2027, 3, 26);
+        assert!(friday.is(Kind::Judas) && friday.level < 0.9);
+        holiday(&mut f, &theme, &o, friday);
+        assert!(f.actors.iter().any(|a| a.role == Role::Judas));
+        for _ in 0..3000 {
+            f.step();
+            assert!(f.actors.iter().all(|a| a.state == 0));
+        }
+        holiday(&mut f, &theme, &o, Fiesta::NONE);
+        assert!(f.actors.is_empty());
+        holiday(&mut f, &theme, &o, Fiesta::of_day(12, 24));
+        assert!(f.actors.is_empty());
+        let (mut f, o) = make("skyline = false", &theme);
+        holiday(&mut f, &theme, &o, Fiesta::height(Kind::Judas));
+        assert!(f.actors.is_empty());
+    }
+
+    /// Judases fit any size and survive the whole burn at each.
+    #[test]
+    fn judases_fit_any_size() {
+        let theme = Theme::classic();
+        let (mut f, o) = make("", &theme);
+        let fiesta = Fiesta::height(Kind::Judas);
+        let ctx = Ctx {
+            theme: &theme,
+            opts: &o,
+            bg: Color::Reset,
+            seed: 3,
+            fiesta,
+        };
+        for (w, h) in [
+            (1, 1),
+            (3, 6),
+            (19, 10),
+            (20, 8),
+            (40, 16),
+            (80, 24),
+            (200, 60),
+            (500, 150),
+        ] {
+            f.resize(&ctx, w, h);
+            f.retheme(&ctx);
+            let mut c = Canvas::new(w, h, Color::Reset);
+            let frames = if w as usize * h as usize > 5000 {
+                500
+            } else {
+                1200
+            };
+            for k in 0..frames {
+                f.update(&ctx, if k % 97 == 96 { 5.0 } else { 1.0 / 30.0 });
+                c.clear();
+                f.draw(&ctx, &mut c);
+            }
+        }
     }
 
     /// With the sky transparent nothing is painted before the first launch,
