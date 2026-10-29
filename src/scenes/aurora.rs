@@ -42,6 +42,16 @@
 //! Dios lies in the manger from Nochebuena on, and the cycle shows Belén
 //! most of the time; `look = "belen"` shows it on any day.
 //!
+//! During the Fiestas Patrias the night moves to the valley of México, under
+//! its volcanoes: Popocatépetl, a snowcapped cone with its crater glowing red
+//! and a little smoke leaning in the wind, and Iztaccíhuatl, the sleeping
+//! woman lying on her back from her head to her feet, snowcapped too, with
+//! the curtains in green, white and red over them. Garlands of lights in the
+//! flag's colors hang along the shore and a bandera waves from a pole, all
+//! mirrored in the lake, and fireworks burst over the volcanoes: one now and
+//! then at the start of the mes patrio and bursts all over the sky by the
+//! night of the Grito. `look = "volcanes"` shows it on any day.
+//!
 //! MIT License
 //!
 //! Copyright (c) 2026 Santiago Sánchez
@@ -91,7 +101,7 @@ pub const INFO: SceneInfo = SceneInfo {
         Opt {
             key: "look",
             default: Val::S("cycle"),
-            help: "cycle, or one look to stay on: tanim, emerald, crimson, ultraviolet, ice, synthwave, ember, prism, starry, patzcuaro (Día de Muertos), belen (Navidad)",
+            help: "cycle, or one look to stay on: tanim, emerald, crimson, ultraviolet, ice, synthwave, ember, prism, starry, patzcuaro (Día de Muertos), belen (Navidad), volcanes (Fiestas Patrias)",
         },
         Opt {
             key: "stay",
@@ -174,6 +184,11 @@ struct Look {
     /// dunes and the Reyes Magos.
     forest: f32,
     belen: f32,
+    /// How much of the Fiestas Patrias night shows: the volcanoes with their
+    /// smoke, the garlands, the flag and the fireworks; and how far the
+    /// curtains' colors reach up the sky (a tricolor needs less room).
+    volcanes: f32,
+    reach: f32,
 }
 
 /// tanim's night.
@@ -203,15 +218,18 @@ const TANIM: Look = Look {
     muertos: 0.0,
     forest: 1.0,
     belen: 0.0,
+    volcanes: 0.0,
+    reach: 1.0,
 };
 
 /// The looks the cycle picks from on an ordinary day: all but the holidays'.
 const ORDINARY: usize = 9;
-/// The holidays' places in `LOOKS`: Pátzcuaro's, Belén's.
+/// The holidays' places in `LOOKS`: Pátzcuaro's, Belén's, the volcanoes'.
 const PATZCUARO: usize = 9;
 const BELEN: usize = 10;
+const VOLCANES: usize = 11;
 
-const LOOKS: [(&str, Look); 11] = [
+const LOOKS: [(&str, Look); 12] = [
     ("tanim", TANIM),
     (
         "emerald",
@@ -413,6 +431,33 @@ const LOOKS: [(&str, Look); 11] = [
             ..TANIM
         },
     ),
+    (
+        "volcanes",
+        Look {
+            // Verde bandera at the lower edge, blanco, then rojo: the flag
+            // squeezed into the lower half of each curtain.
+            glow: [
+                c8(0, 200, 136),
+                c8(244, 241, 234),
+                c8(206, 17, 38),
+                c8(130, 10, 30),
+            ],
+            reach: 0.5,
+            sky_top: c8(4, 8, 18),
+            sky_low: c8(16, 26, 44),
+            far: c8(30, 38, 50),
+            near: c8(14, 20, 26),
+            snow: c8(54, 62, 78),
+            pine: c8(6, 14, 12),
+            water: c8(4, 10, 20),
+            star: c8(244, 241, 234),
+            glint: c8(244, 241, 234),
+            rim: c8(206, 17, 38),
+            rim_k: 0.3,
+            volcanes: 1.0,
+            ..TANIM
+        },
+    ),
 ];
 
 /// Van Gogh's brushstrokes, from the deepest blue to the palest yellow.
@@ -458,6 +503,8 @@ impl Look {
             muertos: f(self.muertos, o.muertos),
             forest: f(self.forest, o.forest),
             belen: f(self.belen, o.belen),
+            volcanes: f(self.volcanes, o.volcanes),
+            reach: f(self.reach, o.reach),
         }
     }
 
@@ -673,6 +720,7 @@ fn fiesta_look(kind: Kind) -> Option<usize> {
     match kind {
         Kind::Muertos => Some(PATZCUARO),
         Kind::Navidad => Some(BELEN),
+        Kind::Patrias => Some(VOLCANES),
         _ => None,
     }
 }
@@ -878,6 +926,143 @@ struct Sheep {
     x: f32,
     y: i32,
     phase: f32,
+}
+
+/// The colors of the Fiestas Patrias night: the flag's green, white and red.
+/// The crater's ember and its smoke keep their own hue under every theme;
+/// the rest comes from the theme.
+#[derive(Clone, Copy)]
+struct Volcan {
+    /// The volcanoes' rock and their snow, lit and in shade.
+    rock: [V3; 2],
+    snow: [V3; 2],
+    /// The crater's ember, and the smoke near it and far from it.
+    ember: V3,
+    smoke: [V3; 2],
+    /// Green, white and red as lights (garlands, fireworks) and as the
+    /// flag's bands, with its eagle and nopal, and the pole.
+    light: [V3; 3],
+    flag: [V3; 3],
+    eagle: V3,
+    nopal: V3,
+    pole: V3,
+}
+
+impl Volcan {
+    fn new(t: &Theme) -> Volcan {
+        let ember = c8(255, 96, 32);
+        if t.native {
+            return Volcan {
+                rock: [c8(36, 44, 60), c8(16, 20, 30)],
+                snow: [c8(204, 208, 220), c8(96, 104, 128)],
+                ember,
+                smoke: [c8(255, 150, 100), c8(140, 142, 156)],
+                light: [c8(0, 168, 114), c8(244, 241, 234), c8(206, 17, 38)],
+                flag: [c8(0, 104, 71), c8(244, 241, 234), c8(206, 17, 38)],
+                eagle: c8(122, 74, 30),
+                nopal: c8(79, 138, 42),
+                pole: c8(150, 150, 156),
+            };
+        }
+        let at = |k: f32| v3(t.grad.at(k));
+        let (low, mid, high) = (at(0.0), at(0.5), at(1.0));
+        let tri = [at(0.2), at(1.0), at(0.65)];
+        Volcan {
+            rock: [mix(low, mid, 0.35), scale(low, 0.5)],
+            snow: [mix(mid, high, 0.8), mix(low, mid, 0.8)],
+            ember,
+            smoke: [c8(255, 150, 100), mix(low, mid, 0.7)],
+            light: tri,
+            flag: tri,
+            eagle: mid,
+            nopal: at(0.3),
+            pole: mix(mid, high, 0.5),
+        }
+    }
+}
+
+/// One pixel of a garland: where, what (0 to 2 a bulb of the flag's green,
+/// white or red, 3 a pole), and a random number that decides when it is lit.
+struct Bulb {
+    x: i32,
+    y: i32,
+    c: u8,
+    r: f32,
+}
+
+/// A burst of fireworks in the air: where, how old (seconds), how far its
+/// sparks fly and the two colors (of the flag's three) they alternate.
+struct Burst {
+    x: f32,
+    y: f32,
+    age: f32,
+    reach: f32,
+    cols: (usize, usize),
+}
+
+/// How long a burst lasts.
+const BURST_LIFE: f32 = 2.4;
+
+/// How many fireworks slots are let off on a screen `w` wide when the mes
+/// patrio has come `level` of the way: one at its start, all by the Grito.
+fn firework_slots(w: i32, level: f32) -> usize {
+    let slots = (w / 36).clamp(2, 7) as usize;
+    1 + ((slots - 1) as f32 * level.clamp(0.0, 1.0)).round() as usize
+}
+
+/// What fireworks slot `slot` has in the air at `secs`, if any: each lets
+/// one off every few seconds, where and in the colors its hash decides.
+fn burst_of(slot: usize, secs: f32, w: i32, hz: i32, seed: u64) -> Option<Burst> {
+    let period = 6.5 + 1.9 * slot as f32;
+    let off = (hash(slot as i32, 7, seed) % 1000) as f32 / 1000.0 * period;
+    let t = secs + off;
+    let n = (t / period).floor();
+    let age = t - n * period;
+    if !(0.0..BURST_LIFE).contains(&age) {
+        return None;
+    }
+    let h = hash(slot as i32, n as i32, seed ^ 0xF1AE);
+    let u = |k: u32| ((h >> (k * 10)) & 1023) as f32 / 1023.0;
+    let c = (h % 3) as usize;
+    Some(Burst {
+        x: (0.1 + 0.8 * u(0)) * w as f32,
+        y: (0.08 + 0.35 * u(1)) * hz as f32,
+        age,
+        reach: (0.1 + 0.08 * u(2)) * hz as f32,
+        cols: (c, (c + 1 + (h >> 40) as usize % 2) % 3),
+    })
+}
+
+/// Iztaccíhuatl's silhouette from her head (0) to her feet (1), as a share
+/// of the height of her chest: the head with its forehead, nose and chin,
+/// the neck, the chest, the waist, the knees, the ankles and the feet.
+fn izta(u: f32) -> f32 {
+    const P: [(f32, f32); 20] = [
+        (0.00, 0.00),
+        (0.03, 0.22),
+        (0.07, 0.50),
+        (0.10, 0.62),
+        (0.12, 0.56),
+        (0.14, 0.62),
+        (0.16, 0.50),
+        (0.19, 0.42),
+        (0.22, 0.40),
+        (0.27, 0.78),
+        (0.34, 1.00),
+        (0.41, 0.94),
+        (0.48, 0.66),
+        (0.55, 0.62),
+        (0.62, 0.84),
+        (0.68, 0.86),
+        (0.75, 0.66),
+        (0.84, 0.58),
+        (0.93, 0.34),
+        (1.00, 0.00),
+    ];
+    let i = P.windows(2).position(|p| u < p[1].0).unwrap_or(P.len() - 2);
+    let (a, b) = (P[i], P[i + 1]);
+    let t = ((u - a.0) / (b.0 - a.0)).clamp(0.0, 1.0);
+    a.1 + (b.1 - a.1) * (1.0 - (t * PI).cos()) / 2.0
 }
 
 /// Where Pátzcuaro's night draws: the picture, which pixels are solid, its
@@ -1239,6 +1424,54 @@ impl Layer<'_> {
     }
 }
 
+/// What the Fiestas Patrias' night draws with.
+impl Layer<'_> {
+    /// A puff of smoke: a soft disc `r` wide, `a` thick at its heart. It is
+    /// painted over what is there (so it darkens a bright curtain behind it)
+    /// without turning it solid.
+    fn puff(&mut self, x: f32, y: f32, r: f32, col: V3, a: f32) {
+        let r = r.max(1.0);
+        let (xi, yi, reach) = (x.round() as i32, y.round() as i32, r.ceil() as i32);
+        for dy in -reach..=reach {
+            for dx in -reach..=reach {
+                let d = (dx * dx + dy * dy) as f32 / (r * r);
+                if d < 1.0
+                    && let Some(i) = self.at(xi + dx, yi + dy)
+                {
+                    self.px[i] = mix(self.px[i], col, a * (1.0 - d) * self.m);
+                }
+            }
+        }
+    }
+
+    /// A burst of fireworks: sparks flying out of its heart in two colors,
+    /// sagging and fading, each with a short trail, after a flash.
+    fn burst(&mut self, b: &Burst, cols: &[V3; 3]) {
+        let k = 1.0 - b.age / BURST_LIFE;
+        let r = b.reach * (1.0 - (-b.age * 3.0).exp());
+        let fall = 2.2 * b.age * b.age * (b.reach / 12.0);
+        let n = 20;
+        for i in 0..n {
+            let a = TAU * i as f32 / n as f32 + b.x;
+            let c = cols[if i % 2 == 0 { b.cols.0 } else { b.cols.1 }];
+            for (j, strength) in [(0.0, 1.0), (1.0, 0.55), (2.0, 0.25)] {
+                let rr = (r - j * 1.3).max(0.0);
+                let (x, y) = (b.x + a.cos() * rr, b.y + a.sin() * rr * 0.85 + fall);
+                self.shine(
+                    x.round() as i32,
+                    y.round() as i32,
+                    c,
+                    k * k * strength * 0.9,
+                );
+            }
+        }
+        if b.age < 0.25 {
+            let flash = 1.0 - b.age / 0.25;
+            self.halo(b.x as i32, b.y as i32, 5, 5, cols[1], 0.7 * flash);
+        }
+    }
+}
+
 /// A candle flame flickering at time `t` (in tanim ticks): its color and
 /// how bright it is.
 fn flicker(flame: &[V3; 2], t: f32, phase: f32) -> (V3, f32) {
@@ -1501,6 +1734,16 @@ struct Aurora {
     gait: f32,
     /// The aurora's faint light on the land, as `compose` last worked it out.
     amb: V3,
+    /// The Fiestas Patrias: its colors, the volcanoes' silhouette by column
+    /// (the row of the top and whose it is: 1 Iztaccíhuatl, 2 Popocatépetl)
+    /// and where their snow begins, the crater, the garlands along the shore
+    /// and the flag (pole, foot, top and width).
+    volcan: Volcan,
+    volc: Vec<(i32, u8)>,
+    snowline: Vec<i32>,
+    crater: (f32, f32),
+    bulbs: Vec<Bulb>,
+    flag: Option<(i32, i32, i32, i32)>,
 }
 
 impl Aurora {
@@ -1512,6 +1755,7 @@ impl Aurora {
         let look = match o.s("look").trim() {
             "pátzcuaro" | "muertos" => "patzcuaro",
             "belén" | "navidad" | "nacimiento" => "belen",
+            "volcán" | "patrias" | "independencia" => "volcanes",
             l => l,
         };
         let fixed = LOOKS.iter().position(|(n, _)| *n == look);
@@ -1584,6 +1828,12 @@ impl Aurora {
             reyes_x: 0.0,
             gait: 0.0,
             amb: [0.0; 3],
+            volcan: Volcan::new(ctx.theme),
+            volc: Vec::new(),
+            snowline: Vec::new(),
+            crater: (0.0, 0.0),
+            bulbs: Vec::new(),
+            flag: None,
             rng,
             hrng,
         }
@@ -1709,6 +1959,7 @@ impl Aurora {
         self.build_starry();
         self.build_patzcuaro();
         self.build_belen();
+        self.build_volcanes();
     }
 
     /// Pátzcuaro's night for this size, from the holiday's own RNG: the
@@ -1985,6 +2236,98 @@ impl Aurora {
                 lean: rangef(&mut rng, -2.0, 2.0),
             });
         }
+    }
+
+    /// The Fiestas Patrias' night for this size, from its own RNG so that the
+    /// layout only depends on the size and the seed: Iztaccíhuatl and
+    /// Popocatépetl across the valley, and the garlands and the flag on the
+    /// near shore.
+    fn build_volcanes(&mut self) {
+        let (w, ph, hz) = (self.w as i32, self.ph as i32, self.horizon as i32);
+        let (wf, hzf) = (w as f32, hz as f32);
+        let mut rng = fastrand::Rng::with_seed(self.seed ^ 0x9A71_1810);
+        self.volc.clear();
+        self.snowline.clear();
+        self.bulbs.clear();
+        self.flag = None;
+        if !self.landscape || w < 24 || hz < 10 {
+            return;
+        }
+        // Popocatépetl on the right, a cone cut by its crater; Iztaccíhuatl
+        // on the left, lying on her back from the head to the feet. Where
+        // they overlap the higher one wins: the saddle between them.
+        let hp = (0.64 * hzf).min(0.27 * wf);
+        let (bp, xp, hi) = (hp * 1.25, wf * 0.76, hp * 0.84);
+        let (xi0, xi1) = (wf * 0.02, wf * 0.58);
+        let crater = (0.05 * bp).max(2.0);
+        let (p1, p2) = (rangef(&mut rng, 0.0, TAU), rangef(&mut rng, 0.0, TAU));
+        for x in 0..w {
+            let xf = x as f32 + 0.5;
+            let dx = (xf - xp).abs();
+            let mut vp = if dx < bp {
+                hp * (1.0 - dx / bp).powf(1.3)
+            } else {
+                0.0
+            };
+            vp = vp.min(hp * 0.94);
+            if dx < crater {
+                vp -= 2.0 * (1.0 - dx / crater);
+            }
+            let u = (xf - xi0) / (xi1 - xi0);
+            let mut vi = if (0.0..1.0).contains(&u) {
+                hi * izta(u)
+            } else {
+                0.0
+            };
+            // Crags along her body.
+            vi *= 1.0 + 0.02 * ((xf * 0.9 + p1).sin() + 0.6 * (xf * 2.3 + p2).sin());
+            let (v, id) = if vp >= vi { (vp, 2) } else { (vi, 1) };
+            if v < 1.0 {
+                self.volc.push((hz, 0));
+                self.snowline.push(hz);
+            } else {
+                self.volc.push((hz - v as i32, id));
+                let alt = if id == 2 { 0.62 * hp } else { 0.5 * hi };
+                let alt = alt * (1.0 + 0.16 * (xf * 0.6 + p1).sin() + 0.07 * (xf * 1.9).sin());
+                self.snowline.push(hz - alt as i32);
+            }
+        }
+        self.crater = (xp, hzf - hp * 0.94 + 1.0);
+        // Garlands of lights between poles along the near shore.
+        let section = (wf * 0.12).clamp(14.0, 34.0) as i32;
+        let hang = (hzf * 0.07).clamp(3.0, 8.0);
+        let shore = |x: i32| self.near[x.clamp(0, w - 1) as usize];
+        let mut x0 = range(&mut rng, 0, section / 2);
+        while x0 + section < w {
+            let x1 = x0 + section;
+            let (ya, yb) = (shore(x0) as f32 - hang - 3.0, shore(x1) as f32 - hang - 3.0);
+            for (x, y0) in [(x0, ya), (x1, yb)] {
+                for y in y0 as i32..=shore(x) {
+                    self.bulbs.push(Bulb { x, y, c: 3, r: 0.0 });
+                }
+            }
+            let mut x = x0 + 2;
+            let mut k = range(&mut rng, 0, 3) as u8;
+            while x < x1 - 1 {
+                let s = (x - x0) as f32 / section as f32;
+                let y = ya + (yb - ya) * s + 0.4 * hang * (PI * s).sin();
+                self.bulbs.push(Bulb {
+                    x,
+                    y: y.round() as i32,
+                    c: k % 3,
+                    r: rng.f32(),
+                });
+                x += 3;
+                k += 1;
+            }
+            x0 = x1 + range(&mut rng, 6, 20);
+        }
+        // The bandera on its pole, in front of Popocatépetl's foot.
+        let fw = (ph as f32 * 0.09).clamp(7.0, 20.0) as i32;
+        let fx = ((wf * 0.88) as i32).min(w - fw - 2).max(1);
+        let base = shore(fx) + 1;
+        let top = base - (hzf * 0.28).clamp(7.0, 26.0) as i32;
+        self.flag = Some((fx, base, top, fw));
     }
 
     /// Paddles the canoes, drifts the veladoras and flies the monarchs `dt`
@@ -2313,6 +2656,7 @@ impl Aurora {
             }
             let steps = (c.len * 3.0) as usize;
             let (base, tall) = (c.base, c.tall);
+            let reach = tall * 3.0 * look.reach;
             for i in 0..steps {
                 let s = i as f32 / 3.0;
                 let mut x = c.x0 + s;
@@ -2344,7 +2688,7 @@ impl Aurora {
                 } else {
                     (-d / tall).exp() * (1.0 - (-(d + 1.0) / 1.5).exp())
                 };
-                let u = (d / (tall * 3.0)).clamp(0.0, 1.0);
+                let u = (d / reach).clamp(0.0, 1.0);
                 self.profile.push((prof, ramp(&look.glow, u)));
             }
             for x in 0..w {
@@ -2366,7 +2710,7 @@ impl Aurora {
                     let k = (((d + 3.0) * PROFILE_RES) as usize).min(n - 1);
                     let (prof, mut col) = self.profile[k];
                     if look.prism > 0.01 {
-                        let u = (d / (tall * 3.0)).clamp(0.0, 1.0);
+                        let u = (d / reach).clamp(0.0, 1.0);
                         let h = hue + u * 0.35;
                         let p = if self.paint.prism.is_empty() {
                             hsv(h, 0.75, 1.0)
@@ -2492,6 +2836,9 @@ impl Aurora {
             *p = add(*p, *g);
             ambient = add(ambient, *g);
         }
+        if look.volcanes > 0.01 && hz > 4 {
+            self.fireworks(look);
+        }
         if !self.landscape {
             return;
         }
@@ -2517,6 +2864,9 @@ impl Aurora {
                 }
                 self.px[y * w + x] = add(base, amb);
                 self.solid[y * w + x] = true;
+            }
+            if look.volcanes > 0.01 {
+                self.volcano_column(x, nr.min(hz), look.volcanes, lift.min(1.5), amb);
             }
             for y in nr..hz {
                 self.px[y * w + x] = add(near, scale(amb, 1.0 / 3.0));
@@ -2549,6 +2899,9 @@ impl Aurora {
                 );
                 self.solid[i] |= s >= 0.5;
             }
+        }
+        if look.volcanes > 0.01 {
+            self.light_volcanes(look, lift.min(1.5));
         }
         // The lake: the scene above, flipped, rippled and darkened.
         let depth = (ph - hz).max(1) as f32;
@@ -2875,6 +3228,156 @@ impl Aurora {
         }
     }
 
+    /// One column of the volcanoes, weighted by `k` as the look fades in: the
+    /// rock lit on the sides that face left, the snow above its line, grain
+    /// in both and a little darker toward the foot.
+    fn volcano_column(&mut self, x: usize, stop: usize, k: f32, lift: f32, amb: V3) {
+        let Some(&(top, id)) = self.volc.get(x) else {
+            return;
+        };
+        if id == 0 {
+            return;
+        }
+        let (w, hz) = (self.w, self.horizon);
+        let left = self.volc[x.saturating_sub(1)].0;
+        let right = self.volc[(x + 1).min(w - 1)].0;
+        // Rising to the right: the slope faces the left and is lit.
+        let face = ((left - right) as f32 / 4.0).clamp(-1.0, 1.0) * 0.5 + 0.5;
+        let v = self.volcan;
+        let (rock, snow) = (
+            mix(v.rock[1], v.rock[0], face),
+            mix(v.snow[1], v.snow[0], face),
+        );
+        let snowline = self.snowline[x];
+        let span = (hz as i32 - top).max(1) as f32;
+        for y in (top.max(0) as usize)..stop {
+            let grain = 0.92 + 0.16 * (hash(x as i32, y as i32, self.seed ^ 0x5A) % 8) as f32 / 8.0;
+            let down = 1.0 - 0.3 * (y as i32 - top) as f32 / span;
+            let base = if (y as i32) < snowline {
+                scale(snow, grain * down.max(0.8))
+            } else {
+                scale(rock, lift * grain * down)
+            };
+            let i = y * w + x;
+            self.px[i] = mix(self.px[i], add(base, amb), k);
+            self.solid[i] |= k >= 0.5;
+        }
+    }
+
+    /// The fireworks over the volcanoes: one slot at the start of the mes
+    /// patrio, every slot by the night of the Grito.
+    fn fireworks(&mut self, look: &Look) {
+        let (w, ph, hz) = (self.w as i32, self.ph as i32, self.horizon as i32);
+        let on = firework_slots(w, self.level(Kind::Patrias));
+        let (secs, seed, light) = (self.t * STEP, self.seed, self.volcan.light);
+        let mut l = Layer {
+            px: &mut self.px,
+            solid: &mut self.solid,
+            w,
+            h: ph,
+            m: look.volcanes,
+            lift: 1.0,
+            water: None,
+            t: self.t,
+            hz,
+        };
+        for slot in 0..on {
+            if let Some(b) = burst_of(slot, secs, w, hz, seed) {
+                l.burst(&b, &light);
+            }
+        }
+    }
+
+    /// What stands in front of the volcanoes, drawn before the lake so that
+    /// it mirrors them: Popocatépetl's ember and its smoke, the garlands of
+    /// lights along the shore and the flag.
+    fn light_volcanes(&mut self, look: &Look, lift: f32) {
+        let (w, ph, hz) = (self.w as i32, self.ph as i32, self.horizon as i32);
+        let (v, level) = (self.volcan, self.level(Kind::Patrias));
+        let sc = (ph as f32 / 120.0).clamp(0.45, 1.3);
+        let mut l = Layer {
+            px: &mut self.px,
+            solid: &mut self.solid,
+            w,
+            h: ph,
+            m: look.volcanes,
+            lift,
+            water: None,
+            t: self.t,
+            hz,
+        };
+        if !self.volc.is_empty() {
+            // The crater glows, and a little smoke leans away in the wind;
+            // more of it as the month goes.
+            let (cx, cy) = self.crater;
+            let (fl, k) = flicker(&[v.ember, mix(v.ember, [1.0, 0.85, 0.5], 0.6)], l.t, 1.3);
+            let glow = 0.3 + 0.3 * level;
+            l.halo(
+                cx as i32,
+                cy as i32,
+                (9.0 * sc) as i32,
+                (6.0 * sc) as i32,
+                fl,
+                glow * k,
+            );
+            for dx in -1..=1 {
+                l.lamp(
+                    cx as i32 + dx,
+                    cy as i32 + 1,
+                    scale(fl, k * (1.0 - 0.2 * dx.abs() as f32)),
+                );
+            }
+            l.lamp(cx as i32, cy as i32, scale(mix(fl, [1.0; 3], 0.4), k));
+            let puffs = 5 + (9.0 * level) as usize;
+            let rise = 0.42 * hz as f32;
+            for i in 0..puffs {
+                let u = (l.t * 0.0045 + i as f32 / puffs as f32).fract();
+                let x = cx + 0.6 * u * rise + (u * 9.0 + i as f32).sin() * 1.5 * u * sc;
+                let y = cy - u * rise;
+                let a = 0.5 * (1.0 - u).powf(1.2) * (u / 0.06).min(1.0);
+                let col = mix(v.smoke[0], v.smoke[1], (u * 4.0).min(1.0));
+                l.puff(x, y, (1.5 + 5.0 * u) * sc, col, (1.6 * a).min(0.85));
+            }
+        }
+        // The garlands: bulbs of the flag's three colors twinkling, more of
+        // them lit as the month goes.
+        let lit = 0.3 + 0.7 * level;
+        for b in &self.bulbs {
+            if b.c == 3 {
+                l.put(b.x, b.y, scale(v.pole, 0.5));
+            } else if b.r < lit {
+                let k = 0.75 + 0.25 * (l.t * 0.2 + b.r * 40.0).sin();
+                let col = v.light[b.c as usize];
+                l.lamp(b.x, b.y, scale(col, k));
+                for (dx, dy) in [(-1, 0), (1, 0), (0, 1), (0, -1)] {
+                    l.shine(b.x + dx, b.y + dy, col, 0.18 * k);
+                }
+            }
+        }
+        // The bandera waves from its pole: green, white with the eagle on
+        // its nopal, and red.
+        if let Some((fx, base, top, fw)) = self.flag {
+            let fh = (fw * 4 / 7).max(3);
+            l.put(fx, top - 1, v.pole);
+            for y in top..=base {
+                l.put(fx, y, scale(v.pole, 0.7));
+            }
+            for c in 0..fw {
+                let amp = 0.12 * fh as f32 * c as f32 / fw as f32;
+                let wave = ((c as f32 * 0.9 - l.t * 0.18).sin() * amp).round() as i32;
+                let band = (3 * c / fw).min(2) as usize;
+                for r in 0..fh {
+                    let col = if band == 1 && (c - fw / 2).abs() <= 1 && (r - fh / 2).abs() <= 1 {
+                        if r > fh / 2 { v.nopal } else { v.eagle }
+                    } else {
+                        v.flag[band]
+                    };
+                    l.lamp(fx + 1 + c, top + r + wave, col);
+                }
+            }
+        }
+    }
+
     /// Turns accumulated light on a transparent sky into a visible pixel.
     /// Weak light fades toward the terminal background; with no known
     /// background it dims instead, and the faintest part is dropped so
@@ -2934,6 +3437,7 @@ impl Scene for Aurora {
         self.paint = Paint::new(ctx.theme);
         self.fest = Fest::new(ctx.theme);
         self.nac = Nacimiento::new(ctx.theme);
+        self.volcan = Volcan::new(ctx.theme);
     }
 
     fn update(&mut self, _ctx: &Ctx, dt: f32) {
@@ -3362,7 +3866,7 @@ mod tests {
             .zip(&a.solid)
             .filter(|(p, solid)| {
                 let k = p[0].max(p[1]).max(p[2]);
-                **solid && k > 0.5 && (0..3).all(|i| (p[i] / k - col[i] / m).abs() < 0.05)
+                **solid && k > 0.35 && (0..3).all(|i| (p[i] / k - col[i] / m).abs() < 0.05)
             })
             .count()
     }
@@ -3578,6 +4082,212 @@ mod tests {
                     let (mut a, o) = make_on(v, &theme, fiesta, 80, 24);
                     let ctx = ctx_on(&theme, &o, theme.bg, fiesta);
                     for (w, h) in [(1, 1), (2, 3), (16, 4), (17, 9), (40, 12), (300, 90)] {
+                        a.resize(&ctx, w, h);
+                        a.retheme(&ctx);
+                        let mut c = Canvas::new(w, h, Color::Reset);
+                        for k in 0..120 {
+                            let dt = if k % 50 == 49 { 5.0 } else { 1.0 / 30.0 };
+                            a.tick(&ctx, dt, dt);
+                            c.clear();
+                            a.draw(&ctx, &mut c);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /// The Fiestas Patrias open on the volcanoes from the first day: both of
+    /// them rise from the valley, the flag waves, and more lights are lit as
+    /// the month goes.
+    #[test]
+    fn volcanes_come_with_the_holiday() {
+        let mut lit = Vec::new();
+        for theme in [Theme::classic(), Theme::builtin("dracula").unwrap()] {
+            for (m, d) in [(9, 1), (9, 15)] {
+                let a = frame("", &theme, Fiesta::of_day(m, d), 120, 36);
+                assert_eq!(a.which, VOLCANES);
+                for id in [1, 2] {
+                    assert!(a.volc.iter().any(|v| v.1 == id), "{m}-{d}: no volcano {id}");
+                }
+                assert!(!a.bulbs.is_empty() && a.flag.is_some());
+                let (cx, cy) = (a.crater.0 as usize, a.crater.1 as usize);
+                let ember = a.px[(cy + 1) * a.w + cx];
+                assert!(ember[0] > 0.5 && ember[0] > ember[2], "{ember:?}");
+                lit.push(hued(&a, a.volcan.light[2]));
+            }
+        }
+        assert!(lit[0] > 0 && lit[0] < lit[1], "{lit:?}");
+    }
+
+    /// The flag waves from its pole in green, white and red.
+    #[test]
+    fn the_flag_waves() {
+        let theme = Theme::classic();
+        let a = frame("", &theme, Fiesta::of_day(9, 16), 160, 48);
+        let v = a.volcan;
+        for band in [0, 2] {
+            assert!(hued(&a, v.flag[band]) > 5, "band {band}");
+        }
+        assert!(hued(&a, v.eagle) > 0 && hued(&a, v.nopal) > 0);
+    }
+
+    /// The holiday shows the volcanoes most of the time; ordinary days never.
+    #[test]
+    fn volcanes_only_on_the_holiday() {
+        let theme = Theme::classic();
+        for (fiesta, lo, hi) in [(Fiesta::of_day(9, 15), 0.75, 1.0), (Fiesta::NONE, 0.0, 0.0)] {
+            let (mut a, o) = make_on("stay = 10.0", &theme, fiesta, 80, 24);
+            let ctx = ctx_on(&theme, &o, Color::Reset, fiesta);
+            let mut c = Canvas::new(80, 24, Color::Reset);
+            let (mut on, n) = (0, 30 * 600);
+            for k in 0..n {
+                a.tick(&ctx, 1.0 / 30.0, 1.0 / 30.0);
+                on += usize::from(a.which == VOLCANES);
+                if k % 300 == 0 && !fiesta.is(Kind::Patrias) {
+                    a.draw(&ctx, &mut c);
+                    assert_eq!(hued(&a, a.volcan.flag[0]), 0);
+                }
+            }
+            let share = on as f32 / n as f32;
+            assert!((lo..=hi).contains(&share), "{share}");
+        }
+    }
+
+    /// Through `retheme` the sky fades into the volcanoes when September
+    /// comes and out of them when the mes patrio goes.
+    #[test]
+    fn the_mes_patrio_comes_and_goes() {
+        let theme = Theme::classic();
+        let (mut a, o) = make_on("", &theme, Fiesta::NONE, 80, 24);
+        let off = ctx_on(&theme, &o, Color::Reset, Fiesta::NONE);
+        let on = ctx_on(&theme, &o, Color::Reset, Fiesta::of_day(9, 3));
+        assert_ne!(a.which, VOLCANES);
+        a.retheme(&on);
+        for _ in 0..(30 * 15) {
+            a.tick(&on, 1.0 / 30.0, 1.0 / 30.0);
+        }
+        assert_eq!(a.which, VOLCANES);
+        assert!(a.look().volcanes > 0.99);
+        a.retheme(&off);
+        for _ in 0..(30 * 15) {
+            a.tick(&off, 1.0 / 30.0, 1.0 / 30.0);
+        }
+        assert!(a.which < ORDINARY);
+        assert_eq!(a.look().volcanes, 0.0);
+        let mut c = Canvas::new(80, 24, Color::Reset);
+        a.draw(&off, &mut c);
+        assert_eq!(hued(&a, a.volcan.flag[0]), 0);
+    }
+
+    /// Fireworks go off now and then and are all over the sky by the night of
+    /// the Grito, a slot or two at the start of the month.
+    #[test]
+    fn fireworks_over_the_volcanoes() {
+        let seen = |slots: usize| {
+            (0..600)
+                .filter(|k| (0..slots).any(|s| burst_of(s, *k as f32 * 0.5, 160, 44, 3).is_some()))
+                .count()
+        };
+        assert!(seen(1) > 100 && seen(1) < 300, "{}", seen(1));
+        assert!(seen(4) > seen(1));
+        for s in 0..4 {
+            for k in 0..400 {
+                if let Some(b) = burst_of(s, k as f32 * 0.37, 160, 44, 3) {
+                    assert!((0.0..BURST_LIFE).contains(&b.age));
+                    assert!((0.0..160.0).contains(&b.x) && (0.0..44.0).contains(&b.y));
+                    assert!(b.cols.0 != b.cols.1 && b.cols.0 < 3 && b.cols.1 < 3);
+                }
+            }
+        }
+        // More slots are let off as the month goes.
+        assert!(firework_slots(160, 0.2) < firework_slots(160, 1.0));
+        assert_eq!(firework_slots(160, 1.0), 4);
+    }
+
+    /// Iztaccíhuatl lies on her back: her head at one end, her chest the
+    /// highest, a waist, knees, and her feet at the other end.
+    #[test]
+    fn the_sleeping_woman() {
+        assert_eq!(izta(0.0), 0.0);
+        assert_eq!(izta(1.0), 0.0);
+        let best = (0..100)
+            .max_by(|a, b| izta(*a as f32 / 100.0).total_cmp(&izta(*b as f32 / 100.0)))
+            .unwrap();
+        assert!((30..40).contains(&best), "highest at {best}");
+        assert!(
+            izta(0.10) < 0.7 * izta(0.34),
+            "the head is lower than the chest"
+        );
+        assert!(
+            izta(0.5) < izta(0.34) && izta(0.5) < izta(0.65),
+            "a waist between chest and knees"
+        );
+        assert!(izta(0.93) < izta(0.65), "the feet are lower than the knees");
+        assert!((0..=100).all(|k| (0.0..=1.0).contains(&izta(k as f32 / 100.0))));
+    }
+
+    /// Popocatépetl smokes more as the month goes: the plume darkens more of
+    /// the sky over the crater.
+    #[test]
+    fn popocatepetl_smokes() {
+        let theme = Theme::classic();
+        let fumes = |f: Fiesta| {
+            let a = frame("", &theme, f, 160, 48);
+            let (cx, cy) = (a.crater.0 as i32, a.crater.1 as i32);
+            let mut n = 0;
+            for y in (cy - 20).max(0)..cy {
+                for x in cx - 6..cx + 20 {
+                    let p = a.px[y as usize * a.w + x as usize];
+                    let (hi, lo) = (p[0].max(p[1]).max(p[2]), p[0].min(p[1]).min(p[2]));
+                    n += usize::from(hi > 0.1 && hi - lo < 0.15 * hi);
+                }
+            }
+            n
+        };
+        assert!(fumes(Fiesta::of_day(9, 15)) > 0);
+    }
+
+    /// The volcanoes can be asked for on any day.
+    #[test]
+    fn volcanes_on_any_day() {
+        let theme = Theme::classic();
+        for name in ["volcanes", "volcán", "patrias"] {
+            let a = frame(&format!("look = '{name}'"), &theme, Fiesta::NONE, 160, 48);
+            assert_eq!(a.which, VOLCANES);
+            assert!(!a.volc.is_empty() && a.flag.is_some());
+            assert!(hued(&a, a.volcan.flag[0]) > 0);
+        }
+    }
+
+    /// The Fiestas Patrias survive odd options and sizes, long runs and huge
+    /// steps, from the first of the month to the parade.
+    #[test]
+    fn the_mes_patrio_survives() {
+        let variants = [
+            "",
+            "sky = true\nlook = 'volcanes'\nspeed = 4.0",
+            "landscape = false\nstars = false\nlook = 'volcanes'",
+            "speed = nan\ncurtains = -5\nstay = nan\nvisitors = inf",
+        ];
+        for v in variants {
+            for theme in [Theme::classic(), Theme::builtin("dracula").unwrap()] {
+                for fiesta in [
+                    Fiesta::of_day(9, 1),
+                    Fiesta::of_day(9, 15),
+                    Fiesta::of_day(9, 16),
+                ] {
+                    let (mut a, o) = make_on(v, &theme, fiesta, 80, 24);
+                    let ctx = ctx_on(&theme, &o, theme.bg, fiesta);
+                    for (w, h) in [
+                        (1, 1),
+                        (2, 3),
+                        (16, 4),
+                        (17, 9),
+                        (23, 12),
+                        (24, 20),
+                        (300, 90),
+                    ] {
                         a.resize(&ctx, w, h);
                         a.retheme(&ctx);
                         let mut c = Canvas::new(w, h, Color::Reset);
