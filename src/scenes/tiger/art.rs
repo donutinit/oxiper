@@ -15,6 +15,9 @@
 //! with more of them: `S` and `T` are its magenta and turquoise stripes
 //! (`s` and `u` in shade), `Y` its yellow dots and paws (`y` in shade), `K`
 //! its deep purple lines.
+//!
+//! On Fiestas Patrias it is a jaguar: `S` is now a rosette's black ring (and
+//! its spots) with `Y` the darker brown at its middle.
 
 use super::Rgb;
 use super::body::{Build, LegSpec, TailSpec};
@@ -186,21 +189,35 @@ pub const TIGER_SLEEP: [Sprite; 2] = [
 ];
 
 const fn tiger_build(coat: u8, stripe: (u8, u8), paw: (u8, u8), ring: u8, tip: u8) -> Build {
+    cat_build(coat, stripe, paw, ring, tip, 0.0, 19)
+}
+
+/// A big cat's build: `heft` is how much thicker its legs are than the tiger's, and `tail` how
+/// many links long its tail is.
+const fn cat_build(
+    coat: u8,
+    stripe: (u8, u8),
+    paw: (u8, u8),
+    ring: u8,
+    tip: u8,
+    heft: f32,
+    tail: usize,
+) -> Build {
     Build {
         hind: LegSpec {
             hip: (4.5, 7.5),
             upper: 6.5,
             lower: 6.5,
-            w_up: 4.2,
-            w_lo: 3.0,
+            w_up: 4.2 + heft,
+            w_lo: 3.0 + heft,
             fore: false,
         },
         fore: LegSpec {
             hip: (21.0, 8.5),
             upper: 6.0,
             lower: 5.5,
-            w_up: 4.2,
-            w_lo: 3.4,
+            w_up: 4.2 + heft,
+            w_lo: 3.4 + heft,
             fore: true,
         },
         far_dx: 2.0,
@@ -213,8 +230,8 @@ const fn tiger_build(coat: u8, stripe: (u8, u8), paw: (u8, u8), ring: u8, tip: u
         paw_w: 5,
         tail: Some(TailSpec {
             root: (1.0, 2.5),
-            links: 19,
-            w0: 3.0,
+            links: tail,
+            w0: 3.0 + heft * 0.5,
             w1: 2.0,
             coat,
             ring: Some(ring),
@@ -317,6 +334,21 @@ pub const ALEBRIJE_SKIN: Skin = Skin {
     ],
     front: ALEBRIJE_FRONT,
     sleep: [ALEBRIJE_SLEEP_0, ALEBRIJE_SLEEP_1],
+};
+
+/// The jaguar of Fiestas Patrias.
+pub const JAGUAR_SKIN: Skin = Skin {
+    build: &JAGUAR,
+    torso: JAGUAR_TORSO,
+    torso_at: (0, 0),
+    heads: [
+        JAGUAR_HEAD,
+        JAGUAR_HEAD_BLINK,
+        JAGUAR_HEAD_SNARL,
+        JAGUAR_HEAD_ROAR,
+    ],
+    front: JAGUAR_FRONT,
+    sleep: [JAGUAR_SLEEP_0, JAGUAR_SLEEP_1],
 };
 
 // ----- what it hunts -----
@@ -954,6 +986,160 @@ pub const ALEBRIJE_SLEEP_1: Sprite = &[
     "SSOOWWWWWWWWWWWWWWWOOOOOWWSWWWkkk..",
     "SSSOOOYOOOOYOOOOYOSSOYOOOOOSWWWWW..",
     ".SSSSOOOOOOOOOO..WWWWOOTOOOOWWWW...",
+];
+
+// ----- Fiestas Patrias -----
+
+/// The jaguar is stockier than the tiger, its legs thicker and its tail shorter, spotted where
+/// the tiger is banded, and its paws are its coat's.
+pub const JAGUAR: Build = cat_build(b'O', (b'S', b's'), (b'O', b'o'), b'S', b'S', 0.8, 15);
+
+/// The jaguar's body: rosettes of black round a darker brown on a golden coat, and small spots between them.
+pub const JAGUAR_TORSO: Sprite = &[
+    "..................oooo.....",
+    "..SSoOSSSooSSoooSSSoOoS....",
+    ".SYOOOSYSOOSYSOOSYSOOSYSo..",
+    "oSSSOOSSOOOSSSOOOSSOOSSSOo.",
+    "oOSOSSOOOSSSOSOSSOOSSSOOSSS",
+    "OOOOSYSOSSYSOOSYSOOSYSOOSYS",
+    "OOOSSSSOOOSSOOSSSOOSSSOOSSW",
+    "OSSSOOSOSSOOOOOOOOOOSSSOOWW",
+    "OSYSSOSYSOOWWWWWWWOOOSYSWWW",
+    "OSOSOOSSSWWw...wWWWWOSSSWWW",
+    ".OOOOSOOOw.......wwWWWWWWW.",
+    "..OOOOOO...........wWWWWW..",
+];
+
+/// Its head, with small black spots on the brow and the cheek. The four heads swap for one another like the tiger's.
+pub const JAGUAR_HEAD: Sprite = &[
+    "..EE..........",
+    ".EWWE.........",
+    ".EOOOooo......",
+    "oOOSOOOOoo....",
+    "OOOOOOOSOOo...",
+    "OOSOOOWWWOOo..",
+    "OOOOOOWkeWOOO.",
+    "OSOOOOOWWOSOOo",
+    "OOOOOSOOOOWWnn",
+    "SOOOWWWWWWWWWk",
+    ".OOWWOWWWWkkk.",
+    "..WWWWOWWWW...",
+    "...WWWWW......",
+    "..............",
+    "..............",
+];
+
+pub const JAGUAR_HEAD_BLINK: Sprite = &[
+    "..EE..........",
+    ".EWWE.........",
+    ".EOOOooo......",
+    "oOOSOOOOoo....",
+    "OOOOOOOSOOo...",
+    "OOSOOOWWWOOo..",
+    "OOOOOOWkkWOOO.",
+    "OSOOOOOWWOSOOo",
+    "OOOOOSOOOOWWnn",
+    "SOOOWWWWWWWWWk",
+    ".OOWWOWWWWkkk.",
+    "..WWWWOWWWW...",
+    "...WWWWW......",
+    "..............",
+    "..............",
+];
+
+pub const JAGUAR_HEAD_SNARL: Sprite = &[
+    "..............",
+    "..EE..........",
+    ".EWWEooo......",
+    "oEOSOOOOoo....",
+    "OOOOOOOSOOo...",
+    "OOSOOOWWkOOo..",
+    "OOOOOOWWWWOOO.",
+    "OSOOOOOWWOSOOo",
+    "OOOOOSOOOOWWnn",
+    "SOOOWWWWtWWWtk",
+    ".OOWWmmmmmmmk.",
+    "..WWWWtWWWt...",
+    "...WWWWWW.....",
+    "..............",
+    "..............",
+];
+
+pub const JAGUAR_HEAD_ROAR: Sprite = &[
+    "..............",
+    "..............",
+    ".EEEoooo......",
+    "oEWSOOOOoo....",
+    "OOOOOOOSOOo...",
+    "OOSOOOWkkOOo..",
+    "OOOOOWWWWWOOO.",
+    "OSOOOOOWWOSOOo",
+    "OOOOOSOOOOWWnn",
+    "SOOOWWWWtWWWtk",
+    ".OOWmmmmmmmm..",
+    "..WWmmpppmm...",
+    "..WWWmmmmmt...",
+    "...WWWWtWWW...",
+    "....WWWWW.....",
+];
+
+/// Face on, for the middle of a turn.
+pub const JAGUAR_FRONT: Sprite = &[
+    "..EE.........EE..",
+    ".EWWE.......EWWE.",
+    ".EOOOoooooooSOOE.",
+    "..OOOOOSOOOOOOO..",
+    ".OSOOOOOOOOOOSOO.",
+    ".OOOWWOOSOOWWOOO.",
+    "OOOSWkeOOOekWOSOO",
+    "OOOOOWWOOSWWOOOOO",
+    "OOOOSOOOnOOOOOOSO",
+    ".OOOOWWWnWWWOOOO.",
+    ".WOOWWWkkkWWWOOW.",
+    "..WWWWkWWWkWWWW..",
+    "...WWWWWWWWWWW...",
+    "...OOOWWWWWOSO...",
+    "..OOOOWWWWWOOOO..",
+    "..SOOOOWWWOOOSO..",
+    "..OOOOOWWWOSSSO..",
+    "..OSO.oWWWo.YSS..",
+    "..OOO.oo.So.SOO..",
+    "..OOS.oo.oo.OOO..",
+    "..OOO.oo.oS.OOO..",
+    "..OOO.ww.ww.OOO..",
+    ".WWWW......WWWW..",
+    ".WWWW......WWWW..",
+];
+
+/// Asleep on its side, breathing in and out.
+pub const JAGUAR_SLEEP_0: Sprite = &[
+    "...................................",
+    "...................................",
+    "....SooSoSoOSSSoOSSSo...EE.........",
+    "..SYSOOSYSOOSYOOOSYSOoooEWWEoS.....",
+    ".oSOSOOSSSOOSSSOOSSOOOOOSOOOOOo....",
+    "oOOOOSSSSOSSSOOSSOOSSSSOOOOOOOSS...",
+    "OOOSOSYOOOSYSOSSYSOOSYSOOSkkWOOYS..",
+    "OOOOOSSSOSSSOOOSSSOOSSSOOOWWWWWSSn.",
+    "OOOSSOWWWWWWWWWWWOOOOOSSSWWWWWWWWk.",
+    "OOSYWWWWWWWWWWWWWWWOOSSYWWOWWWkkk..",
+    "OOSSSSOOOOOOOOOOSOOOOOSSSOOSWWWWW..",
+    ".OOOOOOOOOOSOOO..WWWWOSOOOOOWWWW...",
+];
+
+pub const JAGUAR_SLEEP_1: Sprite = &[
+    "...................................",
+    "....ooSOoooOooooOSooo..............",
+    "..SSSOOSOSOOSSSOOSSSOoo.EE.........",
+    ".oSYSOOSYSOOSYOOOSYSOOooEWWEoS.....",
+    "oOSOSOOSSSOOSSSOOSSOOOOOSOOOOOo....",
+    "OOOOOSSSSOSSSOOSSOOSSSSOOOOOOOSS...",
+    "OOOSOSYOOOSYSOSSYSOOSYSOOSkkWOOYS..",
+    "OOOOOSSSOSSSOOOSSSOOSSSOOOWWWWWSSn.",
+    "OOOSSOWWWWWWWWWWWOOOOOSSSWWWWWWWWk.",
+    "OOSYWWWWWWWWWWWWWWWOOSSYWWOWWWkkk..",
+    "OOSSSSOOOOOOOOOOSOOOOOSSSOOSWWWWW..",
+    ".OOOOOOOOOOSOOO..WWWWOSOOOOOWWWW...",
 ];
 
 /// Every sprite with its palette, for the tests.

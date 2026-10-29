@@ -6,6 +6,7 @@ use std::f32::consts::PI;
 
 use super::art::{self, HEAD_AT, HEAD_PIVOT};
 use super::body::{Gait, Legs, REAR, TailPose};
+use super::fiestas::Visit;
 use super::jungle::{FEET, Jungle};
 use super::{Dice, Kind, Rgb, Rng};
 
@@ -517,15 +518,21 @@ impl Jungle {
                 }
             }
             Mood::Visit => {
+                let cheer = self.pal.visit() == Visit::Cheer;
                 let t = &mut self.tiger;
+                let mut shout = false;
                 if !t.lapping {
                     if (t.tx - t.x).abs() < 2.0 && t.turn == 0.0 {
-                        // Face the shrine and bow to it.
+                        // Face the shrine and bow to it, or look up at the emblem and roar.
                         t.lapping = true;
                         t.clock = rng.rangef(7.0, 12.0);
                         t.dir = if t.shrine > t.x { 1.0 } else { -1.0 };
-                        let (hx, y) = (t.jaws(), FEET as f32 - 26.0);
-                        self.life.petals(hx, y, 10, rng);
+                        if cheer {
+                            t.steps = 0;
+                        } else {
+                            let (hx, y) = (t.jaws(), FEET as f32 - 26.0);
+                            self.life.petals(hx, y, 10, rng);
+                        }
                     } else if steps > 30 * 40 {
                         self.plan(rng);
                     }
@@ -534,6 +541,11 @@ impl Jungle {
                     let d = if rng.chance(0.5) { t.dir } else { -t.dir };
                     t.tx = t.x + d * rng.rangef(140.0, 260.0);
                     t.set(Mood::Patrol);
+                } else if cheer && t.steps % 150 == 16 {
+                    shout = true;
+                }
+                if shout && let Some(d) = self.pal.patrias {
+                    self.cheer(&d, rng);
                 }
             }
             Mood::Look | Mood::Carried => {}
@@ -588,6 +600,7 @@ impl Jungle {
     fn move_tiger(&mut self, rng: &mut Rng) {
         let water = self.water(self.tiger.x);
         let snowy = self.kind.snowy();
+        let cheer = self.pal.visit() == Visit::Cheer;
         let (river, pool) = match water {
             Some(s) if !snowy => (s.river, !s.river),
             _ => (false, false),
@@ -674,7 +687,7 @@ impl Jungle {
         let crouch = match t.mood {
             Mood::Stalk => 1.0,
             Mood::Drink if t.lapping => 0.7,
-            Mood::Visit if t.lapping => 0.3,
+            Mood::Visit if t.lapping && !cheer => 0.3,
             Mood::Look => 0.35,
             _ => 0.0,
         };
@@ -699,6 +712,7 @@ impl Jungle {
             Mood::Drink if t.lapping => 0.85 + 0.06 * (t.steps as f32 * 0.6).sin(),
             Mood::Feed => 0.62 + 0.07 * chew,
             Mood::Look => -0.4,
+            Mood::Visit if t.lapping && cheer => -0.32 + 0.04 * (t.steps as f32 * 0.07).sin(),
             Mood::Visit if t.lapping => 0.55 + 0.05 * (t.steps as f32 * 0.07).sin(),
             Mood::Roar | Mood::Fend if t.steps < 60 => -0.18,
             Mood::Carried => -0.3,
@@ -718,6 +732,7 @@ impl Jungle {
         let mouth = match t.mood {
             Mood::Roar => roaring(t.steps),
             Mood::Fend if t.steps < 60 => roaring(t.steps),
+            Mood::Visit if t.lapping && cheer => roaring(t.steps % 150),
             Mood::Look => 0.45,
             Mood::Carried => 0.6 + 0.4 * (t.steps as f32 * 0.2).sin().abs(),
             Mood::Feed => 0.3 * chew.max(0.0),
@@ -731,6 +746,7 @@ impl Jungle {
         }
         let lash = match t.mood {
             Mood::Roar | Mood::Fend | Mood::Look | Mood::Carried => 1.0,
+            Mood::Visit if t.lapping && cheer => 1.0,
             Mood::Stalk => 0.5,
             _ => 0.25,
         };
@@ -769,19 +785,25 @@ impl Jungle {
             Kind::Siberian => 1,
             Kind::White => 2,
         };
-        // On Día de Muertos it is an alebrije, painted from the holiday's colors.
-        let (skin, lut) = match self.pal.fest {
-            Some(dress) => {
-                #[cfg(test)]
-                {
-                    self.painted.alebrije = true;
-                }
-                (
-                    &art::ALEBRIJE_SKIN,
-                    self.lut_spirit(&dress.alebrije(t.kind)),
-                )
+        // On Día de Muertos it is an alebrije, painted from the holiday's colors,
+        // and on Fiestas Patrias a jaguar.
+        let (skin, lut) = if let Some(dress) = self.pal.fest {
+            #[cfg(test)]
+            {
+                self.painted.alebrije = true;
             }
-            None => (&art::TIGER_SKIN, self.lut(art::TIGER_COLORS[kind])),
+            (
+                &art::ALEBRIJE_SKIN,
+                self.lut_spirit(&dress.alebrije(t.kind)),
+            )
+        } else if let Some(dress) = self.pal.patrias {
+            #[cfg(test)]
+            {
+                self.painted.jaguar = true;
+            }
+            (&art::JAGUAR_SKIN, self.lut(&dress.jaguar(t.kind)))
+        } else {
+            (&art::TIGER_SKIN, self.lut(art::TIGER_COLORS[kind]))
         };
         let water = (t.sink > 0.05).then(|| (FEET - 2, self.water_color()));
         let feet = self.tiger.feet_y();

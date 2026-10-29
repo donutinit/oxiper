@@ -28,6 +28,13 @@ const LIMON: Rgb = Rgb(140, 200, 40);
 const HUESO: Rgb = Rgb(244, 238, 226);
 const DEEP: Rgb = Rgb(40, 16, 52);
 
+/// What a holiday's papel picado is cut from: the colors of its flags, and the cut-outs in them.
+#[derive(Clone, Copy)]
+pub struct Papel {
+    pub flags: [Rgb; 6],
+    pub cutouts: [Sprite; 6],
+}
+
 /// The holiday's colors, and how far it has come.
 #[derive(Clone, Copy, Debug)]
 pub struct Dress {
@@ -138,6 +145,14 @@ impl Dress {
             (b't', self.hueso),
             (b'p', self.rosa.lerp(Rgb::WHITE, 0.4)),
         ]
+    }
+
+    /// The papel picado: six colors, and the cut-outs.
+    pub fn papel(&self) -> Papel {
+        Papel {
+            flags: self.flags,
+            cutouts: FLAGS,
+        }
     }
 
     /// The saucer's colors by letter: sugar and icing, and marigold lights.
@@ -275,6 +290,21 @@ pub const RUIN: Sprite = &[
     "gGGGGGGMGGgMGGmMxxxxxxxxxxxxxxxxxxxxxxxxgGGGGGGGGGMGGGGG",
     "gGGGMGGMGGgGGGGMGGGGMGGGmmGGMGgGMGGGGGGMgGGmGGGMGgGGMGMM",
     "gmGMGmGGGMgmmHMHHHHHHHmmHMHHMmMHHHHHHHMHHHHMHGGGGGMGGmmG",
+];
+
+/// The corbel doorway's edge, as the rows and the columns of the ruin it begins at on its left:
+/// the right side is the same, mirrored.
+pub const ARCH: [(i32, i32); 10] = [
+    (8, 23),
+    (10, 21),
+    (12, 19),
+    (14, 17),
+    (16, 15),
+    (19, 15),
+    (22, 15),
+    (25, 15),
+    (28, 15),
+    (31, 15),
 ];
 
 /// The ofrenda in the doorway, in layers that go over one another as the holiday builds up. The
@@ -476,7 +506,7 @@ const SWING: [f32; 9] = [0.0, 0.03, 0.1, 0.2, 0.33, 0.5, 0.68, 0.85, 1.0];
 
 /// Ruins come in cells this wide; marigold beds in smaller ones.
 const RUIN_CELL: i64 = 260;
-const BED_CELL: i64 = 64;
+pub const BED_CELL: i64 = 64;
 /// A ruin's drawing: half its width, its height, and the row its stone stands on.
 pub const RUIN_HALF: f32 = 28.0;
 pub const RUIN_H: i32 = 36;
@@ -872,8 +902,7 @@ impl Jungle {
     }
 
     /// A bed of flowers in a cell of the jungle: from, to.
-    fn bed_in(&self, cell: i64) -> Option<(f32, f32)> {
-        let level = self.pal.bloom_level()?;
+    pub fn bed_in(&self, cell: i64, level: f32) -> Option<(f32, f32)> {
         let (s, c) = (self.seed, cell as i32);
         if unit(c, 131, s) > 0.3 + 0.35 * level {
             return None;
@@ -904,7 +933,7 @@ impl Jungle {
         let cells =
             (u0 / BED_CELL as f64).floor() as i64 - 1..=(u1 / BED_CELL as f64).floor() as i64 + 1;
         for cell in cells {
-            let Some((a, b)) = self.bed_in(cell) else {
+            let Some((a, b)) = self.bed_in(cell, level) else {
                 continue;
             };
             for x in (a.ceil() as i32).max(bx)..(b.floor() as i32).min(bx + bw) {
@@ -978,6 +1007,11 @@ impl Jungle {
     /// sagging, with flags that swing in the wind.
     pub fn paint_papel(&mut self) {
         let Some(d) = self.pal.fest else { return };
+        self.hang_papel(d.level, &d.papel());
+    }
+
+    /// The strings of papel picado of a holiday at `level`, cut from `papel`.
+    pub fn hang_papel(&mut self, level: f32, papel: &Papel) {
         let mut a = [Anchor::default(); ANCHORS];
         let n = self.anchors(&mut a);
         for w in a[..n].windows(2) {
@@ -988,19 +1022,19 @@ impl Jungle {
             }
             // Not every pair is joined, but the higher the holiday, the more.
             let key = hash(p.id, q.id, self.seed ^ 0x5171);
-            if (key & 0xff) as f32 / 255.0 > 0.55 + 0.4 * d.level {
+            if (key & 0xff) as f32 / 255.0 > 0.55 + 0.4 * level {
                 continue;
             }
-            self.string(p, q, key, 0, None, &d);
-            if d.level >= 0.8 && (key >> 8) & 3 == 0 {
-                self.string(p, q, key >> 3, 1, None, &d);
+            self.string(p, q, key, 0, None, papel);
+            if level >= 0.8 && (key >> 8) & 3 == 0 {
+                self.string(p, q, key >> 3, 1, None, papel);
             }
         }
     }
 
     /// One string from `p` to `q`; `row` 1 is a lower, slacker one. Far ones
     /// are lost in the haze of the distance, by `haze`.
-    fn string(&mut self, p: Anchor, q: Anchor, key: u32, row: i32, haze: Option<f32>, d: &Dress) {
+    fn string(&mut self, p: Anchor, q: Anchor, key: u32, row: i32, haze: Option<f32>, d: &Papel) {
         let len = q.x - p.x;
         let sag = Sag::new(p, q, row);
         let y_at = |x: f32| sag.at(x);
@@ -1024,7 +1058,7 @@ impl Jungle {
             let color = self.shade(d.flags[((k as u32 * 5 + (key >> 4)) % 6) as usize], haze);
             let top = y_at(ix as f32 + 4.0).round() as i32 + 1;
             let sway = gust * (time * 1.9 + fx * 0.07 + phase).sin();
-            self.flag(ix, top, ((h >> 8) % 6) as usize, color, sway);
+            self.flag(d.cutouts[((h >> 8) % 6) as usize], ix, top, color, sway);
         }
     }
 
@@ -1040,6 +1074,11 @@ impl Jungle {
     /// behind the tiger's own ground: shorter, in the haze, and always about.
     pub fn paint_papel_far(&mut self, v: View) {
         let Some(d) = self.pal.fest else { return };
+        self.hang_papel_far(v, d.level, &d.papel());
+    }
+
+    /// The same, for any holiday's papel.
+    pub fn hang_papel_far(&mut self, v: View, level: f32, papel: &Papel) {
         if self.kind.snowy() {
             return;
         }
@@ -1062,8 +1101,8 @@ impl Jungle {
             };
             if let Some(p) = prev {
                 let key = hash(p.id, ci, s ^ 0x7f1a);
-                if x - p.x >= 14.0 && (key & 0xff) as f32 / 255.0 < 0.4 + 0.3 * d.level {
-                    self.string(p, here, key, 0, Some(0.22), &d);
+                if x - p.x >= 14.0 && (key & 0xff) as f32 / 255.0 < 0.4 + 0.3 * level {
+                    self.string(p, here, key, 0, Some(0.22), papel);
                 }
             }
             prev = Some(here);
@@ -1072,8 +1111,8 @@ impl Jungle {
 
     /// One flag, its top left corner on `(x, y)`, swung `sway` pixels at its
     /// bottom.
-    fn flag(&mut self, x: i32, y: i32, pattern: usize, color: Rgb, sway: f32) {
-        for (r, row) in FLAGS[pattern].iter().enumerate() {
+    fn flag(&mut self, cutout: Sprite, x: i32, y: i32, color: Rgb, sway: f32) {
+        for (r, row) in cutout.iter().enumerate() {
             let dx = (sway * SWING[r] * 1.7).round() as i32;
             for (c, ch) in row.bytes().enumerate() {
                 if ch == b'#' {

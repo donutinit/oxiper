@@ -1,7 +1,8 @@
 //! What the holidays of the jungle share: hue matching for the colors of a
 //! theme, which holiday builds what (the ruin to call on, the flowers, the
-//! saucer's room), and what a frame painted, for the tests. Each holiday
-//! keeps the rest to itself: `muertos.rs`, `navidad.rs`.
+//! saucer's room, how the tiger calls on a ruin), and what a frame painted,
+//! for the tests. Each holiday keeps the rest to itself: `muertos.rs`,
+//! `navidad.rs`, `patrias.rs`.
 
 use super::{Pal, Rgb};
 
@@ -66,13 +67,23 @@ pub struct Room {
     pub clear: f32,
 }
 
+/// How the tiger calls on a ruin.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Visit {
+    /// Its head bowed, to an ofrenda or a nacimiento.
+    Bow,
+    /// Its head up, roaring "¡Viva México!" at the emblem over the wall.
+    Cheer,
+}
+
 impl Pal {
     /// The ruin the holiday builds, if it builds one.
     pub fn site(&self) -> Option<Site> {
         let level = self
             .fest
             .map(|d| d.level)
-            .or(self.navidad.map(|d| d.level))?;
+            .or(self.navidad.map(|d| d.level))
+            .or(self.patrias.map(|d| d.level))?;
         Some(Site {
             level,
             half: 28.0,
@@ -86,6 +97,15 @@ impl Pal {
         self.fest.map(|d| d.level).or(self.navidad.map(|d| d.level))
     }
 
+    /// How it calls on the ruin.
+    pub fn visit(&self) -> Visit {
+        if self.patrias.is_some() {
+            Visit::Cheer
+        } else {
+            Visit::Bow
+        }
+    }
+
     /// The room the saucer needs; `ordinary` rows is all it takes on any
     /// other day.
     pub fn room(&self, ordinary: f32) -> Room {
@@ -93,6 +113,8 @@ impl Pal {
             (96.0, super::muertos::SAUCER_EXTRA, 14.0)
         } else if self.navidad.is_some() {
             (92.0, super::navidad::COMET_EXTRA, 6.0)
+        } else if self.patrias.is_some() {
+            (96.0, super::patrias::BELL_EXTRA, 6.0)
         } else {
             (ordinary, 0.0, 0.0)
         };
@@ -108,6 +130,9 @@ impl Pal {
         } else if self.navidad.is_some() {
             // The star's gold, over a deep blue night.
             (Rgb(255, 228, 160), Rgb(24, 26, 56))
+        } else if self.patrias.is_some() {
+            // The bell's bronze, over a green dusk.
+            (Rgb(255, 238, 196), Rgb(22, 44, 40))
         } else {
             (Rgb(170, 255, 200), Rgb(20, 40, 36))
         }
@@ -141,4 +166,9 @@ pub struct Painted {
     pub ninos: u32,
     pub reyes: u32,
     pub comet: bool,
+    /// Fiestas Patrias: the tiger painted as a jaguar, the emblems over the
+    /// ruins, nopales, and the saucer painted as the Campana de Dolores.
+    pub jaguar: bool,
+    pub emblems: u32,
+    pub campana: bool,
 }

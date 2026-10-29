@@ -134,6 +134,18 @@ impl Jungle {
         if self.ufo.glow < 0.01 {
             self.ufo.glow = 0.0;
         }
+        // The Campana de Dolores rings, DON and DAN, as it swings from one side to the other.
+        if let Some(d) = self.pal.patrias
+            && self.ufo.wide()
+            && self.tick.is_multiple_of(22)
+        {
+            let left = (self.tick / 22).is_multiple_of(2);
+            let (x, y) = (
+                self.ufo.x + if left { -14.0 } else { 14.0 },
+                self.ufo.y + 2.0,
+            );
+            self.note(x, y, if left { "DON" } else { "DAN" }, d.oro, 36, 0.12);
+        }
         match self.ufo.phase {
             Phase::Gone => {
                 if self.ufo.due && self.tiger.ready_for_ufo() {
@@ -284,6 +296,8 @@ impl Jungle {
             d.marigold[2].lerp(d.hueso, 0.3)
         } else if let Some(d) = self.pal.navidad {
             d.dorado.lerp(d.blanco, 0.45)
+        } else if let Some(d) = self.pal.patrias {
+            d.oro.lerp(d.blanco, 0.4)
         } else {
             Rgb(190, 255, 210)
         };
@@ -309,11 +323,16 @@ impl Jungle {
             }
             self.beam_petals(x, top, beam);
             self.beam_glints(x, top, beam);
+            self.beam_confeti(x, top, beam);
         }
         let mut lut = [None; 128];
         let frame = ((self.tick / 8) % 2) as usize;
         if let Some(d) = self.pal.navidad {
             self.draw_estrella(&d);
+            return;
+        }
+        if let Some(d) = self.pal.patrias {
+            self.draw_campana(&d);
             return;
         }
         match self.pal.fest {
@@ -343,6 +362,10 @@ impl Jungle {
         }
         if let Some(d) = self.pal.navidad {
             self.estrella_lights(v, &d);
+            return;
+        }
+        if let Some(d) = self.pal.patrias {
+            self.campana_lights(v, &d);
             return;
         }
         // The rim lights are a row lower on the skull's saucer, and marigold.

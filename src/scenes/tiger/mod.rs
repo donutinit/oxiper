@@ -29,6 +29,16 @@
 //! the hills behind on a horse, a camel and an elephant. The posadas climb to
 //! Nochebuena, and the jungle with them.
 //!
+//! On Fiestas Patrias the tiger is a jaguar, golden with rosettes, and the mes
+//! patrio dresses the forest in verde, blanco y rojo: papel picado with the
+//! águila, the campana and the star cut into it strung from tree to tree,
+//! nopales with their red tunas in the undergrowth, and by the path the ruins
+//! with a great flag in their doorway, flags on their poles and, over the wall,
+//! the águila on its nopal with the serpent in its beak, which the jaguar calls
+//! on and roars at, "¡Viva México!". The saucer becomes the Campana de
+//! Dolores, swinging on its yoke and ringing, and the fireflies glow in the
+//! three colors. The month builds up to the Grito on the 15th.
+//!
 //! - `art.rs`: every sprite, drawn by hand one character per pixel: the
 //!   tiger's torso, heads (calm, blinking, snarling, roaring), its front view
 //!   and its sleep, and the alebrije's likenesses of them; deer, boar,
@@ -53,6 +63,9 @@
 //! - `navidad.rs`: Navidad: its colors, the foquitos and heno, the
 //!   nochebuenas, the nacimientos and farolitos, the Reyes' caravan and the
 //!   comet of the Estrella de Belén.
+//! - `patrias.rs`: Fiestas Patrias: its colors, the jaguar's, the papel picado
+//!   in three colors, the nopales, the ruins with their emblem and flags, and
+//!   the Campana de Dolores.
 //! - `jungle.rs`: the ground, the water and the forest layers, the light,
 //!   the camera, and the projection onto the screen.
 //!
@@ -69,6 +82,7 @@ mod jungle;
 mod life;
 mod muertos;
 mod navidad;
+mod patrias;
 mod ufo;
 
 use crate::color::Color;
@@ -284,6 +298,7 @@ struct Pal {
     /// The holiday's colors, while there is a holiday: at most one of these.
     fest: Option<muertos::Dress>,
     navidad: Option<navidad::Dress>,
+    patrias: Option<patrias::Dress>,
 }
 
 const DAY_TOP: Rgb = Rgb(84, 150, 214);
@@ -306,6 +321,10 @@ impl Pal {
             .fiesta
             .is(crate::fiesta::Kind::Navidad)
             .then(|| navidad::Dress::new(ctx));
+        let patrias = ctx
+            .fiesta
+            .is(crate::fiesta::Kind::Patrias)
+            .then(|| patrias::Dress::new(ctx));
         let native = Pal {
             day_top: top,
             day_bot: bot,
@@ -313,6 +332,7 @@ impl Pal {
             green_k: 0.0,
             fest,
             navidad,
+            patrias,
         };
         if ctx.theme.native {
             return native;
@@ -929,6 +949,8 @@ mod tests {
     #[derive(Default, Debug)]
     struct Seen {
         alebrije: bool,
+        jaguar: bool,
+        emblems: u32,
         flags: u32,
         blossoms: u32,
         ruins: u32,
@@ -944,6 +966,8 @@ mod tests {
         /// Nothing of any holiday on screen.
         fn nothing(&self) -> bool {
             !self.alebrije
+                && !self.jaguar
+                && self.emblems == 0
                 && (self.flags, self.blossoms, self.ruins, self.candles) == (0, 0, 0, 0)
                 && (self.bulbs, self.heno, self.belenes, self.ninos, self.reyes) == (0, 0, 0, 0, 0)
         }
@@ -959,6 +983,8 @@ mod tests {
         play(&mut s, &c, (200, 50), secs, 15, |s| {
             let p = &s.jungle.painted;
             seen.alebrije |= p.alebrije;
+            seen.jaguar |= p.jaguar;
+            seen.emblems += p.emblems;
             seen.flags += p.flags;
             seen.blossoms += p.blossoms;
             seen.ruins += p.ruins;
@@ -1203,7 +1229,7 @@ mod tests {
         use crate::fiesta::Kind as Day;
         let theme = Theme::classic();
         for kind in Day::ALL {
-            if matches!(kind, Day::Muertos | Day::Navidad) {
+            if matches!(kind, Day::Muertos | Day::Navidad | Day::Patrias) {
                 continue;
             }
             let fiesta = Fiesta::height(kind);
@@ -1421,6 +1447,193 @@ mod tests {
             belen.dedup();
             assert!(belen.len() >= 12, "{name}: {belen:?}");
             assert!(d.bulbs.iter().all(|c| *c != Rgb::BLACK), "{name}");
+        }
+    }
+
+    // ----- Fiestas Patrias -----
+
+    /// During the mes patrio the tiger is a jaguar, the jungle is strung with papel picado in
+    /// three colors, nopales grow in the undergrowth, and the ruins carry their flags and their
+    /// emblem; on an ordinary day nothing is.
+    #[test]
+    fn patrias_dresses_the_jungle() {
+        let theme = Theme::classic();
+        for kind in ["bengal", "siberian", "white"] {
+            for fiesta in [Fiesta::of_day(9, 15), Fiesta::of_day(9, 1)] {
+                let seen = seen_over(fiesta, &theme, kind, 150);
+                assert!(seen.jaguar && !seen.alebrije, "{kind} {fiesta:?}: {seen:?}");
+                assert!(seen.flags > 0, "{kind} {fiesta:?}: {seen:?}");
+                assert!(seen.blossoms > 0, "{kind} {fiesta:?}: {seen:?}");
+                assert!(seen.ruins > 0, "{kind} {fiesta:?}: {seen:?}");
+                assert!(seen.emblems > 0, "{kind} {fiesta:?}: {seen:?}");
+                assert_eq!(seen.bulbs + seen.heno + seen.belenes, 0, "{seen:?}");
+            }
+        }
+    }
+
+    /// The month builds up to the Grito: more papel picado, more nopales, more of everything.
+    #[test]
+    fn patrias_builds_up() {
+        let theme = Theme::classic();
+        let low = seen_over(Fiesta::of_day(9, 1), &theme, "bengal", 240);
+        let high = seen_over(Fiesta::of_day(9, 15), &theme, "bengal", 240);
+        assert!(low.ruins > 0 && high.ruins > 0, "{low:?} {high:?}");
+        assert!(high.flags > low.flags, "{low:?} {high:?}");
+        assert!(high.blossoms > low.blossoms, "{low:?} {high:?}");
+    }
+
+    /// Switching the holiday on and off through `retheme` makes the tiger a jaguar and a tiger
+    /// again, at once, and a jaguar on its way to the emblem is called off.
+    #[test]
+    fn patrias_comes_and_goes_with_retheme() {
+        let theme = Theme::classic();
+        let o = opts("ufo = 0\nzoom = 1");
+        let off = fiesta_ctx(&theme, &o, Fiesta::NONE);
+        let on = fiesta_ctx(&theme, &o, Fiesta::of_day(9, 15));
+        let mut s = TigerScene::new(&off);
+        s.resize(&off, 200, 50);
+        s.retheme(&off);
+        let mut cv = Canvas::new(200, 50, Color::Reset);
+        for _ in 0..3 {
+            for (c, dressed) in [(&on, true), (&off, false), (&on, true), (&off, false)] {
+                s.retheme(c);
+                for _ in 0..5 {
+                    s.tick(c, 1.0 / 30.0, 1.0 / 30.0);
+                }
+                cv.clear();
+                s.draw(c, &mut cv);
+                let p = &s.jungle.painted;
+                assert_eq!(p.jaguar, dressed, "{p:?}");
+                assert_eq!(p.flags > 0 || p.blossoms > 0, dressed, "{p:?}");
+                if !dressed {
+                    assert_eq!((p.ruins, p.emblems), (0, 0), "{p:?}");
+                }
+            }
+        }
+        s.retheme(&on);
+        s.jungle.tiger.set(Mood::Visit);
+        s.retheme(&off);
+        assert_ne!(s.jungle.tiger.mood, Mood::Visit);
+    }
+
+    /// Odd sizes, odd options and huge steps survive Fiestas Patrias, on any of its days, under
+    /// classic and under other themes.
+    #[test]
+    fn patrias_survives_odd_sizes_and_steps() {
+        let cases = [
+            "speed = 50.0\nday = 1\nzoom = 99\nsky = false\nprey = 10.0\nkind = 'random'\nufo = 3600.0",
+            "speed = 0.0\nday = 999999999\nzoom = -4\nprey = -3.0\nkind = 'nope'\nufo = -1.0",
+            "kind = 'siberian'\nprey = 0\nufo = nan",
+            "kind = 'white'\nzoom = 6\nspeed = inf\nufo = 3600.0",
+        ];
+        let themes = [
+            Theme::classic(),
+            Theme::builtin("mono").unwrap(),
+            Theme::builtin("dracula").unwrap(),
+            Theme::terminal(&TermColors::default()),
+        ];
+        for case in cases {
+            let o = opts(case);
+            for theme in &themes {
+                for day in [(9, 1), (9, 8), (9, 15), (9, 16)] {
+                    let c = fiesta_ctx(theme, &o, Fiesta::of_day(day.0, day.1));
+                    let mut s = (INFO.make)(&c);
+                    for &(w, h) in &[(1u16, 1u16), (2, 3), (7, 2), (1, 40), (300, 90), (80, 24)] {
+                        s.resize(&c, w, h);
+                        s.retheme(&c);
+                        let mut cv = Canvas::new(w, h, Color::Reset);
+                        for dt in [0.0, f32::NAN, -1.0, f32::INFINITY, 0.05, 5.0, 1e9] {
+                            s.tick(&c, dt, 0.05);
+                            s.next_change();
+                            cv.clear();
+                            s.draw(&c, &mut cv);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /// The jaguar calls on the ruins too: it walks to the emblem over the wall, looks up at it and
+    /// roars "¡Viva México!", which shows over its head.
+    #[test]
+    fn the_jaguar_roars_at_the_emblem() {
+        let theme = Theme::classic();
+        let o = opts("ufo = 0\nday = 60");
+        let c = fiesta_ctx(&theme, &o, Fiesta::of_day(9, 15));
+        let mut s = TigerScene::new(&c);
+        s.resize(&c, 120, 36);
+        s.retheme(&c);
+        let (mut walked, mut roared, mut cheered) = (false, false, false);
+        for _ in 0..30 * 60 * 12 {
+            s.tick(&c, 1.0 / 30.0, 1.0 / 30.0);
+            let t = &s.jungle.tiger;
+            if t.mood == Mood::Visit {
+                walked = true;
+                roared |= t.mouth > 0.9;
+            }
+            cheered |= s.jungle.notes.iter().any(|n| n.text.contains("VIVA"));
+            assert!(!t.gone && t.x.is_finite());
+        }
+        assert!(walked && roared && cheered, "{walked} {roared} {cheered}");
+    }
+
+    /// The saucer is the Campana de Dolores on Fiestas Patrias, ringing: no skull, no comet.
+    #[test]
+    fn the_saucer_is_a_bell_at_patrias() {
+        let theme = Theme::classic();
+        for (fiesta, bell) in [
+            (Fiesta::of_day(9, 15), true),
+            (Fiesta::of_day(12, 24), false),
+        ] {
+            let o = opts("ufo = 0\nday = 120");
+            let c = fiesta_ctx(&theme, &o, fiesta);
+            let mut s = TigerScene::new(&c);
+            s.resize(&c, 100, 30);
+            s.retheme(&c);
+            s.jungle.summon();
+            let mut cv = Canvas::new(100, 30, Color::Reset);
+            let (mut beamed, mut rang) = (false, false);
+            for _ in 0..30 * 60 {
+                s.tick(&c, 1.0 / 30.0, 1.0 / 30.0);
+                cv.clear();
+                s.draw(&c, &mut cv);
+                rang |= s
+                    .jungle
+                    .notes
+                    .iter()
+                    .any(|n| n.text == "DON" || n.text == "DAN");
+                if s.jungle.ufo.phase == Phase::Beam {
+                    beamed = true;
+                    assert_eq!(s.jungle.painted.campana, bell);
+                    assert!(!s.jungle.painted.saucer);
+                }
+            }
+            assert!(beamed);
+            assert_eq!(rang, bell);
+        }
+    }
+
+    /// The colors of Fiestas Patrias come from the theme, and stay told apart; the jaguar wears
+    /// them in every kind.
+    #[test]
+    fn the_patrias_dress_keeps_its_colors_apart() {
+        for name in crate::theme::names() {
+            let Some(theme) = Theme::builtin(name) else {
+                continue;
+            };
+            let o = opts("");
+            let c = fiesta_ctx(&theme, &o, Fiesta::of_day(9, 15));
+            let d = patrias::Dress::new(&c);
+            assert_ne!(d.verde, d.rojo, "{name}");
+            for kind in Kind::ALL {
+                let mut colors: Vec<Rgb> = d.jaguar(kind).iter().map(|&(_, c)| c).collect();
+                colors.sort_by_key(|c| (c.0, c.1, c.2));
+                colors.dedup();
+                assert!(colors.len() >= 9, "{name} {kind:?}: {colors:?}");
+            }
+            let papel = d.papel();
+            assert!(papel.flags.iter().all(|f| *f != Rgb::BLACK), "{name}");
         }
     }
 }

@@ -18,7 +18,8 @@ use super::art::Sprite;
 use super::fiestas::by_hue;
 use super::jungle::{FEET, Jungle, MID_CELL, MID_P, View};
 use super::muertos::{
-    ANCHORS, Anchor, FLAMA, OFRENDA_AT, RUIN, RUIN_FOOT, RUIN_H, RUIN_HALF, STONE, STRING_MAX, Sag,
+    ANCHORS, ARCH, Anchor, FLAMA, OFRENDA_AT, RUIN, RUIN_FOOT, RUIN_H, RUIN_HALF, STONE,
+    STRING_MAX, Sag,
 };
 use super::{Rgb, hash, rgb_of, unit};
 use crate::scene::Ctx;
@@ -497,21 +498,6 @@ const BELEN: [(Sprite, f32); 4] = [
     (BELEN_1, 0.45),
     (BELEN_2, 0.8),
     (BELEN_3, 0.95),
-];
-
-/// The corbel doorway's edge, as the rows and the columns of the ruin it begins at on its left:
-/// the right side is the same, mirrored.
-const ARCH: [(i32, i32); 10] = [
-    (8, 23),
-    (10, 21),
-    (12, 19),
-    (14, 17),
-    (16, 15),
-    (19, 15),
-    (22, 15),
-    (25, 15),
-    (28, 15),
-    (31, 15),
 ];
 
 /// Heno hanging from the corbels of the doorway: column, row, length.

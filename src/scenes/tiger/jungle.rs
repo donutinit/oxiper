@@ -742,19 +742,24 @@ impl Jungle {
         self.paint_reyes(v);
         self.paint_papel_far(v);
         self.paint_luces_far(v);
+        self.paint_banderas_far(v);
         self.paint_ground();
         self.paint_beds(false);
+        self.paint_nopales(false);
         self.paint_ruins();
         self.paint_belenes();
+        self.paint_emblemas();
         self.paint_trees();
         self.paint_papel();
         self.paint_luces();
+        self.paint_banderas();
         self.paint_mist(v);
         self.draw_life_back();
         self.draw_tiger();
         self.draw_life_front();
         self.paint_grass();
         self.paint_beds(true);
+        self.paint_nopales(true);
         self.paint_front(v);
         self.draw_specks();
         self.draw_ufo();
@@ -1602,8 +1607,9 @@ impl Jungle {
                 self.blend_out(x, y, flake, 0.75);
             }
         } else if night > 0.05 && !self.ufo.hushed() {
-            // The fireflies of Día de Muertos are warm, like the candles, and
-            // at Navidad they are foquitos of every color.
+            // The fireflies of Día de Muertos are warm, like the candles, at
+            // Navidad they are foquitos of every color, and on Fiestas Patrias
+            // they glow in verde, blanco y rojo.
             let glow = if self.pal.fest.is_some() {
                 Rgb(255, 200, 90)
             } else {
@@ -1611,9 +1617,13 @@ impl Jungle {
             };
             for i in 0..self.motes.len() {
                 let m = self.motes[i];
-                let glow = match self.pal.navidad {
-                    Some(d) => d.bulbs[(m.phase * 10.0) as usize % 6],
-                    None => glow,
+                let glow = if let Some(d) = self.pal.navidad {
+                    d.bulbs[(m.phase * 10.0) as usize % 6]
+                } else if let Some(d) = self.pal.patrias {
+                    [d.verde.lerp(Rgb::WHITE, 0.35), d.blanco, d.rojo]
+                        [(m.phase * 10.0) as usize % 3]
+                } else {
+                    glow
                 };
                 let b = night * (tick * 0.05 + m.phase).sin().max(0.0).powi(3);
                 let (x, y) = v.to_screen(m.x, m.y);
