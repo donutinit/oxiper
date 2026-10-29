@@ -8,6 +8,7 @@
 use super::feed::{Feed, FeedKind};
 use super::lexico::{self, Dress};
 use super::map::{self, Dots};
+use super::revolucion;
 use super::{Env, Pal, Rect, Widget, babble, muertos, put, put_ch};
 use crate::color::Color;
 use crate::fiesta::{Fiesta, Kind};
@@ -530,6 +531,7 @@ pub(super) fn hash(a: u32, b: u32) -> u32 {
 fn rain_head(kind: Kind) -> char {
     match kind {
         Kind::Navidad => '\u{2736}',
+        Kind::Revolucion => '\u{25ae}',
         _ => '\u{2605}',
     }
 }
@@ -541,7 +543,20 @@ fn rain_trail(kind: Kind, x: usize, pal: &Pal) -> Color {
         Kind::Navidad => [pal.green, pal.red][x % 2],
         // The flag: verde, blanco y rojo, column by column.
         Kind::Patrias => [pal.green, pal.bright, pal.red][x % 3],
+        // Brass among the sepia.
+        Kind::Revolucion if x.is_multiple_of(5) => pal.oro,
         _ => pal.main,
+    }
+}
+
+/// What the rain is made of: the kana of the matrix, or in the Revolución the
+/// dots and dashes of the telegraph.
+fn rain_glyph(kind: Kind, h2: u32, plain: char) -> char {
+    match kind {
+        Kind::Revolucion => [
+            '\u{00b7}', '\u{2501}', '\u{00b7}', '\u{2501}', '\u{00b7}', ' ',
+        ][(h2 / 5 % 6) as usize],
+        _ => plain,
     }
 }
 
@@ -674,6 +689,7 @@ impl Widget for Rain {
                         ch = rain_head(self.mx.kind);
                         col = pal.oro.scale(1.2);
                     } else {
+                        ch = rain_glyph(self.mx.kind, h2, ch);
                         col = pal.fade(rain_trail(self.mx.kind, x, pal), fall * 0.85);
                         if h2 % 9 == 0 {
                             ch = rain_sparkle(self.mx.kind, h2 / 9);
@@ -744,7 +760,10 @@ impl Widget for WorldMap {
         self.spawn -= dt;
         if self.spawn <= 0.0 && self.arcs.len() < 5 {
             self.spawn = 0.8 + self.rng.f32() * 2.0;
-            let (from, to) = if self.mx.is(Kind::Muertos) || dress(self.mx).is_some() {
+            let (from, to) = if self.mx.is(Kind::Revolucion) {
+                // The telegrams of the Revolución, along the historic routes.
+                revolucion::ROUTES[self.rng.usize(..revolucion::ROUTES.len())]
+            } else if self.mx.is(Kind::Muertos) || dress(self.mx).is_some() {
                 // Souls (or greetings, or aguinaldos, or echoes of the Grito)
                 // of the whole world on their way back to Mexico.
                 let homes = if self.mx.is(Kind::Patrias) {

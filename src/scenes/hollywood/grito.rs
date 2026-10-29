@@ -26,7 +26,7 @@ use std::fmt::Write;
 
 /// A word in the 3x5 pixel font at (`x`, `y`) of the pane, `sx` columns to a
 /// pixel. Returns the next x.
-fn big(c: &mut Canvas, r: Rect, x: i32, y: i32, text: &str, sx: i32, col: Color) -> i32 {
+pub(super) fn big(c: &mut Canvas, r: Rect, x: i32, y: i32, text: &str, sx: i32, col: Color) -> i32 {
     let mut x = x;
     for ch in text.chars() {
         x = big_char(c, r, x, y, ch, sx, col);
@@ -35,7 +35,15 @@ fn big(c: &mut Canvas, r: Rect, x: i32, y: i32, text: &str, sx: i32, col: Color)
 }
 
 /// One letter of it. Returns the next x.
-fn big_char(c: &mut Canvas, r: Rect, x: i32, y: i32, ch: char, sx: i32, col: Color) -> i32 {
+pub(super) fn big_char(
+    c: &mut Canvas,
+    r: Rect,
+    x: i32,
+    y: i32,
+    ch: char,
+    sx: i32,
+    col: Color,
+) -> i32 {
     for (row, bits) in glyph(ch).iter().enumerate() {
         for px in 0..3 {
             if bits >> (2 - px) & 1 == 1 {
@@ -49,7 +57,7 @@ fn big_char(c: &mut Canvas, r: Rect, x: i32, y: i32, ch: char, sx: i32, col: Col
 }
 
 /// Width of a word in the pixel font.
-fn big_width(text: &str, sx: i32) -> i32 {
+pub(super) fn big_width(text: &str, sx: i32) -> i32 {
     (text.chars().count() as i32 * 4 * sx - sx).max(0)
 }
 

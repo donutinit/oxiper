@@ -70,11 +70,29 @@
 //! Grito is given; the month builds up the crowd, the contingents and the
 //! flags. Ordinary days are untouched.
 //!
+//! On Día de la Revolución the screen becomes the Archivo de la Revolución:
+//! a sepia photograph (manta for the text, the brass of cartridges for the
+//! headings), a bandolier of cartridges hung along every title bar with a
+//! tricolor flag every twelfth column, rain made of the dots and dashes of
+//! the telegraph, and the texts go Spanish about telegrams, trains,
+//! soldaderas and the Plan de San Luis (`revolucion.rs`). Four widgets are
+//! the holiday's (`archivo.rs`): the telegraph key sending telegrams in
+//! Morse (the tape of dots and dashes running, the text appearing a letter
+//! at a time, the STOPs); the timetable of the trains of the División del
+//! Norte rolling south along the line from Ciudad Juárez, a pixel
+//! locomotive crossing the pane with soldaderas and sombreros on the roofs;
+//! the viewer that types out the Plan de San Luis ("el día 20 de noviembre,
+//! de las seis de la tarde en adelante...") and the other documents of the
+//! legajo; and TIERRA Y LIBERTAD in big letters under a zapatista
+//! sombrero. Telegrams cross the map along the routes of the Revolución, and
+//! the access banner asks "¿QUIÉN VIVE?". Ordinary days are untouched.
+//!
 //! Structure: the screen is a binary tree of panes (`Node`) whose leaves each
 //! own a `Widget`. Every 10 to 25 real seconds one pane splits, two panes
 //! merge, or the whole layout reshuffles. Panes tile the screen exactly; each
 //! draws its own title bar and left edge, so neighbours share one thin line.
 
+mod archivo;
 mod babble;
 mod feed;
 mod grito;
@@ -86,6 +104,7 @@ mod muertos;
 mod navidad;
 mod patrias;
 mod posada;
+mod revolucion;
 mod rostro;
 mod sprite;
 mod widgets;
@@ -262,12 +281,28 @@ const PATRIAS: Tints = Tints {
     oro: 0xd4a017,
 };
 
+/// Día de la Revolución: a sepia photograph, manta for the text, latón (the
+/// brass of the cartridges) for the headings, the tricolor for the flags.
+const REVOLUCION: Tints = Tints {
+    main: 0xd9c9a0,
+    bright: 0xf6ecd0,
+    cyan: 0xd2a64a,
+    amber: 0xe2a23b,
+    red: 0xd8393f,
+    green: 0x7aa84b,
+    ink: 0x1c140a,
+    ramp: [0x1a1208, 0x704214, 0xb8913a, 0xefe6cf, 0xfff6dc],
+    garland: [0x008f5d, 0xf4f1ea, 0xce1126, 0x008f5d, 0xf4f1ea, 0xce1126],
+    oro: 0xb8913a,
+};
+
 impl Tints {
     /// The colors of the day's holiday, if it is one of those.
     fn of(f: Fiesta) -> Option<&'static Tints> {
         match f.kind {
             Kind::Navidad => Some(&NAVIDAD),
             Kind::Patrias => Some(&PATRIAS),
+            Kind::Revolucion => Some(&REVOLUCION),
             _ => None,
         }
     }
@@ -463,6 +498,15 @@ const VIVAS: usize = 28;
 const DESFILE: usize = 29;
 const HISTORIA: usize = 30;
 const SIGNATURE_PT: [usize; 5] = [GRITO, CAMPANA, VIVAS, DESFILE, HISTORIA];
+/// Día de la Revolución has four: the telegraph key sending Morse, the
+/// timetable of the trains of the División del Norte, the viewer of the
+/// Plan de San Luis and the other documents, and TIERRA Y LIBERTAD in big
+/// letters.
+const TELEGRAFO: usize = 31;
+const TRENES: usize = 32;
+const ARCHIVO: usize = 33;
+const LEMA: usize = 34;
+const SIGNATURE_RV: [usize; 4] = [TELEGRAFO, TRENES, ARCHIVO, LEMA];
 
 /// The kinds of widget a holiday adds to the ordinary ones.
 fn extras(f: Fiesta) -> std::ops::Range<usize> {
@@ -470,6 +514,7 @@ fn extras(f: Fiesta) -> std::ops::Range<usize> {
         Kind::Muertos => GATEWAY..KINDS_MX,
         Kind::Navidad => REYES..PONCHE + 1,
         Kind::Patrias => GRITO..HISTORIA + 1,
+        Kind::Revolucion => TELEGRAFO..LEMA + 1,
         _ => KINDS..KINDS,
     }
 }
@@ -480,6 +525,7 @@ fn signature(f: Fiesta) -> &'static [usize] {
         Kind::Muertos => &SIGNATURE,
         Kind::Navidad => &SIGNATURE_NV,
         Kind::Patrias => &SIGNATURE_PT,
+        Kind::Revolucion => &SIGNATURE_RV,
         _ => &[],
     }
 }
@@ -734,6 +780,10 @@ fn make_widget(kind: usize, seed: u64, level: u8, mx: Fiesta) -> Box<dyn Widget>
         VIVAS => Box::new(grito::Vivas::new(seed, mx)),
         DESFILE => Box::new(grito::Desfile::new(seed, mx)),
         HISTORIA => Box::new(grito::Historia::new(seed, mx)),
+        TELEGRAFO => Box::new(archivo::Telegrafo::new(seed, mx)),
+        TRENES => Box::new(archivo::Trenes::new(seed, mx)),
+        ARCHIVO => Box::new(archivo::Archivo::new(seed, mx)),
+        LEMA => Box::new(archivo::Lema::new(seed, mx)),
         _ => Box::new(widgets::Keygen::new(seed, level, mx)),
     }
 }
@@ -1222,7 +1272,21 @@ impl Scene for Hollywood {
                 } else {
                     1
                 };
-                if self.fiesta.is(Kind::Navidad) {
+                if self.fiesta.is(Kind::Revolucion) {
+                    // The Revolución hangs a bandolier along the title bar:
+                    // brass cartridges on every other column, a tricolor flag
+                    // every twelfth.
+                    for x in 1..r.w {
+                        let at = x + r.x;
+                        if at % 12 == 6 {
+                            c.set(r.x + x, r.y, '\u{25bc}', pal.picado[(at / 12) as usize % 3]);
+                        } else if at % 2 == 0 {
+                            c.set_attr(r.x + x, r.y, '\u{25ae}', pal.oro, BOLD);
+                        } else {
+                            c.set(r.x + x, r.y, '\u{2500}', edge);
+                        }
+                    }
+                } else if self.fiesta.is(Kind::Navidad) {
                     // Navidad strings a series of foquitos along the title bar,
                     // a bulb every fourth column, then every third and, at
                     // Nochebuena, every other, in the six colors of the
@@ -2459,5 +2523,204 @@ mod tests {
             "{seen}"
         );
         assert!(!seen.contains("Campana sobre campana"));
+    }
+
+    // ------------------------------------------------------ Día de la Revolución
+
+    /// The cartridges of the bandolier along the top row.
+    fn cartuchos(c: &Canvas) -> usize {
+        (0..c.w() as i32)
+            .filter(|&x| c.get(x, 0).is_some_and(|cell| cell.ch == '\u{25ae}'))
+            .count()
+    }
+
+    #[test]
+    fn la_revolucion_dresses_the_screen() {
+        let theme = Theme::classic();
+        let o = opts("");
+        let ctx = ctx_of(&theme, &o, Fiesta::of_day(11, 20));
+        let mut s = Hollywood::new(&ctx);
+        assert_eq!(s.fiesta, ctx.fiesta);
+        s.resize(&ctx, 140, 40);
+        run(&mut s, &ctx, 3.0);
+        let c = frame(&mut s, &ctx, 140, 40);
+        // A bandolier of brass cartridges and a flag now and then along the
+        // title bars, the sepia of an old photograph for the text, a star on
+        // the tape.
+        assert!(cartuchos(&c) > 20, "{}", text(&c));
+        assert!(banderitas(&c) >= 3);
+        assert_eq!(s.env.pal.main, rgb(0xd9c9a0));
+        assert!(c.cells().iter().any(|x| x.fg == s.env.pal.main));
+        assert!(
+            c.cells()
+                .iter()
+                .any(|x| x.ch == '\u{25ae}' && x.fg == s.env.pal.oro)
+        );
+        assert!(text(&c).lines().last().unwrap().contains('\u{2726}'));
+        assert!(s.kinds().iter().any(|k| SIGNATURE_RV.contains(k)));
+        assert!(
+            s.kinds()
+                .iter()
+                .all(|k| *k < KINDS || extras(s.fiesta).contains(k))
+        );
+        assert!(s.fool.is_none());
+        assert_eq!(count(&c, '\u{273f}'), 0);
+        assert_eq!(bulbs(&c), 0);
+    }
+
+    #[test]
+    fn la_revolucion_comes_and_goes_through_retheme() {
+        let theme = Theme::classic();
+        let o = opts("");
+        let ordinary = ctx_of(&theme, &o, Fiesta::NONE);
+        let day = ctx_of(&theme, &o, Fiesta::of_day(11, 20));
+        let patrias = ctx_of(&theme, &o, Fiesta::of_day(9, 15));
+        let mut s = Hollywood::new(&ordinary);
+        s.resize(&ordinary, 160, 48);
+        s.retheme(&ordinary);
+        run(&mut s, &ordinary, 2.0);
+        assert_eq!(cartuchos(&frame(&mut s, &ordinary, 160, 48)), 0);
+        for ctx in [&day, &ordinary, &patrias, &day, &ordinary] {
+            s.retheme(ctx);
+            run(&mut s, ctx, 2.0);
+            let c = frame(&mut s, ctx, 160, 48);
+            let on = ctx.fiesta.is(Kind::Revolucion);
+            assert_eq!(cartuchos(&c) > 0, on, "{}", text(&c));
+            assert_eq!(s.fiesta, holiday(ctx));
+            assert_eq!(s.env.pal.main == rgb(0xd9c9a0), on);
+            assert!(
+                s.kinds()
+                    .iter()
+                    .all(|k| *k < KINDS || extras(s.fiesta).contains(k))
+            );
+        }
+    }
+
+    #[test]
+    fn the_archivo_is_on_screen_at_every_size_and_time() {
+        let theme = Theme::classic();
+        let o = opts("reshuffle = 1");
+        let ctx = ctx_of(&theme, &o, Fiesta::of_day(11, 20));
+        for &(w, h) in &[(200u16, 60u16), (120, 36), (80, 24), (60, 20), (31, 9)] {
+            let mut s = Hollywood::new(&ctx);
+            s.resize(&ctx, w, h);
+            for step in 0..120 {
+                s.tick(&ctx, 0.2, 1.0);
+                assert!(
+                    s.kinds().iter().any(|k| SIGNATURE_RV.contains(k)),
+                    "{w}x{h} step {step}: {:?}",
+                    s.kinds()
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn odd_sizes_and_huge_steps_survive_la_revolucion() {
+        let o = opts("");
+        let dracula = Theme::builtin("dracula").unwrap();
+        for theme in [Theme::classic(), dracula] {
+            let ctx = ctx_of(&theme, &o, Fiesta::of_day(11, 20));
+            for &(w, h) in &[
+                (1u16, 1u16),
+                (2, 3),
+                (7, 2),
+                (30, 7),
+                (29, 8),
+                (45, 12),
+                (80, 24),
+                (200, 60),
+                (300, 90),
+            ] {
+                let mut s = Hollywood::new(&ctx);
+                s.resize(&ctx, w, h);
+                s.retheme(&ctx);
+                for step in 0..60 {
+                    let (dt, real) = if step % 5 == 0 {
+                        (5.0, 5.0)
+                    } else {
+                        (0.05, 0.3)
+                    };
+                    s.tick(&ctx, dt, real);
+                    frame(&mut s, &ctx, w, h);
+                }
+                s.resize(&ctx, w / 2 + 1, h / 2 + 1);
+                frame(&mut s, &ctx, w / 2 + 1, h / 2 + 1);
+            }
+        }
+    }
+
+    #[test]
+    fn la_revolucions_widgets_stay_in_their_panes() {
+        let theme = Theme::classic();
+        let o = opts("");
+        let ctx = ctx_of(&theme, &o, Fiesta::of_day(11, 20));
+        let env = Env {
+            pal: Pal::new(&ctx),
+            level: 7,
+            day: 0.0,
+        };
+        let fiesta = ctx.fiesta;
+        for kind in (0..KINDS).chain(extras(fiesta)) {
+            for &(w, h) in &[
+                (1u16, 1u16),
+                (3, 3),
+                (12, 4),
+                (29, 6),
+                (44, 11),
+                (80, 30),
+                (120, 40),
+            ] {
+                let mut widget = make_widget(kind, 5, 7, fiesta);
+                widget.resize(w, h);
+                let r = Rect {
+                    x: 3,
+                    y: 2,
+                    w: w as i32,
+                    h: h as i32,
+                };
+                for step in 0..40 {
+                    widget.update(if step % 9 == 0 { 0.5 } else { 0.07 }, &env);
+                    let mut c = Canvas::new(w + 8, h + 6, Color::Reset);
+                    widget.draw(&mut c, r, &env);
+                    for y in 0..c.h() as i32 {
+                        for x in 0..c.w() as i32 {
+                            let inside = x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h;
+                            if !inside {
+                                let cell = c.get(x, y).unwrap();
+                                assert_eq!(
+                                    cell.ch, ' ',
+                                    "kind {kind} {w}x{h} drew {:?} at {x},{y}",
+                                    cell.ch
+                                );
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn the_tape_brings_la_revolucions_headlines() {
+        let theme = Theme::classic();
+        let o = opts("");
+        let ctx = ctx_of(&theme, &o, Fiesta::of_day(11, 20));
+        let mut s = Hollywood::new(&ctx);
+        s.resize(&ctx, 100, 30);
+        let mut seen = String::new();
+        for _ in 0..400 {
+            s.tape.clear();
+            s.feed_tape();
+            seen.extend(s.tape.iter());
+        }
+        for line in [
+            "ARCHIVO DE LA REVOLUCI\u{00d3}N: ACCESO ABIERTO",
+            "\u{00a1}TIERRA Y LIBERTAD!",
+            "HOY, 20 DE NOVIEMBRE: LAS SEIS DE LA TARDE EN ADELANTE",
+            "UPLOADING PLAN_DE_SAN_LUIS.PDF",
+        ] {
+            assert!(seen.contains(line), "{line}");
+        }
     }
 }

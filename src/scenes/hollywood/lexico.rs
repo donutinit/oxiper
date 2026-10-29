@@ -153,6 +153,7 @@ pub fn of(f: Fiesta) -> Option<&'static Vocab> {
     match f.kind {
         Kind::Navidad => Some(&super::navidad::VOCAB),
         Kind::Patrias => Some(&super::patrias::VOCAB),
+        Kind::Revolucion => Some(&super::revolucion::VOCAB),
         _ => None,
     }
 }
@@ -941,7 +942,11 @@ impl Vocab {
 }
 
 #[cfg(test)]
-pub const ALL: [&Vocab; 2] = [&super::navidad::VOCAB, &super::patrias::VOCAB];
+pub const ALL: [&Vocab; 3] = [
+    &super::navidad::VOCAB,
+    &super::patrias::VOCAB,
+    &super::revolucion::VOCAB,
+];
 
 #[cfg(test)]
 mod tests {
