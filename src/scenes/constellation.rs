@@ -13,8 +13,22 @@
 //! and flowers light up, and after a while the stars let go and drift on.
 //! Figures come more often as the holiday builds up, up to three at once on
 //! November 2 (see `muertos`).
+//!
+//! The Navidad does the same with the Estrella de Belén over its long tail,
+//! a piñata de siete picos in papel de china, a flor de nochebuena, a
+//! campana swinging from its bow, a Rey Mago on his camel and the pesebre,
+//! in gold, nochebuena red and pine green, the links leaning toward pine.
+//! The Estrella and the nochebuena come from the start, the campana and the
+//! piñata with the posadas, the pesebre a few days later, and the Reyes Magos
+//! come most on their own days, January 2 to 6 (see `navidad`).
+//!
+//! The machinery the holidays share (the figures, the gathering stars, the
+//! spark, the colors under any theme) lives in `holiday`; each holiday only
+//! brings its figures, colors and pace.
 
+mod holiday;
 mod muertos;
+mod navidad;
 
 use std::f32::consts::TAU;
 
@@ -97,7 +111,7 @@ struct Star {
     b: f32,
     links: u8,
     /// Día de Muertos: the figure that called this star (0 = none, or
-    /// `muertos::LETTING_GO`), how visible its ordinary links are, how much
+    /// `holiday::LETTING_GO`), how visible its ordinary links are, how much
     /// it shines as part of a figure, and its figure's hue.
     fig: u8,
     gain: f32,
@@ -146,7 +160,7 @@ pub struct Constellation {
     link_tints: [Color; 7],
     meteor_col: Color,
     meteor_tail: Color,
-    holiday: muertos::Muertos,
+    holiday: holiday::Holiday,
 }
 
 impl Constellation {
@@ -179,7 +193,7 @@ impl Constellation {
             link_tints: [Color::Reset; 7],
             meteor_col: Color::Reset,
             meteor_tail: Color::Reset,
-            holiday: muertos::Muertos::new(ctx.seed),
+            holiday: holiday::Holiday::new(ctx.seed),
         }
     }
 
@@ -447,7 +461,7 @@ impl Scene for Constellation {
         let (fw, fh) = (self.fw, self.fh);
         let v = self.speed * dt;
         for s in &mut self.stars {
-            if s.fig != 0 && s.fig != muertos::LETTING_GO {
+            if s.fig != 0 && s.fig != holiday::LETTING_GO {
                 // A holiday figure holds it.
                 s.p1 = (s.p1 + s.f1 * dt).rem_euclid(TAU);
                 s.p2 = (s.p2 + s.f2 * dt).rem_euclid(TAU);
@@ -652,7 +666,7 @@ impl Scene for Constellation {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::fiesta::Fiesta;
+    use crate::fiesta::{Fiesta, Kind};
     use crate::scene::Opts;
     use crate::theme::Theme;
 
@@ -687,13 +701,16 @@ mod tests {
         s.holiday.draw_lines(ctx, &s.stars, &mut br, s.margin)
     }
 
+    /// Days to try each holiday on: its start, middle and height.
+    const DAYS: [(u32, u32); 5] = [(10, 28), (11, 2), (12, 12), (12, 24), (1, 6)];
+
     /// A figure is drawn within seconds on the holiday's first day and at
     /// its height: its stars held and shining, its links traced.
     #[test]
     fn figures_come_on_the_holiday() {
         let theme = Theme::classic();
         let opts = Opts::new(INFO.options, toml::Table::new());
-        for day in [(10, 28), (11, 2)] {
+        for day in DAYS {
             let ctx = ctx(&theme, &opts, Fiesta::of_day(day.0, day.1));
             let mut s = Constellation::new(&ctx);
             s.resize(&ctx, 120, 36);
@@ -708,24 +725,54 @@ mod tests {
         }
     }
 
-    /// No figures, no holiday colors on an ordinary day.
+    /// Given time, every figure of every holiday comes at its height (and
+    /// none of them is too big or too small for a normal screen).
+    #[test]
+    fn every_figure_comes() {
+        let theme = Theme::classic();
+        let opts = Opts::new(INFO.options, toml::Table::new());
+        for (day, figures) in [((11, 2), 5), ((12, 24), 6)] {
+            let ctx = ctx(&theme, &opts, Fiesta::of_day(day.0, day.1));
+            let mut s = Constellation::new(&ctx);
+            s.resize(&ctx, 120, 36);
+            s.retheme(&ctx);
+            let mut seen = 0;
+            for _ in 0..1800 {
+                s.tick(&ctx, 0.1, 0.1);
+                seen |= s.holiday.showing();
+            }
+            assert_eq!(seen, (1 << figures) - 1, "{day:?}");
+        }
+    }
+
+    /// No figures, no holiday colors on an ordinary day, nor on a holiday
+    /// the sky has no figures for.
     #[test]
     fn ordinary_days_stay_plain() {
         let theme = Theme::classic();
         let opts = Opts::new(INFO.options, toml::Table::new());
-        let ctx = ctx(&theme, &opts, Fiesta::NONE);
-        let mut s = Constellation::new(&ctx);
-        s.resize(&ctx, 120, 36);
-        s.retheme(&ctx);
-        let mut c = Canvas::new(120, 36, Color::Reset);
-        for _ in 0..6 {
-            run(&mut s, &ctx, &mut c, 5.0);
-            assert_eq!(s.holiday.figures_on(), 0);
-            assert!(s.stars.iter().all(|st| st.fig == 0 && st.glow == 0.0));
-            assert_eq!(traced(&s, &ctx), 0);
-            assert_eq!(marks(&c), 0);
+        let mut days = vec![Fiesta::NONE, Fiesta::of_day(6, 15)];
+        days.extend(
+            Kind::ALL
+                .into_iter()
+                .filter(|&k| !holiday::dresses(k))
+                .map(Fiesta::height),
+        );
+        for fiesta in days {
+            let ctx = ctx(&theme, &opts, fiesta);
+            let mut s = Constellation::new(&ctx);
+            s.resize(&ctx, 120, 36);
+            s.retheme(&ctx);
+            let mut c = Canvas::new(120, 36, Color::Reset);
+            for _ in 0..6 {
+                run(&mut s, &ctx, &mut c, 5.0);
+                assert_eq!(s.holiday.figures_on(), 0, "{fiesta:?}");
+                assert!(s.stars.iter().all(|st| st.fig == 0 && st.glow == 0.0));
+                assert_eq!(traced(&s, &ctx), 0);
+                assert_eq!(marks(&c), 0);
+            }
+            assert_eq!(s.tints[0], rgb(NATIVE_TINTS[0]), "{fiesta:?}");
         }
-        assert_eq!(s.tints[0], rgb(NATIVE_TINTS[0]));
     }
 
     /// The holiday arrives and leaves through `retheme`, as at midnight.
@@ -733,34 +780,61 @@ mod tests {
     fn retheme_switches_the_holiday() {
         let theme = Theme::classic();
         let opts = Opts::new(INFO.options, toml::Table::new());
-        let plain = ctx(&theme, &opts, Fiesta::NONE);
-        let fiesta = ctx(&theme, &opts, Fiesta::of_day(11, 1));
-        let mut s = Constellation::new(&plain);
-        s.resize(&plain, 100, 30);
-        s.retheme(&plain);
-        let tints = s.tints;
+        for day in [(11, 1), (12, 20), (1, 3)] {
+            let plain = ctx(&theme, &opts, Fiesta::NONE);
+            let fiesta = ctx(&theme, &opts, Fiesta::of_day(day.0, day.1));
+            let mut s = Constellation::new(&plain);
+            s.resize(&plain, 100, 30);
+            s.retheme(&plain);
+            let tints = s.tints;
+            let mut c = Canvas::new(100, 30, Color::Reset);
+            run(&mut s, &plain, &mut c, 3.0);
+            s.retheme(&fiesta);
+            assert_ne!(s.tints, tints, "{day:?}");
+            run(&mut s, &fiesta, &mut c, 9.0);
+            assert!(s.holiday.figures_on() >= 1, "{day:?}");
+            assert!(traced(&s, &fiesta) > 100, "{day:?}");
+            s.retheme(&plain);
+            assert_eq!(s.tints, tints, "{day:?}");
+            assert_eq!(s.holiday.figures_on(), 0, "{day:?}");
+            assert!(
+                s.stars
+                    .iter()
+                    .all(|st| st.fig == 0 && st.gain == 1.0 && st.glow == 0.0)
+            );
+            run(&mut s, &plain, &mut c, 12.0);
+            assert_eq!(s.holiday.figures_on(), 0, "{day:?}");
+            assert_eq!(marks(&c), 0, "{day:?}");
+        }
+    }
+
+    /// One holiday giving way straight to another (a config reload) lets go
+    /// of the first one's figures before the second's begin.
+    #[test]
+    fn holidays_give_way_to_each_other() {
+        let theme = Theme::classic();
+        let opts = Opts::new(INFO.options, toml::Table::new());
+        let muertos = ctx(&theme, &opts, Fiesta::of_day(11, 2));
+        let navidad = ctx(&theme, &opts, Fiesta::of_day(12, 24));
+        let mut s = Constellation::new(&muertos);
+        s.resize(&muertos, 100, 30);
+        s.retheme(&muertos);
         let mut c = Canvas::new(100, 30, Color::Reset);
-        run(&mut s, &plain, &mut c, 3.0);
-        s.retheme(&fiesta);
-        assert_ne!(s.tints, tints);
-        run(&mut s, &fiesta, &mut c, 9.0);
+        run(&mut s, &muertos, &mut c, 9.0);
         assert!(s.holiday.figures_on() >= 1);
-        assert!(traced(&s, &fiesta) > 100);
-        s.retheme(&plain);
-        assert_eq!(s.tints, tints);
+        s.retheme(&navidad);
         assert_eq!(s.holiday.figures_on(), 0);
-        assert!(
-            s.stars
-                .iter()
-                .all(|st| st.fig == 0 && st.gain == 1.0 && st.glow == 0.0)
-        );
-        run(&mut s, &plain, &mut c, 12.0);
-        assert_eq!(s.holiday.figures_on(), 0);
-        assert_eq!(marks(&c), 0);
+        assert!(s.stars.iter().all(|st| st.fig == 0 && st.glow == 0.0));
+        for _ in 0..40 {
+            run(&mut s, &navidad, &mut c, 1.0);
+            // Navidad has six figures; Muertos's fifth would not fit.
+            assert!(s.holiday.showing() < 1 << 6);
+        }
+        assert!(s.holiday.figures_on() >= 1);
     }
 
     /// Odd sizes, resizes mid-figure, huge steps and odd options survive
-    /// the holiday under two themes.
+    /// every holiday under two themes.
     #[test]
     fn holiday_survives_sizes_and_steps() {
         let variants = [
@@ -772,27 +846,29 @@ mod tests {
         ];
         for v in variants {
             for theme in [Theme::classic(), Theme::builtin("dracula").unwrap()] {
-                let opts = Opts::new(INFO.options, v.parse().unwrap());
-                let ctx = ctx(&theme, &opts, Fiesta::of_day(11, 2));
-                let mut s = Constellation::new(&ctx);
-                s.retheme(&ctx);
-                let sizes = [
-                    (120, 36),
-                    (1, 1),
-                    (2, 3),
-                    (7, 2),
-                    (300, 90),
-                    (40, 12),
-                    (3, 40),
-                ];
-                for &(w, h) in &sizes {
-                    s.resize(&ctx, w, h);
-                    let mut c = Canvas::new(w, h, Color::Reset);
-                    for f in 0..200 {
-                        let dt = if f % 37 == 36 { 5.0 } else { 1.0 / 30.0 };
-                        s.tick(&ctx, dt, dt);
-                        c.clear();
-                        s.draw(&ctx, &mut c);
+                for day in [(11, 2), (12, 24), (1, 4)] {
+                    let opts = Opts::new(INFO.options, v.parse().unwrap());
+                    let ctx = ctx(&theme, &opts, Fiesta::of_day(day.0, day.1));
+                    let mut s = Constellation::new(&ctx);
+                    s.retheme(&ctx);
+                    let sizes = [
+                        (120, 36),
+                        (1, 1),
+                        (2, 3),
+                        (7, 2),
+                        (300, 90),
+                        (40, 12),
+                        (3, 40),
+                    ];
+                    for &(w, h) in &sizes {
+                        s.resize(&ctx, w, h);
+                        let mut c = Canvas::new(w, h, Color::Reset);
+                        for f in 0..200 {
+                            let dt = if f % 37 == 36 { 5.0 } else { 1.0 / 30.0 };
+                            s.tick(&ctx, dt, dt);
+                            c.clear();
+                            s.draw(&ctx, &mut c);
+                        }
                     }
                 }
             }
@@ -802,6 +878,6 @@ mod tests {
     /// Every figure fits the node budget and links only its own nodes.
     #[test]
     fn figures_are_well_formed() {
-        muertos::check_figures();
+        holiday::check_figures();
     }
 }
