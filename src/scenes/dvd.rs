@@ -68,9 +68,18 @@
 //! corner the mask winks and a sparkle catches its sequins, a burst of
 //! confeti, lentejuelas and serpentinas flies off, and the banner reads
 //! "¡VIVA EL CARNAVAL!".
+//!
+//! In the Guelaguetza the logo is the penacho of the Danza de la Pluma: a
+//! great round fan of twelve feathers in the colors of Oaxacan embroidery
+//! around a gold disc with a mirror in it, swaying as it dances, and turning
+//! a feather on every bounce. It scatters flowers and petals as it goes, more
+//! as the Lunes del Cerro comes. At a corner it dances three times as fast
+//! for a moment while flowers, petals, feathers and sparks fly off, and the
+//! banner reads "¡VIVA OAXACA!".
 
 mod candelaria;
 mod carnaval;
+mod guelaguetza;
 mod muertos;
 mod navidad;
 mod nino;
@@ -295,6 +304,7 @@ fn look_for(f: Fiesta) -> Option<&'static Look> {
     match f.kind {
         Kind::Candelaria => Some(&candelaria::LOOK),
         Kind::Carnaval => Some(&carnaval::LOOK),
+        Kind::Guelaguetza => Some(&guelaguetza::LOOK),
         Kind::Muertos => Some(&muertos::LOOK),
         Kind::Navidad => Some(navidad::look(f)),
         Kind::Nino => Some(&nino::LOOK),
@@ -1489,6 +1499,8 @@ mod tests {
             ("revolución", Fiesta::of_day(11, 20)),
             ("carnaval", Fiesta::height(Kind::Carnaval)),
             ("jueves de carnaval", Fiesta::of_date(2027, 2, 4)),
+            ("lunes del cerro", Fiesta::height(Kind::Guelaguetza)),
+            ("sábado de guelaguetza", Fiesta::of_date(2027, 7, 17)),
         ]
     }
 
@@ -2198,5 +2210,61 @@ mod tests {
             }
             assert!(plumas[0] > 0 && plumas[1] > plumas[0], "{plumas:?}");
         }
+    }
+
+    #[test]
+    fn the_guelaguetza_dances_the_penacho() {
+        let o = crate::scene::Opts::new(INFO.options, toml::Table::new());
+        let (mut seen, mut shed) = (Vec::new(), Vec::new());
+        for theme in ["classic", "nord"] {
+            let th = crate::theme::Theme::builtin(theme).unwrap();
+            let ctx = ctx(&th, &o, Fiesta::height(Kind::Guelaguetza));
+            assert!(ctx.fiesta.is(Kind::Guelaguetza));
+            let mut d = dressed(&ctx, 120, 44);
+            // Twelve feathers in six colors, the gold disc with its mirror
+            // and the beads.
+            for p in b"abcdefghj" {
+                assert!(parts(&d, &[*p]) > 0, "{}", *p as char);
+            }
+            if th.native {
+                assert_eq!(d.palette, super::guelaguetza::LOOK.classic.to_vec());
+                assert_eq!(d.palette.len(), 6);
+            }
+            let banner = Sprite::fit_lines(&["¡Viva", "Oaxaca!"], 120, 44);
+            assert_eq!(d.banner.cells, banner.cells);
+            // It sways back and forth: three turns, and back through the middle.
+            assert_eq!(d.frames.len(), 3);
+            assert_ne!(d.sprite.parts, d.frames[0].parts);
+            assert_ne!(d.frames[0].parts, d.frames[1].parts);
+            assert_eq!(d.frames[0].parts, d.frames[2].parts);
+            d.party_t = PARTY;
+            d.clock = 0.2;
+            assert_eq!(d.pose(0, &d.logos[0]).0.parts, d.sprite.parts);
+            d.celebrate(0);
+            // Three times as fast at a corner: it has already turned on.
+            assert_eq!(d.pose(0, &d.logos[0]).0.parts, d.frames[0].parts);
+            assert!(d.bits.len() > 20);
+            if theme == "classic" {
+                for f in [
+                    Fiesta::of_date(2027, 7, 17),
+                    Fiesta::height(Kind::Guelaguetza),
+                ] {
+                    let ctx = super::tests::ctx(&th, &o, f);
+                    let mut d = dressed(&ctx, 100, 30);
+                    let mut n = 0;
+                    for _ in 0..(60.0 * 30.0) as usize {
+                        d.tick(&ctx, 1.0 / 30.0, 1.0 / 30.0);
+                        n += d.bits.len() + d.floor.iter().filter(|f| f.life > 0.0).count();
+                    }
+                    shed.push(n);
+                    seen.push(f.level);
+                }
+            }
+        }
+        // More flowers as the Lunes del Cerro comes.
+        assert!(
+            seen[0] < seen[1] && shed[1] > shed[0] * 13 / 10,
+            "{seen:?} {shed:?}"
+        );
     }
 }
