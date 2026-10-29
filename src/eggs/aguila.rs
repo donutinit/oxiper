@@ -16,9 +16,8 @@
 //! from either side and is gone within 30 s.
 
 use super::patrias::{Palette, fade};
-use super::stage::{Stage, hash, unit};
+use super::stage::{Pen, Stage, hash, unit};
 use super::{Egg, Info};
-use crate::color::Color;
 use crate::fiesta::Kind;
 use crate::render::Canvas;
 use crate::theme::Theme;
@@ -173,33 +172,6 @@ impl Aguila {
             perched: t >= LANDS,
             sz: geo.sz,
         }
-    }
-}
-
-/// A pen that draws in the picture's own left-to-right.
-struct Pen<'a> {
-    c: &'a mut Canvas,
-    st: Stage,
-    mirror: bool,
-}
-
-impl Pen<'_> {
-    fn x(&self, x: i32) -> i32 {
-        if self.mirror { self.st.w - 1 - x } else { x }
-    }
-
-    fn px(&mut self, x: i32, y: i32, color: Color) {
-        let x = self.x(x);
-        self.st.px(self.c, x, y, color);
-    }
-
-    fn line(&mut self, a: (i32, i32), b: (i32, i32), thick: i32, color: Color) {
-        let (a, b) = ((self.x(a.0), a.1), (self.x(b.0), b.1));
-        // A thick line is `thick` wide to the right of its points, so the
-        // mirrored one steps back by the width to stay in place.
-        let off = if self.mirror { 1 - thick } else { 0 };
-        self.st
-            .line(self.c, (a.0 + off, a.1), (b.0 + off, b.1), thick, color);
     }
 }
 
@@ -585,6 +557,7 @@ impl Aguila {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::color::Color;
 
     /// The nopal grows, the eagle comes in and lands on its top penca and
     /// sits there until the end.

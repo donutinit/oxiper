@@ -200,6 +200,92 @@ impl Stage {
     }
 }
 
+/// A pen that draws in a visitor's own left-to-right: facing the other way,
+/// it mirrors everything across the stage (sprites flip; the terminal's own
+/// letters and the block font are placed by the caller, with [`Pen::x`] and
+/// [`Pen::left_of`], so that they still read forward).
+pub(crate) struct Pen<'a> {
+    pub c: &'a mut Canvas,
+    pub st: Stage,
+    pub mirror: bool,
+}
+
+impl Pen<'_> {
+    /// The column that art pixel `x` lands on.
+    pub fn x(&self, x: i32) -> i32 {
+        if self.mirror { self.st.w - 1 - x } else { x }
+    }
+
+    /// The left column of a span that starts at `x` and is `w` pixels wide.
+    pub fn left_of(&self, x: i32, w: i32) -> i32 {
+        if self.mirror { self.st.w - x - w } else { x }
+    }
+
+    pub fn rect(&mut self, x: i32, y: i32, w: i32, h: i32, color: Color) {
+        let x = self.left_of(x, w);
+        self.st.rect(self.c, x, y, w, h, color);
+    }
+
+    #[inline]
+    pub fn px(&mut self, x: i32, y: i32, color: Color) {
+        self.rect(x, y, 1, 1, color);
+    }
+
+    /// A line of art pixels, `thick` of them across.
+    pub fn line(&mut self, (x0, y0): (i32, i32), (x1, y1): (i32, i32), thick: i32, color: Color) {
+        let (dx, dy) = ((x1 - x0).abs(), -(y1 - y0).abs());
+        let (sx, sy) = (if x0 < x1 { 1 } else { -1 }, if y0 < y1 { 1 } else { -1 });
+        let (mut x, mut y, mut err) = (x0, y0, dx + dy);
+        // Never more steps than the line is long (and so never forever).
+        for _ in 0..=dx.max(-dy) {
+            self.rect(x, y, thick, thick, color);
+            let e2 = 2 * err;
+            if e2 >= dy {
+                err += dy;
+                x += sx;
+            }
+            if e2 <= dx {
+                err += dx;
+                y += sy;
+            }
+        }
+    }
+
+    /// A filled ellipse, `(rx, ry)` across and up from its middle.
+    pub fn blob(&mut self, (cx, cy): (f32, f32), (rx, ry): (f32, f32), color: Color) {
+        let ry = ry.max(0.5);
+        for y in (cy - ry).floor() as i32..=(cy + ry).ceil() as i32 {
+            let v = (y as f32 + 0.5 - cy) / ry;
+            if v.abs() > 1.0 {
+                continue;
+            }
+            let half = rx * (1.0 - v * v).sqrt();
+            let x0 = (cx - half).round() as i32;
+            let w = ((2.0 * half).round() as i32).max(1);
+            self.rect(x0, y, w, 1, color);
+        }
+    }
+
+    /// Pixel art like [`Stage::sprite`], its left edge at `x`.
+    pub fn sprite(
+        &mut self,
+        (x, y): (i32, i32),
+        rows: &[&str],
+        flip: bool,
+        shift: impl Fn(i32) -> i32,
+        color: impl Fn(u8) -> Option<Color>,
+    ) {
+        if self.mirror {
+            let w = rows.iter().map(|r| r.len()).max().unwrap_or(0) as i32;
+            let x = self.st.w - x - w;
+            self.st
+                .sprite(self.c, (x, y), rows, !flip, |r| -shift(r), color);
+        } else {
+            self.st.sprite(self.c, (x, y), rows, flip, shift, color);
+        }
+    }
+}
+
 /// A cheap, repeatable mix of two numbers: the same crowd member, the same
 /// confetto, always the same dice, with no state to keep.
 pub(crate) fn hash(a: u32, b: u32) -> u32 {

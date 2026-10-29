@@ -9,6 +9,7 @@
 //! eggs never change what `record`, `snap` and `bench` produce. Those never
 //! roll for an egg; only the interactive loop does (or a forced rate).
 
+pub mod adelitas;
 pub mod aguila;
 pub mod alebrije;
 pub mod calaverita;
@@ -22,8 +23,10 @@ mod muertos;
 pub mod nyan;
 pub(crate) mod palette;
 mod patrias;
+mod revolucion;
 pub mod sl;
 mod stage;
+pub mod tren;
 
 use crate::color::Color;
 use crate::fiesta::{Fiesta, Kind};
@@ -70,6 +73,8 @@ pub const ALL: &[&Info] = &[
     &grito::INFO,
     &jarabe::INFO,
     &aguila::INFO,
+    &adelitas::INFO,
+    &tren::INFO,
 ];
 
 /// An `egg_rate` at or above this plays an egg at once, again and again, and
@@ -550,6 +555,13 @@ mod tests {
             Kind::Patrias,
             &[(9, 1), (9, 15), (9, 16)],
         );
+    }
+
+    /// The Día de la Revolución visitors come on the 20th of November, and
+    /// never on an ordinary day or another holiday.
+    #[test]
+    fn the_visitors_keep_to_the_revolucion() {
+        keep_to(&["adelitas", "tren"], Kind::Revolucion, &[(11, 20)]);
     }
 
     /// Any egg survives tiny and huge screens and long steps, under any theme.
