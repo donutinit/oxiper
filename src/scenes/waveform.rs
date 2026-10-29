@@ -17,8 +17,25 @@
 //! away. Under other themes the garlands take the theme's colors; the
 //! marigolds, the skulls and the flames keep their own. All of it lives in
 //! `waveform/muertos.rs`.
+//!
+//! At Navidad the waves are strings of series lights: a cord (verde pino, and
+//! rojo nochebuena on every other wave) with foquitos hanging from it in rojo,
+//! verde, azul, amarillo, rosa and naranja, blinking in chase patterns (a comet
+//! running along the wave, odds and evens, a swell of light rolling, twinkling,
+//! three groups in turn) that change every so often and differ from wave to
+//! wave, each lit bulb throwing a halo. Esferas, glass ornaments with a gold
+//! cap, hang from the crests, and now and then a piñata of siete picos swings
+//! there. The posadas bring more of it: the bulbs crowd closer, the ornaments
+//! reach more of the waves and more of each crest, and the piñatas come more
+//! often (every wave carries them by Nochebuena). Beads turn into foquitos and
+//! esferas floating on the wave, and the filled style keeps its dither under
+//! the cord. Under other themes the cord is the wave's own color and the bulbs,
+//! esferas and papel de china take the theme's accents closest to their hue.
+//! All of it lives in `waveform/navidad.rs`.
 
+mod hues;
 mod muertos;
+mod navidad;
 
 use std::f32::consts::{PI, TAU};
 
@@ -27,6 +44,7 @@ use crate::fiesta::Kind;
 use crate::render::{Braille, Canvas};
 use crate::scene::{Ctx, Opt, Scene, SceneInfo, Val};
 use muertos::Muertos;
+use navidad::Navidad;
 
 pub const INFO: SceneInfo = SceneInfo {
     name: "waveform",
@@ -158,6 +176,8 @@ struct Waveform {
     shades: Vec<Color>,
     /// Día de Muertos, while it lasts.
     muertos: Option<Muertos>,
+    /// Navidad, while it lasts.
+    navidad: Option<Navidad>,
 }
 
 impl Waveform {
@@ -234,6 +254,7 @@ impl Waveform {
             env: Vec::new(),
             shades: Vec::new(),
             muertos: None,
+            navidad: None,
         }
     }
 
@@ -439,6 +460,9 @@ impl Scene for Waveform {
         if let Some(m) = self.muertos.as_mut() {
             m.resized(self.pw);
         }
+        if let Some(m) = self.navidad.as_mut() {
+            m.resized(self.pw);
+        }
     }
 
     fn retheme(&mut self, ctx: &Ctx) {
@@ -452,15 +476,19 @@ impl Scene for Waveform {
             0.55
         };
         let muertos = ctx.fiesta.is(Kind::Muertos);
+        let navidad = ctx.fiesta.is(Kind::Navidad);
         self.shades.clear();
         for (li, l) in self.layers.iter().enumerate() {
             // Front layers take the bright end of the ramp, back layers the
             // middle; ramps start near the background, so skip that end. On
             // Día de Muertos each wave is a papel picado color instead.
+            let ordinary = g.at(0.38 + 0.62 * l.depth);
             let c = if muertos {
                 muertos::picado(ctx, n - 1 - li)
+            } else if navidad {
+                navidad::cord(ctx, n - 1 - li, ordinary)
             } else {
-                g.at(0.38 + 0.62 * l.depth)
+                ordinary
             };
             for s in 0..SHADES {
                 let k = s as f32 / (SHADES - 1) as f32;
@@ -480,6 +508,11 @@ impl Scene for Waveform {
         } else {
             self.muertos = None;
         }
+        if navidad {
+            Navidad::dress(&mut self.navidad, ctx, &self.layers, self.pw);
+        } else {
+            self.navidad = None;
+        }
     }
 
     fn update(&mut self, _ctx: &Ctx, dt: f32) {
@@ -491,6 +524,7 @@ impl Scene for Waveform {
         // Keep the clock small so `sin` stays precise over long runs.
         self.t = (self.t + dt * self.speed) % 36_000.0;
         self.step_muertos(dt);
+        self.step_navidad(dt);
     }
 
     fn draw(&mut self, _ctx: &Ctx, c: &mut Canvas) {
@@ -508,6 +542,8 @@ impl Scene for Waveform {
         self.braille.clear();
         if self.muertos.is_some() {
             self.draw_muertos();
+        } else if self.navidad.is_some() {
+            self.draw_navidad();
         } else {
             match self.style {
                 Style::Lines => self.draw_lines(),
@@ -539,8 +575,15 @@ mod tests {
             "amplitude = 5.0\nfrequency = 20.0\nspeed = 20.0\nnoise = 5.0",
             "amplitude = nan\nfrequency = inf\nspeed = -1.0\nlayers = -3",
         ];
-        // Ordinary days, then Día de Muertos at its first day and at its height.
-        let days = [Fiesta::NONE, Fiesta::of_day(10, 28), Fiesta::of_day(11, 2)];
+        // Ordinary days, then Día de Muertos at its first day and at its
+        // height, and Navidad at the first posada's eve and at Nochebuena.
+        let days = [
+            Fiesta::NONE,
+            Fiesta::of_day(10, 28),
+            Fiesta::of_day(11, 2),
+            Fiesta::of_day(12, 12),
+            Fiesta::of_day(12, 24),
+        ];
         for (v, fiesta) in variants
             .iter()
             .flat_map(|v| days.iter().map(move |d| (v, *d)))
@@ -563,12 +606,11 @@ mod tests {
                     }
                     let mut c = Canvas::new(w, h, Color::Reset);
                     // The holiday on a huge screen is slow to run unoptimized: fewer frames.
-                    let (frames, every) =
-                        if fiesta.is(Kind::Muertos) && w as u32 * h as u32 > 10_000 {
-                            (10, 4)
-                        } else {
-                            (40, 13)
-                        };
+                    let (frames, every) = if fiesta.on() && w as u32 * h as u32 > 10_000 {
+                        (10, 4)
+                    } else {
+                        (40, 13)
+                    };
                     for f in 0..frames {
                         s.update(
                             &ctx,

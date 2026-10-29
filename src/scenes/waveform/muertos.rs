@@ -70,12 +70,12 @@ struct Loose {
 
 /// `v` rounded to the nearest dot (a plain cast, for anything above -512).
 #[inline]
-fn rnd(v: f32) -> i32 {
+pub(super) fn rnd(v: f32) -> i32 {
     (v + 512.5) as i32 - 512
 }
 
 /// A hash of `n`, 0 to 1.
-fn hash(n: u32) -> f32 {
+pub(super) fn hash(n: u32) -> f32 {
     let n = n.wrapping_mul(0x9e37_79b9) ^ 0x85eb_ca6b;
     let n = (n ^ (n >> 15)).wrapping_mul(0x2c1b_3c6d);
     ((n ^ (n >> 12)) & 0xffff) as f32 / 65536.0
@@ -376,14 +376,14 @@ impl Waveform {
     }
 
     /// How big the petals are, next to what they are on a 36-row screen.
-    fn scale(&self) -> f32 {
+    pub(super) fn scale(&self) -> f32 {
         (self.ph as f32 / 144.0).clamp(0.7, 1.4)
     }
 
     /// How far a layer's pattern has ridden along with the swell, in dots, as
     /// whole `period`s (the laps) and what is left over, so a long run never
     /// loses its precision.
-    fn ride(&self, li: usize, period: f32) -> (i64, f32) {
+    pub(super) fn ride(&self, li: usize, period: f32) -> (i64, f32) {
         let d = self.layers[li].depth;
         let wv = self.swell[0];
         let kx = TAU / self.lambda()
