@@ -16,7 +16,7 @@ use crate::fiesta::{Fiesta, Kind};
 use crate::render::{BOLD, Braille, Canvas};
 use crate::scene::Ctx;
 
-use super::{DISSOLVE, LINK_FLOOR, Star, muertos, navidad};
+use super::{DISSOLVE, LINK_FLOOR, Star, muertos, navidad, patrias};
 
 /// Most stars a figure takes.
 pub(super) const MAX_NODES: usize = 40;
@@ -54,6 +54,13 @@ pub(super) enum Anim {
         hw: f32,
         amp: f32,
     },
+    /// A wave runs along `x` (a flag, a serpent), rising from nothing at
+    /// `from` to `amp` design units over `span`.
+    Wave {
+        from: f32,
+        span: f32,
+        amp: f32,
+    },
     /// Everything farther than `r0` from (`cx`, `cy`) breathes in and out
     /// by up to `amp` of its distance (a star's rays).
     Pulse {
@@ -75,7 +82,7 @@ impl Anim {
         match self {
             Anim::Still | Anim::Flap | Anim::Flicker(_) => 0.0,
             Anim::Swing { amp, .. } => 22.0 * amp,
-            Anim::Walk { amp, .. } => amp,
+            Anim::Wave { amp, .. } | Anim::Walk { amp, .. } => amp,
             Anim::Pulse { r0, amp, .. } => 2.0 * r0 * amp,
         }
     }
@@ -127,7 +134,7 @@ pub(super) struct Dress {
 }
 
 /// Every holiday the sky dresses for.
-const DRESSES: [&Dress; 2] = [&muertos::DRESS, &navidad::DRESS];
+const DRESSES: [&Dress; 3] = [&muertos::DRESS, &navidad::DRESS, &patrias::DRESS];
 
 /// One figure in the sky.
 #[derive(Clone, Copy)]
@@ -196,6 +203,10 @@ impl Drawing {
                 dy = py + ux * sin + uy * cos - self.cy;
             }
             Anim::Swing { .. } => {}
+            Anim::Wave { from, span, amp } => {
+                let ramp = ((x - from) / span).clamp(0.0, 1.0);
+                dy += amp * ramp * (x * 0.5 - self.age * 2.6).sin();
+            }
             Anim::Pulse { cx, cy, r0, amp } => {
                 let (ux, uy) = (x - cx, y - cy);
                 let r = ux.hypot(uy);

@@ -22,6 +22,14 @@
 //! piñata with the posadas, the pesebre a few days later, and the Reyes Magos
 //! come most on their own days, January 2 to 6 (see `navidad`).
 //!
+//! The Fiestas Patrias draw the águila on the nopal with the serpent in its
+//! beak, the Campana de Dolores swinging in its belfry, the bandera rippling
+//! on its pole and a sombrero de charro, among stars in verde, blanco and
+//! rojo, links leaning verde and meteors fading white to rojo. The bandera
+//! and the sombrero come from the first of September, the águila a week
+//! into the mes patrio, the campana ten days in and most on the Grito (see
+//! `patrias`).
+//!
 //! The machinery the holidays share (the figures, the gathering stars, the
 //! spark, the colors under any theme) lives in `holiday`; each holiday only
 //! brings its figures, colors and pace.
@@ -29,6 +37,7 @@
 mod holiday;
 mod muertos;
 mod navidad;
+mod patrias;
 
 use std::f32::consts::TAU;
 
@@ -702,7 +711,15 @@ mod tests {
     }
 
     /// Days to try each holiday on: its start, middle and height.
-    const DAYS: [(u32, u32); 5] = [(10, 28), (11, 2), (12, 12), (12, 24), (1, 6)];
+    const DAYS: [(u32, u32); 7] = [
+        (10, 28),
+        (11, 2),
+        (12, 12),
+        (12, 24),
+        (1, 6),
+        (9, 1),
+        (9, 15),
+    ];
 
     /// A figure is drawn within seconds on the holiday's first day and at
     /// its height: its stars held and shining, its links traced.
@@ -731,7 +748,7 @@ mod tests {
     fn every_figure_comes() {
         let theme = Theme::classic();
         let opts = Opts::new(INFO.options, toml::Table::new());
-        for (day, figures) in [((11, 2), 5), ((12, 24), 6)] {
+        for (day, figures) in [((11, 2), 5), ((12, 24), 6), ((9, 15), 4)] {
             let ctx = ctx(&theme, &opts, Fiesta::of_day(day.0, day.1));
             let mut s = Constellation::new(&ctx);
             s.resize(&ctx, 120, 36);
@@ -780,7 +797,7 @@ mod tests {
     fn retheme_switches_the_holiday() {
         let theme = Theme::classic();
         let opts = Opts::new(INFO.options, toml::Table::new());
-        for day in [(11, 1), (12, 20), (1, 3)] {
+        for day in [(11, 1), (12, 20), (1, 3), (9, 10)] {
             let plain = ctx(&theme, &opts, Fiesta::NONE);
             let fiesta = ctx(&theme, &opts, Fiesta::of_day(day.0, day.1));
             let mut s = Constellation::new(&plain);
@@ -846,7 +863,7 @@ mod tests {
         ];
         for v in variants {
             for theme in [Theme::classic(), Theme::builtin("dracula").unwrap()] {
-                for day in [(11, 2), (12, 24), (1, 4)] {
+                for day in [(11, 2), (12, 24), (1, 4), (9, 15)] {
                     let opts = Opts::new(INFO.options, v.parse().unwrap());
                     let ctx = ctx(&theme, &opts, Fiesta::of_day(day.0, day.1));
                     let mut s = Constellation::new(&ctx);
