@@ -2,8 +2,9 @@
 //!
 //! Each holiday that has an overlay is a module of its own, which says what
 //! it hangs and what falls (a [`Look`]); the engines that do the hanging and
-//! the falling are shared: papel picado strings ([`papel`]) and flecks
-//! ([`drift`]).
+//! the falling are shared: papel picado strings ([`papel`]), cords with
+//! things hanging from them ([`cord`]), flecks ([`drift`]) and serpentinas
+//! ([`ribbon`]).
 //!
 //! Día de Muertos strings papel picado across the top of the screen: cut
 //! tissue-paper flags in rosa mexicano, naranja, morado, turquesa, amarillo
@@ -20,22 +21,43 @@
 //! Everything is laid pixel by pixel over what the scene drew: a cell the
 //! overlay covers by half keeps the scene's other half, the cut-outs show the
 //! scene through the paper, and every other cell is left alone. The flags keep
-//! to the top four rows (six with two strings). On an ordinary day, and on a
-//! holiday without an overlay, it draws nothing.
+//! to the top four rows (six with two strings).
+//!
+//! Navidad strings foquitos (series lights) across the top: a green cord
+//! that sags between its ties, bulbs in red, green, blue, gold, rosa and
+//! naranja blinking in turn (a chase, a breathing wave, an alternation, a
+//! twinkle), swags of heno (Spanish moss) draped along it and esferas (glass
+//! balls) hanging by a thread, more of everything as the posadas climb to
+//! Nochebuena. They keep to the top five rows. During the posadas a piñata
+//! of siete picos hangs from the middle of the string, swaying, which takes
+//! eight rows (on a screen twenty rows tall or more); on Año Nuevo confetti
+//! and serpentinas fall over everything.
+//! Under any theme but `classic` the bulbs and the confetti take the theme's
+//! colors and the esferas the theme's closest to red, green, gold and silver.
+//!
+//! On an ordinary day, and on a holiday without an overlay, it draws nothing.
 
+mod cord;
 mod drift;
 mod muertos;
+mod navidad;
 mod papel;
+mod ribbon;
 
 use super::{Fiesta, Kind};
 use crate::color::Color;
 use crate::render::{Canvas, Cell};
 use crate::theme::Theme;
+use cord::Hung;
 use drift::{Fleck, Flecks};
+use navidad::Lights;
 use papel::{Flag, Papel};
+use ribbon::{Ribbon, Ribbons};
 
 /// The level from which a second string is up (Todos Santos).
 const LOWER_LEVEL: f32 = 0.8;
+/// How tall a screen has to be for the piñata to hang from it.
+const PINATA_ROWS: u16 = 20;
 /// The strings, as bits.
 const UPPER: u8 = 1;
 const LOWER: u8 = 2;
@@ -52,13 +74,29 @@ struct Look {
     salt: u64,
     papel: Option<&'static Papel>,
     flecks: Option<&'static Flecks>,
+    ribbons: Option<&'static Ribbons>,
+    lights: Option<&'static Lights>,
+    /// A piñata hangs from the middle of the lights.
+    pinata: bool,
 }
 
 impl Look {
+    /// Nothing hangs and nothing falls.
+    const NONE: Look = Look {
+        key: 0,
+        salt: 0,
+        papel: None,
+        flecks: None,
+        ribbons: None,
+        lights: None,
+        pinata: false,
+    };
+
     /// The look of the day, if the holiday has one.
     fn of(fiesta: Fiesta) -> Option<Look> {
         match fiesta.kind {
             Kind::Muertos => Some(muertos::look(fiesta)),
+            Kind::Navidad => Some(navidad::look(fiesta)),
             _ => None,
         }
     }
@@ -85,6 +123,10 @@ pub struct Overlay {
     lower: (i32, i32),
     /// As many flecks as the holiday's height brings; fewer are drawn before.
     petals: Vec<Fleck>,
+    /// The serpentinas.
+    ribbons: Vec<Ribbon>,
+    /// What hangs from the cord (`ties`).
+    hung: Vec<Hung>,
 }
 
 impl Overlay {
@@ -102,6 +144,8 @@ impl Overlay {
             ties: Vec::new(),
             lower: (0, 0),
             petals: Vec::new(),
+            ribbons: Vec::new(),
+            hung: Vec::new(),
         }
     }
 
@@ -119,12 +163,18 @@ impl Overlay {
         if let Some(papel) = look.papel {
             self.hang_papel(papel, look.salt);
         }
+        if let Some(lights) = look.lights {
+            self.hang_lights(lights, look.salt);
+        }
     }
 
     /// Scatters what falls over the screen.
     fn scatter_for(&mut self, look: &Look) {
         if let Some(flecks) = look.flecks {
             self.scatter(flecks, look.salt);
+        }
+        if let Some(ribbons) = look.ribbons {
+            self.scatter_ribbons(ribbons, look.salt);
         }
     }
 
@@ -151,6 +201,9 @@ impl Overlay {
         if let Some(flecks) = look.flecks {
             self.fall(dt, flecks);
         }
+        if let Some(ribbons) = look.ribbons {
+            self.unroll(dt, ribbons);
+        }
     }
 
     /// Draws over the scene. Nothing on an ordinary day.
@@ -162,10 +215,19 @@ impl Overlay {
             return;
         }
         if let Some(flecks) = look.flecks {
-            self.draw_flecks(c, flecks, fiesta.level);
+            self.draw_flecks(c, theme, flecks, fiesta.level);
+        }
+        if let Some(ribbons) = look.ribbons {
+            self.draw_ribbons(c, theme, ribbons, fiesta.level);
         }
         if let Some(papel) = look.papel {
             self.draw_papel(c, theme, papel);
+        }
+        if let Some(lights) = look.lights {
+            self.draw_lights(c, theme, lights);
+            if look.pinata && self.h >= PINATA_ROWS {
+                self.draw_pinata(c, theme, lights);
+            }
         }
     }
 }
@@ -182,6 +244,25 @@ fn solid(c: Option<&Color>, fallback: Color) -> Color {
         Some(&c) if c != Color::Reset => c,
         _ => fallback,
     }
+}
+
+/// The theme color closest to a classic one (the classic color itself under
+/// `classic`): a Christmas ball is red under any theme.
+fn like(theme: &Theme, native: Color) -> Color {
+    let Color::Rgb(r, g, b) = native else {
+        return native;
+    };
+    let dist = |c: &&Color| match **c {
+        Color::Rgb(r2, g2, b2) => {
+            let d = |a: u8, b: u8| (a.abs_diff(b) as u32).pow(2);
+            d(r, r2) + d(g, g2) + d(b, b2)
+        }
+        _ => u32::MAX,
+    };
+    if theme.native {
+        return native;
+    }
+    solid(theme.colors.iter().min_by_key(dist), native)
 }
 
 /// The colors a cell shows in its upper and lower half.
@@ -216,6 +297,21 @@ fn put(c: &mut Canvas, x: i32, y: i32, col: Color) {
         put2(c, x, y / 2, Some(col), Some(col));
     } else {
         put2(c, x, y / 2, up, down);
+    }
+}
+
+/// Tints the pixel at column `x`, pixel row `y` toward `col` by `k`: the glow
+/// of a light. It blends into the scene's own color, or into `bg` where the
+/// scene left it bare, and glows nowhere when neither is a color it can mix.
+fn glow(c: &mut Canvas, x: i32, y: i32, col: Color, k: f32, bg: Color) {
+    let Some(cell) = c.get(x, y.div_euclid(2)) else {
+        return;
+    };
+    let (up, down) = halves(cell);
+    let old = if y.rem_euclid(2) == 0 { up } else { down };
+    let old = if old == Color::Reset { bg } else { old };
+    if old.is_rgb() {
+        put(c, x, y, old.lerp(col, k));
     }
 }
 
@@ -268,7 +364,7 @@ mod tests {
     };
 
     /// A scene's frame: half blocks, text and empty cells.
-    fn scene(w: u16, h: u16) -> Canvas {
+    pub(super) fn scene(w: u16, h: u16) -> Canvas {
         let mut c = Canvas::new(w, h, Color::Reset);
         for y in 0..h as i32 {
             for x in 0..w as i32 {
@@ -293,7 +389,7 @@ mod tests {
     }
 
     /// The frame after `secs` real seconds of the holiday.
-    fn after(o: &mut Overlay, fiesta: Fiesta, secs: f32, theme: &Theme) -> Canvas {
+    pub(super) fn after(o: &mut Overlay, fiesta: Fiesta, secs: f32, theme: &Theme) -> Canvas {
         for _ in 0..(secs * 20.0) as usize {
             o.update(0.05, fiesta);
         }
@@ -303,7 +399,7 @@ mod tests {
     }
 
     /// Rows (from, to) holding cells the overlay changed.
-    fn changed(c: &Canvas, w: u16) -> Vec<(i32, i32)> {
+    pub(super) fn changed(c: &Canvas, w: u16) -> Vec<(i32, i32)> {
         let base = scene(w, c.h());
         c.cells()
             .iter()
@@ -482,5 +578,21 @@ mod tests {
         let theme = Theme::classic();
         let frame = || after(&mut Overlay::new(90, 28), MUERTOS, 6.0, &theme).to_text();
         assert_eq!(frame(), frame());
+    }
+
+    #[test]
+    fn holidays_without_an_overlay_draw_nothing() {
+        for kind in [
+            Kind::Candelaria,
+            Kind::Equinoccio,
+            Kind::SantaCruz,
+            Kind::Judas,
+        ] {
+            let fiesta = Fiesta::height(kind);
+            assert!(fiesta.is(kind));
+            let mut o = Overlay::new(80, 24);
+            let c = after(&mut o, fiesta, 3.0, &Theme::classic());
+            assert!(changed(&c, 80).is_empty(), "{kind:?}");
+        }
     }
 }

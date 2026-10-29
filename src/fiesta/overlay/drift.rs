@@ -2,9 +2,10 @@
 //! swaying (cempasúchil petals, confetti). Each lays only its own pixels, and
 //! the few of them keep the scene visible.
 
-use super::{Overlay, put, wave};
-use crate::color::Color;
+use super::{Overlay, put, solid, wave};
+use crate::color::{Color, rgb};
 use crate::render::Canvas;
+use crate::theme::Theme;
 
 /// What falls.
 pub(super) struct Flecks {
@@ -16,7 +17,24 @@ pub(super) struct Flecks {
     pub share: u8,
     /// Cells per fleck at the holiday's height.
     pub cells: i32,
+    /// Do the tones follow the theme's colors (in order) under any theme but
+    /// `classic`?
+    pub themed: bool,
 }
+
+/// A color and the shade of its other face.
+pub(super) const fn tone(hex: u32) -> (Color, Color) {
+    const fn shade(hex: u32, shift: u32) -> u32 {
+        (((hex >> shift) & 0xff) * 6 / 10) << shift
+    }
+    (
+        rgb(hex),
+        rgb(shade(hex, 16) | shade(hex, 8) | shade(hex, 0)),
+    )
+}
+
+/// The most tones a holiday's flecks can have.
+const TONES: usize = 8;
 
 pub(super) struct Fleck {
     /// Column the sway centers on, and the pixel row.
@@ -65,19 +83,28 @@ impl Overlay {
     }
 
     /// Draws as many flecks as the holiday has reached.
-    pub(super) fn draw_flecks(&self, c: &mut Canvas, flecks: &Flecks, level: f32) {
+    pub(super) fn draw_flecks(&self, c: &mut Canvas, theme: &Theme, flecks: &Flecks, level: f32) {
         let level = level.clamp(0.0, 1.0);
         let n = ((self.petals.len() as f32 * (0.3 + 0.7 * level)).round() as usize)
             .clamp(1, self.petals.len().max(1));
+        let mut tones = [(Color::Reset, Color::Reset); TONES];
+        let k = flecks.tones.len().clamp(1, TONES);
+        tones[..k].copy_from_slice(&flecks.tones[..k]);
+        if flecks.themed && !theme.native {
+            for (i, t) in tones[..k].iter_mut().enumerate() {
+                let c = solid(theme.colors.get(i % theme.colors.len().max(1)), t.0);
+                *t = (c, c.scale(0.6));
+            }
+        }
         for p in self.petals.iter().take(n) {
-            self.draw_fleck(c, flecks, p);
+            self.draw_fleck(c, &tones[..k], p);
         }
     }
 
-    fn draw_fleck(&self, c: &mut Canvas, flecks: &Flecks, p: &Fleck) {
+    fn draw_fleck(&self, c: &mut Canvas, tones: &[(Color, Color)], p: &Fleck) {
         let x = p.x + p.sway * wave(self.t, p.freq, p.phase).sin();
         let turn = wave(self.t, p.spin, p.phase);
-        let (light, dark) = flecks.tones[p.tone as usize % flecks.tones.len()];
+        let (light, dark) = tones[p.tone as usize % tones.len()];
         let (px, py) = (x.floor() as i32, p.y.floor() as i32);
         // Face up, tipping over, edge on, face down.
         match (turn.rem_euclid(std::f32::consts::TAU) * 4.0 / std::f32::consts::TAU) as u8 {
@@ -111,7 +138,7 @@ fn fleck(rng: &mut fastrand::Rng, flecks: &Flecks, w: i32) -> Fleck {
         tone: if flecks.share > 0 {
             u8::from(rng.u8(..) < flecks.share)
         } else {
-            rng.u8(..flecks.tones.len().clamp(1, 255) as u8)
+            rng.u8(..flecks.tones.len().clamp(1, TONES) as u8)
         },
     }
 }

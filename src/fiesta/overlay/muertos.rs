@@ -70,6 +70,7 @@ const PETALS: Flecks = Flecks {
     ],
     share: 50,
     cells: 240,
+    themed: false,
 };
 
 /// What Día de Muertos hangs: the same on each of its days (the second string
@@ -77,8 +78,8 @@ const PETALS: Flecks = Flecks {
 pub(super) fn look(_: Fiesta) -> Look {
     Look {
         key: 1,
-        salt: 0,
         papel: Some(&PAPEL),
         flecks: Some(&PETALS),
+        ..Look::NONE
     }
 }

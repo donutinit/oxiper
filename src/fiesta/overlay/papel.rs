@@ -140,13 +140,7 @@ impl Overlay {
     /// The upper cord's pixel row at column `x`: on the top row at the ties,
     /// one pixel lower between them.
     pub(super) fn sag(&self, x: i32) -> i32 {
-        let k = self.ties.partition_point(|&t| t <= x);
-        if k == 0 || k >= self.ties.len() {
-            return 0;
-        }
-        let (a, b) = (self.ties[k - 1], self.ties[k]);
-        let u = (x - a) as f32 / (b - a).max(1) as f32;
-        (4.0 * u * (1.0 - u) + 0.35) as i32
+        self.sag_by(x, 1.0)
     }
 
     /// Does a flag of the upper string (`UPPER`), the lower one (`LOWER`) or
