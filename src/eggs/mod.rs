@@ -14,6 +14,7 @@ pub mod aguila;
 pub mod alebrije;
 mod blit;
 pub mod calaverita;
+pub mod calenda;
 mod candelaria;
 mod carnaval;
 pub mod catrina;
@@ -23,6 +24,7 @@ pub mod cruz;
 pub mod duckpond;
 mod equinoccio;
 pub mod grito;
+mod guelaguetza;
 pub mod inocente;
 pub mod jarabe;
 pub mod judas;
@@ -39,6 +41,7 @@ pub(crate) mod palette;
 pub mod pastorela;
 mod patrias;
 mod pen;
+pub mod pina;
 pub mod pinata;
 pub mod posada;
 mod quema;
@@ -110,6 +113,8 @@ pub const ALL: &[&Info] = &[
     &chinelos::INFO,
     &comparsa::INFO,
     &judas::INFO,
+    &pina::INFO,
+    &calenda::INFO,
 ];
 
 /// An `egg_rate` at or above this plays an egg at once, again and again, and

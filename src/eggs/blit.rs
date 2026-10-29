@@ -161,11 +161,13 @@ pub(crate) fn plume(
     let (dx, dy) = (tip.0 - base.0, tip.1 - base.1);
     let len = (dx * dx + dy * dy).sqrt().max(1.0);
     let (nx, ny) = (-dy / len, dx / len);
-    let steps = (len * 1.5).ceil() as i32;
     let at = |t: f32| {
         let off = bend * (PI * t).sin();
         (base.0 + dx * t + nx * off, base.1 + dy * t + ny * off)
     };
+    // Discs of its width along it, close enough to leave no gaps: further
+    // apart the wider it is, so a big feather costs no more than a small one.
+    let steps = (len / (width * 0.2).max(0.67)).ceil() as i32;
     for i in 0..=steps {
         let t = i as f32 / steps as f32;
         let (x, y) = at(t);
@@ -180,6 +182,7 @@ pub(crate) fn plume(
             }
         }
     }
+    let steps = (len * 1.5).ceil() as i32;
     for i in 0..=steps {
         let t = i as f32 / steps as f32;
         if (0.1..0.92).contains(&t) {
@@ -190,11 +193,14 @@ pub(crate) fn plume(
 }
 
 /// The scale to draw art `art_h` pixels tall at on a screen `rows` rows
-/// tall, so it fills at most `share` of it: whole numbers where it can be
-/// bigger than the art, fourths where it must be smaller (never below a
-/// fourth).
+/// tall, so it fills at most `share` of it: see [`whole`].
 pub fn fit(rows: u16, art_h: i32, share: f32) -> f32 {
-    let k = rows as f32 * 2.0 * share / art_h.max(1) as f32;
+    whole(rows as f32 * 2.0 * share / art_h.max(1) as f32)
+}
+
+/// The scale nearest to `k` that keeps the pixels square: whole numbers
+/// from 1 to 6 (rounded down), fourths below 1 (never under a fourth).
+pub fn whole(k: f32) -> f32 {
     if k >= 1.0 {
         k.floor().min(6.0)
     } else {
@@ -298,6 +304,10 @@ mod tests {
         assert_eq!(fit(10, 44, 0.9), 0.5);
         assert_eq!(fit(1, 44, 0.9), 0.25);
         assert_eq!(fit(0, 44, 0.9), 0.25);
+        assert_eq!(
+            (whole(2.9), whole(1.0), whole(0.6), whole(0.01), whole(40.0)),
+            (2.0, 1.0, 0.5, 0.25, 6.0)
+        );
     }
 
     #[test]
