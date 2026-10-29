@@ -6,8 +6,9 @@
 //! cmatrix, map, sshart, apg and friends, all simulated here.
 
 use super::feed::{Feed, FeedKind};
+use super::lexico::{self, Dress};
 use super::map::{self, Dots};
-use super::{Env, Rect, Widget, babble, muertos, put, put_ch};
+use super::{Env, Pal, Rect, Widget, babble, muertos, put, put_ch};
 use crate::color::Color;
 use crate::fiesta::{Fiesta, Kind};
 use crate::render::{BOLD, Canvas, DIM};
@@ -15,6 +16,11 @@ use fastrand::Rng;
 use std::collections::VecDeque;
 use std::f32::consts::{PI, TAU};
 use std::fmt::Write;
+
+/// How the day's holiday after Día de Muertos renames the ordinary widgets.
+fn dress(mx: Fiesta) -> Option<&'static Dress> {
+    lexico::of(mx).map(|v| &v.dress)
+}
 
 /// A widget that draws nothing (placeholder while panes are moved around).
 pub struct Nothing;
@@ -97,12 +103,18 @@ impl Htop {
         let mut procs = Vec::new();
         let users = if mx.is(Kind::Muertos) {
             ["root", "mictlan", "xolo", "catrina", "abuela", "nobody"]
+        } else if let Some(d) = dress(mx) {
+            d.users
         } else {
             ["root", "root", "daemon", "www-data", "neo", "nobody"]
         };
         for _ in 0..24 {
             let mut cmd = String::from(if mx.is(Kind::Muertos) && rng.bool() {
                 babble::pick(&mut rng, muertos::DAEMONS)
+            } else if let Some(v) = lexico::of(mx)
+                && rng.bool()
+            {
+                babble::pick(&mut rng, v.daemons)
             } else {
                 babble::pick(&mut rng, babble::DAEMONS)
             });
@@ -138,6 +150,8 @@ impl Widget for Htop {
     fn name(&self) -> &'static str {
         if self.mx.is(Kind::Muertos) {
             "htop --almas"
+        } else if let Some(d) = dress(self.mx) {
+            d.htop
         } else {
             "htop"
         }
@@ -197,7 +211,13 @@ impl Widget for Htop {
             y = y.max(row as i32 + 1);
         }
         let mx = self.mx.is(Kind::Muertos);
-        let (mem_label, swap_label) = if mx { ("Ofr", "Vel") } else { ("Mem", "Swp") };
+        let dr = dress(self.mx);
+        let es = mx || dr.is_some();
+        let (mem_label, swap_label) = match dr {
+            Some(d) => (d.mem, d.swap),
+            None if mx => ("Ofr", "Vel"),
+            None => ("Mem", "Swp"),
+        };
         let mut t = String::new();
         let _ = write!(t, "{:.2}G/15.6G", self.mem * 15.6);
         meter(c, r, 0, y, colw - 1, mem_label, self.mem, &t, env);
@@ -216,6 +236,18 @@ impl Widget for Htop {
             let _ = write!(
                 t,
                 "Almas: {}, {} en tr\u{00e1}nsito; Carga: {:.2}  Arriba {}d {:02}:{:02}",
+                200 + (up % 37),
+                900 + (up % 211),
+                self.cpu.iter().sum::<f32>() / 4.0,
+                up / 86400,
+                up / 3600 % 24,
+                up / 60 % 60
+            );
+        } else if let Some(d) = dr {
+            let _ = write!(
+                t,
+                "{}: {}, {} en tr\u{00e1}nsito; Carga: {:.2}  Arriba {}d {:02}:{:02}",
+                d.tasks,
                 200 + (up % 37),
                 900 + (up % 211),
                 self.cpu.iter().sum::<f32>() / 4.0,
@@ -243,7 +275,7 @@ impl Widget for Htop {
                 r,
                 0,
                 y,
-                if mx {
+                if es {
                     "  PID USUARIO   CPU%  MEM%  COMANDO"
                 } else {
                     "  PID USER      CPU%  MEM%  COMMAND"
@@ -314,6 +346,8 @@ impl Widget for Bandwidth {
     fn name(&self) -> &'static str {
         if self.mx.is(Kind::Muertos) {
             "bmon -p mictlan0"
+        } else if let Some(d) = dress(self.mx) {
+            d.bmon
         } else {
             "bmon -p eth0"
         }
@@ -333,7 +367,7 @@ impl Widget for Bandwidth {
                 0.1 + self.rng.f32() * 0.5
             };
             self.tx_t = 0.05 + self.rng.f32() * 0.3;
-            if self.mx.is(Kind::Muertos) {
+            if self.mx.is(Kind::Muertos) || dress(self.mx).is_some() {
                 // More souls come home the higher the holiday.
                 self.rx_t *= 0.55 + 0.45 * self.mx.level;
             }
@@ -368,6 +402,18 @@ impl Widget for Bandwidth {
                 "mictlan0  \u{2193} llegan {:7.1} almas/s  \u{2191} vuelven {:6.1} almas/s",
                 last_rx * 1840.0,
                 last_tx * 310.0
+            );
+        } else if let Some(d) = dress(self.mx) {
+            let _ = write!(
+                t,
+                "{}  \u{2193} {} {:7.1} {}  \u{2191} {} {:6.1} {}",
+                d.iface,
+                d.down,
+                last_rx * 1840.0,
+                d.down_unit,
+                d.up,
+                last_tx * 310.0,
+                d.up_unit
             );
         } else {
             let _ = write!(
@@ -408,6 +454,15 @@ impl Widget for Bandwidth {
                 "pico {:.0} almas/s   prom {:.0} almas/s",
                 self.peak * 1840.0,
                 self.hist.iter().map(|h| h.0).sum::<f32>() / n.max(1) as f32 * 1840.0
+            );
+        } else if let Some(d) = dress(self.mx) {
+            let _ = write!(
+                t,
+                "pico {:.0} {}   prom {:.0} {}",
+                self.peak * 1840.0,
+                d.down_unit,
+                self.hist.iter().map(|h| h.0).sum::<f32>() / n.max(1) as f32 * 1840.0,
+                d.down_unit
             );
         } else {
             let _ = write!(
@@ -471,6 +526,29 @@ fn hash(a: u32, b: u32) -> u32 {
     h ^ (h >> 12)
 }
 
+/// The head of a drop in a holiday's rain: its star.
+fn rain_head(kind: Kind) -> char {
+    match kind {
+        Kind::Navidad => '\u{2736}',
+        _ => '\u{2605}',
+    }
+}
+
+/// The color a column's trail takes in a holiday's rain: green and red
+/// turn by turn for Navidad.
+fn rain_trail(kind: Kind, x: usize, pal: &Pal) -> Color {
+    match kind {
+        Kind::Navidad => [pal.green, pal.red][x % 2],
+        _ => pal.main,
+    }
+}
+
+/// The glints among a holiday's rain.
+fn rain_sparkle(kind: Kind, n: u32) -> char {
+    let _ = kind;
+    ['\u{2726}', '\u{2727}', '\u{2736}', '\u{2022}'][n as usize % 4]
+}
+
 impl Rain {
     pub fn new(seed: u64, mx: Fiesta) -> Rain {
         Rain {
@@ -491,6 +569,11 @@ impl Rain {
         if mx.is(Kind::Muertos) && rng.f32() < 0.1 + 0.2 * mx.level {
             word = RAIN_WORDS[rng.usize(..RAIN_WORDS.len())];
             len = len.max(word.len() as i32 + 3);
+        } else if let Some(d) = dress(mx)
+            && rng.f32() < 0.1 + 0.2 * mx.level
+        {
+            word = d.rain_words[rng.usize(..d.rain_words.len())];
+            len = len.max(word.len() as i32 + 3);
         }
         Drop {
             y: if first {
@@ -509,6 +592,8 @@ impl Widget for Rain {
     fn name(&self) -> &'static str {
         if self.mx.is(Kind::Muertos) {
             "cmatrix -ab --petalos"
+        } else if let Some(d) = dress(self.mx) {
+            d.rain
         } else {
             "cmatrix -ab"
         }
@@ -537,6 +622,7 @@ impl Widget for Rain {
 
     fn draw(&mut self, c: &mut Canvas, r: Rect, env: &Env) {
         let pal = &env.pal;
+        let dr = dress(self.mx);
         for (x, d) in self.drops.iter().enumerate() {
             let head = d.y.floor() as i32;
             for k in 0..d.len {
@@ -572,6 +658,25 @@ impl Widget for Rain {
                         ch =
                             ['\u{273f}', '\u{2740}', '\u{273e}', '\u{2741}'][(h2 / 9 % 4) as usize];
                         col = pal.flor.lerp(col, k as f32 / d.len as f32);
+                    }
+                } else if dr.is_some() {
+                    // The holiday's rain: its words read from top to bottom,
+                    // its star heads the drops and the trails take its colors.
+                    let wl = d.word.len() as i32;
+                    let fall = k as f32 / d.len as f32;
+                    if k < wl {
+                        ch = d.word.as_bytes()[(wl - 1 - k) as usize] as char;
+                        col = pal.fade(pal.bright, k as f32 / wl as f32 * 0.35);
+                        at = BOLD;
+                    } else if k == 0 {
+                        ch = rain_head(self.mx.kind);
+                        col = pal.oro.scale(1.2);
+                    } else {
+                        col = pal.fade(rain_trail(self.mx.kind, x, pal), fall * 0.85);
+                        if h2 % 9 == 0 {
+                            ch = rain_sparkle(self.mx.kind, h2 / 9);
+                            col = pal.oro.lerp(col, fall);
+                        }
                     }
                 }
                 put_ch(c, r, x as i32, row, ch, col, at);
@@ -620,6 +725,8 @@ impl Widget for WorldMap {
     fn name(&self) -> &'static str {
         if self.mx.is(Kind::Muertos) {
             "tracemap --regreso"
+        } else if let Some(d) = dress(self.mx) {
+            d.map
         } else {
             "tracemap --live"
         }
@@ -635,8 +742,9 @@ impl Widget for WorldMap {
         self.spawn -= dt;
         if self.spawn <= 0.0 && self.arcs.len() < 5 {
             self.spawn = 0.8 + self.rng.f32() * 2.0;
-            let (from, to) = if self.mx.is(Kind::Muertos) {
-                // Souls of the whole world on their way back to Mexico.
+            let (from, to) = if self.mx.is(Kind::Muertos) || dress(self.mx).is_some() {
+                // Souls (or greetings, or aguinaldos) of the whole world on
+                // their way back to Mexico.
                 (
                     map::ORIGINS[self.rng.usize(..map::ORIGINS.len())],
                     map::HOMES[self.rng.usize(..map::HOMES.len())],
@@ -684,6 +792,7 @@ impl Widget for WorldMap {
         self.fx.clear();
         let mut status = String::new();
         let mx = self.mx.is(Kind::Muertos);
+        let dr = dress(self.mx);
         for a in &self.arcs {
             let (_, la, lo) = a.from;
             let (_, lb, lob) = a.to;
@@ -694,6 +803,7 @@ impl Widget for WorldMap {
             let col = match (a.glow > 0.0, mx) {
                 (true, _) => pal.red,
                 (false, true) => pal.main,
+                (false, false) if dr.is_some() => pal.oro,
                 (false, false) => pal.amber,
             };
             let upto = (steps as f32 * a.t) as i32;
@@ -708,6 +818,8 @@ impl Widget for WorldMap {
             }
             status = if mx {
                 format!("ALMA EN CAMINO: {} -> {}", a.from.0, a.to.0)
+            } else if let Some(d) = dr {
+                format!("{}: {} -> {}", d.trace, a.from.0, a.to.0)
             } else {
                 format!("TRACE {} -> {}", a.from.0, a.to.0)
             };
@@ -720,6 +832,8 @@ impl Widget for WorldMap {
             let ch = match (mx, blink) {
                 (true, true) => '\u{2740}',
                 (true, false) => '\u{273f}',
+                (false, true) if dr.is_some() => '\u{2736}',
+                (false, false) if dr.is_some() => '\u{2726}',
                 (false, true) => '\u{25c9}',
                 (false, false) => '\u{25cf}',
             };
@@ -727,6 +841,8 @@ impl Widget for WorldMap {
                 pal.red
             } else if mx {
                 pal.flor
+            } else if dr.is_some() {
+                pal.oro
             } else {
                 pal.amber
             };
@@ -738,6 +854,12 @@ impl Widget for WorldMap {
             let tw = t.chars().count() as i32;
             if r.w >= status.chars().count() as i32 + tw + 2 {
                 put(c, r, r.w - tw, 0, &t, pal.flor, BOLD);
+            }
+        } else if let Some(d) = dr {
+            let t = format!("{}: {}", d.arrived, self.home);
+            let tw = t.chars().count() as i32;
+            if r.w >= status.chars().count() as i32 + tw + 2 {
+                put(c, r, r.w - tw, 0, &t, pal.oro, BOLD);
             }
         }
     }
@@ -767,7 +889,7 @@ impl Radar {
     pub fn new(seed: u64, mx: Fiesta) -> Radar {
         let mut rng = Rng::with_seed(seed);
         // The holiday tracks more souls the higher it is.
-        let n = if mx.is(Kind::Muertos) {
+        let n = if mx.is(Kind::Muertos) || dress(mx).is_some() {
             5 + (6.0 * mx.level).round() as usize
         } else {
             9
@@ -780,6 +902,8 @@ impl Radar {
                 id: rng.u16(100..999),
                 soul: if mx.is(Kind::Muertos) {
                     muertos::soul(&mut rng, mx.level)
+                } else if let Some(v) = lexico::of(mx) {
+                    babble::pick(&mut rng, v.people)
                 } else {
                     ""
                 },
@@ -805,6 +929,8 @@ impl Widget for Radar {
     fn name(&self) -> &'static str {
         if self.mx.is(Kind::Muertos) {
             "radar-almas --sweep"
+        } else if let Some(d) = dress(self.mx) {
+            d.radar
         } else {
             "radar --sweep"
         }
@@ -818,7 +944,7 @@ impl Widget for Radar {
     fn update(&mut self, dt: f32, _env: &Env) {
         let prev = self.sweep;
         self.sweep = (self.sweep + dt * 1.6) % TAU;
-        let mx = self.mx.is(Kind::Muertos);
+        let mx = self.mx.is(Kind::Muertos) || dress(self.mx).is_some();
         for b in self.blips.iter_mut() {
             b.glow = (b.glow - dt * 0.35).max(0.0);
             let crossed = if self.sweep >= prev {
@@ -839,7 +965,10 @@ impl Widget for Radar {
                     b.home = 0.0;
                     b.dist = 0.9 + self.rng.f32() * 0.08;
                     b.ang = self.rng.f32() * TAU;
-                    b.soul = muertos::soul(&mut self.rng, self.mx.level);
+                    b.soul = match lexico::of(self.mx) {
+                        Some(v) => babble::pick(&mut self.rng, v.people),
+                        None => muertos::soul(&mut self.rng, self.mx.level),
+                    };
                     b.id = self.rng.u16(100..999);
                 }
                 continue;
@@ -852,7 +981,11 @@ impl Widget for Radar {
 
     fn draw(&mut self, c: &mut Canvas, r: Rect, env: &Env) {
         let pal = &env.pal;
-        let mx = self.mx.is(Kind::Muertos);
+        let dr = dress(self.mx);
+        let mx = self.mx.is(Kind::Muertos) || dr.is_some();
+        // The light that sweeps and burns in the middle: a marigold's or a
+        // holiday's gold.
+        let glow = if dr.is_some() { pal.oro } else { pal.flor };
         let (pw, ph) = (self.dots.pw(), self.dots.ph());
         let (cx, cy) = (pw as f32 / 2.0, ph as f32 / 2.0);
         let rad = (cx.min(cy) - 1.0).max(2.0);
@@ -874,7 +1007,7 @@ impl Widget for Radar {
             let col = if i == 0 {
                 pal.bright
             } else if mx {
-                pal.fade(pal.flor, 0.15 + i as f32 * 0.1)
+                pal.fade(glow, 0.15 + i as f32 * 0.1)
             } else {
                 pal.fade(pal.green, 0.15 + i as f32 * 0.1)
             };
@@ -890,17 +1023,13 @@ impl Widget for Radar {
         };
         self.dots.blit(c, area);
         if mx {
-            // The ofrenda in the middle, its candle lit.
+            // The ofrenda (or the star of Belén) in the middle, its candle lit.
             let lit = (self.sweep * 2.0) as i32 % 2 == 0;
-            put_ch(
-                c,
-                area,
-                (cx / 2.0) as i32,
-                (cy / 4.0) as i32,
-                if lit { '\u{2740}' } else { '\u{273f}' },
-                pal.vela,
-                BOLD,
-            );
+            let (ch, col) = match dr {
+                Some(_) => (if lit { '\u{2726}' } else { '\u{2736}' }, pal.oro),
+                None => (if lit { '\u{2740}' } else { '\u{273f}' }, pal.vela),
+            };
+            put_ch(c, area, (cx / 2.0) as i32, (cy / 4.0) as i32, ch, col, BOLD);
         }
         for b in &self.blips {
             if b.glow > 0.02 || mx {
@@ -922,7 +1051,9 @@ impl Widget for Radar {
         }
         if r.w >= 50 {
             let x0 = rw + 1;
-            if mx {
+            if let Some(d) = dr {
+                put(c, r, x0, 0, d.contacts, pal.cyan, BOLD);
+            } else if mx {
                 put(c, r, x0, 0, "ALMAS EN CAMINO", pal.cyan, BOLD);
             } else {
                 put(c, r, x0, 0, "CONTACTS", pal.cyan, BOLD);
@@ -933,7 +1064,7 @@ impl Widget for Radar {
                 if mx {
                     let name = b.soul;
                     let t = if b.home < 4.0 {
-                        format!("{name:<13} EN CASA")
+                        format!("{name:<13} {}", dr.map_or("EN CASA", |d| d.home))
                     } else {
                         format!(
                             "{name:<13} {:03}\u{00b0} {:4.1}",
@@ -941,7 +1072,7 @@ impl Widget for Radar {
                             b.dist * 40.0
                         )
                     };
-                    let col = if b.home < 4.0 { pal.flor } else { col };
+                    let col = if b.home < 4.0 { glow } else { col };
                     put(c, r, x0, y, &t, col, if b.home < 4.0 { BOLD } else { 0 });
                     continue;
                 }
@@ -995,6 +1126,8 @@ impl Widget for Progress {
     fn name(&self) -> &'static str {
         if self.mx.is(Kind::Muertos) {
             "pv --ofrenda"
+        } else if let Some(d) = dress(self.mx) {
+            d.progress
         } else {
             "pv --force"
         }
@@ -1013,6 +1146,10 @@ impl Widget for Progress {
             if b.label.is_empty() {
                 if self.mx.is(Kind::Muertos) && self.rng.f32() < muertos::share(self.mx.level) {
                     muertos::progress_label(&mut self.rng, env.level.max(1), &mut b.label);
+                } else if let Some(v) = lexico::of(self.mx)
+                    && self.rng.f32() < lexico::share(self.mx.level)
+                {
+                    v.progress_label(&mut self.rng, env.level.max(1), &mut b.label);
                 } else {
                     babble::progress_label(&mut self.rng, env.level.max(1), &mut b.label);
                 }
@@ -1047,7 +1184,7 @@ impl Widget for Progress {
                     r,
                     0,
                     y,
-                    if self.mx.is(Kind::Muertos) {
+                    if self.mx.is(Kind::Muertos) || dress(self.mx).is_some() {
                         "COMPLETO"
                     } else {
                         "COMPLETE"
@@ -1066,6 +1203,9 @@ impl Widget for Progress {
                 let (ch, col) = if self.mx.is(Kind::Muertos) && !done && x + 1 == filled {
                     // A marigold at the head of the bar.
                     ('\u{273f}', pal.flor)
+                } else if dress(self.mx).is_some() && !done && x + 1 == filled {
+                    // A star at the head of it.
+                    ('\u{2736}', pal.oro)
                 } else if x < filled {
                     (
                         '\u{2588}',
@@ -1157,6 +1297,8 @@ impl Satellites {
         let mut rng = Rng::with_seed(seed);
         let mut names: Vec<&str> = if mx.is(Kind::Muertos) {
             SAT_NAMES_MX
+        } else if let Some(d) = dress(mx) {
+            d.sat_names
         } else {
             SAT_NAMES
         }
@@ -1194,6 +1336,8 @@ impl Widget for Satellites {
     fn name(&self) -> &'static str {
         if self.mx.is(Kind::Muertos) {
             "rastreador-satelital"
+        } else if let Some(d) = dress(self.mx) {
+            d.sats
         } else {
             "satellite-tracker"
         }
@@ -1268,6 +1412,8 @@ impl Widget for Satellites {
             0,
             if self.mx.is(Kind::Muertos) {
                 "RASTREO ORBITAL  ENLACE AL MICTL\u{00c1}N"
+            } else if let Some(d) = dress(self.mx) {
+                d.sats_head
             } else {
                 "ORBITAL TRACKING  UPLINK LOCKED"
             },
@@ -1356,15 +1502,22 @@ impl Widget for Ticker {
     fn name(&self) -> &'static str {
         if self.mx.is(Kind::Muertos) {
             "bolsa --mictlan"
+        } else if let Some(d) = dress(self.mx) {
+            d.ticker
         } else {
             "ticker --crypto"
         }
     }
 
     fn resize(&mut self, _w: u16, h: u16) {
-        if self.mx.is(Kind::Muertos) {
-            let n = (h as usize).saturating_sub(2).clamp(1, SYMBOLS_MX.len());
-            let mut syms: Vec<(&'static str, bool)> = SYMBOLS_MX.to_vec();
+        let holiday: Option<&'static [(&'static str, bool)]> = if self.mx.is(Kind::Muertos) {
+            Some(SYMBOLS_MX)
+        } else {
+            dress(self.mx).map(|d| d.symbols)
+        };
+        if let Some(list) = holiday {
+            let n = (h as usize).saturating_sub(2).clamp(1, list.len());
+            let mut syms: Vec<(&'static str, bool)> = list.to_vec();
             self.rng.shuffle(&mut syms);
             self.quotes = syms
                 .into_iter()
@@ -1408,7 +1561,7 @@ impl Widget for Ticker {
         }
         self.timer = 0.4 + self.rng.f32() * 0.4;
         // Marigolds, candles and bread climb with the holiday.
-        let lift = if self.mx.is(Kind::Muertos) {
+        let lift = if self.mx.is(Kind::Muertos) || dress(self.mx).is_some() {
             0.012 * self.mx.level
         } else {
             0.0
@@ -1431,6 +1584,8 @@ impl Widget for Ticker {
             0,
             if self.mx.is(Kind::Muertos) {
                 "CLAVE       \u{00da}LTIMO   CAMB%  TENDENCIA"
+            } else if let Some(d) = dress(self.mx) {
+                d.ticker_head
             } else {
                 "SYMBOL      LAST     CHG%  TREND"
             },
@@ -1477,22 +1632,56 @@ impl Widget for Ticker {
 
 // ---------------------------------------------------------------- access banners
 
-/// A 3x5 pixel font for the banner letters.
-fn glyph(ch: char) -> [u8; 5] {
+/// A 3x5 pixel font for the banner letters. The holidays after Día de
+/// Muertos need more of the alphabet than "ACCESS DENIED" does.
+pub(super) fn glyph(ch: char) -> [u8; 5] {
     match ch {
         'A' => [0b010, 0b101, 0b111, 0b101, 0b101],
+        'B' => [0b110, 0b101, 0b110, 0b101, 0b110],
         'C' => [0b011, 0b100, 0b100, 0b100, 0b011],
         'D' => [0b110, 0b101, 0b101, 0b101, 0b110],
         'E' => [0b111, 0b100, 0b110, 0b100, 0b111],
+        'F' => [0b111, 0b100, 0b110, 0b100, 0b100],
         'G' => [0b011, 0b100, 0b101, 0b101, 0b011],
+        'H' => [0b101, 0b101, 0b111, 0b101, 0b101],
         'I' => [0b111, 0b010, 0b010, 0b010, 0b111],
+        'J' => [0b001, 0b001, 0b001, 0b101, 0b010],
+        'K' => [0b101, 0b101, 0b110, 0b101, 0b101],
+        'L' => [0b100, 0b100, 0b100, 0b100, 0b111],
+        'M' => [0b111, 0b111, 0b101, 0b101, 0b101],
         'N' => [0b101, 0b111, 0b111, 0b101, 0b101],
+        'P' => [0b110, 0b101, 0b110, 0b100, 0b100],
+        'Q' => [0b010, 0b101, 0b101, 0b111, 0b011],
         'R' => [0b110, 0b101, 0b110, 0b101, 0b101],
         'S' => [0b011, 0b100, 0b010, 0b001, 0b110],
         'T' => [0b111, 0b010, 0b010, 0b010, 0b010],
         'O' => [0b010, 0b101, 0b101, 0b101, 0b010],
+        'U' => [0b101, 0b101, 0b101, 0b101, 0b111],
+        'V' => [0b101, 0b101, 0b101, 0b101, 0b010],
+        'W' => [0b101, 0b101, 0b111, 0b111, 0b101],
+        'X' => [0b101, 0b101, 0b010, 0b101, 0b101],
+        'Y' => [0b101, 0b101, 0b010, 0b010, 0b010],
+        'Z' => [0b111, 0b001, 0b010, 0b100, 0b111],
+        '0' => [0b111, 0b101, 0b101, 0b101, 0b111],
+        '1' => [0b010, 0b110, 0b010, 0b010, 0b111],
+        '2' => [0b110, 0b001, 0b010, 0b100, 0b111],
+        '3' => [0b110, 0b001, 0b010, 0b001, 0b110],
+        '4' => [0b101, 0b101, 0b111, 0b001, 0b001],
+        '5' => [0b111, 0b100, 0b110, 0b001, 0b110],
+        '6' => [0b011, 0b100, 0b111, 0b101, 0b111],
+        '7' => [0b111, 0b001, 0b010, 0b010, 0b010],
+        '8' => [0b111, 0b101, 0b111, 0b101, 0b111],
+        '9' => [0b111, 0b101, 0b111, 0b001, 0b110],
+        '!' => [0b010, 0b010, 0b010, 0b000, 0b010],
+        '\u{00a1}' => [0b010, 0b000, 0b010, 0b010, 0b010],
         _ => [0; 5],
     }
+}
+
+/// Can the banner font draw `ch`?
+#[cfg(test)]
+pub(super) fn has_glyph(ch: char) -> bool {
+    glyph(ch) != [0; 5]
 }
 
 pub struct Access {
@@ -1540,6 +1729,8 @@ impl Widget for Access {
     fn name(&self) -> &'static str {
         if self.mx.is(Kind::Muertos) {
             "authd --mictlan"
+        } else if let Some(d) = dress(self.mx) {
+            d.authd
         } else {
             "authd"
         }
@@ -1563,7 +1754,7 @@ impl Widget for Access {
                 self.wait -= dt;
                 if self.wait <= 0.0 {
                     // The souls are let in more often the higher the holiday.
-                    let granted = if self.mx.is(Kind::Muertos) {
+                    let granted = if self.mx.is(Kind::Muertos) || dress(self.mx).is_some() {
                         self.rng.f32() < 0.25 + 0.4 * self.mx.level
                     } else {
                         self.rng.u8(..10) < 4
@@ -1581,12 +1772,15 @@ impl Widget for Access {
         };
         let pal = &env.pal;
         let col = if granted { pal.green } else { pal.red };
-        let mx = self.mx.is(Kind::Muertos);
-        let (w1, w2) = match (mx, granted) {
-            (true, true) => ("ACCESO", "CONCEDIDO"),
-            (true, false) => ("ACCESO", "DENEGADO"),
-            (false, true) => ("ACCESS", "GRANTED"),
-            (false, false) => ("ACCESS", "DENIED"),
+        let dr = dress(self.mx);
+        let words = dr.map(|d| if granted { &d.granted } else { &d.denied });
+        let mx = self.mx.is(Kind::Muertos) || dr.is_some();
+        let (w1, w2) = match (words, mx, granted) {
+            (Some(w), _, _) => (w[0], w[1]),
+            (None, true, true) => ("ACCESO", "CONCEDIDO"),
+            (None, true, false) => ("ACCESO", "DENEGADO"),
+            (None, false, true) => ("ACCESS", "GRANTED"),
+            (None, false, false) => ("ACCESS", "DENIED"),
         };
         // Blink in the last moments.
         let on = left > 0.5 || (left * 10.0) as i32 % 2 == 0;
@@ -1607,7 +1801,7 @@ impl Widget for Access {
         }
         // The little banner says it in one line; at the holiday it says as
         // much of "ACCESO AL MICTLAN DENEGADO" as fits.
-        let small = if !mx {
+        let small = if !mx || dr.is_some() {
             format!("{w1} {w2}")
         } else if r.w >= 32 {
             format!("{w1} AL MICTL\u{00c1}N {w2}")
@@ -1649,10 +1843,10 @@ impl Widget for Access {
             Self::word(c, sub, by + 7, w2, sx, col);
             if mx {
                 // Captions on the frame: where to, and what the guard says.
-                let (up, down) = if granted {
-                    (" MICTL\u{00c1}N ", " \u{00a1}PASA, TE ESPERAN! ")
-                } else {
-                    (" MICTL\u{00c1}N ", " TODAV\u{00cd}A NO TE TOCA ")
+                let (up, down) = match words {
+                    Some(w) => (w[2], w[3]),
+                    None if granted => (" MICTL\u{00c1}N ", " \u{00a1}PASA, TE ESPERAN! "),
+                    None => (" MICTL\u{00c1}N ", " TODAV\u{00cd}A NO TE TOCA "),
                 };
                 for (y, t) in [(by, up), (by + bh - 1, down)] {
                     let n = t.chars().count() as i32;
@@ -1749,6 +1943,8 @@ impl Widget for Keygen {
     fn name(&self) -> &'static str {
         if self.mx.is(Kind::Muertos) {
             "ssh-keygen -lv --altar"
+        } else if let Some(d) = dress(self.mx) {
+            d.keygen
         } else {
             "ssh-keygen -lv"
         }
@@ -1785,8 +1981,13 @@ impl Widget for Keygen {
             self.feed.draw(c, r, env);
             return;
         }
-        let mx = self.mx.is(Kind::Muertos);
-        let title = if mx { "[ALMA 4096]" } else { "[RSA 4096]" };
+        let dr = dress(self.mx);
+        let mx = self.mx.is(Kind::Muertos) || dr.is_some();
+        let title = match dr {
+            Some(d) => d.key_title,
+            None if mx => "[ALMA 4096]",
+            None => "[RSA 4096]",
+        };
         let mut top = String::from("+");
         top.push_str(&"-".repeat(3));
         top.push_str(title);
@@ -1799,12 +2000,47 @@ impl Widget for Keygen {
             for x in 0..17 {
                 let n = self.field[y][x] as usize;
                 let (ch, col, at) = if (x, y) == self.pos && self.step < 64 {
-                    (if mx { '\u{2726}' } else { '^' }, pal.bright, BOLD)
+                    (
+                        if !mx {
+                            '^'
+                        } else {
+                            dr.map_or('\u{2726}', |d| d.art_walker)
+                        },
+                        pal.bright,
+                        BOLD,
+                    )
                 } else if (x, y) == (8, 4) {
                     // Start and end: the house and the ofrenda.
-                    (if mx { '\u{2302}' } else { 'S' }, pal.amber, BOLD)
+                    (
+                        if !mx {
+                            'S'
+                        } else {
+                            dr.map_or('\u{2302}', |d| d.art_start)
+                        },
+                        pal.amber,
+                        BOLD,
+                    )
                 } else if (x, y) == self.pos && n > 0 {
-                    (if mx { '\u{2740}' } else { 'E' }, pal.amber, BOLD)
+                    (
+                        if !mx {
+                            'E'
+                        } else {
+                            dr.map_or('\u{2740}', |d| d.art_end)
+                        },
+                        pal.amber,
+                        BOLD,
+                    )
+                } else if let Some(d) = dr {
+                    // Ornaments, from dim dots to green stars to gold as they pile up.
+                    let k = n.min(14);
+                    let col = if k < 4 {
+                        pal.dim
+                    } else if k < 9 {
+                        pal.main
+                    } else {
+                        pal.oro
+                    };
+                    (d.art[k], col, if n > 4 { BOLD } else { 0 })
                 } else if mx {
                     // Flowers, from white to orange to rosa as they pile up.
                     let k = n.min(14);
@@ -1831,7 +2067,9 @@ impl Widget for Keygen {
             r,
             0,
             10,
-            if mx {
+            if let Some(d) = dr {
+                d.key_end
+            } else if mx {
                 "+---[PANTE\u{00d3}N]-----+"
             } else {
                 "+----[SHA256]-----+"
@@ -1845,7 +2083,9 @@ impl Widget for Keygen {
                 r,
                 22,
                 1,
-                if mx {
+                if let Some(d) = dr {
+                    d.key_lines[0]
+                } else if mx {
                     "Generando la llave de la ofrenda"
                 } else {
                     "Generating public/private rsa key pair"
@@ -1862,12 +2102,21 @@ impl Widget for Keygen {
                 r,
                 22,
                 3,
-                if mx { "Huella:" } else { "Fingerprint:" },
+                match dr {
+                    Some(d) => d.key_lines[1],
+                    None if mx => "Huella:",
+                    None => "Fingerprint:",
+                },
                 pal.dim,
                 0,
             );
             put(c, r, 22, 4, &fp, pal.bright, BOLD);
-            let steps = format!("{} {:>2}/64", if mx { "Paso" } else { "Walk" }, self.step);
+            let walk = match dr {
+                Some(d) => d.key_lines[2],
+                None if mx => "Paso",
+                None => "Walk",
+            };
+            let steps = format!("{walk} {:>2}/64", self.step);
             put(c, r, 22, 6, &steps, pal.amber, 0);
         }
         let sub = Rect {

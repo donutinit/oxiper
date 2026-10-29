@@ -28,6 +28,27 @@
 //! home too. Ordinary days are untouched (the holiday draws on its own
 //! random numbers).
 //!
+//! On Navidad, the Guadalupe–Reyes, the screen strings a series of foquitos
+//! along every title bar (a bulb every fourth column, then every third and,
+//! at Nochebuena, every other, blinking in a chase) and the texts go
+//! Spanish about posadas, piñatas, ponche and Reyes Magos (`navidad.rs` and
+//! `lexico.rs`, the same grammar as the Mictlán's), with the villancicos
+//! scrolling through the logs verse by verse. Four widgets are the holiday's
+//! (`posada.rs`): "RASTREO DE LOS REYES MAGOS", Melchor, Gaspar and Baltasar
+//! riding to Mexico under the Estrella de Belén, farther along every day
+//! with an ETA to January 6; the database of cartas a los Reyes with a globo
+//! de cantoya carrying one up; the piñata's impact sensor ("golpes: 7/9
+//! ¡dale!") beside the piñata of seven points swinging, bursting and raining
+//! sweets; and the ponche's thermometer over its olla, hottest on Nochebuena.
+//! The other widgets are renamed and re-worded for the posada (shepherds on
+//! the radar, aguinaldos on the map, a market of ponche and piñatas, the
+//! access banner that answers "ENTREN, SANTOS PEREGRINOS" or "AQUÍ NO ES
+//! MESÓN"). The posadas count up to Nochebuena and the Reyes close in
+//! through January, with headlines for Año Nuevo and the rosca. On December
+//! 28, the Santos Inocentes, the whole screen now and then turns red with
+//! "SISTEMA COMPROMETIDO" and a wipe of /dev/sda1 until it owns up:
+//! "¡INOCENTE PALOMITA!" (`inocentes.rs`). Ordinary days are untouched.
+//!
 //! Structure: the screen is a binary tree of panes (`Node`) whose leaves each
 //! own a `Widget`. Every 10 to 25 real seconds one pane splits, two panes
 //! merge, or the whole layout reshuffles. Panes tile the screen exactly; each
@@ -35,9 +56,13 @@
 
 mod babble;
 mod feed;
+mod inocentes;
+mod lexico;
 mod map;
 mod mictlan;
 mod muertos;
+mod navidad;
+mod posada;
 mod rostro;
 mod sprite;
 mod widgets;
@@ -47,6 +72,7 @@ use crate::fiesta::{Fiesta, Kind};
 use crate::render::{BOLD, Canvas, DIM};
 use crate::scene::{Ctx, Opt, Scene, SceneInfo, Val};
 use fastrand::Rng;
+use inocentes::Fool;
 
 pub const INFO: SceneInfo = SceneInfo {
     name: "hollywood",
@@ -117,12 +143,22 @@ pub struct Pal {
     /// Text drawn on top of a colored background (banners, table headers).
     pub ink: Color,
     pub ramp: Gradient,
-    /// Día de Muertos: the six colors of papel picado (the theme's first six
-    /// accents unless `classic`), a marigold and a candle flame, which keep
-    /// their own hue under every theme.
+    /// The six colors of the garland a holiday hangs from the title bars
+    /// (the theme's first six accents unless `classic`): Día de Muertos'
+    /// papel picado, Navidad's series of foquitos, the tricolor banderitas
+    /// of the Fiestas Patrias and the Revolución.
     pub picado: [Color; 6],
+    /// Día de Muertos: a marigold and a candle flame, which keep their own
+    /// hue under every theme.
     pub flor: Color,
     pub vela: Color,
+    /// Navidad, Fiestas Patrias, Revolución: the holiday's gold (the star of
+    /// Belén, the bell of Dolores, a brass cartridge), also in its own hue
+    /// under every theme.
+    pub oro: Color,
+    /// Navidad: the papel de china of the piñata (the theme's accents unless
+    /// `classic`).
+    pub papel: [Color; 6],
     bg: Color,
 }
 
@@ -148,42 +184,123 @@ const PICADO: [Color; 6] = [
     rgb(0x8cc828),
 ];
 
+/// The papel de china of a piñata under `classic`: rosa mexicano, amarillo,
+/// naranja, turquesa, morado and verde limón.
+const PAPEL: [Color; 6] = [
+    rgb(0xe4007c),
+    rgb(0xffd200),
+    rgb(0xff8c00),
+    rgb(0x00aab8),
+    rgb(0x7028a0),
+    rgb(0x8cc828),
+];
+
+/// The classic colors of a holiday after Día de Muertos (all `0xrrggbb`).
+struct Tints {
+    main: u32,
+    bright: u32,
+    cyan: u32,
+    amber: u32,
+    red: u32,
+    green: u32,
+    ink: u32,
+    ramp: [u32; 5],
+    garland: [u32; 6],
+    oro: u32,
+}
+
+/// Navidad: verde de los foquitos for the text, blanco, rojo nochebuena
+/// and dorado, the series lights in their six colors.
+const NAVIDAD: Tints = Tints {
+    main: 0x3bd16f,
+    bright: 0xf4f1ea,
+    cyan: 0x4d8dff,
+    amber: 0xf2b632,
+    red: 0xff3b3b,
+    green: 0x6be28f,
+    ink: 0x07140b,
+    ramp: [0x0c2a16, 0x1f6f3a, 0xc8102e, 0xf2b632, 0xf4f1ea],
+    garland: [0xff3b3b, 0x3bd16f, 0x3b7bff, 0xffd23b, 0xff5fb4, 0xff8c1a],
+    oro: 0xf2b632,
+};
+
+impl Tints {
+    /// The colors of the day's holiday, if it is one of those.
+    fn of(f: Fiesta) -> Option<&'static Tints> {
+        match f.kind {
+            Kind::Navidad => Some(&NAVIDAD),
+            _ => None,
+        }
+    }
+}
+
 impl Pal {
     fn new(ctx: &Ctx) -> Pal {
         let native = ctx.theme.native;
         let mx = ctx.fiesta.is(Kind::Muertos);
-        let main = match (native, mx) {
-            (true, true) => rgb(0xffa01e),
-            (true, false) => rgb(0x33ee66),
+        let tint = Tints::of(ctx.fiesta);
+        let main = match (native, mx, tint) {
+            (true, true, _) => rgb(0xffa01e),
+            (true, false, Some(t)) => rgb(t.main),
+            (true, false, None) => rgb(0x33ee66),
             _ => ctx.theme.fg,
         };
-        let pick =
-            |i: usize, plain: u32, holiday: u32| ctx.pick(i, rgb(if mx { holiday } else { plain }));
+        let pick = |i: usize, plain: u32, holiday: u32, tinted: Option<u32>| {
+            ctx.pick(
+                i,
+                rgb(if mx {
+                    holiday
+                } else if let Some(t) = tinted {
+                    t
+                } else {
+                    plain
+                }),
+            )
+        };
         Pal {
             main,
             dim: ctx.fade(main, 0.5),
             bright: if native {
-                rgb(if mx { 0xffecb8 } else { 0xcfffd8 })
+                rgb(if mx {
+                    0xffecb8
+                } else if let Some(t) = tint {
+                    t.bright
+                } else {
+                    0xcfffd8
+                })
             } else {
                 ctx.pick(5, main)
             },
-            cyan: pick(4, 0x33d6e8, 0x00c0cc),
-            amber: pick(2, 0xffb000, 0xffd200),
-            red: pick(0, 0xff4545, 0xf0208c),
-            green: pick(3, 0x66ff66, 0x8cc828),
+            cyan: pick(4, 0x33d6e8, 0x00c0cc, tint.map(|t| t.cyan)),
+            amber: pick(2, 0xffb000, 0xffd200, tint.map(|t| t.amber)),
+            red: pick(0, 0xff4545, 0xf0208c, tint.map(|t| t.red)),
+            green: pick(3, 0x66ff66, 0x8cc828, tint.map(|t| t.green)),
             ink: if native {
-                rgb(if mx { 0x120e28 } else { 0x04110a })
+                rgb(if mx {
+                    0x120e28
+                } else if let Some(t) = tint {
+                    t.ink
+                } else {
+                    0x04110a
+                })
             } else {
                 ctx.theme.bg
             },
             ramp: if mx {
                 ctx.ramp(&MX_RAMP)
+            } else if let Some(t) = tint {
+                ctx.ramp(&t.ramp.map(rgb))
             } else {
                 ctx.ramp(&[rgb(0x03140a), rgb(0x0f8a35), rgb(0x33ee66), rgb(0xd8ffe2)])
             },
-            picado: std::array::from_fn(|i| ctx.pick(i, PICADO[i])),
+            picado: match tint {
+                Some(t) if !mx => std::array::from_fn(|i| ctx.pick(i, rgb(t.garland[i]))),
+                _ => std::array::from_fn(|i| ctx.pick(i, PICADO[i])),
+            },
             flor: rgb(0xff8c00),
             vela: rgb(0xffd678),
+            oro: rgb(tint.map_or(0xf2b632, |t| t.oro)),
+            papel: std::array::from_fn(|i| ctx.pick(i, PAPEL[i])),
             bg: ctx.bg,
         }
     }
@@ -216,9 +333,10 @@ pub struct Env {
     pub level: u8,
 }
 
-/// The holiday as the screen cares about it: only Día de Muertos.
+/// The holiday as the screen cares about it: Día de Muertos, Navidad (and
+/// the rest as they are dressed); any other day looks like an ordinary one.
 fn holiday(ctx: &Ctx) -> Fiesta {
-    if ctx.fiesta.is(Kind::Muertos) {
+    if ctx.fiesta.is(Kind::Muertos) || Tints::of(ctx.fiesta).is_some() {
         ctx.fiesta
     } else {
         Fiesta::NONE
@@ -263,6 +381,14 @@ pub fn put_ch(c: &mut Canvas, r: Rect, x: i32, y: i32, ch: char, col: Color, att
     }
 }
 
+/// The first `n` characters of `s`.
+pub fn truncate(s: &str, n: usize) -> &str {
+    match s.char_indices().nth(n) {
+        Some((i, _)) => &s[..i],
+        None => s,
+    }
+}
+
 const MIN_W: i32 = 30;
 const MIN_H: i32 = 7;
 
@@ -278,6 +404,31 @@ const FACE: usize = 21;
 /// The widgets that make a screen read as Día de Muertos at a glance; every
 /// layout of the holiday keeps at least one of them.
 const SIGNATURE: [usize; 4] = [RADAR, GATEWAY, OFRENDA, FACE];
+/// Navidad has four of its own: the tracking of the Reyes Magos, the cartas
+/// a los Reyes, the piñata's impact sensor and the ponche's thermometer.
+const REYES: usize = 22;
+const CARTAS: usize = 23;
+const PINATA: usize = 24;
+const PONCHE: usize = 25;
+const SIGNATURE_NV: [usize; 4] = [REYES, CARTAS, PINATA, PONCHE];
+
+/// The kinds of widget a holiday adds to the ordinary ones.
+fn extras(f: Fiesta) -> std::ops::Range<usize> {
+    match f.kind {
+        Kind::Muertos => GATEWAY..KINDS_MX,
+        Kind::Navidad => REYES..PONCHE + 1,
+        _ => KINDS..KINDS,
+    }
+}
+
+/// The widgets that make a screen read as the day's holiday at a glance.
+fn signature(f: Fiesta) -> &'static [usize] {
+    match f.kind {
+        Kind::Muertos => &SIGNATURE,
+        Kind::Navidad => &SIGNATURE_NV,
+        _ => &[],
+    }
+}
 
 struct Pane {
     rect: Rect,
@@ -520,6 +671,10 @@ fn make_widget(kind: usize, seed: u64, level: u8, mx: Fiesta) -> Box<dyn Widget>
         GATEWAY => Box::new(mictlan::Gateway::new(seed, mx)),
         OFRENDA => Box::new(mictlan::Ofrenda::new(seed, mx)),
         FACE => Box::new(rostro::Face::new(seed, mx)),
+        REYES => Box::new(posada::Reyes::new(seed, mx)),
+        CARTAS => Box::new(posada::Cartas::new(seed, mx)),
+        PINATA => Box::new(posada::Pinata::new(seed, mx)),
+        PONCHE => Box::new(posada::Ponche::new(seed, mx)),
         _ => Box::new(widgets::Keygen::new(seed, level, mx)),
     }
 }
@@ -539,9 +694,14 @@ pub struct Hollywood {
     tape: Vec<char>,
     tape_off: f32,
     tape_buf: String,
-    /// Día de Muertos (or `Fiesta::NONE`), cached; `retheme` re-dresses the
+    /// The day's holiday (or `Fiesta::NONE`), cached; `retheme` re-dresses the
     /// panes when it changes.
     fiesta: Fiesta,
+    seed: u64,
+    /// Scene time, for the lights that blink along the title bars.
+    clock: f32,
+    /// Santos Inocentes: the prank that takes over the panes now and then.
+    fool: Option<Fool>,
 }
 
 impl Hollywood {
@@ -561,6 +721,9 @@ impl Hollywood {
                 level: o.i("babble").clamp(0, 10) as u8,
             },
             fiesta: holiday(ctx),
+            seed: ctx.seed,
+            clock: 0.0,
+            fool: holiday(ctx).inocentes().then(|| Fool::new(ctx.seed)),
             max_panes: o.i("panes").clamp(3, 12) as usize,
             reshuffle,
             speed: if speed.is_finite() {
@@ -598,16 +761,20 @@ impl Hollywood {
         }
     }
 
-    /// A widget kind: any of them, or on Día de Muertos (three more kinds) the
-    /// signature ones more often the higher the holiday.
+    /// A widget kind: any of them, or on a holiday with widgets of its own
+    /// (Día de Muertos three more kinds, Navidad four) the signature ones more
+    /// often the higher the holiday.
     fn roll_kind(&mut self) -> usize {
-        if !self.fiesta.is(Kind::Muertos) {
+        let sig = signature(self.fiesta);
+        if sig.is_empty() {
             return self.rng.usize(..KINDS);
         }
         if self.rng.f32() < 0.1 + 0.2 * self.fiesta.level {
-            SIGNATURE[self.rng.usize(..SIGNATURE.len())]
+            sig[self.rng.usize(..sig.len())]
         } else {
-            self.rng.usize(..KINDS_MX)
+            let more = extras(self.fiesta);
+            let k = self.rng.usize(..KINDS + more.len());
+            if k < KINDS { k } else { more.start + k - KINDS }
         }
     }
 
@@ -640,6 +807,8 @@ impl Hollywood {
             p.title.push_str(" \u{00b7} ");
             if mx.is(Kind::Muertos) {
                 muertos::mixed_title(rng, mx.level, &mut p.title);
+            } else if let Some(v) = lexico::of(mx) {
+                v.mixed_title(rng, mx.level, &mut p.title);
             } else {
                 babble::title(rng, &mut p.title);
             }
@@ -647,12 +816,19 @@ impl Hollywood {
         p.retitle = 8.0 + rng.f32() * 14.0;
     }
 
-    /// Day of the dead: keeps at least one signature widget on screen by
-    /// turning the biggest pane into the Mictlán gateway if there is none.
+    /// A holiday with widgets of its own keeps at least one signature widget
+    /// on screen by turning the biggest pane into the Mictlán gateway (or the
+    /// tracking of the Reyes Magos) if there is none.
     fn ensure_signature(&mut self) {
-        if !self.fiesta.is(Kind::Muertos) {
+        let sig = signature(self.fiesta);
+        if sig.is_empty() {
             return;
         }
+        let fallback = if self.fiesta.is(Kind::Muertos) {
+            GATEWAY
+        } else {
+            sig[0]
+        };
         let area = self.area();
         let (level, mx) = (self.env.level, self.fiesta);
         let Some(root) = &mut self.root else {
@@ -660,7 +836,7 @@ impl Hollywood {
         };
         let (mut have, mut biggest) = (false, 0);
         root.each(&mut |p| {
-            have |= SIGNATURE.contains(&p.kind);
+            have |= sig.contains(&p.kind);
             biggest = biggest.max(p.rect.area());
         });
         if have {
@@ -671,8 +847,8 @@ impl Hollywood {
         root.each_mut(&mut |p| {
             if !done && p.rect.area() == biggest {
                 done = true;
-                p.kind = GATEWAY;
-                p.widget = make_widget(GATEWAY, rng.u64(..), level, mx);
+                p.kind = fallback;
+                p.widget = make_widget(fallback, rng.u64(..), level, mx);
                 p.content = (u16::MAX, u16::MAX);
                 Self::retitle(p, rng, level, mx);
             }
@@ -684,6 +860,7 @@ impl Hollywood {
     /// the widget of the new day.
     fn dress(&mut self, mx: Fiesta) {
         self.fiesta = mx;
+        self.fool = mx.inocentes().then(|| Fool::new(self.seed));
         self.tape.clear();
         self.tape_off = 0.0;
         let area = self.area();
@@ -691,7 +868,7 @@ impl Hollywood {
         if let Some(root) = &mut self.root {
             let rng = &mut self.rng;
             root.each_mut(&mut |p| {
-                if p.kind >= KINDS && !mx.is(Kind::Muertos) {
+                if p.kind >= KINDS && !extras(mx).contains(&p.kind) {
                     p.kind = rng.usize(..KINDS);
                 }
                 p.widget = make_widget(p.kind, rng.u64(..), level, mx);
@@ -821,6 +998,32 @@ impl Hollywood {
                     s.push_str(&up);
                 }
                 s.push_str("  \u{273f}  ");
+            } else if let Some(v) = lexico::of(self.fiesta) {
+                // Headlines of the holiday among its mission log; the days of
+                // the turn of the year and of the Reyes have some of their own.
+                let day = (v.days)(self.fiesta);
+                if !day.is_empty() && self.rng.f32() < 0.4 {
+                    let tpl = day[self.rng.usize(..day.len())];
+                    let from = s.len();
+                    v.expand(&mut self.rng, tpl, &mut s);
+                    let up = s[from..].to_uppercase();
+                    s.truncate(from);
+                    s.push_str(&up);
+                } else if self.rng.f32() < 0.3 + 0.3 * self.fiesta.level {
+                    v.headline(&mut self.rng, &mut s);
+                } else {
+                    s.push_str("MISI\u{00d3}N ");
+                    s.push(v.mark);
+                    s.push(' ');
+                    let from = s.len();
+                    v.mixed(&mut self.rng, self.env.level, self.fiesta.level, &mut s);
+                    let up = s[from..].to_uppercase();
+                    s.truncate(from);
+                    s.push_str(&up);
+                }
+                s.push_str("  ");
+                s.push(v.mark);
+                s.push_str("  ");
             } else {
                 s.push_str("MISSION \u{25c6} ");
                 babble::gerund_phrase(&mut self.rng, self.env.level, &mut s);
@@ -883,6 +1086,7 @@ impl Scene for Hollywood {
 
     fn update(&mut self, _ctx: &Ctx, dt: f32) {
         let dt = (dt * self.speed).clamp(0.0, 0.5);
+        self.clock += dt;
         let env = &self.env;
         if let Some(r) = &mut self.root {
             r.each_mut(&mut |p| {
@@ -903,6 +1107,9 @@ impl Scene for Hollywood {
     fn tick(&mut self, ctx: &Ctx, dt: f32, real: f32) {
         self.update(ctx, dt);
         let real = real.clamp(0.0, 30.0);
+        if let Some(f) = &mut self.fool {
+            f.tick(real);
+        }
         self.next_event -= real;
         if self.next_event <= 0.0 && self.w > 0 {
             self.change_layout();
@@ -924,6 +1131,8 @@ impl Scene for Hollywood {
         self.feed_tape();
         let env = &self.env;
         let pal = &env.pal;
+        let alarm = self.fool.as_ref().and_then(|f| f.edge(pal));
+        let clock = self.clock;
         if let Some(root) = &mut self.root {
             root.each_mut(&mut |p| {
                 let r = p.rect;
@@ -931,7 +1140,9 @@ impl Scene for Hollywood {
                     return;
                 }
                 // New panes light their border up for a moment.
-                let edge = if p.age < 1.0 {
+                let edge = if let Some(col) = alarm {
+                    col
+                } else if p.age < 1.0 {
                     pal.fade(pal.bright, p.age * 0.5)
                 } else {
                     pal.fade(pal.main, 0.45)
@@ -949,12 +1160,43 @@ impl Scene for Hollywood {
                 } else {
                     1
                 };
-                for x in 1..r.w {
-                    if gap > 0 && (x + r.x + r.y) % gap == 0 {
-                        let k = ((x + r.x) / gap.max(1)) as usize % 6;
-                        c.set(r.x + x, r.y, '\u{25bc}', pal.picado[k]);
+                if self.fiesta.is(Kind::Navidad) {
+                    // Navidad strings a series of foquitos along the title bar,
+                    // a bulb every fourth column, then every third and, at
+                    // Nochebuena, every other, in the six colors of the
+                    // lights. They blink in a chase: two of every three lit,
+                    // the dark one running along the string.
+                    let gap = if self.fiesta.level < 0.5 {
+                        4
+                    } else if self.fiesta.level < 0.8 {
+                        3
                     } else {
-                        c.set(r.x + x, r.y, '\u{2500}', edge);
+                        2
+                    };
+                    let phase = (clock * 3.0) as usize;
+                    for x in 1..r.w {
+                        if (x + r.x + r.y) % gap == 0 {
+                            let n = ((x + r.x) / gap) as usize;
+                            let lit = !(n + phase).is_multiple_of(3);
+                            let bulb = pal.picado[n % 6];
+                            let (col, at) = if lit {
+                                (bulb, BOLD)
+                            } else {
+                                (pal.fade(bulb, 0.65), 0)
+                            };
+                            c.set_attr(r.x + x, r.y, '\u{25cf}', col, at);
+                        } else {
+                            c.set(r.x + x, r.y, '\u{2500}', edge);
+                        }
+                    }
+                } else {
+                    for x in 1..r.w {
+                        if gap > 0 && (x + r.x + r.y) % gap == 0 {
+                            let k = ((x + r.x) / gap.max(1)) as usize % 6;
+                            c.set(r.x + x, r.y, '\u{25bc}', pal.picado[k]);
+                        } else {
+                            c.set(r.x + x, r.y, '\u{2500}', edge);
+                        }
                     }
                 }
                 for y in 1..r.h {
@@ -995,16 +1237,22 @@ impl Scene for Hollywood {
         // The mission ticker.
         if self.h >= 8 {
             let y = self.h - 1;
+            let mark = lexico::of(self.fiesta).map_or('\0', |v| v.mark);
             for (i, &ch) in self.tape.iter().take(self.w as usize).enumerate() {
                 let (col, at) = if ch == '\u{25c6}' {
                     (pal.amber, BOLD)
                 } else if ch == '\u{273f}' {
                     (pal.flor, BOLD)
+                } else if ch == mark {
+                    (pal.oro, BOLD)
                 } else {
                     (pal.cyan, 0)
                 };
                 c.set_attr(i as i32, y, ch, col, at);
             }
+        }
+        if let Some(f) = &mut self.fool {
+            f.draw(c, pal);
         }
     }
 }
@@ -1428,5 +1676,421 @@ mod tests {
         assert!(seen.contains("PASA, TE ESPERAN"), "granted banner");
         assert!(seen.contains("DENEGADO") && seen.contains("MICTL\u{00c1}N"));
         assert!(!seen.contains("ACCESS"));
+    }
+
+    // ------------------------------------------------------------------ Navidad
+
+    /// The foquitos strung along the top row, where every pane has its title bar.
+    fn bulbs(c: &Canvas) -> usize {
+        (0..c.w() as i32)
+            .filter(|&x| c.get(x, 0).is_some_and(|cell| cell.ch == '\u{25cf}'))
+            .count()
+    }
+
+    /// Days across the holiday: the first, a posada, Nochebuena, Navidad, the
+    /// Inocentes, Año Nuevo and the Reyes closing in and arrived.
+    const NAVIDAD_DAYS: [(u32, u32); 8] = [
+        (12, 12),
+        (12, 20),
+        (12, 24),
+        (12, 25),
+        (12, 28),
+        (12, 31),
+        (1, 2),
+        (1, 6),
+    ];
+
+    #[test]
+    fn navidad_dresses_the_screen() {
+        let theme = Theme::classic();
+        let o = opts("");
+        for (m, d) in NAVIDAD_DAYS {
+            let ctx = ctx_of(&theme, &o, Fiesta::of_day(m, d));
+            let mut s = Hollywood::new(&ctx);
+            s.resize(&ctx, 140, 40);
+            run(&mut s, &ctx, 3.0);
+            let c = frame(&mut s, &ctx, 140, 40);
+            // Series lights along the title bars in their six colors, the
+            // green of the foquitos for the text, a star on the tape.
+            assert!(bulbs(&c) > 6, "{m}-{d}\n{}", text(&c));
+            let mut colors: Vec<Color> = Vec::new();
+            for x in (0..140)
+                .filter_map(|x| c.get(x, 0))
+                .filter(|x| x.ch == '\u{25cf}')
+            {
+                if !colors.contains(&x.fg) {
+                    colors.push(x.fg);
+                }
+            }
+            assert!(colors.len() >= 4, "{m}-{d} {colors:?}");
+            assert_eq!(s.env.pal.main, rgb(0x3bd16f));
+            assert!(c.cells().iter().any(|x| x.fg == s.env.pal.main));
+            assert!(
+                text(&c).lines().last().unwrap().contains('\u{2736}'),
+                "{m}-{d}"
+            );
+            assert!(s.kinds().iter().any(|k| SIGNATURE_NV.contains(k)));
+            assert!(
+                s.kinds()
+                    .iter()
+                    .all(|k| *k < KINDS || extras(s.fiesta).contains(k))
+            );
+            // And not a flower of the other holiday.
+            assert_eq!(count(&c, '\u{273f}'), 0);
+        }
+    }
+
+    #[test]
+    fn an_ordinary_day_has_no_navidad() {
+        let theme = Theme::classic();
+        let o = opts("");
+        // Days that are ordinary, and holidays this scene does not dress for.
+        for fiesta in [
+            Fiesta::NONE,
+            Fiesta::of_day(6, 15),
+            Fiesta::of_day(8, 20),
+            Fiesta::of_day(2, 2),
+            Fiesta::of_day(4, 30),
+            Fiesta::of_day(5, 3),
+        ] {
+            let ctx = ctx_of(&theme, &o, fiesta);
+            let mut s = Hollywood::new(&ctx);
+            assert_eq!(s.fiesta, Fiesta::NONE, "{fiesta:?}");
+            s.resize(&ctx, 140, 40);
+            run(&mut s, &ctx, 30.0);
+            let c = frame(&mut s, &ctx, 140, 40);
+            assert_eq!(bulbs(&c), 0, "{fiesta:?}");
+            assert_eq!(s.env.pal.main, rgb(0x33ee66));
+            assert!(s.fool.is_none());
+            assert!(s.kinds().iter().all(|&k| k < KINDS));
+            assert!(text(&c).lines().last().unwrap().starts_with("MISSION"));
+            let t = text(&c);
+            for word in ["RASTREO", "posada", "PI\u{00d1}ATA"] {
+                assert!(!t.contains(word), "{word}");
+            }
+        }
+    }
+
+    #[test]
+    fn navidad_comes_and_goes_through_retheme() {
+        let theme = Theme::classic();
+        let o = opts("");
+        let ordinary = ctx_of(&theme, &o, Fiesta::NONE);
+        let first = ctx_of(&theme, &o, Fiesta::of_day(12, 12));
+        let height = ctx_of(&theme, &o, Fiesta::of_day(12, 24));
+        let reyes = ctx_of(&theme, &o, Fiesta::of_day(1, 6));
+        let muertos = ctx_of(&theme, &o, Fiesta::of_day(11, 2));
+        let mut s = Hollywood::new(&ordinary);
+        s.resize(&ordinary, 160, 48);
+        s.retheme(&ordinary);
+        run(&mut s, &ordinary, 2.0);
+        assert_eq!(bulbs(&frame(&mut s, &ordinary, 160, 48)), 0);
+        for ctx in [&first, &height, &ordinary, &reyes, &muertos, &ordinary] {
+            s.retheme(ctx);
+            run(&mut s, ctx, 2.0);
+            let c = frame(&mut s, ctx, 160, 48);
+            let on = ctx.fiesta.is(Kind::Navidad);
+            assert_eq!(bulbs(&c) > 0, on, "{}", text(&c));
+            assert_eq!(s.fiesta, holiday(ctx));
+            assert_eq!(s.env.pal.main == rgb(0x3bd16f), on);
+            if !on && !ctx.fiesta.is(Kind::Muertos) {
+                assert!(s.kinds().iter().all(|&k| k < KINDS), "{:?}", s.kinds());
+            }
+            // Only the right holiday's widgets are ever in the seats.
+            assert!(
+                s.kinds()
+                    .iter()
+                    .all(|k| *k < KINDS || extras(s.fiesta).contains(k))
+            );
+        }
+        // Dressing only changes the widgets: the panes stay where they were.
+        let mut t = Hollywood::new(&ordinary);
+        t.resize(&ordinary, 160, 48);
+        let rects = t.rects();
+        t.retheme(&height);
+        assert_eq!(t.rects(), rects);
+        t.retheme(&ordinary);
+        assert_eq!(t.rects(), rects);
+    }
+
+    #[test]
+    fn navidad_grows_with_its_level() {
+        let theme = Theme::classic();
+        let o = opts("");
+        let bulbs = |fiesta: Fiesta| {
+            let ctx = ctx_of(&theme, &o, fiesta);
+            let mut s = Hollywood::new(&ctx);
+            s.resize(&ctx, 160, 48);
+            bulbs(&frame(&mut s, &ctx, 160, 48))
+        };
+        let (low, mid, high) = (
+            bulbs(Fiesta::of_day(12, 12)),
+            bulbs(Fiesta::of_day(12, 18)),
+            bulbs(Fiesta::of_day(12, 24)),
+        );
+        assert!(low < mid && mid < high, "{low} {mid} {high}");
+        // More of the text is the holiday's, more shepherds on the radar.
+        assert!(lexico::share(0.3) < lexico::share(1.0));
+        let radar = |f: Fiesta| widgets::Radar::new(1, f);
+        assert!(
+            radar(Fiesta::of_day(12, 12)).blips_len() < radar(Fiesta::of_day(12, 24)).blips_len()
+        );
+    }
+
+    #[test]
+    fn the_reyes_are_on_screen_at_every_size_and_time() {
+        let theme = Theme::classic();
+        let o = opts("reshuffle = 1");
+        for (m, d) in [(12, 24), (12, 12), (1, 4)] {
+            let ctx = ctx_of(&theme, &o, Fiesta::of_day(m, d));
+            for &(w, h) in &[(200u16, 60u16), (120, 36), (80, 24), (60, 20), (31, 9)] {
+                let mut s = Hollywood::new(&ctx);
+                s.resize(&ctx, w, h);
+                for step in 0..120 {
+                    s.tick(&ctx, 0.2, 1.0);
+                    assert!(
+                        s.kinds().iter().any(|k| SIGNATURE_NV.contains(k)),
+                        "{m}-{d} {w}x{h} step {step}: {:?}",
+                        s.kinds()
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn odd_sizes_and_huge_steps_survive_navidad() {
+        let o = opts("");
+        let dracula = Theme::builtin("dracula").unwrap();
+        for theme in [Theme::classic(), dracula] {
+            for (m, d) in NAVIDAD_DAYS {
+                let ctx = ctx_of(&theme, &o, Fiesta::of_day(m, d));
+                for &(w, h) in &[
+                    (1u16, 1u16),
+                    (2, 3),
+                    (7, 2),
+                    (30, 7),
+                    (29, 8),
+                    (45, 12),
+                    (80, 24),
+                    (200, 60),
+                    (300, 90),
+                ] {
+                    let mut s = Hollywood::new(&ctx);
+                    s.resize(&ctx, w, h);
+                    s.retheme(&ctx);
+                    for step in 0..60 {
+                        let (dt, real) = if step % 5 == 0 {
+                            (5.0, 5.0)
+                        } else {
+                            (0.05, 0.3)
+                        };
+                        s.tick(&ctx, dt, real);
+                        frame(&mut s, &ctx, w, h);
+                    }
+                    // A resize in the middle of it.
+                    s.resize(&ctx, w / 2 + 1, h / 2 + 1);
+                    frame(&mut s, &ctx, w / 2 + 1, h / 2 + 1);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn navidads_widgets_stay_in_their_panes() {
+        let theme = Theme::classic();
+        let o = opts("");
+        let ctx = ctx_of(&theme, &o, Fiesta::of_day(12, 24));
+        let env = Env {
+            pal: Pal::new(&ctx),
+            level: 7,
+        };
+        for (m, d) in [(12, 12), (12, 24), (1, 2), (1, 6)] {
+            let fiesta = Fiesta::of_day(m, d);
+            for kind in (0..KINDS).chain(extras(fiesta)) {
+                for &(w, h) in &[
+                    (1u16, 1u16),
+                    (3, 3),
+                    (12, 4),
+                    (29, 6),
+                    (44, 11),
+                    (80, 30),
+                    (120, 40),
+                ] {
+                    let mut widget = make_widget(kind, 5, 7, fiesta);
+                    widget.resize(w, h);
+                    let r = Rect {
+                        x: 3,
+                        y: 2,
+                        w: w as i32,
+                        h: h as i32,
+                    };
+                    for step in 0..40 {
+                        widget.update(if step % 9 == 0 { 0.5 } else { 0.07 }, &env);
+                        let mut c = Canvas::new(w + 8, h + 6, Color::Reset);
+                        widget.draw(&mut c, r, &env);
+                        for y in 0..c.h() as i32 {
+                            for x in 0..c.w() as i32 {
+                                let inside = x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h;
+                                if !inside {
+                                    let cell = c.get(x, y).unwrap();
+                                    assert_eq!(
+                                        cell.ch, ' ',
+                                        "kind {kind} {m}-{d} {w}x{h} drew {:?} at {x},{y}",
+                                        cell.ch
+                                    );
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn the_tape_brings_navidads_headlines() {
+        let theme = Theme::classic();
+        let o = opts("");
+        let ctx = ctx_of(&theme, &o, Fiesta::of_day(12, 24));
+        let mut s = Hollywood::new(&ctx);
+        s.resize(&ctx, 100, 30);
+        let mut seen = String::new();
+        for _ in 0..400 {
+            s.tape.clear();
+            s.feed_tape();
+            seen.extend(s.tape.iter());
+        }
+        for line in [
+            "RASTREO DE LOS REYES MAGOS: ETA 06-ENE",
+            "UPLOADING AGUINALDO_2026.TAR.GZ",
+            "AQU\u{00cd} NO ES MES\u{00d3}N: ACCESO DENEGADO",
+        ] {
+            assert!(seen.contains(line), "{line}");
+        }
+        // The turn of the year and the Reyes have headlines of their own.
+        for (m, d, line) in [
+            (12, 31, "DOCE UVAS"),
+            (1, 1, "PR\u{00d3}SPERO A\u{00d1}O NUEVO"),
+            (1, 4, "ROSCA DE REYES"),
+        ] {
+            let ctx = ctx_of(&theme, &o, Fiesta::of_day(m, d));
+            let mut s = Hollywood::new(&ctx);
+            s.resize(&ctx, 100, 30);
+            let mut seen = String::new();
+            for _ in 0..400 {
+                s.tape.clear();
+                s.feed_tape();
+                seen.extend(s.tape.iter());
+            }
+            assert!(seen.contains(line), "{m}-{d} {line}");
+        }
+        let ctx = ctx_of(&theme, &o, Fiesta::of_day(12, 20));
+        let mut s = Hollywood::new(&ctx);
+        s.resize(&ctx, 100, 30);
+        let mut seen = String::new();
+        for _ in 0..400 {
+            s.tape.clear();
+            s.feed_tape();
+            seen.extend(s.tape.iter());
+        }
+        assert!(!seen.contains("DOCE UVAS"));
+    }
+
+    #[test]
+    fn the_villancicos_scroll_through_the_log() {
+        let theme = Theme::classic();
+        let o = opts("");
+        let ctx = ctx_of(&theme, &o, Fiesta::of_day(12, 24));
+        let env = Env {
+            pal: Pal::new(&ctx),
+            level: 7,
+        };
+        let mut seen = String::new();
+        for seed in 0..12u64 {
+            let mut f = feed::Feed::new(feed::FeedKind::Log, seed, 7, ctx.fiesta);
+            f.resize(120, 40);
+            for step in 0..400 {
+                f.update(0.1, &env);
+                if step % 40 == 0 {
+                    let mut c = Canvas::new(120, 40, Color::Reset);
+                    f.draw(
+                        &mut c,
+                        Rect {
+                            x: 0,
+                            y: 0,
+                            w: 120,
+                            h: 40,
+                        },
+                        &env,
+                    );
+                    seen.push_str(&c.to_text());
+                }
+            }
+        }
+        assert!(seen.contains("\u{266a} "), "{seen}");
+        // Songs go by in order: a verse is followed by the next one.
+        assert!(
+            seen.contains("Campana sobre campana,")
+                || seen.contains("Aqu\u{00ed} no es mes\u{00f3}n")
+                || seen.contains("no pierdas el tino")
+                || seen.contains("Noche de paz")
+        );
+        // An ordinary log has none.
+        let mut f = feed::Feed::new(feed::FeedKind::Log, 3, 7, Fiesta::NONE);
+        f.resize(120, 40);
+        for _ in 0..400 {
+            f.update(0.1, &env);
+        }
+        let mut c = Canvas::new(120, 40, Color::Reset);
+        f.draw(
+            &mut c,
+            Rect {
+                x: 0,
+                y: 0,
+                w: 120,
+                h: 40,
+            },
+            &env,
+        );
+        assert!(!c.to_text().contains('\u{266a}'));
+    }
+
+    #[test]
+    fn the_inocentes_prank_runs_on_december_28_only() {
+        let theme = Theme::classic();
+        let o = opts("");
+        let prank = |m: u32, d: u32| {
+            let ctx = ctx_of(&theme, &o, Fiesta::of_day(m, d));
+            let mut s = Hollywood::new(&ctx);
+            s.resize(&ctx, 140, 40);
+            let mut seen = String::new();
+            // Two minutes of wall-clock time, a frame every half second.
+            for _ in 0..240 {
+                s.tick(&ctx, 0.5, 0.5);
+                seen.push_str(&frame(&mut s, &ctx, 140, 40).to_text());
+            }
+            seen
+        };
+        let seen = prank(12, 28);
+        assert!(seen.contains("SISTEMA COMPROMETIDO"));
+        assert!(seen.contains("\u{00a1}\u{00a1}ALERTA!!"));
+        assert!(seen.contains("INOCENTE PALOMITA, QUE TE DEJASTE ENGA\u{00d1}AR"));
+        // Any other day of Navidad leaves the panes alone.
+        for (m, d) in [(12, 27), (12, 29), (12, 24), (1, 6)] {
+            let seen = prank(m, d);
+            assert!(!seen.contains("SISTEMA COMPROMETIDO"), "{m}-{d}");
+            assert!(!seen.contains("INOCENTE PALOMITA"), "{m}-{d}");
+        }
+        // It comes and goes with the day.
+        let ordinary = ctx_of(&theme, &o, Fiesta::NONE);
+        let day = ctx_of(&theme, &o, Fiesta::of_day(12, 28));
+        let mut s = Hollywood::new(&ordinary);
+        s.resize(&ordinary, 100, 30);
+        assert!(s.fool.is_none());
+        s.retheme(&day);
+        assert!(s.fool.is_some());
+        s.retheme(&ordinary);
+        assert!(s.fool.is_none());
     }
 }
