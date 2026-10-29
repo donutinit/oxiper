@@ -13,6 +13,7 @@ pub mod adelitas;
 pub mod aguila;
 pub mod alebrije;
 pub mod calaverita;
+mod candelaria;
 pub mod catrina;
 pub mod duckpond;
 pub mod grito;
@@ -26,12 +27,14 @@ pub mod nyan;
 pub(crate) mod palette;
 pub mod pastorela;
 mod patrias;
+mod pen;
 pub mod pinata;
 pub mod posada;
 mod revolucion;
 pub mod reyes;
 pub mod sl;
 mod stage;
+pub mod tamalero;
 pub mod tren;
 
 use crate::color::Color;
@@ -86,6 +89,7 @@ pub const ALL: &[&Info] = &[
     &reyes::INFO,
     &pastorela::INFO,
     &inocente::INFO,
+    &tamalero::INFO,
 ];
 
 /// An `egg_rate` at or above this plays an egg at once, again and again, and
