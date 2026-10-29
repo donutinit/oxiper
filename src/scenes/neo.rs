@@ -22,13 +22,27 @@
 //! MICTLÁN, the names on an ofrenda, a word for the day. Now and then a
 //! calavera de azúcar is painted by the rain, out of its own heaviest
 //! glyphs: bone, flower eyes in cempasúchil or rosa with golden hearts,
-//! turquesa icing, a smile of teeth. Under other themes the rain takes the
-//! accents nearest in hue to those colors. It all draws from its own RNG on
-//! top of the screen neo keeps, so the rain falls exactly as it does on any
-//! other day.
+//! turquesa icing, a smile of teeth.
+//!
+//! On Navidad, the Guadalupe–Reyes, the rain falls in verde pino with
+//! droplets in rojo nochebuena joining in as the posadas go, every head a
+//! golden glint and a few droplets all dorado. The words are POSADAS,
+//! NOCHEBUENA, PIÑATA, AGUINALDO, VILLANCICO, ROSCA DE REYES and more, the
+//! names the nacimiento's and the pastorela's cast (MELCHOR, GASPAR,
+//! BALTASAR, LUZBEL), a word for each day (the posadas' verses, Año Nuevo's
+//! PRÓSPERO AÑO NUEVO, the Reyes' ¿QUIÉN SACÓ EL MUÑECO?). Now and then the
+//! rain paints a piñata de siete picos in papel de china, an Estrella de
+//! Belén or a nochebuena, out of its own glyphs like the calavera. On the
+//! Santos Inocentes it plays a prank: now and then the rain turns around
+//! (a wipe from the top down), falls upward for a while, its words rising
+//! out of the bottom, and spells ¡INOCENTE PALOMITA!, then turns back.
+//!
+//! Under other themes the rain takes the accents nearest in hue to those
+//! colors. It all draws from its own RNG on top of the screen neo keeps, so
+//! the rain falls exactly as it does on any other day.
 
 use crate::color::{self, Color};
-use crate::fiesta::Kind;
+use crate::fiesta::{Fiesta, Kind};
 use crate::render::{BOLD, Canvas};
 use crate::scene::{Ctx, Opt, Scene, SceneInfo, Val};
 
@@ -135,7 +149,7 @@ struct Glyph {
     ch: char,
     pair: u8,
     bold: bool,
-    /// Which palette: 0 the scene's, 1 Día de Muertos' second one.
+    /// Which palette: 0 the scene's, 1 and 2 the others a holiday gives it.
     hue: u8,
 }
 
@@ -248,7 +262,7 @@ struct Neo {
     next_glitch: f64,
     force_draw_everything: bool,
     rng: fastrand::Rng,
-    muertos: Muertos,
+    holiday: Holiday,
 }
 
 impl Neo {
@@ -317,7 +331,7 @@ impl Neo {
             next_glitch: 0.0,
             force_draw_everything: false,
             rng,
-            muertos: Muertos::new(ctx.seed, finite(o.f("speed"), 8.0), &chars),
+            holiday: Holiday::new(ctx.seed, finite(o.f("speed"), 8.0), &chars),
         }
     }
 
@@ -479,7 +493,7 @@ impl Neo {
             let (lo, hi) = self.linger_ms;
             linger = self.rng.u32(lo..=hi) as f64 / 1000.0;
         }
-        let hue = self.muertos.hue();
+        let hue = self.holiday.hue();
         self.droplets[idx] = Droplet {
             alive: true,
             head_crawling: true,
@@ -735,14 +749,14 @@ impl Scene for Neo {
         self.cols = w.max(1) as usize;
         self.lines = h.max(1) as usize;
         self.reset();
-        self.muertos.figs.clear();
+        self.holiday.figs.clear();
     }
 
     fn retheme(&mut self, ctx: &Ctx) {
         let (pairs, native) = resolve_colors(ctx, &self.colors);
         self.pairs = pairs;
         let auto = matches!(self.colors.trim(), "" | "auto");
-        if let Some(pairs) = self.muertos.retheme(ctx, auto, native) {
+        if let Some(pairs) = self.holiday.retheme(ctx, auto, native) {
             self.pairs = pairs;
         }
         self.shading = self.shading_opt.unwrap_or(if native {
@@ -769,35 +783,47 @@ impl Scene for Neo {
 
     fn tick(&mut self, ctx: &Ctx, dt: f32, real: f32) {
         self.update(ctx, dt);
-        if self.muertos.on {
+        if self.holiday.on() {
             let head = self.num_pairs() as u8;
             let (w, h) = (self.cols, self.lines);
-            self.muertos.tick(dt, real, &self.screen, w, h, head);
+            self.holiday.tick(dt, real, &self.screen, w, h, head);
         }
     }
 
     fn draw(&mut self, ctx: &Ctx, c: &mut Canvas) {
         let n = self.num_pairs();
-        // Día de Muertos' second palette, when the rain has one.
-        let alt = &self.muertos.alt;
-        let alt = if alt.len() == self.pairs.len() {
-            alt
-        } else {
-            &self.pairs
+        // The other palettes a holiday gives the rain, when it has them.
+        let other = |i: usize| {
+            let alt = &self.holiday.alt[i];
+            if alt.len() == self.pairs.len() {
+                alt
+            } else {
+                &self.pairs
+            }
         };
-        for (y, row) in self.screen.chunks_exact(self.cols).enumerate() {
+        let tables = [&self.pairs, other(0), other(1)];
+        // On the Santos Inocentes the rain falls upward: rows are drawn upside down.
+        let turned = self.holiday.up || self.holiday.sweep < 1.0;
+        let seam = (self.holiday.sweep * self.lines as f32) as usize;
+        for y in 0..self.lines {
+            let flip = turned && mirrored(self.holiday.up, self.holiday.sweep, y, self.lines);
+            let sy = if flip { self.lines - 1 - y } else { y };
+            let row = &self.screen[sy * self.cols..(sy + 1) * self.cols];
             for (x, g) in row.iter().enumerate() {
                 if g.pair == 0 || g.ch == ' ' {
                     continue;
                 }
-                let pairs = if g.hue == 0 { &self.pairs } else { alt };
-                let fg = pairs[(g.pair as usize).min(n)];
+                let mut fg = tables[(g.hue as usize).min(2)][(g.pair as usize).min(n)];
+                // The wipe leaves a bright line.
+                if turned && self.holiday.sweep < 1.0 && y == seam {
+                    fg = self.holiday.flash;
+                }
                 let attr = if g.bold { BOLD } else { 0 };
                 c.set_attr(x as i32, y as i32, g.ch, fg, attr);
             }
         }
-        if self.muertos.on {
-            self.muertos.draw(ctx, c, &self.char_pool);
+        if self.holiday.on() {
+            self.holiday.draw(ctx, c, &self.char_pool);
         }
     }
 }
@@ -1215,20 +1241,27 @@ fn resolve_colors(ctx: &Ctx, colors: &str) -> (Vec<Color>, bool) {
 }
 
 // ---------------------------------------------------------------------------
-// Día de Muertos
+// The fiestas: Día de Muertos and Navidad
 
-/// Mixed into the seed for the holiday's own random numbers, so the rain
+/// Mixed into the seed for the holidays' own random numbers, so the rain
 /// itself falls exactly as it does on any other day.
-const MUERTOS_SEED: u64 = 0x000D_1ADE_0001_1102;
-/// At most this many words and calaveras hidden in the rain at once.
+const HOLIDAY_SEED: u64 = 0x000D_1ADE_0001_1102;
+/// At most this many words and paintings hidden in the rain at once.
 const MAX_FIGS: usize = 6;
-/// Cells per figure (the biggest calavera; words are shorter).
+/// Cells per figure (the biggest painting; words are shorter).
 const SLAB: usize = 25 * 14;
 /// Seconds a figure takes to dim and crumble back into the rain.
 const FADE: f64 = 2.0;
+/// Markers a painting's ink table tells apart: the printable ASCII from the space on.
+const INKS: usize = 96;
+/// Seconds the rain takes to turn around, wiping from the top down.
+const SWEEP: f32 = 0.6;
 
-/// Words the rain carries.
-const WORDS: &[&str] = &[
+/// What the rain spells when it falls upward on the Santos Inocentes.
+const PRANK: &str = "¡INOCENTE PALOMITA!";
+
+/// Words the rain carries on Día de Muertos.
+const MUERTOS_WORDS: &[&str] = &[
     "DÍA DE MUERTOS",
     "CEMPASÚCHIL",
     "MICTLÁN",
@@ -1249,7 +1282,7 @@ const WORDS: &[&str] = &[
 ];
 
 /// Names written on an ofrenda.
-const NAMES: &[&str] = &[
+const MUERTOS_NAMES: &[&str] = &[
     "ABUELITA LUPE",
     "DON CHUY",
     "TÍA CHOLE",
@@ -1264,16 +1297,96 @@ const NAMES: &[&str] = &[
     "TATA CHENTE",
 ];
 
-/// The words of the day, by `fiesta.level`.
-fn day_word(level: f32) -> Option<&'static str> {
-    Some(match (level * 100.0).round() as u32 {
-        45 => "ÁNIMAS SOLAS",
-        50 => "HASTA EL AÑO QUE ENTRA",
-        60 => "ANGELITOS",
-        80 => "TODOS SANTOS",
-        100 => "FIELES DIFUNTOS",
-        _ => return None,
-    })
+/// Words the rain carries in the Guadalupe–Reyes.
+const NAVIDAD_WORDS: &[&str] = &[
+    "POSADAS",
+    "NOCHEBUENA",
+    "PIÑATA",
+    "AGUINALDO",
+    "PONCHE",
+    "PASTORELA",
+    "VILLANCICO",
+    "ROSCA DE REYES",
+    "FELIZ NAVIDAD",
+    "PRÓSPERO AÑO NUEVO",
+    "COLACIÓN",
+    "TEJOCOTES",
+    "BUÑUELOS",
+    "RECALENTADO",
+    "NACIMIENTO",
+    "ESTRELLA DE BELÉN",
+    "LUCES DE BENGALA",
+    "CARTA A LOS REYES",
+    "GUADALUPE-REYES",
+    "TAMALES",
+];
+
+/// The cast of the nacimiento, the pastorela and the Reyes, who light up like names.
+const NAVIDAD_NAMES: &[&str] = &[
+    "MELCHOR",
+    "GASPAR",
+    "BALTASAR",
+    "MARÍA",
+    "JOSÉ",
+    "NIÑO DIOS",
+    "LUZBEL",
+    "SAN MIGUEL ARCÁNGEL",
+    "BATO",
+    "GILA",
+];
+
+/// The words and the names a holiday hides in the rain.
+fn lexicon(kind: Kind) -> (&'static [&'static str], &'static [&'static str]) {
+    match kind {
+        Kind::Navidad => (NAVIDAD_WORDS, NAVIDAD_NAMES),
+        _ => (MUERTOS_WORDS, MUERTOS_NAMES),
+    }
+}
+
+/// The words of the day, by day and `fiesta.level`.
+fn day_words(f: Fiesta) -> &'static [&'static str] {
+    if f.is(Kind::Navidad) {
+        return match f.date() {
+            (12, 12..=15) => &["VIRGEN DE GUADALUPE", "LAS MAÑANITAS", "GUADALUPE-REYES"],
+            (12, 24) => &["NOCHEBUENA", "LA ÚLTIMA POSADA", "NIÑO DIOS"],
+            (12, 16..=23) => &[
+                "POSADAS",
+                "EN EL NOMBRE DEL CIELO",
+                "¡DALE, DALE, DALE!",
+                "NO PIERDAS EL TINO",
+            ],
+            (12, 25) => &["FELIZ NAVIDAD", "NAVIDAD"],
+            (12, 28) => &["SANTOS INOCENTES", "¿DE VERAS?"],
+            (12, 26..=30) => &["RECALENTADO", "TAMALES"],
+            (12, 31) | (1, 1) => &[
+                "PRÓSPERO AÑO NUEVO",
+                "FELIZ AÑO NUEVO",
+                "LAS DOCE UVAS",
+                "PIDE UN DESEO",
+            ],
+            (1, 6) => &[
+                "ROSCA DE REYES",
+                "DÍA DE REYES",
+                "¿QUIÉN SACÓ EL MUÑECO?",
+                "REYES MAGOS",
+            ],
+            (1, 2..=5) => &[
+                "REYES MAGOS",
+                "CARTA A LOS REYES",
+                "MELCHOR, GASPAR Y BALTASAR",
+                "ROSCA DE REYES",
+            ],
+            _ => &[],
+        };
+    }
+    match (f.level * 100.0).round() as u32 {
+        45 => &["ÁNIMAS SOLAS"],
+        50 => &["HASTA EL AÑO QUE ENTRA"],
+        60 => &["ANGELITOS"],
+        80 => &["TODOS SANTOS"],
+        100 => &["FIELES DIFUNTOS"],
+        _ => &[],
+    }
 }
 
 /// Calaveras de azúcar the rain paints, small to big: `#` bone, `o` the
@@ -1320,21 +1433,150 @@ const SKULLS: &[&[&str]] = &[
     ],
 ];
 
+/// Piñatas de siete picos in papel de china: `RYOTML` the cones, `d` the body, `w` its glint.
+const PINATAS: &[&[&str]] = &[
+    &[
+        "     R     ",
+        " OOOdRdYYY ",
+        "  OddwddO  ",
+        "LLLddwddOOO",
+        "   MMdTT   ",
+        "   M   T   ",
+    ],
+    &[
+        "        R        ",
+        "       RRR       ",
+        "  OOOOOdRdYYYYY  ",
+        "   OOdddddddYY   ",
+        "  LLdddwwwdddOO  ",
+        "LLLLLdddwdddOOOOO",
+        "    MMMdddTTT    ",
+        "    MMMM TTTT    ",
+    ],
+    &[
+        "           R           ",
+        "          RRR          ",
+        "  OOO    RRRRR    YYY  ",
+        "   OOOOOOOdRdYYYYYYY   ",
+        "    OOOdddddddddYYY    ",
+        "    LOdddwwwwwdddOO    ",
+        "  LLLLdddwwwwwdddOOOO  ",
+        "LLLLLLLdddddddddTOOOOOO",
+        "      MMMMdddTTTT      ",
+        "      MMMMM TTTTT      ",
+        "      MMM     TTT      ",
+    ],
+];
+
+/// The Estrella de Belén: `D` its rays, `d` its body, `w` its core.
+const ESTRELLAS: &[&[&str]] = &[
+    &[
+        "    D    ",
+        "    D    ",
+        " DDdddDD ",
+        "DDddwddDD",
+        "DDddwddDD",
+        " DDdddDD ",
+        "    D    ",
+        "    D    ",
+    ],
+    &[
+        "        D        ",
+        "       DDD       ",
+        "   DD  DDD  DD   ",
+        "   DDDDdddDDDD   ",
+        "   DDdddddddDD   ",
+        "DDDDDddwwwdddDDDD",
+        "   DDdddwdddDD   ",
+        "   DDDDdddDDDD   ",
+        "   DD  DDD  DD   ",
+        "       DDD       ",
+        "        D        ",
+    ],
+    &[
+        "          D          ",
+        "         DDD         ",
+        "         DDD         ",
+        "   DDDD DDDDD DDDD   ",
+        "    DDDDdddddDDDD    ",
+        "     DdddddddddD     ",
+        "DDDDDdddwwwwwdddDDDDD",
+        "DDDDDdddwwwwwdddDDDDD",
+        "     DdddddddddD     ",
+        "    DDDDdddddDDDD    ",
+        "   DDDD DDDDD DDDD   ",
+        "         DDD         ",
+        "         DDD         ",
+        "          D          ",
+    ],
+];
+
+/// Nochebuenas, the poinsettia: `r` the bracts, `v` the leaves, `y` the flowers at its heart.
+const NOCHEBUENAS: &[&[&str]] = &[
+    &[
+        "    r   r    ",
+        "    rrvrr    ",
+        "rrrvrrvrrvrrr",
+        "  rrrryrrrr  ",
+        "  rrrryrrrr  ",
+        "rrrvrrvrrvrrr",
+        "    rrvrr    ",
+        "    r   r    ",
+    ],
+    &[
+        "     rr     rr     ",
+        "     rrr v rrr     ",
+        "    vvrrrvrrrvv    ",
+        "rrrrrvvrrvrrvvrrrrr",
+        "  rrrrrrrvrrrrrrr  ",
+        "  vvvvvvyyyvvvvvv  ",
+        "  rrrrrrrvrrrrrrr  ",
+        "rrrrrvvrrvrrvvrrrrr",
+        "    vvrrrvrrrvv    ",
+        "     rrr v rrr     ",
+        "     rr     rr     ",
+    ],
+    &[
+        "      rr       rr      ",
+        "      rrrr   rrrr      ",
+        "      rrrrvvvrrrr      ",
+        "    vvvrrrrvrrrrvvv    ",
+        "rrrrrrvvrrrvrrrvvrrrrrr",
+        " rrrrrrrrrrvrrrrrrrrrr ",
+        "  vvrrrrrryyyrrrrrrvv  ",
+        "  vvrrrrrryyyrrrrrrvv  ",
+        " rrrrrrrrrrvrrrrrrrrrr ",
+        "rrrrrrvvrrrvrrrvvrrrrrr",
+        "    vvvrrrrvrrrrvvv    ",
+        "      rrrrvvvrrrr      ",
+        "      rrrr   rrrr      ",
+        "      rr       rr      ",
+    ],
+];
+
+/// The paintings a holiday has, each in three sizes, small to big.
+fn paintings(kind: Kind) -> &'static [&'static [&'static [&'static str]]] {
+    match kind {
+        Kind::Navidad => &[PINATAS, ESTRELLAS, NOCHEBUENAS],
+        _ => &[SKULLS],
+    }
+}
+
 #[derive(Clone, Copy)]
 enum Shape {
     /// A word, and whether it is a name (names glow like candlelight, words
     /// like marigolds).
     Word(&'static str, bool),
-    /// A calavera (an index into `SKULLS`), with rosa mexicano eyes rather
-    /// than cempasúchil ones.
-    Skull(usize, bool),
+    /// A painting, rows of ink markers (see `Holiday::ink`), and its variant:
+    /// a calavera has rosa mexicano eyes rather than cempasúchil ones.
+    Art(&'static [&'static str], bool),
 }
 
 impl Shape {
     fn size(self) -> (usize, usize) {
         match self {
             Shape::Word(s, _) => (s.chars().count(), 1),
-            Shape::Skull(i, _) => (SKULLS[i][0].len(), SKULLS[i].len()),
+            Shape::Art(rows, _) => (rows[0].len(), rows.len()),
         }
     }
 
@@ -1342,19 +1584,20 @@ impl Shape {
     fn has(self, dx: usize, dy: usize) -> bool {
         match self {
             Shape::Word(s, _) => s.chars().nth(dx).is_some_and(|c| c != ' '),
-            Shape::Skull(i, _) => SKULLS[i][dy].as_bytes()[dx] != b' ',
+            Shape::Art(rows, _) => rows[dy].as_bytes()[dx] != b' ',
         }
     }
 }
 
-/// A word or a calavera hidden in the rain. The rain lights it up: a word's
-/// letters fall down their columns like droplet heads and land in place; a
-/// calavera is painted column by column, top-down, by droplets of its own
-/// (and by any real one that gets there first).
+/// A word or a painting hidden in the rain. The rain lights it up: a word's
+/// letters fall down their columns like droplet heads and land in place (or
+/// rise, when the rain falls upward); a painting is painted column by column,
+/// top-down, by droplets of its own (and by any real one that gets there
+/// first).
 #[derive(Clone, Copy)]
 struct Figure {
     shape: Shape,
-    /// Its cells' times live at `slot * SLAB` in `Muertos::touched` and `head`.
+    /// Its cells' times live at `slot * SLAB` in `Holiday::touched` and `head`.
     slot: usize,
     x: usize,
     y: usize,
@@ -1365,9 +1608,11 @@ struct Figure {
     life: f64,
     /// When the rain starts lighting it up (scene seconds).
     start: f64,
-    /// How many rows a word's letters fall before they land.
+    /// How many rows a word's letters fall (or rise) before they land.
     fall: f32,
-    /// Picks when each column lights up, the glyphs a calavera is made of
+    /// Do the letters come up from below?
+    up: bool,
+    /// Picks when each column lights up, the glyphs a painting is made of
     /// and the order its cells crumble.
     salt: u32,
 }
@@ -1377,7 +1622,7 @@ impl Figure {
     fn delay(&self, dx: usize) -> f64 {
         let spread = match self.shape {
             Shape::Word(..) => 1.2,
-            Shape::Skull(..) => 1.8,
+            Shape::Art(..) => 1.8,
         };
         (spread * hash01(self.salt, dx)) as f64
     }
@@ -1387,7 +1632,7 @@ impl Figure {
     fn reach(&self, dx: usize, dy: usize, speed: f32) -> f64 {
         let rows = match self.shape {
             Shape::Word(..) => self.fall,
-            Shape::Skull(..) => dy as f32,
+            Shape::Art(..) => dy as f32,
         };
         self.delay(dx) + (rows / speed) as f64
     }
@@ -1402,27 +1647,39 @@ fn hash01(salt: u32, i: usize) -> f32 {
     (h >> 8) as f32 / (1 << 24) as f32
 }
 
-/// What Día de Muertos adds to the rain: a second palette, and the figures.
-struct Muertos {
-    on: bool,
+/// Is row `y` drawn upside down? While the rain turns around (`sweep` below
+/// 1) the rows above the wipe already show the new direction, the rest the old.
+fn mirrored(up: bool, sweep: f32, y: usize, lines: usize) -> bool {
+    if sweep >= 1.0 || (y as f32) < sweep * lines as f32 {
+        up
+    } else {
+        !up
+    }
+}
+
+/// What a holiday adds to the rain: more palettes, and the figures.
+struct Holiday {
+    /// Which holiday the rain is dressed for (`Kind::None` on any other day).
+    kind: Kind,
+    fiesta: Fiesta,
     level: f32,
     /// Seeded apart from the rain's own.
     rng: fastrand::Rng,
     /// How fast the rain falls, in rows a second (neo's droplets crawl about
     /// twice their nominal speed).
     speed: f32,
-    /// The heaviest of the rain's characters, that calaveras are made of.
+    /// The heaviest of the rain's characters, that paintings are made of.
     dense: Vec<char>,
-    /// The rosa mexicano palette some droplets fall in (as long as the
-    /// scene's pair table), or empty when the rain keeps the user's colors.
-    alt: Vec<Color>,
+    /// The other palettes some droplets fall in (as long as the scene's pair
+    /// table): rosa mexicano on Día de Muertos; rojo nochebuena and dorado on
+    /// Navidad. Empty when the rain keeps the user's colors.
+    alt: [Vec<Color>; 2],
     word: Color,
     name: Color,
-    bone: Color,
-    petals: [Color; 2],
-    heart: Color,
-    icing: Color,
     flash: Color,
+    /// The color of each painting marker, by marker (see `slot`), in each of
+    /// the two variants a painting has.
+    inks: [[Color; INKS]; 2],
     figs: Vec<Figure>,
     /// For each figure slot and cell, when the rain lit it up (negative: not
     /// yet), and when a droplet's head last went through it (scene seconds).
@@ -1433,11 +1690,25 @@ struct Muertos {
     /// Scene seconds, for how things move.
     motion: f64,
     next_word: f64,
-    next_skull: f64,
+    next_art: f64,
+    /// Día de los Santos Inocentes: the rain falls upward (`up`), the wipe
+    /// that turns it around is at `sweep` (1 when done), the next turn is at
+    /// `next_flip` (real seconds), and `pranks` more words are to be spelled.
+    prank: bool,
+    up: bool,
+    sweep: f32,
+    next_flip: f64,
+    pranks: u8,
+    next_prank: f64,
 }
 
-impl Muertos {
-    fn new(seed: u64, chars_per_sec: f32, chars: &[char]) -> Muertos {
+/// Where a marker lives in an ink table.
+fn slot(m: u8) -> usize {
+    (m.saturating_sub(32) as usize).min(INKS - 1)
+}
+
+impl Holiday {
+    fn new(seed: u64, chars_per_sec: f32, chars: &[char]) -> Holiday {
         const DENSE: &str = "#@%&$8096BWMQGDNHKRX";
         let mut dense: Vec<char> = DENSE.chars().filter(|c| chars.contains(c)).collect();
         if dense.is_empty() {
@@ -1446,95 +1717,200 @@ impl Muertos {
         if dense.is_empty() {
             dense.push('#');
         }
-        Muertos {
-            on: false,
+        Holiday {
+            kind: Kind::None,
+            fiesta: Fiesta::NONE,
             level: 0.0,
-            rng: fastrand::Rng::with_seed(seed ^ MUERTOS_SEED),
+            rng: fastrand::Rng::with_seed(seed ^ HOLIDAY_SEED),
             speed: (2.0 * chars_per_sec).clamp(4.0, 60.0),
             dense,
-            alt: Vec::new(),
+            alt: [Vec::new(), Vec::new()],
             word: Color::Reset,
             name: Color::Reset,
-            bone: Color::Reset,
-            petals: [Color::Reset; 2],
-            heart: Color::Reset,
-            icing: Color::Reset,
             flash: Color::Reset,
+            inks: [[Color::Reset; INKS]; 2],
             figs: Vec::with_capacity(MAX_FIGS),
             touched: vec![-1.0; MAX_FIGS * SLAB],
             head: vec![-1.0; MAX_FIGS * SLAB],
             clock: 0.0,
             motion: 0.0,
             next_word: 0.0,
-            next_skull: 0.0,
+            next_art: 0.0,
+            prank: false,
+            up: false,
+            sweep: 1.0,
+            next_flip: 0.0,
+            pranks: 0,
+            next_prank: 0.0,
         }
     }
 
+    /// Is the rain dressed for a holiday?
+    fn on(&self) -> bool {
+        self.kind != Kind::None
+    }
+
+    /// Sets the color of a painting marker, in both variants.
+    fn ink(&mut self, m: u8, color: Color) {
+        self.inks[0][slot(m)] = color;
+        self.inks[1][slot(m)] = color;
+    }
+
     /// Dresses up for the holiday (or not). Returns the rain's own palette
-    /// when it changes too: cempasúchil under `classic`, the theme accent
-    /// nearest to it otherwise, unless the user picked the colors.
+    /// when it changes too: cempasúchil, or verde pino, under `classic`, the
+    /// theme accent nearest to it otherwise, unless the user picked the colors.
     fn retheme(&mut self, ctx: &Ctx, auto: bool, native: bool) -> Option<Vec<Color>> {
-        let was = self.on;
-        self.on = ctx.fiesta.is(Kind::Muertos);
+        let was = self.kind;
+        self.kind = match ctx.fiesta.kind {
+            k @ (Kind::Muertos | Kind::Navidad) => k,
+            _ => Kind::None,
+        };
+        self.fiesta = ctx.fiesta;
         self.level = ctx.fiesta.level.clamp(0.0, 1.0);
-        self.alt.clear();
-        if !self.on {
+        self.alt = [Vec::new(), Vec::new()];
+        let prank = self.kind == Kind::Navidad && ctx.fiesta.inocentes();
+        if !prank {
+            self.up = false;
+            self.sweep = 1.0;
+        } else if !self.prank {
+            self.next_flip = self.clock + 5.0;
+            self.pranks = 0;
+        }
+        self.prank = prank;
+        if !self.on() {
             self.figs.clear();
             return None;
         }
-        if !was {
+        if was != self.kind {
             self.figs.clear();
             self.next_word = self.clock + 0.3;
-            self.next_skull = self.clock + 1.2;
+            self.next_art = self.clock + 1.2;
         }
+        self.inks = [[Color::Reset; INKS]; 2];
+        match self.kind {
+            Kind::Navidad => self.navidad(ctx, auto, native),
+            _ => self.muertos(ctx, auto, native),
+        }
+    }
+
+    /// Día de Muertos: cempasúchil rain with rosa mexicano droplets, bone
+    /// calaveras with flower eyes. Under other themes, the accents nearest
+    /// in hue to those colors.
+    fn muertos(&mut self, ctx: &Ctx, auto: bool, native: bool) -> Option<Vec<Color>> {
         let theme = ctx.theme;
-        // Under other themes, the accents nearest in hue to the holiday's colors.
         let cempa = nearest(theme, CEMPASUCHIL, None);
         let rosa = nearest(theme, ROSA, Some(cempa));
         let gold = nearest(theme, AMARILLO, None);
+        let (bone, petals, heart, icing);
         if theme.native {
             self.word = Color::Rgb(255, 216, 64);
             self.name = HUESO;
-            self.bone = HUESO;
-            self.petals = [CEMPASUCHIL, ROSA];
-            self.heart = AMARILLO;
-            self.icing = TURQUESA;
+            bone = HUESO;
+            petals = [CEMPASUCHIL, ROSA];
+            heart = AMARILLO;
+            icing = TURQUESA;
             self.flash = Color::Rgb(255, 250, 236);
         } else {
             self.word = gold;
             self.name = theme.fg;
-            self.bone = theme.fg.lerp(WHITE, 0.3);
-            self.petals = [cempa, rosa];
-            self.heart = gold;
-            self.icing = nearest(theme, TURQUESA, None);
+            bone = theme.fg.lerp(WHITE, 0.3);
+            petals = [cempa, rosa];
+            heart = gold;
+            icing = nearest(theme, TURQUESA, None);
             self.flash = theme.fg.lerp(WHITE, 0.8);
+        }
+        self.ink(b'#', bone);
+        self.ink(b'*', heart);
+        self.ink(b'i', icing);
+        for (v, petal) in petals.into_iter().enumerate() {
+            self.inks[v][slot(b'o')] = petal;
         }
         if !auto {
             return None;
         }
         let (main, alt) = if native {
-            let table = |t: &[(u8, u8, u8)]| {
-                std::iter::once(Color::Reset)
-                    .chain(t.iter().map(|&(r, g, b)| Color::Rgb(r, g, b)))
-                    .collect()
-            };
-            (table(CEMPASUCHIL_RAIN), table(ROSA_RAIN))
+            (rain_table(CEMPASUCHIL_RAIN), rain_table(ROSA_RAIN))
         } else {
             (
                 accent_pairs(ctx, cempa, gold.lerp(WHITE, 0.6)),
                 accent_pairs(ctx, rosa, gold.lerp(WHITE, 0.2)),
             )
         };
-        self.alt = alt;
+        self.alt[0] = alt;
         Some(main)
     }
 
-    /// The palette of a new droplet: more fall in rosa mexicano as the holiday comes.
+    /// Navidad: rain in verde pino and rojo nochebuena with golden heads and
+    /// a few dorado droplets; piñatas, estrellas and nochebuenas painted out
+    /// of it. Under other themes, the accents nearest in hue to those colors.
+    fn navidad(&mut self, ctx: &Ctx, auto: bool, native: bool) -> Option<Vec<Color>> {
+        let theme = ctx.theme;
+        let green = nearest(theme, VERDE_PINO, None);
+        let red = nearest(theme, ROJO_NOCHEBUENA, Some(green));
+        let gold = nearest(theme, DORADO, None);
+        if theme.native {
+            self.word = DORADO;
+            self.name = BLANCO;
+            self.flash = Color::Rgb(255, 250, 236);
+            self.ink(b'd', DORADO);
+            self.ink(b'D', DORADO.lerp(WHITE, 0.35));
+            self.ink(b'w', BLANCO);
+            self.ink(b'r', ROJO_NOCHEBUENA);
+            self.ink(b'v', VERDE_PINO);
+            self.ink(b'y', AMARILLO);
+            for (m, c) in PAPEL {
+                self.ink(m, c);
+            }
+        } else {
+            self.word = gold;
+            self.name = theme.fg;
+            self.flash = theme.fg.lerp(WHITE, 0.8);
+            self.ink(b'd', gold);
+            self.ink(b'D', gold.lerp(WHITE, 0.35));
+            self.ink(b'w', theme.fg.lerp(WHITE, 0.3));
+            self.ink(b'r', red);
+            self.ink(b'v', green);
+            self.ink(b'y', gold.lerp(WHITE, 0.2));
+            for (m, c) in PAPEL {
+                self.ink(m, nearest(theme, c, None));
+            }
+        }
+        if !auto {
+            return None;
+        }
+        let (main, reds, golds) = if native {
+            (
+                rain_table(VERDE_RAIN),
+                rain_table(ROJO_RAIN),
+                rain_table(DORADO_RAIN),
+            )
+        } else {
+            (
+                accent_pairs(ctx, green, gold.lerp(WHITE, 0.45)),
+                accent_pairs(ctx, red, gold.lerp(WHITE, 0.45)),
+                accent_pairs(ctx, gold, gold.lerp(WHITE, 0.7)),
+            )
+        };
+        self.alt = [reds, golds];
+        Some(main)
+    }
+
+    /// The palette of a new droplet (0 the scene's, 1 and 2 the others): more
+    /// fall in rosa mexicano as Día de Muertos comes, and in rojo nochebuena
+    /// and dorado as Navidad does.
     fn hue(&mut self) -> u8 {
-        if self.alt.is_empty() {
+        if self.alt[0].is_empty() {
             return 0;
         }
-        (self.rng.f32() < 0.2 + 0.25 * self.level) as u8
+        let r = self.rng.f32();
+        match self.kind {
+            Kind::Navidad => {
+                let gold = 0.04 + 0.08 * self.level;
+                let red = 0.15 + 0.3 * self.level;
+                if r < gold { 2 } else { (r < gold + red) as u8 }
+            }
+            _ => (r < 0.2 + 0.25 * self.level) as u8,
+        }
     }
 
     /// Lights up what the rain reaches, retires old figures and hides new ones.
@@ -1547,6 +1923,10 @@ impl Muertos {
         }
         let (now, t) = (self.clock, self.motion);
         self.figs.retain(|f| now < f.born + f.life);
+        if self.prank {
+            self.turn_around(real, cols, lines);
+        }
+        let (up, sweep) = (self.up, self.sweep);
         for f in &self.figs {
             for dy in 0..f.h {
                 for dx in 0..f.w {
@@ -1555,13 +1935,19 @@ impl Muertos {
                         continue;
                     }
                     let k = f.slot * SLAB + dy * f.w + dx;
-                    let g = screen[y * cols + x];
+                    // Where the rain is, as the screen has it: not as it is drawn.
+                    let sy = if mirrored(up, sweep, y, lines) {
+                        lines - 1 - y
+                    } else {
+                        y
+                    };
+                    let g = screen[sy * cols + x];
                     let rain = g.pair != 0 && g.ch != ' ';
                     if self.touched[k] < 0.0 {
                         let reach = f.start + f.reach(dx, dy, self.speed);
                         if t >= reach {
                             self.touched[k] = reach;
-                        } else if rain && matches!(f.shape, Shape::Skull(..)) {
+                        } else if rain && matches!(f.shape, Shape::Art(..)) {
                             self.touched[k] = t;
                         }
                     }
@@ -1576,33 +1962,88 @@ impl Muertos {
             self.next_word = now + self.rng.f64() * 2.5 + 2.5 / (0.5 + l);
             self.spawn(false, cols, lines);
         }
-        if now >= self.next_skull {
-            self.next_skull = now + (9.0 + self.rng.f64() * 5.0) / (0.4 + 0.6 * l);
+        if now >= self.next_art {
+            self.next_art = now + (9.0 + self.rng.f64() * 5.0) / (0.4 + 0.6 * l);
             self.spawn(true, cols, lines);
         }
     }
 
-    /// Hides a new word or calavera somewhere free in the rain, if it fits.
-    fn spawn(&mut self, skull: bool, cols: usize, lines: usize) {
+    /// Santos Inocentes: now and then the rain turns around, wiping from the
+    /// top down, falls upward for a while and spells ¡INOCENTE PALOMITA!,
+    /// then wipes back to normal.
+    fn turn_around(&mut self, real: f32, cols: usize, lines: usize) {
+        if real > 0.0 {
+            self.sweep = (self.sweep + real.min(60.0) / SWEEP).min(1.0);
+        }
+        let now = self.clock;
+        if now >= self.next_flip {
+            if cols < PRANK.chars().count() + 2 || lines < 5 {
+                // No room to spell it: no prank.
+                self.up = false;
+                self.sweep = 1.0;
+                self.next_flip = now + 10.0;
+            } else if self.up {
+                self.up = false;
+                self.sweep = 0.0;
+                self.next_flip = now + 24.0 + self.rng.f64() * 16.0;
+            } else {
+                self.up = true;
+                self.sweep = 0.0;
+                self.pranks = 2;
+                self.next_prank = now + 1.2;
+                self.next_flip = now + 14.0 + self.rng.f64() * 3.0;
+            }
+        }
+        if self.up && self.pranks > 0 && self.sweep >= 1.0 && now >= self.next_prank {
+            let word = Shape::Word(PRANK, true);
+            let placed = match self.free_slot() {
+                Some(s) => self.place(s, word, cols, lines, lines / 4, lines * 3 / 4),
+                None => false,
+            };
+            if placed {
+                self.pranks -= 1;
+                self.next_prank = now + 6.0;
+            } else {
+                self.next_prank = now + 0.5;
+            }
+        }
+    }
+
+    fn free_slot(&self) -> Option<usize> {
+        (0..MAX_FIGS).find(|&s| self.figs.iter().all(|f| f.slot != s))
+    }
+
+    /// Hides a new word or painting somewhere free in the rain, if it fits.
+    fn spawn(&mut self, art: bool, cols: usize, lines: usize) {
         let area = (cols * lines) as f32;
         let cap = ((2.0 + self.level * area / 1800.0) as usize).clamp(1, MAX_FIGS);
-        let skulls = self
+        let arts = self
             .figs
             .iter()
-            .filter(|f| matches!(f.shape, Shape::Skull(..)))
+            .filter(|f| matches!(f.shape, Shape::Art(..)))
             .count();
-        let max_skulls = if self.level >= 0.8 && area >= 8000.0 {
+        let max_arts = if self.level >= 0.8 && area >= 8000.0 {
             2
         } else {
             1
         };
-        if self.figs.len() >= cap || (skull && skulls >= max_skulls) {
+        if self.figs.len() >= cap || (art && arts >= max_arts) {
             return;
         }
-        let Some(slot) = (0..MAX_FIGS).find(|&s| self.figs.iter().all(|f| f.slot != s)) else {
+        // The rain falling upward paints nothing: it is busy spelling.
+        if art && self.prank && (self.up || self.sweep < 1.0) {
+            return;
+        }
+        let Some(slot) = self.free_slot() else {
             return;
         };
-        let shape = if skull {
+        let shape = if art {
+            let set = paintings(self.kind);
+            let sizes = if set.len() > 1 {
+                set[self.rng.usize(0..set.len())]
+            } else {
+                set[0]
+            };
             let i = if lines >= 44 && cols >= 100 {
                 2
             } else if lines >= 24 && cols >= 40 {
@@ -1610,30 +2051,61 @@ impl Muertos {
             } else {
                 0
             };
-            Shape::Skull(i, self.rng.bool())
+            Shape::Art(sizes[i], self.rng.bool())
         } else {
+            let (words, names) = lexicon(self.kind);
+            let day = day_words(self.fiesta);
+            let day_chance = if self.kind == Kind::Muertos {
+                0.15
+            } else {
+                0.3
+            };
             let r = self.rng.f32();
-            match day_word(self.level) {
-                Some(w) if r < 0.15 => Shape::Word(w, false),
-                _ if r < 0.5 => Shape::Word(NAMES[self.rng.usize(0..NAMES.len())], true),
-                _ => Shape::Word(WORDS[self.rng.usize(0..WORDS.len())], false),
+            if !day.is_empty() && r < day_chance {
+                let w = if day.len() > 1 {
+                    day[self.rng.usize(0..day.len())]
+                } else {
+                    day[0]
+                };
+                Shape::Word(w, false)
+            } else if r < 0.5 {
+                Shape::Word(names[self.rng.usize(0..names.len())], true)
+            } else {
+                Shape::Word(words[self.rng.usize(0..words.len())], false)
             }
         };
-        let (w, h) = shape.size();
-        // Keep clear of the papel picado strung across the top.
+        // Keep clear of what the overlay strings across the top.
         let top = match lines {
             0..18 => 0,
             _ if self.level >= 0.8 => 6,
+            _ if self.kind == Kind::Navidad && self.fiesta.posadas() => 6,
             _ => 4,
         };
+        self.place(slot, shape, cols, lines, top, usize::MAX);
+    }
+
+    /// Puts a figure in `slot`, somewhere free between rows `top` and
+    /// `bottom` (the highest row it may start on), if it fits. Whether it
+    /// did.
+    fn place(
+        &mut self,
+        slot: usize,
+        shape: Shape,
+        cols: usize,
+        lines: usize,
+        top: usize,
+        bottom: usize,
+    ) -> bool {
+        let (w, h) = shape.size();
         // A word keeps a free cell at each end.
         let pad = matches!(shape, Shape::Word(..)) as usize;
         if w + 2 * pad > cols || h + top > lines {
-            return;
+            return false;
         }
+        let last = (lines - h).min(bottom).max(top);
         for _ in 0..12 {
             let x = self.rng.usize(pad..=cols - w - pad);
-            let y = self.rng.usize(top..=lines - h);
+            let y = self.rng.usize(top..=last);
             let clear = self
                 .figs
                 .iter()
@@ -1644,7 +2116,10 @@ impl Muertos {
             let cells = slot * SLAB..slot * SLAB + w * h;
             self.touched[cells.clone()].fill(-1.0);
             self.head[cells].fill(-1.0);
-            let life = if skull { 11.0 } else { 8.0 } + self.rng.f64() * 2.0;
+            let art = matches!(shape, Shape::Art(..));
+            let life = if art { 11.0 } else { 8.0 } + self.rng.f64() * 2.0;
+            // Words come up from below while the rain falls upward.
+            let up = self.up && !art;
             self.figs.push(Figure {
                 shape,
                 slot,
@@ -1655,11 +2130,17 @@ impl Muertos {
                 born: self.clock,
                 life,
                 start: self.motion,
-                fall: (y as f32).min(10.0),
+                fall: if up {
+                    ((lines - 1 - y) as f32).min(10.0)
+                } else {
+                    (y as f32).min(10.0)
+                },
+                up,
                 salt: self.rng.u32(..),
             });
-            return;
+            return true;
         }
+        false
     }
 
     fn draw(&self, ctx: &Ctx, c: &mut Canvas, pool: &[char]) {
@@ -1671,6 +2152,7 @@ impl Muertos {
             match f.shape {
                 Shape::Word(word, name) => {
                     let color = if name { self.name } else { self.word };
+                    let dir = if f.up { -1 } else { 1 };
                     let mut prev = false;
                     for (dx, ch) in word.chars().enumerate() {
                         let x = fx + dx as i32;
@@ -1701,28 +2183,26 @@ impl Muertos {
                         if since < 0.0 {
                             continue;
                         }
-                        let y = fy - f.fall as i32 + (since * self.speed as f64) as i32;
+                        let from = fy - dir * f.fall as i32;
+                        let y = from + dir * (since * self.speed as f64) as i32;
                         c.set_attr(x, y, ch, self.flash, BOLD);
                         for i in 1..4 {
-                            if y - i < fy - f.fall as i32 {
+                            let ty = y - dir * i;
+                            if (ty - from) * dir < 0 {
                                 break;
                             }
-                            let g =
-                                pool[(f.salt as usize + (y - i) as usize * 13 + dx) % pool.len()];
-                            c.set(x, y - i, g, ctx.fade(color, 0.25 * i as f32));
+                            let g = pool[(f.salt as usize + ty as usize * 13 + dx) % pool.len()];
+                            c.set(x, ty, g, ctx.fade(color, 0.25 * i as f32));
                         }
                     }
                 }
-                Shape::Skull(i, rosa) => {
-                    for (dy, row) in SKULLS[i].iter().enumerate() {
+                Shape::Art(rows, alt) => {
+                    for (dy, row) in rows.iter().enumerate() {
                         for (dx, m) in row.bytes().enumerate() {
                             let color = match m {
-                                b'#' => self.bone,
-                                b'o' => self.petals[rosa as usize],
-                                b'*' => self.heart,
-                                b'i' => self.icing,
+                                b' ' => continue,
                                 b'.' => Color::Reset,
-                                _ => continue,
+                                _ => self.inks[alt as usize][slot(m)],
                             };
                             let k = dy * f.w + dx;
                             let Some(fg) = self.glow(ctx, color, base + k, out, f.salt, k) else {
@@ -1793,6 +2273,27 @@ const ROSA: Color = Color::Rgb(228, 0, 124);
 const AMARILLO: Color = Color::Rgb(255, 210, 0);
 const TURQUESA: Color = Color::Rgb(0, 170, 184);
 const HUESO: Color = Color::Rgb(244, 238, 226);
+const VERDE_PINO: Color = Color::Rgb(31, 111, 58);
+const ROJO_NOCHEBUENA: Color = Color::Rgb(200, 16, 46);
+const DORADO: Color = Color::Rgb(242, 182, 50);
+const BLANCO: Color = Color::Rgb(244, 241, 234);
+
+/// The papel de china of a piñata, by painting marker.
+const PAPEL: [(u8, Color); 6] = [
+    (b'R', ROSA),
+    (b'Y', AMARILLO),
+    (b'O', Color::Rgb(255, 140, 0)),
+    (b'T', TURQUESA),
+    (b'M', Color::Rgb(112, 40, 160)),
+    (b'L', Color::Rgb(140, 200, 40)),
+];
+
+/// A pair table (index 0 unused) from its colors, tail end to head.
+fn rain_table(table: &[(u8, u8, u8)]) -> Vec<Color> {
+    std::iter::once(Color::Reset)
+        .chain(table.iter().map(|&(r, g, b)| Color::Rgb(r, g, b)))
+        .collect()
+}
 
 /// The rain in cempasúchil under `classic`, pair 1 (the tail end) to the head.
 const CEMPASUCHIL_RAIN: &[(u8, u8, u8)] = &[
@@ -1814,6 +2315,39 @@ const ROSA_RAIN: &[(u8, u8, u8)] = &[
     (236, 34, 138),
     (250, 116, 184),
     (255, 206, 96),
+];
+
+/// The rain in verde pino under `classic` on Navidad, with golden heads.
+const VERDE_RAIN: &[(u8, u8, u8)] = &[
+    (4, 26, 12),
+    (10, 54, 26),
+    (18, 88, 44),
+    (31, 111, 58),
+    (44, 146, 76),
+    (96, 200, 120),
+    (255, 226, 130),
+];
+
+/// In rojo nochebuena, golden-headed too.
+const ROJO_RAIN: &[(u8, u8, u8)] = &[
+    (40, 2, 10),
+    (88, 6, 22),
+    (146, 10, 34),
+    (200, 16, 46),
+    (232, 48, 72),
+    (248, 118, 138),
+    (255, 226, 130),
+];
+
+/// And the few droplets in dorado, the glints.
+const DORADO_RAIN: &[(u8, u8, u8)] = &[
+    (50, 34, 4),
+    (108, 74, 8),
+    (168, 122, 20),
+    (212, 156, 34),
+    (242, 182, 50),
+    (255, 214, 110),
+    (255, 248, 214),
 ];
 
 /// The theme's accent closest in hue to `to` (grays come last), other than `not`.
@@ -2023,29 +2557,31 @@ mod tests {
                 fiesta,
             };
             let mut n = dressed(&theme, &opts, fiesta, 120, 36);
-            assert!(n.muertos.on);
+            assert!(n.holiday.on());
             let cempa: Vec<Color> = CEMPASUCHIL_RAIN
                 .iter()
                 .map(|&(r, g, b)| Color::Rgb(r, g, b))
                 .collect();
             assert_eq!(&n.pairs[1..], &cempa[..], "cempasúchil, not neo green");
-            assert_eq!(n.muertos.alt.len(), n.pairs.len());
+            assert_eq!(n.holiday.alt[0].len(), n.pairs.len());
+            let bone_ink = n.holiday.inks[0][slot(b'#')];
+            let heart_ink = n.holiday.inks[0][slot(b'*')];
             let (mut word, mut skull, mut rosa, mut figs) = (false, false, false, 0);
             run(&mut n, &ctx, 40.0, |n, c| {
-                figs = figs.max(n.muertos.figs.len());
+                figs = figs.max(n.holiday.figs.len());
                 rosa |= n.screen.iter().any(|g| g.hue == 1 && g.pair != 0);
-                for f in &n.muertos.figs {
-                    let settled = n.muertos.clock < f.born + f.life - FADE;
+                for f in &n.holiday.figs {
+                    let settled = n.holiday.clock < f.born + f.life - FADE;
                     match f.shape {
                         Shape::Word(w, _) if settled => {
                             let lit =
-                                (0..f.w).all(|dx| n.muertos.touched[f.slot * SLAB + dx] >= 0.0);
+                                (0..f.w).all(|dx| n.holiday.touched[f.slot * SLAB + dx] >= 0.0);
                             word |= lit && row_is(c, f.x, f.y, w);
                         }
-                        Shape::Skull(..) if settled => {
+                        Shape::Art(..) if settled => {
                             // Flower eyes in petals and golden hearts, on bone glyphs.
-                            let bone = c.cells().iter().filter(|x| x.fg == n.muertos.bone).count();
-                            let eyes = c.cells().iter().any(|x| x.fg == n.muertos.heart);
+                            let bone = c.cells().iter().filter(|x| x.fg == bone_ink).count();
+                            let eyes = c.cells().iter().any(|x| x.fg == heart_ink);
                             skull |= bone > 40 && eyes;
                         }
                         _ => {}
@@ -2063,34 +2599,69 @@ mod tests {
         );
     }
 
-    /// Every word and calavera fits its slab, in cells the rain can light up.
+    /// Every word and painting fits its slab, in cells the rain can light up.
     #[test]
     fn figures_fit_their_slabs() {
-        for w in WORDS.iter().chain(NAMES) {
-            assert!(
-                w.chars().count() <= SLAB && w.chars().all(|c| !odd_width(c)),
-                "{w}"
-            );
-        }
-        for level in [0.25, 0.35, 0.45, 0.5, 0.6, 0.8, 1.0] {
-            if let Some(w) = day_word(level) {
-                assert!(
-                    w.chars().count() <= SLAB && w.chars().all(|c| !odd_width(c)),
-                    "{w}"
-                );
+        let fits = |w: &str| w.chars().count() <= SLAB && w.chars().all(|c| !odd_width(c));
+        for kind in [Kind::Muertos, Kind::Navidad] {
+            let (words, names) = lexicon(kind);
+            for w in words.iter().chain(names) {
+                assert!(fits(w), "{w}");
+            }
+            for set in paintings(kind) {
+                assert_eq!(set.len(), 3, "three sizes");
+                for (i, s) in set.iter().enumerate() {
+                    let w = s[0].len();
+                    assert!(
+                        s.iter().all(|r| r.len() == w),
+                        "{kind:?} {i} is a rectangle"
+                    );
+                    assert!(w * s.len() <= SLAB, "{kind:?} {i}");
+                }
             }
         }
-        for (i, s) in SKULLS.iter().enumerate() {
-            let w = s[0].len();
-            assert!(s.iter().all(|r| r.len() == w), "skull {i} is a rectangle");
-            assert!(w * s.len() <= SLAB, "skull {i}");
-            assert!(s.iter().all(|r| r.bytes().all(|b| b" #o*i.".contains(&b))));
+        assert!(fits(PRANK));
+        // Every day of Día de Muertos but the first two has a word of its own.
+        for (d, some) in [(28, false), (29, false), (30, true), (31, true)] {
+            assert_eq!(!day_words(Fiesta::of_day(10, d)).is_empty(), some, "10-{d}");
         }
-        // The days of the holiday each have a word of their own, besides the first two.
-        for level in [0.45, 0.5, 0.6, 0.8, 1.0] {
-            assert!(day_word(level).is_some(), "{level}");
+        for d in 1..=3 {
+            assert!(!day_words(Fiesta::of_day(11, d)).is_empty(), "11-{d}");
         }
-        assert!(day_word(0.25).is_none() && day_word(0.35).is_none());
+        // And so does every day of the Guadalupe–Reyes.
+        let days = (12..=31).map(|d| (12, d)).chain((1..=6).map(|d| (1, d)));
+        for (m, d) in days {
+            let words = day_words(Fiesta::of_day(m, d));
+            assert!(
+                !words.is_empty() && words.iter().all(|w| fits(w)),
+                "{m}-{d}"
+            );
+        }
+    }
+
+    /// Every marker of every painting has an ink, under `classic` and a theme.
+    #[test]
+    fn paintings_are_fully_inked() {
+        let opts = Opts::new(INFO.options, toml::Table::new());
+        for theme in [Theme::classic(), Theme::builtin("nord").unwrap()] {
+            for fiesta in [Fiesta::of_day(11, 2), Fiesta::of_day(12, 24)] {
+                let n = dressed(&theme, &opts, fiesta, 40, 12);
+                for set in paintings(n.holiday.kind) {
+                    for rows in *set {
+                        for m in rows.iter().flat_map(|r| r.bytes()) {
+                            for v in 0..2 {
+                                assert!(
+                                    matches!(m, b' ' | b'.')
+                                        || n.holiday.inks[v][slot(m)] != Color::Reset,
+                                    "{} has no ink",
+                                    m as char
+                                );
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 
     /// On an ordinary day there is nothing of it: neo's own green, no figures.
@@ -2106,10 +2677,10 @@ mod tests {
             fiesta: Fiesta::NONE,
         };
         let mut n = dressed(&theme, &opts, Fiesta::NONE, 120, 36);
-        assert!(!n.muertos.on);
+        assert!(!n.holiday.on());
         assert_eq!(n.pairs, neo_scheme("green").unwrap());
         run(&mut n, &ctx, 40.0, |n, _| {
-            assert!(n.muertos.figs.is_empty() && n.muertos.alt.is_empty());
+            assert!(n.holiday.figs.is_empty() && n.holiday.alt[0].is_empty());
             assert!(n.screen.iter().all(|g| g.hue == 0));
         });
         // Not even the random numbers: the same rain as one that never heard of it.
@@ -2120,6 +2691,229 @@ mod tests {
             b.tick(&ctx, 1.0 / 30.0, 1.0 / 30.0);
         }
         assert!(a.screen == b.screen);
+    }
+
+    /// A holiday neo has no costume for leaves the rain as on an ordinary day.
+    #[test]
+    fn other_holidays_stay_ordinary() {
+        let theme = Theme::classic();
+        let opts = Opts::new(INFO.options, toml::Table::new());
+        let plain = Ctx {
+            theme: &theme,
+            opts: &opts,
+            bg: Color::Rgb(13, 17, 23),
+            seed: 11,
+            fiesta: Fiesta::NONE,
+        };
+        for kind in [Kind::Candelaria, Kind::Nino, Kind::Revolucion] {
+            let fiesta = Fiesta::height(kind);
+            assert!(fiesta.on(), "{kind:?}");
+            let ctx = Ctx { fiesta, ..plain };
+            let mut a = dressed(&theme, &opts, Fiesta::NONE, 80, 24);
+            let mut b = dressed(&theme, &opts, fiesta, 80, 24);
+            assert!(!b.holiday.on() && b.pairs == a.pairs);
+            for _ in 0..300 {
+                a.tick(&plain, 1.0 / 30.0, 1.0 / 30.0);
+                b.tick(&ctx, 1.0 / 30.0, 1.0 / 30.0);
+            }
+            assert!(a.screen == b.screen && b.holiday.figs.is_empty());
+        }
+    }
+
+    /// Dressing up never touches the rain's own random numbers: the droplets
+    /// fall where they fall on an ordinary day, only in other colors.
+    #[test]
+    fn the_rain_falls_the_same() {
+        let theme = Theme::classic();
+        let opts = Opts::new(INFO.options, toml::Table::new());
+        let plain = Ctx {
+            theme: &theme,
+            opts: &opts,
+            bg: Color::Rgb(13, 17, 23),
+            seed: 11,
+            fiesta: Fiesta::NONE,
+        };
+        let shape = |n: &Neo| -> Vec<(char, u8, bool)> {
+            n.screen.iter().map(|g| (g.ch, g.pair, g.bold)).collect()
+        };
+        let mut a = dressed(&theme, &opts, Fiesta::NONE, 90, 26);
+        for _ in 0..400 {
+            a.tick(&plain, 1.0 / 30.0, 1.0 / 30.0);
+        }
+        for (m, d) in [(11, 2), (12, 24), (12, 28), (1, 6)] {
+            let fiesta = Fiesta::of_day(m, d);
+            let ctx = Ctx { fiesta, ..plain };
+            let mut b = dressed(&theme, &opts, fiesta, 90, 26);
+            for _ in 0..400 {
+                b.tick(&ctx, 1.0 / 30.0, 1.0 / 30.0);
+            }
+            assert!(shape(&a) == shape(&b), "{m}-{d}");
+        }
+    }
+
+    /// What Navidad adds shows: the rain in verde pino with rojo nochebuena
+    /// droplets and a few in dorado, words that land in place, piñatas,
+    /// estrellas and nochebuenas painted in their own colors.
+    #[test]
+    fn navidad_lights_the_rain() {
+        let theme = Theme::classic();
+        let opts = Opts::new(INFO.options, toml::Table::new());
+        let mut most = Vec::new();
+        for fiesta in [Fiesta::of_day(12, 13), Fiesta::of_day(12, 24)] {
+            let ctx = Ctx {
+                theme: &theme,
+                opts: &opts,
+                bg: Color::Rgb(13, 17, 23),
+                seed: 11,
+                fiesta,
+            };
+            let mut n = dressed(&theme, &opts, fiesta, 110, 32);
+            assert!(n.holiday.on() && !n.holiday.prank);
+            assert_eq!(n.pairs, rain_table(VERDE_RAIN), "verde pino, not neo green");
+            assert_eq!(n.holiday.alt[0], rain_table(ROJO_RAIN));
+            assert_eq!(n.holiday.alt[1], rain_table(DORADO_RAIN));
+            let (mut word, mut name, mut painted, mut hues, mut figs) =
+                (false, false, [false; 3], [false; 3], 0);
+            run(&mut n, &ctx, 150.0, |n, c| {
+                figs = figs.max(n.holiday.figs.len());
+                for g in n.screen.iter().filter(|g| g.pair != 0) {
+                    hues[g.hue as usize] = true;
+                }
+                for f in &n.holiday.figs {
+                    if n.holiday.clock >= f.born + f.life - FADE {
+                        continue;
+                    }
+                    let lit = (0..f.w * f.h).all(|k| {
+                        let (dx, dy) = (k % f.w, k / f.w);
+                        !f.shape.has(dx, dy) || n.holiday.touched[f.slot * SLAB + k] >= 0.0
+                    });
+                    match f.shape {
+                        Shape::Word(w, is_name) => {
+                            let landed = lit && row_is(c, f.x, f.y, w);
+                            word |= landed && !is_name;
+                            name |= landed && is_name;
+                        }
+                        Shape::Art(rows, _) if lit => {
+                            // Most of its cells are in the painting's own colors.
+                            let (mut inked, mut cells) = (0, 0);
+                            for (dy, row) in rows.iter().enumerate() {
+                                for (dx, m) in row.bytes().enumerate() {
+                                    if matches!(m, b' ' | b'.') {
+                                        continue;
+                                    }
+                                    cells += 1;
+                                    let cell = c.get((f.x + dx) as i32, (f.y + dy) as i32);
+                                    inked += cell
+                                        .is_some_and(|x| x.fg == n.holiday.inks[0][slot(m)])
+                                        as usize;
+                                }
+                            }
+                            if inked * 2 > cells {
+                                // A piñata has `R`, an estrella `D`, a nochebuena `r`.
+                                let which = b"RDr"
+                                    .iter()
+                                    .position(|&m| rows.iter().any(|r| r.as_bytes().contains(&m)));
+                                painted[which.unwrap()] = true;
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+            });
+            assert!(word && name, "words and names landed in the rain");
+            assert!(hues == [true; 3], "droplets fell in all three palettes");
+            if fiesta.level >= 1.0 {
+                assert!(
+                    painted == [true; 3],
+                    "a piñata, an estrella and a nochebuena: {painted:?}"
+                );
+            }
+            most.push(figs);
+        }
+        assert!(
+            most[1] > most[0],
+            "more is hidden in the rain at the height: {most:?}"
+        );
+    }
+
+    /// The Santos Inocentes: now and then the rain turns upside down, falls
+    /// upward and spells ¡INOCENTE PALOMITA!, then goes back. On other days
+    /// of the Navidad it never does.
+    #[test]
+    fn inocentes_fall_upward() {
+        let theme = Theme::classic();
+        let opts = Opts::new(INFO.options, toml::Table::new());
+        // The rain as drawn, against the screen it comes from, away from figures.
+        let drawn = |n: &Neo, c: &Canvas, upside_down: bool| {
+            let (cols, lines) = (n.cols, n.lines);
+            for y in 0..lines {
+                for x in 0..cols {
+                    let near = n
+                        .holiday
+                        .figs
+                        .iter()
+                        .any(|f| x + 2 >= f.x && x < f.x + f.w + 2);
+                    if near {
+                        continue;
+                    }
+                    let sy = if upside_down { lines - 1 - y } else { y };
+                    let g = n.screen[sy * cols + x];
+                    let want = if g.pair != 0 { g.ch } else { ' ' };
+                    let got = c.get(x as i32, y as i32).map_or(' ', |cell| cell.ch);
+                    assert_eq!(got, want, "({x}, {y})");
+                }
+            }
+        };
+        let fiesta = Fiesta::of_day(12, 28);
+        assert!(fiesta.inocentes());
+        let ctx = Ctx {
+            theme: &theme,
+            opts: &opts,
+            bg: Color::Rgb(13, 17, 23),
+            seed: 11,
+            fiesta,
+        };
+        let mut n = dressed(&theme, &opts, fiesta, 100, 30);
+        assert!(n.holiday.prank && !n.holiday.up);
+        let (mut turned, mut spelled, mut back, mut up_for) = (false, false, false, 0.0);
+        run(&mut n, &ctx, 100.0, |n, c| {
+            let h = &n.holiday;
+            if h.up && h.sweep >= 1.0 {
+                turned = true;
+                up_for += 1.0 / 30.0;
+                drawn(n, c, true);
+                for f in &h.figs {
+                    let rising = matches!(f.shape, Shape::Word(PRANK, _)) && f.up;
+                    let lit = (0..f.w)
+                        .all(|dx| !f.shape.has(dx, 0) || h.touched[f.slot * SLAB + dx] >= 0.0);
+                    let settled = h.clock < f.born + f.life - FADE;
+                    spelled |= rising && lit && settled && row_is(c, f.x, f.y, PRANK);
+                }
+            } else if !h.up && h.sweep >= 1.0 {
+                back |= turned;
+                drawn(n, c, false);
+            }
+        });
+        assert!(turned && spelled && back, "{turned} {spelled} {back}");
+        assert!(
+            (8.0..60.0).contains(&up_for),
+            "for a while, not forever: {up_for}"
+        );
+
+        // Navidad's other days keep the rain falling down.
+        for (m, d) in [(12, 25), (12, 27), (1, 6)] {
+            let fiesta = Fiesta::of_day(m, d);
+            let ctx = Ctx { fiesta, ..ctx };
+            let mut n = dressed(&theme, &opts, fiesta, 100, 30);
+            assert!(!n.holiday.prank);
+            run(&mut n, &ctx, 60.0, |n, c| {
+                assert!(!n.holiday.up && n.holiday.sweep >= 1.0);
+                drawn(n, c, false);
+                for f in &n.holiday.figs {
+                    assert!(!f.up && !matches!(f.shape, Shape::Word(PRANK, _)));
+                }
+            });
+        }
     }
 
     /// The holiday comes and goes through `retheme`, in place.
@@ -2139,28 +2933,109 @@ mod tests {
         run(&mut n, &ctx, 3.0, |_, _| {});
         ctx.fiesta = Fiesta::of_day(11, 2);
         n.retheme(&ctx);
-        assert!(n.muertos.on && n.pairs != plain && !n.muertos.alt.is_empty());
+        assert!(n.holiday.on() && n.pairs != plain && !n.holiday.alt[0].is_empty());
         let mut seen = false;
         run(&mut n, &ctx, 30.0, |n, _| {
-            seen |= !n.muertos.figs.is_empty()
+            seen |= !n.holiday.figs.is_empty()
         });
         assert!(seen, "words or calaveras were hidden");
         ctx.fiesta = Fiesta::NONE;
         n.retheme(&ctx);
-        assert!(!n.muertos.on && n.pairs == plain && n.muertos.alt.is_empty());
+        assert!(!n.holiday.on() && n.pairs == plain && n.holiday.alt[0].is_empty());
         run(&mut n, &ctx, 30.0, |n, _| {
-            assert!(n.muertos.figs.is_empty())
+            assert!(n.holiday.figs.is_empty())
         });
         // And back on, with the holiday's own palette again.
         ctx.fiesta = Fiesta::of_day(10, 28);
         n.retheme(&ctx);
-        assert!(n.muertos.on && n.pairs != plain);
+        assert!(n.holiday.on() && n.pairs != plain);
         // A palette picked by the user stays theirs.
         let opts = Opts::new(INFO.options, "colors = 'blue'".parse().unwrap());
         let mut blue = dressed(&theme, &opts, Fiesta::of_day(11, 2), 100, 30);
-        assert!(blue.muertos.on && blue.muertos.alt.is_empty());
+        assert!(blue.holiday.on() && blue.holiday.alt[0].is_empty());
         assert_eq!(blue.pairs, neo_scheme("blue").unwrap());
         run(&mut blue, &ctx, 5.0, |_, _| {});
+    }
+
+    /// Navidad too, and the Santos Inocentes' upside-down rain with it.
+    #[test]
+    fn navidad_comes_and_goes() {
+        let theme = Theme::builtin("dracula").unwrap();
+        let opts = Opts::new(INFO.options, toml::Table::new());
+        let mut ctx = Ctx {
+            theme: &theme,
+            opts: &opts,
+            bg: Color::Rgb(13, 17, 23),
+            seed: 11,
+            fiesta: Fiesta::NONE,
+        };
+        let mut n = dressed(&theme, &opts, Fiesta::NONE, 100, 30);
+        let plain = n.pairs.clone();
+        run(&mut n, &ctx, 3.0, |_, _| {});
+        ctx.fiesta = Fiesta::of_day(12, 28);
+        n.retheme(&ctx);
+        assert!(n.holiday.kind == Kind::Navidad && n.pairs != plain);
+        assert!(n.holiday.alt.iter().all(|a| a.len() == n.pairs.len()));
+        // Wait for the rain to turn around.
+        let mut up = false;
+        run(&mut n, &ctx, 30.0, |n, _| up |= n.holiday.up);
+        assert!(up, "the rain fell upward");
+        // And if the day changes while it is, the rain is right side up at once.
+        let mut turned = false;
+        while !turned {
+            run(&mut n, &ctx, 1.0, |n, _| {
+                turned |= n.holiday.up && n.holiday.sweep >= 1.0
+            });
+        }
+        ctx.fiesta = Fiesta::of_day(12, 29);
+        n.retheme(&ctx);
+        assert!(!n.holiday.up && n.holiday.sweep >= 1.0 && !n.holiday.prank);
+        run(&mut n, &ctx, 40.0, |n, _| assert!(!n.holiday.up));
+        ctx.fiesta = Fiesta::NONE;
+        n.retheme(&ctx);
+        assert!(!n.holiday.on() && n.pairs == plain);
+        assert!(n.holiday.alt.iter().all(|a| a.is_empty()));
+        run(&mut n, &ctx, 30.0, |n, _| {
+            assert!(n.holiday.figs.is_empty() && !n.holiday.up)
+        });
+        // A palette picked by the user stays theirs.
+        let opts = Opts::new(INFO.options, "colors = 'blue'".parse().unwrap());
+        let mut blue = dressed(&theme, &opts, Fiesta::of_day(12, 24), 100, 30);
+        assert!(blue.holiday.on() && blue.holiday.alt[0].is_empty());
+        assert_eq!(blue.pairs, neo_scheme("blue").unwrap());
+        run(&mut blue, &ctx, 5.0, |_, _| {});
+    }
+
+    /// The rain that turns upside down survives odd sizes and huge steps.
+    #[test]
+    fn inocentes_survive() {
+        let theme = Theme::classic();
+        let opts = Opts::new(INFO.options, toml::Table::new());
+        let fiesta = Fiesta::of_day(12, 28);
+        let ctx = Ctx {
+            theme: &theme,
+            opts: &opts,
+            bg: Color::Rgb(10, 10, 20),
+            seed: 5,
+            fiesta,
+        };
+        for (w, h, frames) in [(1u16, 1u16, 300), (3, 1, 300), (21, 5, 300), (22, 6, 300)]
+            .into_iter()
+            .chain([(40, 12, 300), (120, 40, 120), (300, 90, 40)])
+        {
+            let mut n = dressed(&theme, &opts, fiesta, w, h);
+            let mut c = Canvas::new(w, h, Color::Reset);
+            let mut up = false;
+            for f in 0..frames {
+                let real = [0.25, 5.0, 0.0, f32::NAN, 1.0][f % 5];
+                n.tick(&ctx, 1.0 / 30.0, real);
+                c.clear();
+                n.draw(&ctx, &mut c);
+                up |= n.holiday.up;
+            }
+            // Where there is room to spell it, the rain turned around.
+            assert_eq!(up, w >= 21 && h >= 5, "{w}x{h}");
+        }
     }
 
     /// The holiday survives tiny and huge screens, huge steps and odd options,
@@ -2176,7 +3051,8 @@ mod tests {
         for (i, case) in cases.iter().enumerate() {
             let opts = Opts::new(INFO.options, case.parse().unwrap());
             for theme in [Theme::classic(), Theme::builtin("nord").unwrap()] {
-                for fiesta in [Fiesta::of_day(10, 28), Fiesta::of_day(11, 2)] {
+                let days = [(10, 28), (11, 2), (12, 16), (12, 24), (12, 28), (1, 6)];
+                for fiesta in days.map(|(m, d)| Fiesta::of_day(m, d)) {
                     let ctx = Ctx {
                         theme: &theme,
                         opts: &opts,
