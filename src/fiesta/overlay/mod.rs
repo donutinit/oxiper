@@ -45,12 +45,19 @@
 //! strings. Under any theme but `classic` the tricolor is the theme's own
 //! green, red and foreground.
 //!
+//! Día del Niño lets globos of every color rise from the bottom of the screen,
+//! swaying on their strings, a dozen at most and fewer on a small screen so
+//! that they never bury the scene. Now and then one pops: a white flash, its
+//! scraps flying out and its string falling, and a new one rises where it was.
+//! Under any theme but `classic` the balloons take the theme's colors.
+//!
 //! On an ordinary day, and on a holiday without an overlay, it draws nothing.
 
 mod cord;
 mod drift;
 mod muertos;
 mod navidad;
+mod nino;
 mod papel;
 mod patrias;
 mod ribbon;
@@ -62,6 +69,7 @@ use crate::theme::Theme;
 use cord::Hung;
 use drift::{Fleck, Flecks};
 use navidad::Lights;
+use nino::{Balloon, Balloons};
 use papel::{Flag, Papel};
 use ribbon::{Ribbon, Ribbons};
 
@@ -113,6 +121,7 @@ struct Look {
     flecks: Option<&'static Flecks>,
     ribbons: Option<&'static Ribbons>,
     lights: Option<&'static Lights>,
+    balloons: Option<&'static Balloons>,
     /// A piñata hangs from the middle of the lights.
     pinata: bool,
 }
@@ -126,6 +135,7 @@ impl Look {
         flecks: None,
         ribbons: None,
         lights: None,
+        balloons: None,
         pinata: false,
     };
 
@@ -135,6 +145,7 @@ impl Look {
             Kind::Muertos => Some(muertos::look(fiesta)),
             Kind::Navidad => Some(navidad::look(fiesta)),
             Kind::Patrias => Some(patrias::look(fiesta)),
+            Kind::Nino => Some(nino::look(fiesta)),
             _ => None,
         }
     }
@@ -165,6 +176,9 @@ pub struct Overlay {
     ribbons: Vec<Ribbon>,
     /// What hangs from the cord (`ties`).
     hung: Vec<Hung>,
+    /// The balloons, and seconds until the next one pops.
+    balloons: Vec<Balloon>,
+    pop_in: f32,
 }
 
 impl Overlay {
@@ -184,6 +198,8 @@ impl Overlay {
             petals: Vec::new(),
             ribbons: Vec::new(),
             hung: Vec::new(),
+            balloons: Vec::new(),
+            pop_in: 0.0,
         }
     }
 
@@ -214,6 +230,9 @@ impl Overlay {
         if let Some(ribbons) = look.ribbons {
             self.scatter_ribbons(ribbons, look.salt);
         }
+        if let Some(balloons) = look.balloons {
+            self.scatter_balloons(balloons, look.salt);
+        }
     }
 
     /// Advances by `dt` real seconds.
@@ -242,6 +261,9 @@ impl Overlay {
         if let Some(ribbons) = look.ribbons {
             self.unroll(dt, ribbons);
         }
+        if look.balloons.is_some() {
+            self.rise(dt);
+        }
     }
 
     /// Draws over the scene. Nothing on an ordinary day.
@@ -257,6 +279,9 @@ impl Overlay {
         }
         if let Some(ribbons) = look.ribbons {
             self.draw_ribbons(c, theme, ribbons, fiesta.level);
+        }
+        if let Some(balloons) = look.balloons {
+            self.draw_balloons(c, theme, balloons, fiesta.level);
         }
         if let Some(papel) = look.papel {
             self.draw_papel(c, theme, papel);
