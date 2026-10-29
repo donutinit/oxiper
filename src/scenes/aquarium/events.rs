@@ -1,8 +1,10 @@
 //! Now and then, something special: feeding time, a plankton bloom, a bait
 //! ball, a migration, a rare sighting, a pod of whales; and the season's
-//! decorations (Día de Muertos): petals on the waves, veladoras floating
+//! decorations. Día de Muertos: petals on the waves, veladoras floating
 //! among them, the path of petals down to the altar and the souls walking
-//! it, candles on the floor at night. The season follows the holidays
+//! it, candles on the floor at night. Navidad (`navidad.rs`): the series'
+//! lights hung between the plants, esferas rising, the Niño Dios in the
+//! manger, the posadas' procession at night. The season follows the holidays
 //! (`season_of`), and comes and goes with them in `retheme`.
 //!
 //! One event runs at a time. The scheduler waits a quiet spell, picks an event
@@ -13,8 +15,8 @@
 use std::f32::consts::{PI, TAU};
 
 use super::assets::{
-    ALWAYS, ARCTIC, Biomes, DEEP, FILTER, FRESH, KELP, LEGENDARY, Lane, MUERTOS, OCEAN, PREDATOR,
-    REEF, Season, TANK, Traits,
+    ALWAYS, ARCTIC, Biomes, DEEP, FILTER, FRESH, KELP, LEGENDARY, Lane, MUERTOS, NAVIDAD, OCEAN,
+    PREDATOR, REEF, Season, TANK, Traits,
 };
 use super::biome::{Food, Visit, between, hash, swim_motion, weighted};
 use super::library::{SpeciesEntry, library};
@@ -171,19 +173,57 @@ enum Legend {
 
 /// The season the options ask for, and how far it has come (0 to 1): `auto`
 /// follows the holidays (`ctx.fiesta`, so the local date or the `fiestas`
-/// setting), `muertos` is Día de Muertos every day (as far as the holiday
-/// has come, or at its height), and anything else is no season at all.
+/// setting), `muertos` and `navidad` are that holiday every day (as far as
+/// it has come, or at its height), and anything else is no season at all.
 pub(super) fn season_of(o: &crate::scene::Opts, f: Fiesta) -> (Season, f32) {
-    let muertos = f.is(fiesta::Kind::Muertos);
-    let level = if muertos && f.level.is_finite() {
-        f.level.clamp(0.0, 1.0)
-    } else {
-        1.0
+    // How far the holiday has come, or its height on another day.
+    let level = |kind| {
+        if f.is(kind) && f.level.is_finite() {
+            f.level.clamp(0.0, 1.0)
+        } else {
+            1.0
+        }
     };
+    let (muertos, navidad) = (f.is(fiesta::Kind::Muertos), f.is(fiesta::Kind::Navidad));
     match o.s("season").trim().to_ascii_lowercase().as_str() {
-        "muertos" | "dia-de-muertos" | "día de muertos" => (MUERTOS, level),
-        "auto" | "" if muertos => (MUERTOS, level),
+        "muertos" | "dia-de-muertos" | "día de muertos" => (MUERTOS, level(fiesta::Kind::Muertos)),
+        "navidad" | "posadas" | "guadalupe-reyes" => (NAVIDAD, level(fiesta::Kind::Navidad)),
+        "auto" | "" if muertos => (MUERTOS, level(fiesta::Kind::Muertos)),
+        "auto" | "" if navidad => (NAVIDAD, level(fiesta::Kind::Navidad)),
         _ => (ALWAYS, 0.0),
+    }
+}
+
+/// The Navidad's days, when the season is the Navidad: whether it is the
+/// posadas (a procession at night) and whether the Niño Dios has been born
+/// (Nochebuena on). Asked for on another day it is the height of the
+/// holiday: both.
+pub(super) fn season_days(o: &crate::scene::Opts, f: Fiesta) -> (bool, bool) {
+    if season_of(o, f).0 != NAVIDAD {
+        (false, false)
+    } else if f.is(fiesta::Kind::Navidad) {
+        (f.posadas(), f.month == 1 || (f.month == 12 && f.day >= 24))
+    } else {
+        (true, true)
+    }
+}
+
+/// How much of the plants are the season's own: all of the ofrenda's flowers,
+/// but the Navidad leaves room for its kelp, which wears the lights.
+pub(super) fn plant_share(season: Season, level: f32) -> f32 {
+    match season {
+        NAVIDAD => 0.12 + 0.25 * level,
+        _ => 0.3 + 0.35 * level,
+    }
+}
+
+/// What is set on the floor first in a season, the biggest that fits: the
+/// name every such prop starts with.
+pub(super) fn centerpiece(season: Season) -> &'static str {
+    match season {
+        MUERTOS => "ofrend",
+        NAVIDAD => "nacimient",
+        _ => "",
     }
 }
 
@@ -194,7 +234,7 @@ impl Aquarium {
         let Some(w) = self.world.as_mut() else {
             return;
         };
-        if w.season == MUERTOS {
+        if w.season != ALWAYS {
             // Kept small so that the petals' positions stay precise.
             w.ev.drift = (w.ev.drift + cur * dt) % 4096.0;
         }
@@ -800,25 +840,42 @@ impl Aquarium {
         {
             self.draw_hand(c, run);
         }
-        if w.season == MUERTOS {
-            self.draw_petals(c, w.seed, w.ev.drift, w.level);
-            if self.surface() {
-                self.draw_floating_candles(c, w.seed, w.ev.drift, w.level);
+        match w.season {
+            MUERTOS => {
+                self.draw_petals(c, w.seed, w.ev.drift, w.level);
+                if self.surface() {
+                    self.draw_floating_candles(c, w.seed, w.ev.drift, w.level);
+                }
+                let light = self.light();
+                if light < 0.4 {
+                    self.draw_candles(c, w.seed, w.floor, light, w.level);
+                }
             }
-            let light = self.light();
-            if light < 0.4 {
-                self.draw_candles(c, w.seed, w.floor, light, w.level);
+            NAVIDAD => {
+                if w.nino {
+                    self.draw_nino(c);
+                }
+                if w.posadas && self.light() < 0.45 {
+                    self.draw_procession(c, w.seed, w.level);
+                }
             }
+            _ => {}
         }
     }
 
-    /// Behind everything but the backdrop: the season's path of petals.
+    /// Behind everything but the backdrop: the season's path of petals, or
+    /// the Navidad's esferas and the series hung between the plants.
     pub(super) fn draw_event_backdrop(&self, c: &mut Canvas) {
         let Some(w) = self.world.as_ref() else {
             return;
         };
-        if w.season == MUERTOS {
-            self.draw_path(c, w.seed, w.level);
+        match w.season {
+            MUERTOS => self.draw_path(c, w.seed, w.level),
+            NAVIDAD => {
+                self.draw_esferas(c, w.seed, w.ev.drift, w.level);
+                self.draw_lights(c, w.seed, w.level);
+            }
+            _ => {}
         }
     }
 
@@ -1075,6 +1132,7 @@ impl Aquarium {
         };
         let (season, level) = season_of(ctx.opts, ctx.fiesta);
         w.level = level;
+        (w.posadas, w.nino) = season_days(ctx.opts, ctx.fiesta);
         if season == w.season {
             return;
         }
@@ -1112,6 +1170,44 @@ mod tests {
         // as the holiday has come.
         assert_eq!(season_of(&muertos, Fiesta::NONE), (MUERTOS, 1.0));
         assert_eq!(season_of(&muertos, first), (MUERTOS, 0.25));
+        // The Navidad, from the Guadalupe to the Reyes; Muertos is still Muertos.
+        let navidad = opts("navidad");
+        assert_eq!(season_of(&auto, Fiesta::of_day(12, 24)), (NAVIDAD, 1.0));
+        assert_eq!(season_of(&auto, Fiesta::of_day(1, 3)), (NAVIDAD, 0.5));
+        assert_eq!(season_of(&none, Fiesta::of_day(12, 24)), (ALWAYS, 0.0));
+        assert_eq!(season_of(&navidad, Fiesta::NONE), (NAVIDAD, 1.0));
+        assert_eq!(season_of(&navidad, Fiesta::of_day(1, 3)), (NAVIDAD, 0.5));
+        assert_eq!(season_of(&muertos, Fiesta::of_day(12, 24)), (MUERTOS, 1.0));
+        assert_eq!(season_of(&navidad, height), (NAVIDAD, 1.0));
+        // Holidays this scene has no costume for are ordinary days.
+        for day in [(9, 15), (2, 2), (11, 20), (4, 30)] {
+            assert_eq!(
+                season_of(&auto, Fiesta::of_day(day.0, day.1)),
+                (ALWAYS, 0.0)
+            );
+        }
+    }
+
+    #[test]
+    fn the_navidads_days() {
+        let o = |season: &str| {
+            let mut t = toml::Table::new();
+            t.insert("season".into(), s(season));
+            crate::scene::Opts::new(INFO.options, t)
+        };
+        let (auto, navidad) = (o("auto"), o("navidad"));
+        let days = |o: &crate::scene::Opts, m, d| season_days(o, Fiesta::of_day(m, d));
+        // (the posadas, the Niño Dios born)
+        assert_eq!(days(&auto, 12, 13), (false, false));
+        assert_eq!(days(&auto, 12, 20), (true, false));
+        assert_eq!(days(&auto, 12, 24), (true, true));
+        assert_eq!(days(&auto, 12, 28), (false, true));
+        assert_eq!(days(&auto, 1, 3), (false, true));
+        assert_eq!(days(&auto, 11, 2), (false, false));
+        assert_eq!(days(&auto, 6, 15), (false, false));
+        // Asked for on an ordinary day, it is Nochebuena.
+        assert_eq!(days(&navidad, 6, 15), (true, true));
+        assert_eq!(days(&o("none"), 12, 24), (false, false));
     }
 
     fn scene(opts: &[(&str, toml::Value)], f: impl FnOnce(&Ctx, &mut Aquarium)) {
@@ -1661,6 +1757,312 @@ mod tests {
                         a.retheme(ctx);
                         a.draw(ctx, &mut c);
                     });
+                }
+            }
+        }
+    }
+    // ---- Navidad ----
+
+    /// The nacimiento on the floor, if any: its top left corner and its name.
+    fn nacimiento(a: &Aquarium) -> Option<(i32, i32, &'static str)> {
+        let lib = library();
+        a.ents
+            .iter()
+            .filter(|e| e.kind == Kind::Decor && e.who != NOBODY)
+            .find_map(|e| {
+                let name = lib.decor[e.who as usize].name;
+                name.starts_with("nacimient")
+                    .then(|| (e.x.floor() as i32, e.y.floor() as i32, name))
+            })
+    }
+
+    #[test]
+    fn the_navidad_comes_on_its_days() {
+        for (day, (w, h)) in [
+            ((12, 24), (120, 40)),
+            ((12, 16), (120, 40)),
+            ((1, 6), (80, 24)),
+            ((12, 12), (140, 45)),
+        ] {
+            for biome in ["reef", "tank", "ocean", "fresh", "kelp", "arctic", "deep"] {
+                let fiesta = Fiesta::of_day(day.0, day.1);
+                festive_scene(&[("biome", s(biome))], fiesta, "classic", |ctx, a| {
+                    a.resize(ctx, w, h);
+                    frame(ctx, a, w, h, 2.0, true);
+                    // The nacimiento is the first thing set on the floor, and
+                    // esferas rise behind the fish.
+                    let p = props(a);
+                    assert!(
+                        p.first().is_some_and(|d| d.0.starts_with("nacimient")),
+                        "{biome} {day:?}: {p:?}"
+                    );
+                    // (The deep sea has few of the season's own creatures.)
+                    let own = 1 + usize::from(biome != "deep");
+                    assert!(seasonal(a) >= own, "{biome} {day:?}");
+                    let mut c = Canvas::new(w, h, Color::Reset);
+                    a.draw_event_backdrop(&mut c);
+                    assert!(c.to_text().contains('@'), "{biome} {day:?}: no esferas");
+                });
+            }
+        }
+    }
+
+    #[test]
+    fn the_manger_is_where_the_nino_goes() {
+        let lib = library();
+        for name in ["nacimiento", "nacimientito"] {
+            let (dx, dy) = navidad::manger(name).unwrap();
+            let d = &lib.decor[lib.decor_named(name).unwrap()];
+            let spr = &lib.sprites[d.spr as usize];
+            for f in 0..spr.frame_count() {
+                let cell = spr
+                    .frame(f)
+                    .iter()
+                    .find(|c| (c.dx as i32, c.dy as i32) == (dx, dy));
+                assert_eq!(cell.map(|c| c.ch), Some('~'), "{name} frame {f}");
+            }
+        }
+    }
+
+    #[test]
+    fn the_nino_dios_is_born_on_nochebuena() {
+        for (day, born) in [
+            ((12, 20), false),
+            ((12, 23), false),
+            ((12, 24), true),
+            ((12, 28), true),
+            ((1, 6), true),
+        ] {
+            let opts = [("biome", s("tank"))];
+            festive_scene(&opts, Fiesta::of_day(day.0, day.1), "classic", |ctx, a| {
+                a.resize(ctx, 140, 45);
+                let (x, y, name) = nacimiento(a).expect("a nacimiento");
+                let (dx, dy) = navidad::manger(name).unwrap();
+                let mut c = Canvas::new(140, 45, Color::Reset);
+                a.draw_event_overlay(&mut c);
+                let lies = c.get(x + dx, y + dy).is_some_and(|cell| cell.ch == 'o');
+                assert_eq!(lies, born, "{day:?}");
+            });
+        }
+    }
+
+    #[test]
+    fn the_posadas_walk_at_night() {
+        // Fish with candles, counted on the overlay alone.
+        let walking = |day: (u32, u32), night: bool, w: u16, h: u16| {
+            let opts = [
+                ("biome", s("tank")),
+                ("day_length", rate(if night { 900.0 } else { 0.0 })),
+            ];
+            let mut n = 0;
+            festive_scene(&opts, Fiesta::of_day(day.0, day.1), "classic", |ctx, a| {
+                a.resize(ctx, w, h);
+                for _ in 0..300 {
+                    a.update(ctx, 0.1);
+                }
+                if night {
+                    a.world.as_mut().unwrap().env.force_night();
+                }
+                let mut c = Canvas::new(w, h, Color::Reset);
+                a.draw_event_overlay(&mut c);
+                let t = c.to_text();
+                n = t.matches("<(o>").count() + t.matches("<o)>").count();
+            });
+            n
+        };
+        assert!(walking((12, 20), true, 140, 45) >= 3);
+        assert!(walking((12, 24), true, 60, 20) >= 2);
+        assert_eq!(walking((12, 20), false, 140, 45), 0, "by day");
+        assert_eq!(walking((12, 13), true, 140, 45), 0, "before the posadas");
+        assert_eq!(walking((12, 28), true, 140, 45), 0, "after Nochebuena");
+        assert_eq!(walking((1, 5), true, 140, 45), 0, "in January");
+        // More of them as the posadas go.
+        assert!(walking((12, 23), true, 200, 60) > walking((12, 16), true, 200, 60));
+    }
+
+    #[test]
+    fn the_kelp_wears_the_series() {
+        let opts = [("biome", s("kelp")), ("day_length", rate(0.0))];
+        festive_scene(&opts, Fiesta::of_day(12, 24), "classic", |ctx, a| {
+            a.resize(ctx, 160, 40);
+            for _ in 0..50 {
+                a.update(ctx, 0.1);
+            }
+            // Strings between the plants, a bulb every third cell...
+            let mut c = Canvas::new(160, 40, Color::Reset);
+            a.draw_event_backdrop(&mut c);
+            let text = c.to_text();
+            let bulbs = text.chars().filter(|ch| "Oo".contains(*ch)).count();
+            assert!(bulbs >= 3, "{bulbs} bulbs on the strings");
+            assert!(text.contains('-'), "no cord");
+            // ...and bulbs on the plants themselves.
+            let mut on_plants = 0;
+            for e in a.ents.iter().filter(|e| e.kind == Kind::Seaweed) {
+                let mut c = Canvas::new(160, 40, Color::Reset);
+                a.dress_plant(e, &mut c);
+                on_plants += c.to_text().chars().filter(|ch| "Oo.".contains(*ch)).count();
+            }
+            assert!(on_plants >= 3, "{on_plants} bulbs on the plants");
+        });
+        // The lights chase: a moment later the same strings are not the same.
+        festive_scene(&opts, Fiesta::of_day(12, 24), "classic", |ctx, a| {
+            a.resize(ctx, 160, 40);
+            a.update(ctx, 0.1);
+            let shot = |a: &Aquarium| {
+                let mut c = Canvas::new(160, 40, Color::Reset);
+                a.draw_event_backdrop(&mut c);
+                c.to_text()
+            };
+            let before = shot(a);
+            for _ in 0..4 {
+                a.update(ctx, 0.1);
+            }
+            assert_ne!(before, shot(a));
+        });
+    }
+
+    #[test]
+    fn ordinary_days_have_no_navidad() {
+        // Nor do the holidays this scene has no costume for.
+        for fiesta in [
+            Fiesta::NONE,
+            Fiesta::of_day(6, 15),
+            Fiesta::of_day(9, 15),
+            Fiesta::of_day(2, 2),
+            Fiesta::of_day(11, 20),
+        ] {
+            for biome in ["reef", "tank", "kelp", "deep"] {
+                festive_scene(&[("biome", s(biome))], fiesta, "classic", |ctx, a| {
+                    a.resize(ctx, 140, 45);
+                    let text = frame(ctx, a, 140, 45, 60.0, true);
+                    assert_eq!(seasonal(a), 0, "{biome} {fiesta:?}");
+                    assert!(nacimiento(a).is_none(), "{biome} {fiesta:?}");
+                    let mut c = Canvas::new(140, 45, Color::Reset);
+                    a.draw_event_backdrop(&mut c);
+                    a.draw_event_overlay(&mut c);
+                    assert!(c.to_text().trim().is_empty(), "{biome} {fiesta:?}");
+                    assert!(!text.contains("<(o>") && !text.contains("<o)>"));
+                });
+            }
+        }
+    }
+
+    #[test]
+    fn the_navidad_comes_and_goes_with_retheme() {
+        let theme = crate::theme::Theme::classic();
+        let mut t = toml::Table::new();
+        t.insert("biome".into(), s("tank"));
+        let opts = crate::scene::Opts::new(INFO.options, t);
+        let ctx = |fiesta| Ctx {
+            theme: &theme,
+            opts: &opts,
+            bg: Color::Reset,
+            seed: 5,
+            fiesta,
+        };
+        let (off, on) = (ctx(Fiesta::NONE), ctx(Fiesta::of_day(12, 24)));
+        let mut a = Aquarium::new(&off);
+        a.resize(&off, 140, 45);
+        a.retheme(&off);
+        assert_eq!(seasonal(&a), 0);
+        // Midnight, December 11 to 12: the floor is set at once.
+        a.retheme(&on);
+        assert!(nacimiento(&a).is_some());
+        assert!(
+            props(&a)
+                .first()
+                .is_some_and(|d| d.0.starts_with("nacimient"))
+        );
+        frame(&on, &mut a, 140, 45, 120.0, true);
+        let lib = library();
+        let creatures = a
+            .ents
+            .iter()
+            .filter(|e| matches!(e.kind, Kind::Fish | Kind::Critter))
+            .filter(|e| lib.species[e.who as usize].def.season != ALWAYS)
+            .count();
+        assert!(creatures > 0, "the season's creatures came");
+        // And after the Reyes it is all gone, but for the last creatures'
+        // crossing.
+        a.retheme(&off);
+        assert!(nacimiento(&a).is_none());
+        assert!(props(&a).iter().all(|d| !d.1));
+        frame(&off, &mut a, 140, 45, 600.0, true);
+        assert_eq!(seasonal(&a), 0);
+        let mut c = Canvas::new(140, 45, Color::Reset);
+        a.draw_event_backdrop(&mut c);
+        assert!(c.to_text().trim().is_empty());
+        // The posadas begin on the 16th without the floor being set again.
+        a.retheme(&ctx(Fiesta::of_day(12, 13)));
+        let n = a.ents.len();
+        a.retheme(&ctx(Fiesta::of_day(12, 16)));
+        assert!(a.world.as_ref().unwrap().posadas);
+        assert_eq!(a.ents.len(), n);
+    }
+
+    #[test]
+    fn more_navidad_as_the_holiday_comes() {
+        // The share of new groups that are of the season.
+        let share = |day: (u32, u32)| {
+            let mut ours = 0;
+            festive_scene(
+                &[("biome", s("reef"))],
+                Fiesta::of_day(day.0, day.1),
+                "classic",
+                |ctx, a| {
+                    a.resize(ctx, 160, 50);
+                    let lib = library();
+                    for _ in 0..800 {
+                        let n = a.ents.len();
+                        a.add_group(false, true);
+                        ours += usize::from(
+                            a.ents
+                                .get(n)
+                                .is_some_and(|e| lib.species[e.who as usize].def.season != ALWAYS),
+                        );
+                    }
+                },
+            );
+            ours as f32 / 800.0
+        };
+        let (first, height) = (share((12, 13)), share((12, 24)));
+        assert!(
+            0.15 < first && first < height && height < 0.75,
+            "{first} {height}"
+        );
+    }
+
+    #[test]
+    fn the_navidad_survives_odd_screens_and_long_steps() {
+        for theme in ["classic", "dracula"] {
+            for day in [(12, 20), (12, 24), (1, 6)] {
+                for (w, h) in [
+                    (1, 1),
+                    (5, 3),
+                    (12, 9),
+                    (30, 12),
+                    (40, 14),
+                    (300, 90),
+                    (300, 10),
+                ] {
+                    for biome in ["random", "deep", "tank", "mixed"] {
+                        let opts = [("biome", s(biome)), ("events", rate(20.0))];
+                        festive_scene(&opts, Fiesta::of_day(day.0, day.1), theme, |ctx, a| {
+                            a.resize(ctx, w, h);
+                            let mut c = Canvas::new(w, h, Color::Reset);
+                            for k in 0..40 {
+                                a.update(ctx, 5.0);
+                                if k == 20
+                                    && let Some(world) = a.world.as_mut()
+                                {
+                                    world.env.force_night();
+                                }
+                                a.draw(ctx, &mut c);
+                            }
+                            a.retheme(ctx);
+                            a.draw(ctx, &mut c);
+                        });
+                    }
                 }
             }
         }

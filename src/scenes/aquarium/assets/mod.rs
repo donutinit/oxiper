@@ -27,6 +27,7 @@ mod decor;
 mod deep;
 mod floor;
 mod fresh;
+mod navidad;
 mod ocean;
 mod oddballs;
 mod plants;
@@ -159,6 +160,9 @@ pub type Season = u8;
 pub const ALWAYS: Season = 0;
 /// Día de Muertos (around November 1st and 2nd).
 pub const MUERTOS: Season = 1;
+/// The Navidad: the posadas, Nochebuena, Año Nuevo and the Reyes (December
+/// 12 to January 6).
+pub const NAVIDAD: Season = 2;
 
 /// Which band of the water a creature keeps to.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -696,21 +700,31 @@ pub fn species() -> impl Iterator<Item = &'static Species> {
         critters::SPECIES,
         floor::SPECIES,
         season::SPECIES,
+        navidad::SPECIES,
     ]
     .into_iter()
     .flatten()
 }
 
 pub fn plants() -> impl Iterator<Item = &'static Plant> {
-    plants::PLANTS.iter().chain(season::PLANTS)
+    plants::PLANTS
+        .iter()
+        .chain(season::PLANTS)
+        .chain(navidad::PLANTS)
 }
 
 pub fn decor() -> impl Iterator<Item = &'static Decor> {
-    decor::DECOR.iter().chain(season::DECOR)
+    decor::DECOR
+        .iter()
+        .chain(season::DECOR)
+        .chain(navidad::DECOR)
 }
 
 pub fn visitors() -> impl Iterator<Item = &'static Visitor> {
-    visitors::VISITORS.iter().chain(season::VISITORS)
+    visitors::VISITORS
+        .iter()
+        .chain(season::VISITORS)
+        .chain(navidad::VISITORS)
 }
 
 /// Mask digit choices, parsed from a `tint` string.
@@ -885,8 +899,10 @@ fn extra_note(note: &mut String, traits: Traits, season: Season) {
     if traits != 0 {
         note.push_str(&format!(" [{}]", trait_names(traits)));
     }
-    if season == MUERTOS {
-        note.push_str(" (muertos)");
+    match season {
+        MUERTOS => note.push_str(" (muertos)"),
+        NAVIDAD => note.push_str(" (navidad)"),
+        _ => {}
     }
 }
 
@@ -1237,7 +1253,7 @@ mod tests {
                 0,
                 "{who}: traits for visitors or props"
             );
-            assert!(s.season <= MUERTOS, "{who}: season");
+            assert!(s.season <= NAVIDAD, "{who}: season");
             assert_eq!(
                 s.traits & PUFF != 0,
                 !s.alt.is_empty(),
@@ -1261,7 +1277,7 @@ mod tests {
                 0,
                 "{who}: traits for creatures or props"
             );
-            assert!(v.season <= MUERTOS, "{who}: season");
+            assert!(v.season <= NAVIDAD, "{who}: season");
             assert!(
                 v.traits & PLUNGE == 0 || v.lane == Lane::Sky,
                 "{who}: only birds plunge"
@@ -1270,12 +1286,12 @@ mod tests {
         for p in plants() {
             let who = format!("plant {}", p.name);
             assert_eq!(p.traits & !(STING | SHELTER | GLOW), 0, "{who}: traits");
-            assert!(p.season <= MUERTOS, "{who}: season");
+            assert!(p.season <= NAVIDAD, "{who}: season");
         }
         for d in decor() {
             let who = format!("decor {}", d.name);
             assert_eq!(d.traits & !(SHELTER | GLOW), 0, "{who}: traits");
-            assert!(d.season <= MUERTOS, "{who}: season");
+            assert!(d.season <= NAVIDAD, "{who}: season");
         }
     }
 

@@ -126,6 +126,10 @@ pub(super) struct World {
     pub(super) season: Season,
     /// How far the season has come, 0 to 1: how much of it there is.
     pub(super) level: f32,
+    /// The Navidad's days: the posadas (the procession at night) and from
+    /// Nochebuena (the Niño Dios in the manger).
+    pub(super) posadas: bool,
+    pub(super) nino: bool,
     pub(super) eco: ecology::Eco,
     pub(super) enc: encounters::Enc,
     pub(super) env: environment::Env,
@@ -150,6 +154,7 @@ impl World {
         };
         let stay = o.f("biome_time");
         let (season, level) = events::season_of(o, fiesta);
+        let (posadas, nino) = events::season_days(o, fiesta);
         Some(World {
             biomes,
             biome: 0,
@@ -183,6 +188,8 @@ impl World {
             seed: 0,
             season,
             level,
+            posadas,
+            nino,
             eco: ecology::Eco::from_opts(o),
             enc: encounters::Enc::from_opts(o),
             env: environment::Env::from_opts(o),
@@ -692,7 +699,11 @@ impl Aquarium {
             .collect();
         if w.season != ALWAYS {
             let seasonal = |k: usize| lib.plants[pool[k] as usize].season != ALWAYS;
-            festive(&mut weights, seasonal, 0.3 + 0.35 * w.level);
+            festive(
+                &mut weights,
+                seasonal,
+                events::plant_share(w.season, w.level),
+            );
         }
         let Some(k) = weighted(&mut self.rng, pool.len(), |k| weights[k]) else {
             return;
@@ -755,12 +766,13 @@ impl Aquarium {
             .collect();
         let fit_of = |i: u16| fits.iter().find(|f| f.0 == i).map_or(1.0, |f| f.1);
         let mut altar = None;
+        let centerpiece = events::centerpiece(w.season);
         if festive_on {
             if level >= 0.8 {
                 want = (want + 1).min(cands.len());
             }
             altar = (0..cands.len())
-                .filter(|&k| lib.decor[cands[k] as usize].name.starts_with("ofrend"))
+                .filter(|&k| lib.decor[cands[k] as usize].name.starts_with(centerpiece))
                 .max_by_key(|&k| {
                     let s = &lib.sprites[lib.decor[cands[k] as usize].spr as usize];
                     ((fit_of(cands[k]) * 100.0) as i32, s.w * s.h)

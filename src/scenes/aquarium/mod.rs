@@ -31,6 +31,16 @@
 //! a catrina jellyfish swim; the xolo, La Catrina, trajineras and monarchs
 //! pass by. How much of it comes follows how far the holiday has come
 //! (`fiesta.level`); on an ordinary day nothing of it does.
+//!
+//! At the Navidad (`navidad` keeps it every day) a nacimiento is set on the
+//! floor first (with a small one for small screens), beside a tree, a pot of
+//! ponche, farolitos and a rosca; the kelp is hung with the series' blinking
+//! lights, strung from plant to plant, and esferas rise like bubbles; red and
+//! green fish, a nochebuena-tailed school, bulbs of the series, a glass
+//! jellyfish swim, a piñata de siete picos bobs on the waves, the Estrella de
+//! Belén crosses the sky and the Reyes Magos sail by. From Nochebuena the
+//! Niño Dios lies in the manger, and at night during the posadas a procession
+//! of small fish carrying candles swims across.
 
 mod art;
 pub mod assets;
@@ -39,7 +49,9 @@ mod ecology;
 mod encounters;
 mod environment;
 mod events;
+mod garlands;
 mod library;
+mod navidad;
 mod sprite;
 
 use std::cmp::Reverse;
@@ -152,7 +164,7 @@ pub const INFO: SceneInfo = SceneInfo {
         Opt {
             key: "season",
             default: Val::S("auto"),
-            help: "auto (the holidays, see `fiestas`), none, or muertos (Día de Muertos every day)",
+            help: "auto (the holidays, see `fiestas`), none, muertos (Día de Muertos every day) or navidad (the Navidad every day)",
         },
         Opt {
             key: "castle",
@@ -1218,6 +1230,15 @@ impl Aquarium {
                 let (col, attr) = pens[e.pen(cell.code) as usize];
                 c.set_attr(x, y, cell.ch, col, attr);
             }
+        }
+        // At the Navidad the plants wear the series' lights.
+        if e.kind == Kind::Seaweed
+            && self
+                .world
+                .as_ref()
+                .is_some_and(|w| w.season == assets::NAVIDAD)
+        {
+            self.dress_plant(e, c);
         }
     }
 }
