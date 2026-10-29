@@ -46,10 +46,17 @@
 //! dorado, blanco) in turn, steam curling up from it. At a corner the hoja
 //! opens on the masa and a stripe of salsa roja, hojas, maíz, steam and
 //! sparks of a vela fly off, and the banner reads "¡TE TOCAN LOS TAMALES!".
+//!
+//! On Día del Niño the logo is a trompo, its painted stripes (in toy colors,
+//! changing on every bounce) sliding around it as it spins on its púa. At a
+//! corner it spins three times as fast for a moment while canicas, estrellas
+//! and caramelos shoot out of it and bounce down to lie along the bottom
+//! row, and the banner reads "¡FELIZ DÍA DEL NIÑO!".
 
 mod candelaria;
 mod muertos;
 mod navidad;
+mod nino;
 mod patrias;
 
 use crate::color::{Color, rgb};
@@ -142,6 +149,8 @@ enum React {
     Chatter,
     /// Its reaction picture shows for a moment.
     Hold,
+    /// Its frames play faster for a moment.
+    Spin,
     /// It shakes at each "¡dale!", bursts, and comes back whole: its
     /// reaction picture is what is left of it.
     Pop,
@@ -269,6 +278,7 @@ fn look_for(f: Fiesta) -> Option<&'static Look> {
         Kind::Candelaria => Some(&candelaria::LOOK),
         Kind::Muertos => Some(&muertos::LOOK),
         Kind::Navidad => Some(navidad::look(f)),
+        Kind::Nino => Some(&nino::LOOK),
         Kind::Patrias => Some(&patrias::LOOK),
         _ => None,
     }
@@ -358,6 +368,7 @@ fn glyph_es(ch: char) -> Option<[u8; 5]> {
         '¡' => Some([0x04, 0x00, 0x04, 0x04, 0x04]),
         'ó' | 'Ó' => Some([0x02, 0x0e, 0x11, 0x11, 0x0e]),
         'é' | 'É' => Some([0x02, 0x1f, 0x10, 0x1c, 0x1f]),
+        'í' | 'Í' => Some([0x02, 0x0e, 0x04, 0x04, 0x0e]),
         'ñ' | 'Ñ' => Some([0x0a, 0x19, 0x15, 0x13, 0x11]),
         _ => glyph(ch),
     }
@@ -1253,7 +1264,12 @@ impl Dvd {
             _ => {}
         }
         if !self.frames.is_empty() && look.beat > 0.0 {
-            let k = ((self.clock * look.beat) as usize + i) % (self.frames.len() + 1);
+            let spin = if look.react == React::Spin && t < 1.8 {
+                3.0
+            } else {
+                1.0
+            };
+            let k = ((self.clock * look.beat * spin) as usize + i) % (self.frames.len() + 1);
             if k > 0 {
                 return (&self.frames[k - 1], 0);
             }
@@ -1449,6 +1465,7 @@ mod tests {
             ("mes patrio", Fiesta::of_day(9, 2)),
             ("grito", Fiesta::of_day(9, 15)),
             ("candelaria", Fiesta::of_day(2, 2)),
+            ("niño", Fiesta::of_day(4, 30)),
         ]
     }
 
@@ -2046,6 +2063,47 @@ mod tests {
             let mut c = Canvas::new(120, 40, Color::Reset);
             d.draw(&ctx, &mut c);
             assert!(c.cells().iter().any(|cell| cell.fg == flame), "{theme}");
+        }
+    }
+
+    #[test]
+    fn the_nino_spins_a_trompo() {
+        let o = crate::scene::Opts::new(INFO.options, toml::Table::new());
+        for theme in ["classic", "nord"] {
+            let th = crate::theme::Theme::builtin(theme).unwrap();
+            let ctx = ctx(&th, &o, Fiesta::of_day(4, 30));
+            let mut d = dressed(&ctx, 120, 40);
+            // Stripes, a belt, the cuerda and the púa.
+            for p in b"abwzm" {
+                assert!(parts(&d, &[*p]) > 0, "{}", *p as char);
+            }
+            if th.native {
+                assert_eq!(d.palette.len(), 5);
+            }
+            // Four frames, the stripes in a different place in each.
+            assert_eq!(d.frames.len(), 3);
+            let mut all = vec![d.sprite.parts.clone()];
+            all.extend(d.frames.iter().map(|f| f.parts.clone()));
+            for (i, a) in all.iter().enumerate() {
+                for b in &all[i + 1..] {
+                    assert_ne!(a, b);
+                }
+            }
+            let banner = Sprite::fit_lines(&["¡Feliz Día", "del Niño!"], 120, 40);
+            assert_eq!(d.banner.cells, banner.cells);
+            // It turns on its own, and three times as fast at a corner.
+            d.party_t = PARTY;
+            d.clock = 0.15;
+            let calm = d.pose(0, &d.logos[0]).0.parts.clone();
+            assert_eq!(calm, d.frames[0].parts, "frame 2 of 4 at 8 fps");
+            d.celebrate(0);
+            d.clock = 0.15;
+            let fast = d.pose(0, &d.logos[0]).0.parts.clone();
+            assert_eq!(fast, d.frames[2].parts, "frame 4 of 4");
+            // And it throws canicas and stars.
+            assert!(d.bits.len() > 20);
+            d.clock = 0.0;
+            assert!(play(&mut d, &ctx, 0.5).to_text().contains("esquinas: 1"));
         }
     }
 }
