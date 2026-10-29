@@ -18,6 +18,18 @@
 //! azúcar and veladoras flickering in colored glass; by November 2 tapers and
 //! a pan de muerto have joined them. Leaves the user chose keep their glyph
 //! and only take the colors.
+//!
+//! On Navidad the tree is trimmed the Mexican way: esferas hang among the
+//! leaves, a series of foquitos runs along the branches blinking in chase and
+//! alternating patterns (the scene reports `next_change` so the app still
+//! sleeps between steps), heno drapes from the boughs, and once the tree is
+//! grown a star shines on its crown. It stands in a foil-wrapped pot with
+//! nochebuenas on the soil. At its foot lies a nacimiento on musgo: a pesebre
+//! with the ox and the mule, María and José, and across the pot the pastores
+//! and their sheep, more of them with every posada; the Niño Dios and an
+//! angel arrive on Nochebuena. In January the Reyes Magos set out from the
+//! edge of the screen and come closer each day, reaching the pesebre on the
+//! 6th.
 
 use crate::color::{self, Color, rgb};
 use crate::fiesta::{self, Fiesta};
@@ -869,7 +881,7 @@ fn bloom(x: i32, y: i32, seed: u32, level: f32) -> Bloom {
     }
 }
 
-/// The holiday's colors.
+/// Día de Muertos' colors.
 struct Dress {
     marigold: [Color; 3],
     velvet: [Color; 2],
@@ -1042,7 +1054,407 @@ const OFRENDA: [(f32, bool, i32, &Sprite); 6] = [
 ];
 
 // ---------------------------------------------------------------------------
+// Navidad: the tree trimmed the Mexican way
+
+const ROJO_NOCHEBUENA: Color = rgb(0xc8102e);
+const VERDE_PINO: Color = rgb(0x1f6f3a);
+const DORADO: Color = rgb(0xf2b632);
+const PLATA: Color = rgb(0xc9ccd6);
+const BLANCO: Color = rgb(0xf4f1ea);
+const HENO: Color = rgb(0x9aa58a);
+const MUSGO: Color = rgb(0x4f7a28);
+const MUSGO_LIGHT: Color = rgb(0x6f9a3a);
+const CANELA: Color = rgb(0x8b4a1e);
+const CANA: Color = rgb(0xc9b26b);
+const PIEL: Color = rgb(0xdca878);
+const PIEL_OSCURA: Color = rgb(0x7a4a2a);
+const AZUL_MARIA: Color = rgb(0x3a63c8);
+const CAFE: Color = rgb(0x8a5a2b);
+const GRIS: Color = rgb(0x9a9a9e);
+
+/// The foquitos of the series: rojo, verde, azul, amarillo, rosa, naranja.
+const FOQUITOS: [Color; 6] = [
+    rgb(0xff3b3b),
+    rgb(0x3bd16f),
+    rgb(0x3b7bff),
+    rgb(0xffd23b),
+    rgb(0xff5fb4),
+    rgb(0xff8c1a),
+];
+
+/// Seconds between one step of the series' blinking and the next.
+const BLINK: f32 = 0.4;
+
+/// Colors by ink letter: `a` to `z`, then `A` to `Z`.
+#[derive(Clone, Copy)]
+struct Inks([Color; 52]);
+
+impl Inks {
+    fn new(colors: &[(u8, Color)]) -> Inks {
+        let mut inks = Inks([Color::Reset; 52]);
+        for &(k, color) in colors {
+            inks.0[Inks::slot(k)] = color;
+        }
+        inks
+    }
+
+    fn slot(k: u8) -> usize {
+        match k {
+            b'a'..=b'z' => (k - b'a') as usize,
+            b'A'..=b'Z' => 26 + (k - b'A') as usize,
+            _ => 0,
+        }
+    }
+
+    fn get(&self, k: u8) -> Color {
+        self.0[Inks::slot(k)]
+    }
+}
+
+/// How much of the Navidad has been put up: the tree and the nacimiento fill
+/// up through the posadas, and stay complete from Nochebuena on.
+fn built(f: Fiesta) -> f32 {
+    if f.month == 12 && f.day <= 24 {
+        f.level
+    } else {
+        1.0
+    }
+}
+
+/// The Niño Dios lies in the pesebre from Nochebuena on.
+fn nino_dios(f: Fiesta) -> bool {
+    f.month == 1 || f.day >= 24
+}
+
+/// How far the Reyes Magos still are from the pesebre, 1 (at the edge of the
+/// screen) to 0 (arrived, on the 6th); `None` while they have not set out.
+fn reyes_away(f: Fiesta) -> Option<f32> {
+    f.reyes().then(|| (6 - f.day.min(6)) as f32 / 4.0)
+}
+
+/// The Navidad's colors.
+struct Navidad {
+    inks: Inks,
+    /// Esferas: rojo, dorado, plata, blanco.
+    esferas: [Color; 4],
+    luces: [Color; 6],
+    heno: Color,
+    star: Color,
+}
+
+impl Navidad {
+    fn classic(pairs: &[Color; 5]) -> Navidad {
+        Navidad::make(
+            pairs,
+            [
+                ROJO_NOCHEBUENA,
+                VERDE_PINO,
+                DORADO,
+                PLATA,
+                BLANCO,
+                AZUL_MARIA,
+            ],
+            FOQUITOS,
+            [MUSGO, MUSGO_LIGHT],
+            [CANELA, CANA, HENO, PIEL, PIEL_OSCURA, CAFE, GRIS, MORADO],
+        )
+    }
+
+    /// The same dress in the theme's colors.
+    fn themed(ctx: &Ctx, pairs: &[Color; 5]) -> Navidad {
+        let t = ctx.theme;
+        let leaf = pairs[LEAF_BRIGHT as usize];
+        let wood = pairs[WOOD_BRIGHT as usize];
+        let by = |hue, tol, avoid, i, native| {
+            by_hue(&t.colors, hue, tol, avoid).unwrap_or_else(|| ctx.pick(i, native))
+        };
+        let rojo = by(355.0, 35.0, None, 0, ROJO_NOCHEBUENA);
+        let dorado = by(45.0, 25.0, Some(rojo), 1, DORADO);
+        let azul = by(220.0, 45.0, Some(rojo), 2, AZUL_MARIA);
+        let rosa = by(325.0, 40.0, Some(rojo), 4, FOQUITOS[4]);
+        let morado = by(275.0, 45.0, Some(azul), 3, MORADO);
+        let naranja = by_hue(&t.colors, 28.0, 22.0, Some(rojo)).unwrap_or(wood);
+        let plata = ctx.fade(t.fg, 0.3);
+        let heno = ctx.fade(leaf.lerp(t.fg, 0.5), 0.2);
+        Navidad::make(
+            pairs,
+            [rojo, leaf, dorado, plata, t.fg, azul],
+            [rojo, leaf, azul, dorado, rosa, naranja],
+            [ctx.fade(leaf, 0.35), leaf],
+            [
+                wood,
+                dorado.lerp(t.fg, 0.3),
+                heno,
+                wood.lerp(t.fg, 0.4),
+                wood.lerp(rojo, 0.3),
+                wood,
+                plata,
+                morado,
+            ],
+        )
+    }
+
+    /// `main`: rojo, verde, dorado, plata, blanco, azul; `luces`; the musgo's
+    /// two shades; `rest`: canela, caña, heno, piel, piel oscura, café, gris,
+    /// morado.
+    fn make(
+        pairs: &[Color; 5],
+        main: [Color; 6],
+        luces: [Color; 6],
+        musgo: [Color; 2],
+        rest: [Color; 8],
+    ) -> Navidad {
+        let [rojo, verde, dorado, plata, blanco, azul] = main;
+        let [canela, cana, heno, piel, oscura, cafe, gris, morado] = rest;
+        let inks = Inks::new(&[
+            (b'r', rojo),
+            (b'g', verde),
+            (b'o', dorado),
+            (b'p', plata),
+            (b'w', blanco),
+            (b'b', azul),
+            (b'm', musgo[0]),
+            (b'l', musgo[1]),
+            (b't', canela),
+            (b'c', cana),
+            (b'h', heno),
+            (b's', piel),
+            (b'q', oscura),
+            (b'n', cafe),
+            (b'y', gris),
+            (b'u', morado),
+            (b'W', pairs[WOOD_BRIGHT as usize]),
+        ]);
+        Navidad {
+            inks,
+            esferas: [rojo, dorado, plata, blanco],
+            luces,
+            heno,
+            star: dorado,
+        }
+    }
+}
+
+/// What hangs on a cell of the tree today.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum Adorno {
+    None,
+    /// A glass ball, in one of the four colors.
+    Esfera(u8),
+    /// A bulb of the series, numbered along the string.
+    Foquito(i32),
+}
+
+/// What the tree wears at a cell of tree `seed`. The series of foquitos runs
+/// along the branches, a bulb every fifth step; the esferas hang from the
+/// leaves, most where nothing below them hides them. Both fill up with
+/// `built`.
+fn adorno(x: i32, y: i32, seed: u32, built: f32, wood: bool, hangs: bool) -> Adorno {
+    let b = built.clamp(0.0, 1.0);
+    let n = x + 3 * y;
+    if n.rem_euclid(5) == 0 {
+        let p = if wood { 0.3 + 0.65 * b } else { 0.1 + 0.3 * b };
+        if hash01(x, y, seed ^ 0x6c75_6365) < p {
+            return Adorno::Foquito(n.div_euclid(5));
+        }
+    }
+    if !wood {
+        let p = (0.03 + 0.07 * b) * if hangs { 2.5 } else { 1.0 };
+        if hash01(x, y, seed ^ 0x6573_6665) < p {
+            let k = (hash01(x, y, seed ^ 0x636f_6c6f) * 4.0) as u8;
+            return Adorno::Esfera(k.min(3));
+        }
+    }
+    Adorno::None
+}
+
+// ---------------------------------------------------------------------------
+// The Navidad's sprites: ink letters are per holiday (see `Navidad::make`); a
+// space leaves the cell alone and a `.` clears it.
+
+/// Cbonsai's pot one in foil, with nochebuenas on the soil: red bracts, a
+/// golden heart, green leaves between them.
+const NOCHEBUENA_ONE: Sprite = Sprite {
+    art: &[
+        r":___________./~~~\.___________:",
+        r" \(*)v(*)v(*)v(*)v(*)v(*)v(*)/ ",
+        r"  \_________________________/ ",
+        r"  (_)                     (_)",
+    ],
+    ink: &[
+        "ooooooooooooWWWWWWWoooooooooooo",
+        " rrorgrorgrorgrorgrorgrorgrorr ",
+        "  rrrrrrrrrrrrrrrrrrrrrrrrrrr ",
+        "  rrr                     rrr",
+    ],
+};
+
+const NOCHEBUENA_TWO: Sprite = Sprite {
+    art: &[r"(---./~~~\.---)", r" ((*)v(*)v(*)) ", r"  (_________)  "],
+    ink: &["ooooWWWWWWWoooo", " rrorgrorgrorr ", "  rrrrrrrrrrr  "],
+};
+
+/// The pesebre: a thatched roof on two posts, 26 wide. The holy family and
+/// the animals stand between the posts (see `NACIMIENTO`).
+const PORTAL: Sprite = Sprite {
+    art: &[
+        r"        .-~~~~~~-.        ",
+        r"    .-'~~~~~~~~~~~~'-.    ",
+        r" /~~~~~~~~~~~~~~~~~~~~~~\ ",
+        r"  |                    |  ",
+        r"  |                    |  ",
+        r"  |                    |  ",
+    ],
+    ink: &[
+        "        cccccccccc        ",
+        "    cccccccccccccccccc    ",
+        " tcccccccccccccccccccccct ",
+        "  t                    t  ",
+        "  t                    t  ",
+        "  t                    t  ",
+    ],
+};
+const PORTAL_W: i32 = 26;
+
+/// A narrower pesebre for terminals without room for the full one: the holy
+/// family without the animals, 18 wide.
+const PORTAL_COMPACT: Sprite = Sprite {
+    art: &[
+        r"      .-~~-.      ",
+        r"   .-'~~~~~~'-.   ",
+        r" /~~~~~~~~~~~~~~\ ",
+        r"  |            |  ",
+        r"  |            |  ",
+        r"  |            |  ",
+    ],
+    ink: &[
+        "      cccccc      ",
+        "   cccccccccccc   ",
+        " tcccccccccccccct ",
+        "  t            t  ",
+        "  t            t  ",
+        "  t            t  ",
+    ],
+};
+const COMPACT_W: i32 = 18;
+
+/// The manger, straw and all; the Niño Dios lies in it from Nochebuena.
+const CUNA: Sprite = Sprite {
+    art: &["~~~~~", r"\___/"],
+    ink: &["ccccc", "ttttt"],
+};
+
+/// The Niño Dios, rays around him.
+const NINO: Sprite = Sprite {
+    art: &[r"\|/", "(o)"],
+    ink: &["ooo", "oso"],
+};
+
+const OX: Sprite = Sprite {
+    art: &["u--u", "(oo)"],
+    ink: &["wnnw", "nwwn"],
+};
+
+const MULA: Sprite = Sprite {
+    art: &[r"/  \", "(..)"],
+    ink: &["y  y", "yyyy"],
+};
+
+const MARIA: Sprite = Sprite {
+    art: &["(o)", r"/#\", r"/_\"],
+    ink: &["oso", "bwb", "bbb"],
+};
+
+const JOSE: Sprite = Sprite {
+    art: &["(o)*", r"/#\|", r"/ \|"],
+    ink: &["osow", "nnnt", "n nt"],
+};
+
+const PASTOR_A: Sprite = Sprite {
+    art: &["_o_)", r"/#\|", r"/ \|"],
+    ink: &["nsnt", "wwwt", "w wt"],
+};
+
+const PASTOR_B: Sprite = Sprite {
+    art: &["_o_)", r"/#\|", r"/ \|"],
+    ink: &["nsnt", "uuut", "u ut"],
+};
+
+const OVEJA: Sprite = Sprite {
+    art: &["(@@@)o", " || ||"],
+    ink: &["wwwwwy", " yy yy"],
+};
+
+const ANGEL: Sprite = Sprite {
+    art: &[r"\(o)/", r" /#\ ", "  V  "],
+    ink: &["wosow", " www ", "  w  "],
+};
+
+/// The Reyes Magos, three wide and a column of room, solid so that they stand
+/// cleanly in front of whatever they walk past: Melchor with oro, Gaspar with
+/// incienso, Baltasar with mirra.
+const MELCHOR: Sprite = Sprite {
+    art: &[" ^  ", "(_) ", r"/$\ ", r"/ \ "],
+    ink: &[".o..", "sss.", "ror.", "r.r."],
+};
+
+const GASPAR: Sprite = Sprite {
+    art: &[" ^  ", "(_) ", r"/*\ ", r"/ \ "],
+    ink: &[".o..", "sss.", "uwu.", "u.u."],
+};
+
+const BALTASAR: Sprite = Sprite {
+    art: &[" ^  ", "(_) ", r"/&\ ", r"/ \ "],
+    ink: &[".o..", "qqq.", "bnb.", "b.b."],
+};
+
+/// The nacimiento's figures inside the pesebre, in the order they join as the
+/// posadas go: from what level, how many columns from the portal's left edge,
+/// which.
+const NACIMIENTO: [(f32, i32, &Sprite); 4] = [
+    (0.4, 3, &OX),
+    (0.5, 16, &MARIA),
+    (0.6, 7, &JOSE),
+    (0.47, 19, &MULA),
+];
+
+/// The same for the narrower pesebre.
+const NACIMIENTO_COMPACT: [(f32, i32, &Sprite); 2] = [(0.5, 12, &MARIA), (0.6, 3, &JOSE)];
+
+/// The pastores and their sheep, in the order they gather: from what level,
+/// how many columns from the pot, which. They stand on the side of the pot
+/// opposite the pesebre.
+const PASTORES: [(f32, i32, &Sprite); 6] = [
+    (0.0, 1, &OVEJA),
+    (0.65, 8, &PASTOR_A),
+    (0.75, 13, &OVEJA),
+    (0.82, 20, &PASTOR_B),
+    (0.89, 25, &OVEJA),
+    (1.0, 32, &OVEJA),
+];
+const PASTORES_W: i32 = 40;
+
+// ---------------------------------------------------------------------------
 // The scene
+
+/// The holiday the tree is dressed for. Any other holiday leaves it as it is
+/// on an ordinary day.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum Look {
+    Plain,
+    Muertos,
+    Navidad,
+}
+
+impl Look {
+    fn of(f: Fiesta) -> Look {
+        match f.kind {
+            fiesta::Kind::Muertos => Look::Muertos,
+            fiesta::Kind::Navidad => Look::Navidad,
+            _ => Look::Plain,
+        }
+    }
+}
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 enum Phase {
@@ -1091,16 +1503,19 @@ struct Bonsai {
     pairs: [Color; 5],
     msg_fg: Color,
 
-    // Día de Muertos
+    // The holidays
     fiesta: Fiesta,
+    look: Look,
     dress: Dress,
+    navidad: Navidad,
     /// Leaves may turn into blossom glyphs (only with the default `&` leaves;
     /// leaves the user chose keep their glyph and only change color).
     bloom_glyphs: bool,
     /// The holiday's own randomness.
     frng: fastrand::Rng,
     petals: Vec<Petal>,
-    /// Petals owed, and scene seconds for the candles' flicker.
+    /// Petals owed, and seconds for the candles' flicker (scene time) and for
+    /// the series' blinking (wall clock).
     spawn: f32,
     clock: f32,
 }
@@ -1179,7 +1594,9 @@ impl Bonsai {
             pairs: CLASSIC,
             msg_fg: Color::Reset,
             fiesta: ctx.fiesta,
+            look: Look::of(ctx.fiesta),
             dress: Dress::CLASSIC,
+            navidad: Navidad::classic(&CLASSIC),
             bloom_glyphs,
             frng: fastrand::Rng::with_seed(ctx.seed ^ FIESTA_SALT),
             petals: Vec::with_capacity(PETALS),
@@ -1402,14 +1819,7 @@ impl Bonsai {
     /// The ofrenda at the foot of the tree, and the petals.
     fn draw_ofrenda(&self, ctx: &Ctx, c: &mut Canvas) {
         let (l, r, ground) = self.foot();
-        // Petals lying on the ground, under everything else.
-        for p in self.petals.iter().filter(|p| p.rest >= 0.0) {
-            let (x, y) = (p.x.floor() as i32, p.y.floor() as i32);
-            if c.get(x, y).is_some_and(|cell| cell.ch == ' ') {
-                let fg = ctx.fade(p.color, (1.0 - p.rest / 1.5).clamp(0.0, 1.0));
-                c.set(x, y, p.lie, fg);
-            }
-        }
+        self.lying_petals(ctx, c);
         let skull = if l - 6 - 10 >= 0 || self.w >= 100 {
             &CALAVERA
         } else {
@@ -1427,7 +1837,22 @@ impl Bonsai {
             let glass = self.dress.glass[i % 3];
             self.sprite(c, x, ground, s, glass, i as i32, 0);
         }
-        // Petals in the air, in front of it all.
+        self.flying_petals(c);
+    }
+
+    /// Petals lying on the ground, under everything else.
+    fn lying_petals(&self, ctx: &Ctx, c: &mut Canvas) {
+        for p in self.petals.iter().filter(|p| p.rest >= 0.0) {
+            let (x, y) = (p.x.floor() as i32, p.y.floor() as i32);
+            if c.get(x, y).is_some_and(|cell| cell.ch == ' ') {
+                let fg = ctx.fade(p.color, (1.0 - p.rest / 1.5).clamp(0.0, 1.0));
+                c.set(x, y, p.lie, fg);
+            }
+        }
+    }
+
+    /// Petals in the air, in front of it all.
+    fn flying_petals(&self, c: &mut Canvas) {
         for p in self.petals.iter().filter(|p| p.rest < 0.0) {
             let k = (p.phase * 1.6) as i32;
             let ch = ['\'', '`', '.', ','][k.rem_euclid(4) as usize];
@@ -1519,6 +1944,312 @@ impl Bonsai {
     }
 }
 
+// -- Navidad --
+
+/// Where the pesebre stands: its left column, the side of the pot (1 right,
+/// -1 left), and whether it is the full one or the narrow one.
+struct Belen {
+    x: i32,
+    side: i32,
+    full: bool,
+}
+
+impl Belen {
+    fn width(&self) -> i32 {
+        if self.full { PORTAL_W } else { COMPACT_W }
+    }
+}
+
+impl Bonsai {
+    /// The color of a sprite's ink letter for the holiday on.
+    fn ink_of(&self, k: u8) -> Color {
+        match self.look {
+            Look::Navidad => self.navidad.inks.get(k),
+            _ => Color::Reset,
+        }
+    }
+
+    /// Draws a sprite with its left column at `at.0`, standing on row `at.1`,
+    /// faded `fade` toward the background.
+    fn plot(&self, ctx: &Ctx, c: &mut Canvas, at: (i32, i32), s: &Sprite, attr: u8, fade: f32) {
+        let top = at.1 + 1 - s.art.len() as i32;
+        for (dy, (art, ink)) in s.art.iter().zip(s.ink).enumerate() {
+            let y = top + dy as i32;
+            for (dx, (ch, k)) in art.chars().zip(ink.bytes()).enumerate() {
+                let x = at.0 + dx as i32;
+                match k {
+                    b' ' => {}
+                    b'.' => c.set(x, y, ' ', Color::Reset),
+                    _ if ch == ' ' => {}
+                    _ => {
+                        let fg = self.ink_of(k);
+                        let fg = if fade > 0.0 { ctx.fade(fg, fade) } else { fg };
+                        c.set_attr(x, y, ch, fg, attr);
+                    }
+                }
+            }
+        }
+    }
+
+    /// Room for a piece `width` wide beside the pot, on the side `prefer`
+    /// (1 right, -1 left) if it fits, else on the other: its left column and
+    /// the side.
+    fn room(&self, width: i32, prefer: i32) -> Option<(i32, i32)> {
+        let (l, r, _) = self.foot();
+        let fits = |side: i32| {
+            let x = if side > 0 { r + 3 } else { l - 3 - width + 1 };
+            (x >= 0 && x + width <= self.w).then_some((x, side))
+        };
+        fits(prefer).or_else(|| fits(-prefer))
+    }
+
+    /// The pot of the Navidad in place of cbonsai's.
+    fn draw_pot(&self, ctx: &Ctx, c: &mut Canvas) {
+        let (pot, bold) = match self.base {
+            1 => (&NOCHEBUENA_ONE, true),
+            2 => (&NOCHEBUENA_TWO, false),
+            _ => return,
+        };
+        let ground = self.base_y + pot.art.len() as i32 - 1;
+        let attr = if bold { BOLD } else { 0 };
+        self.plot(ctx, c, (self.base_x, ground), pot, attr, 0.0);
+    }
+
+    /// What a leaf or a bough wears on Navidad: its glyph, color and weight.
+    fn trim(&self, ctx: &Ctx, x: i32, y: i32, cell: GCell, attr: u8) -> (char, Color, u8) {
+        let pair = cell.style & 7;
+        let wood = matches!(pair, WOOD_DARK | WOOD_BRIGHT);
+        let g = &self.grid;
+        let hangs = !wood && y + 1 < g.h && g.cells[((y + 1) * g.w + x) as usize].ch <= ' ';
+        let n = &self.navidad;
+        match adorno(x, y, self.seed, built(self.fiesta), wood, hangs) {
+            Adorno::None => (cell.ch, self.pairs[pair as usize], attr),
+            Adorno::Esfera(k) => {
+                let ch = if self.bloom_glyphs { '@' } else { cell.ch };
+                (ch, n.esferas[k as usize], BOLD)
+            }
+            Adorno::Foquito(i) => {
+                let color = n.luces[i.rem_euclid(6) as usize];
+                let glyph = |g| {
+                    if wood || self.bloom_glyphs {
+                        g
+                    } else {
+                        cell.ch
+                    }
+                };
+                if self.lit(i) {
+                    (glyph('O'), color, BOLD)
+                } else {
+                    (glyph('o'), ctx.fade(color, 0.7), 0)
+                }
+            }
+        }
+    }
+
+    /// The step of the series' blinking the scene is at.
+    fn step(&self) -> i32 {
+        (self.clock / BLINK) as i32
+    }
+
+    /// Is bulb `i` of the series lit? Every few seconds the series changes
+    /// its pattern: steady with a few twinkling, a chase, bulbs taking turns,
+    /// all of them blinking together.
+    fn lit(&self, i: i32) -> bool {
+        let step = self.step();
+        match (step / 16) % 4 {
+            0 => hash01(i, step, 0x7477_696e) > 0.12,
+            1 => (i + step).rem_euclid(3) != 0,
+            2 => (i + step / 2).rem_euclid(2) == 0,
+            _ => (step / 3) % 2 == 0,
+        }
+    }
+
+    /// The musgo the nacimiento stands on: moss along the ground, in tufts a
+    /// row above it, thinning out at both ends.
+    fn draw_musgo(&self, c: &mut Canvas) {
+        let (l, r, ground) = self.foot();
+        let belen = self.belen();
+        let (side, w) = belen
+            .as_ref()
+            .map_or((1, PORTAL_W), |b| (b.side, b.width()));
+        let (a, b) = if side > 0 {
+            (l - 3 - PASTORES_W, r + 3 + w)
+        } else {
+            (l - 4 - w, r + 3 + PASTORES_W)
+        };
+        let inks = &self.navidad.inks;
+        let portal = belen.map(|b| b.x..b.x + w);
+        for x in a.max(0)..=b.min(self.w - 1) {
+            let edge = (((x - a).min(b - x) + 1) as f32 / 4.0).min(1.0);
+            if hash01(x, ground, self.seed ^ 0x6d75_7367) >= edge {
+                continue;
+            }
+            let ink = if hash01(x, 1, self.seed ^ 0x6d6f_7373) < 0.5 {
+                b'm'
+            } else {
+                b'l'
+            };
+            let h = hash01(x, 2, self.seed ^ 0x6d6f_7374);
+            let ch = ['"', '\'', ',', ';', '.', '"'][((h * 6.0) as usize).min(5)];
+            c.set(x, ground, ch, inks.get(ink));
+            let inside = portal.as_ref().is_some_and(|r| r.contains(&x));
+            if !inside && hash01(x, ground - 1, self.seed ^ 0x7475_6674) < 0.1 * edge {
+                c.set(x, ground - 1, '\'', inks.get(b'l'));
+            }
+        }
+    }
+
+    /// Where the pesebre stands, the right of the pot when it fits, and
+    /// which of the two sizes.
+    fn belen(&self) -> Option<Belen> {
+        [true, false].into_iter().find_map(|full| {
+            let w = if full { PORTAL_W } else { COMPACT_W };
+            let (x, side) = self.room(w, 1)?;
+            Some(Belen { x, side, full })
+        })
+    }
+
+    /// Heno draped from the boughs, in strands one to three cells long.
+    fn draw_heno(&self, c: &mut Canvas) {
+        let g = &self.grid;
+        let Some((x0, y0, x1, y1)) = g.bbox else {
+            return;
+        };
+        let p = 0.1 + 0.2 * built(self.fiesta);
+        for y in y0..=y1 {
+            for x in x0..=x1 {
+                let cell = g.cells[(y * g.w + x) as usize];
+                let wood = matches!(cell.style & 7, WOOD_DARK | WOOD_BRIGHT);
+                if !wood || cell.ch <= ' ' || hash01(x, y, self.seed ^ 0x6865_6e6f) >= p {
+                    continue;
+                }
+                let len = 1 + (hash01(x, y, self.seed ^ 0x6c65_6e67) * 3.0) as i32;
+                let sway = hash01(x, y, self.seed ^ 0x7377_6179);
+                for k in 1..=len.min(3) {
+                    let ch = [';', ':', '\''][(k - 1) as usize];
+                    let hx = x + (sway < 0.5 && k == 2) as i32;
+                    if c.get(hx, y + k).is_none_or(|cell| cell.ch != ' ') {
+                        break;
+                    }
+                    c.set(hx, y + k, ch, self.navidad.heno);
+                }
+            }
+        }
+    }
+
+    /// The star on the crown, once the tree has grown.
+    fn draw_star(&self, c: &mut Canvas) {
+        let g = &self.grid;
+        let (Phase::Done, Some((x0, y0, x1, _))) = (self.phase, g.bbox) else {
+            return;
+        };
+        // the crown: the middle of the topmost row
+        let top = &g.cells[(y0 * g.w) as usize..((y0 + 1) * g.w) as usize];
+        let mut xs = (x0..=x1).filter(|&x| top[x as usize].ch > ' ');
+        let (first, last) = match xs.next() {
+            Some(first) => (first, xs.next_back().unwrap_or(first)),
+            None => (x0, x1),
+        };
+        let (x, y) = ((first + last) / 2, y0 - 2);
+        let k = self.navidad.star;
+        let (ray, diag) = (self.step() & 1 == 0, self.step() & 1 == 1);
+        for (dx, dy, ch, on) in [
+            (0, -1, '|', ray),
+            (0, 1, '|', ray),
+            (-1, 0, '-', ray),
+            (1, 0, '-', ray),
+            (-1, -1, '\\', diag),
+            (1, 1, '\\', diag),
+            (1, -1, '/', diag),
+            (-1, 1, '/', diag),
+        ] {
+            if on {
+                c.set_attr(x + dx, y + dy, ch, k, 0);
+            }
+        }
+        c.set_attr(x, y, '*', k, BOLD);
+    }
+
+    /// The nacimiento: the pesebre with its figures, the pastores and their
+    /// sheep across the pot, the angel and the Niño Dios from Nochebuena, the
+    /// Reyes Magos on their way in January.
+    fn draw_belen(&self, ctx: &Ctx, c: &mut Canvas) {
+        self.draw_heno(c);
+        self.draw_star(c);
+        let (l, _, ground) = self.foot();
+        let built = built(self.fiesta);
+        let nino = nino_dios(self.fiesta);
+        let portal = self.belen();
+        // the pastores, on the other side of the pot
+        let side = -portal.as_ref().map_or(1, |b| b.side);
+        for (i, &(from, off, s)) in PASTORES.iter().enumerate() {
+            let w = s.art[0].chars().count() as i32;
+            let x = if side < 0 {
+                l - 3 - off - w + 1
+            } else {
+                self.foot().1 + 2 + off
+            };
+            if from <= built && x >= 0 && x + w <= self.w {
+                self.plot(ctx, c, (x, ground), s, 0, 0.0);
+                if nino && i == 2 {
+                    // the angel announces it over the flock
+                    self.plot(ctx, c, (x + 1, ground - 3), &ANGEL, 0, 0.0);
+                }
+            }
+        }
+        let Some(belen) = portal else {
+            return;
+        };
+        let px = belen.x;
+        let (roof, figures, cuna): (_, &[(f32, i32, &Sprite)], _) = if belen.full {
+            (&PORTAL, &NACIMIENTO, 11)
+        } else {
+            (&PORTAL_COMPACT, &NACIMIENTO_COMPACT, 7)
+        };
+        self.plot(ctx, c, (px, ground), roof, 0, 0.0);
+        self.plot(ctx, c, (px + cuna, ground), &CUNA, 0, 0.0);
+        for &(from, dx, s) in figures {
+            if from <= built {
+                self.plot(ctx, c, (px + dx, ground), s, 0, 0.0);
+            }
+        }
+        if nino {
+            // rays around the Niño, twinkling
+            self.plot(ctx, c, (px + cuna + 1, ground - 1), &NINO, 0, 0.0);
+            if self.step() & 1 == 1 {
+                c.set_attr(px + cuna + 1, ground - 2, '.', self.navidad.star, 0);
+                c.set_attr(px + cuna + 3, ground - 2, '.', self.navidad.star, 0);
+            }
+        }
+        self.draw_reyes(ctx, c, &belen);
+    }
+
+    /// The Reyes Magos, in single file from the edge of the screen toward the
+    /// pesebre: dim and far on January 2, in front of it on the 6th.
+    fn draw_reyes(&self, ctx: &Ctx, c: &mut Canvas, belen: &Belen) {
+        let Some(away) = reyes_away(self.fiesta) else {
+            return;
+        };
+        let (_, _, ground) = self.foot();
+        let side = belen.side;
+        let (here, far) = if side > 0 {
+            ((belen.x + belen.width() + 1).min(self.w - 12), self.w - 4)
+        } else {
+            ((belen.x - 12).max(1), -7)
+        };
+        let x0 = here + ((far - here) as f32 * away).round() as i32;
+        let fade = 0.5 * away;
+        for (i, king) in [&MELCHOR, &GASPAR, &BALTASAR].into_iter().enumerate() {
+            let slot = if side > 0 { i } else { 2 - i } as i32;
+            self.plot(ctx, c, (x0 + 4 * slot, ground), king, 0, fade);
+        }
+        // the star they follow
+        let k = ctx.fade(self.navidad.star, fade);
+        let star = if self.step() & 1 == 0 { '*' } else { '+' };
+        c.set_attr(x0 + 5, ground - 5, star, k, BOLD);
+    }
+}
+
 impl Scene for Bonsai {
     fn resize(&mut self, _ctx: &Ctx, w: u16, h: u16) {
         let (w, h) = (w as i32, h as i32);
@@ -1566,9 +2297,19 @@ impl Scene for Bonsai {
         } else {
             Dress::themed(ctx, self.pairs[TEXT as usize])
         };
-        if !self.fiesta.is(fiesta::Kind::Muertos) {
+        let look = Look::of(ctx.fiesta);
+        if look == Look::Navidad {
+            self.navidad = if ctx.theme.native {
+                Navidad::classic(&self.pairs)
+            } else {
+                Navidad::themed(ctx, &self.pairs)
+            };
+        }
+        // petals belong to the holiday that dropped them
+        if look != self.look || look != Look::Muertos {
             self.petals.clear();
         }
+        self.look = look;
     }
 
     fn update(&mut self, ctx: &Ctx, dt: f32) {
@@ -1576,8 +2317,11 @@ impl Scene for Bonsai {
     }
 
     fn tick(&mut self, _ctx: &Ctx, dt: f32, real: f32) {
-        if self.fiesta.is(fiesta::Kind::Muertos) {
-            self.tick_fiesta(dt, real);
+        match self.look {
+            Look::Muertos => self.tick_fiesta(dt, real),
+            // the series blinks on the wall clock, however fast the scene runs
+            Look::Navidad => self.clock = (self.clock + real.clamp(0.0, 1.0)).rem_euclid(3600.0),
+            Look::Plain => {}
         }
         let mut t = (dt.max(0.0) as f64).min(86_400.0);
         let mut r = (real.max(0.0) as f64).min(86_400.0);
@@ -1619,24 +2363,33 @@ impl Scene for Bonsai {
     }
 
     fn next_change(&self) -> f32 {
-        if self.fiesta.is(fiesta::Kind::Muertos) {
+        if self.look == Look::Muertos {
             // candles flicker and petals fall
             return 0.0;
         }
-        match self.phase {
+        let own = match self.phase {
             Phase::Growing => (self.step - self.acc).max(0.0) as f32,
             // The wait is in real seconds; this is asked in scene seconds.
             Phase::Done if self.infinite => ((self.wait - self.hold).max(0.0) * self.pace) as f32,
             Phase::Done => f32::INFINITY,
+        };
+        if self.look == Look::Navidad {
+            // the series blinks a step at a time, in real seconds; this is
+            // asked in scene seconds
+            let step = (BLINK - self.clock.rem_euclid(BLINK)) as f64 * self.pace;
+            return own.min(step as f32);
         }
+        own
     }
 
     fn draw(&mut self, ctx: &Ctx, c: &mut Canvas) {
-        let dressed = self.fiesta.is(fiesta::Kind::Muertos);
-        if dressed {
-            self.draw_talavera(c);
-        } else {
-            self.draw_base(c);
+        match self.look {
+            Look::Muertos => self.draw_talavera(c),
+            Look::Navidad => {
+                self.draw_musgo(c);
+                self.draw_pot(ctx, c);
+            }
+            Look::Plain => self.draw_base(c),
         }
         let g = &self.grid;
         if let Some((x0, y0, x1, y1)) = g.bbox {
@@ -1646,17 +2399,27 @@ impl Scene for Bonsai {
                     let cell = row[x as usize];
                     if cell.ch > ' ' && cell.style & WIDE_TAIL == 0 {
                         let attr = if cell.style & BOLD_BIT != 0 { BOLD } else { 0 };
-                        let (ch, fg) = match cell.style & 7 {
-                            LEAF_DARK | LEAF_BRIGHT if dressed => self.blossom(x, y, cell),
-                            pair => (cell.ch, self.pairs[pair as usize]),
+                        let pair = cell.style & 7;
+                        let leaf = matches!(pair, LEAF_DARK | LEAF_BRIGHT);
+                        let (ch, fg, attr) = match self.look {
+                            Look::Muertos if leaf => {
+                                let (ch, fg) = self.blossom(x, y, cell);
+                                (ch, fg, attr)
+                            }
+                            Look::Navidad if leaf || matches!(pair, WOOD_DARK | WOOD_BRIGHT) => {
+                                self.trim(ctx, x, y, cell, attr)
+                            }
+                            _ => (cell.ch, self.pairs[pair as usize], attr),
                         };
                         c.set_attr(x, y, ch, fg, attr);
                     }
                 }
             }
         }
-        if dressed {
-            self.draw_ofrenda(ctx, c);
+        match self.look {
+            Look::Muertos => self.draw_ofrenda(ctx, c),
+            Look::Navidad => self.draw_belen(ctx, c),
+            Look::Plain => {}
         }
         self.draw_message(c);
     }
@@ -1975,6 +2738,331 @@ mod tests {
         // dracula's orange and pink for the marigolds and the terciopelo
         assert!(count(&c, |cell| cell.ch == '@' && cell.fg == rgb(0xffb86c)) > 10);
         assert!(count(&c, |cell| cell.fg == rgb(0xff79c6)) > 5);
+    }
+
+    const GROWN: &str = "seed = 42\nlive = false\ninfinite = false";
+
+    #[test]
+    fn the_new_sprites_are_well_formed() {
+        for s in [
+            &NOCHEBUENA_ONE,
+            &NOCHEBUENA_TWO,
+            &PORTAL,
+            &PORTAL_COMPACT,
+            &CUNA,
+            &NINO,
+            &OX,
+            &MULA,
+            &MARIA,
+            &JOSE,
+            &PASTOR_A,
+            &PASTOR_B,
+            &OVEJA,
+            &ANGEL,
+            &MELCHOR,
+            &GASPAR,
+            &BALTASAR,
+        ] {
+            assert_eq!(s.art.len(), s.ink.len(), "{:?}", s.art);
+            for (art, ink) in s.art.iter().zip(s.ink) {
+                assert_eq!(art.chars().count(), ink.len(), "{art:?} / {ink:?}");
+            }
+        }
+        assert_eq!(PORTAL.art[0].len() as i32, PORTAL_W);
+        assert_eq!(PORTAL_COMPACT.art[0].len() as i32, COMPACT_W);
+    }
+
+    /// The nacimiento's side of the screen: the bottom rows, without the
+    /// columns of the pot and its tree.
+    fn belen_text(c: &Canvas) -> String {
+        let (w, h) = (c.w() as i32, c.h() as i32);
+        let mid = w / 2;
+        let mut text = String::new();
+        for y in h - 6..h {
+            for x in (0..w).filter(|&x| (x - mid).abs() > 17) {
+                text.push(c.get(x, y).unwrap().ch);
+            }
+            text.push('\n');
+        }
+        text
+    }
+
+    #[test]
+    fn navidad_dresses_the_tree() {
+        let theme = Theme::classic();
+        let n = Navidad::classic(&CLASSIC);
+        let (b, c) = dressed(GROWN, &theme, Fiesta::of_day(12, 24), 100, 30);
+        let text = c.to_text();
+        // the foquitos along the branches, esferas and heno among the leaves
+        let bulbs = count(&c, |cell| cell.ch == 'O' && FOQUITOS.contains(&cell.fg));
+        let esferas = count(&c, |cell| cell.ch == '@' && n.esferas.contains(&cell.fg));
+        let heno = count(&c, |cell| cell.fg == HENO && ";:'".contains(cell.ch));
+        let leaves = count(&c, |cell| cell.ch == '&' && CLASSIC[..3].contains(&cell.fg));
+        assert!(
+            bulbs > 5 && esferas > 3 && heno > 3 && leaves > 20,
+            "{bulbs} {esferas} {heno} {leaves}\n{text}"
+        );
+        // the star on the crown, the nochebuenas in the pot
+        assert!(
+            count(&c, |cell| cell.ch == '*' && cell.fg == DORADO) >= 1,
+            "{text}"
+        );
+        assert!(text.contains("(*)v(*)v(*)"), "{text}");
+        // the pesebre with everyone in it, the Niño Dios and the angel
+        let belen = belen_text(&c);
+        assert!(belen.contains("(..)"), "{belen}");
+        for piece in ["u--u", "(o)*", "~(o)~", r"\(o)/", "(@@@)o", "_o_)"] {
+            assert!(belen.contains(piece), "{piece}\n{belen}");
+        }
+        assert!(text.contains(".-'~~~~"), "{text}");
+        assert!(count(&c, |cell| cell.fg == MUSGO || cell.fg == MUSGO_LIGHT) > 20);
+        // no Reyes yet, and no petals
+        assert_eq!(
+            count(&c, |cell| cell.ch == '^' && cell.fg == DORADO),
+            0,
+            "{text}"
+        );
+        assert!(b.petals.is_empty());
+    }
+
+    #[test]
+    fn the_posadas_add_to_the_nacimiento() {
+        let theme = Theme::classic();
+        let pieces = |m, d| {
+            let (_, c) = dressed(GROWN, &theme, Fiesta::of_day(m, d), 100, 30);
+            let t = belen_text(&c);
+            ["u--u", "(..)", "(o)*", "_o_)", "~(o)~", r"\(o)/"].map(|p| t.matches(p).count())
+        };
+        let (early, middle, nochebuena, later) = (
+            pieces(12, 13),
+            pieces(12, 20),
+            pieces(12, 24),
+            pieces(12, 26),
+        );
+        // the ox and the mule, then José and the pastores; the Niño Dios and
+        // the angel only from Nochebuena on
+        assert_eq!(early, [0, 0, 0, 0, 0, 0]);
+        assert_eq!(middle, [1, 1, 1, 1, 0, 0]);
+        assert_eq!(pieces(12, 19), [1, 1, 1, 0, 0, 0]);
+        assert_eq!(nochebuena[..4], [1, 1, 1, 2]);
+        assert_eq!(nochebuena[4..], [1, 1]);
+        assert_eq!(later, nochebuena);
+        assert_eq!(pieces(1, 1), nochebuena);
+        // the tree itself is trimmed more as the posadas go
+        let bulbs = |m, d| {
+            let (_, c) = dressed(GROWN, &theme, Fiesta::of_day(m, d), 100, 30);
+            count(&c, |cell| cell.ch == 'O' && FOQUITOS.contains(&cell.fg))
+        };
+        assert!(bulbs(12, 12) < bulbs(12, 24));
+    }
+
+    #[test]
+    fn a_narrow_screen_gets_the_narrow_pesebre() {
+        let theme = Theme::classic();
+        let (_, c) = dressed(GROWN, &theme, Fiesta::of_day(12, 24), 80, 24);
+        let t = c.to_text();
+        assert!(t.contains(".-'~~~~~~'-."), "{t}");
+        for piece in ["(o)*", "~(o)~"] {
+            assert!(t.contains(piece), "{piece}\n{t}");
+        }
+        // too narrow for either: the tree and the pot, the sheep that fit
+        let (_, c) = dressed(GROWN, &theme, Fiesta::of_day(12, 24), 50, 20);
+        assert!(!c.to_text().contains(".-'"), "{}", c.to_text());
+    }
+
+    #[test]
+    fn the_reyes_come_closer_each_day() {
+        let theme = Theme::classic();
+        let kings = |d| {
+            let (_, c) = dressed(GROWN, &theme, Fiesta::of_day(1, d), 200, 40);
+            let (w, h) = (c.w() as i32, c.h() as i32);
+            // the crowns, and Melchor's gift, on the bottom rows
+            let crowns = count(&c, |cell| cell.ch == '^' && cell.fg != Color::Reset);
+            let mut gift = None;
+            for y in h - 4..h {
+                for x in 0..w {
+                    if c.get(x, y).unwrap().ch == '$' && gift.is_none() {
+                        gift = Some(x);
+                    }
+                }
+            }
+            (crowns, gift)
+        };
+        let days: Vec<_> = (1..=6).map(kings).collect();
+        assert_eq!(days[0], (0, None));
+        let mut last = i32::MAX;
+        for (n, x) in &days[1..] {
+            let x = x.expect("Melchor's gift");
+            assert!(x < last, "{days:?}");
+            last = x;
+            // the others follow him in from the edge
+            assert!(*n >= 1, "{days:?}");
+        }
+        assert_eq!(days[5].0, 3);
+        // and on the 6th they stand at the pesebre
+        let (_, c) = dressed(GROWN, &theme, Fiesta::of_day(1, 6), 200, 40);
+        let t = c.to_text();
+        assert!(
+            t.contains(r"/$\") && t.contains(r"/*\") && t.contains(r"/&\"),
+            "{t}"
+        );
+        // the farther away, the dimmer
+        let dim = |d| {
+            let (_, c) = dressed(GROWN, &theme, Fiesta::of_day(1, d), 200, 40);
+            let fg = c
+                .cells()
+                .iter()
+                .find(|cell| cell.ch == '$')
+                .map(|cell| cell.fg);
+            fg.unwrap_or(Color::Reset)
+        };
+        assert_ne!(dim(2), dim(6));
+        assert_eq!(dim(6), DORADO);
+    }
+
+    #[test]
+    fn the_series_blinks_a_step_at_a_time() {
+        let theme = Theme::classic();
+        let (mut b, c) = dressed(GROWN, &theme, Fiesta::of_day(12, 24), 100, 30);
+        let opts = Opts::new(INFO.options, GROWN.parse().unwrap());
+        let ctx = Ctx {
+            theme: &theme,
+            opts: &opts,
+            bg: Color::Reset,
+            seed: 1,
+            fiesta: Fiesta::of_day(12, 24),
+        };
+        // a grown tree still asks for a redraw each step, and no oftener
+        assert!(b.next_change() > 0.0 && b.next_change() <= BLINK);
+        let mut frames = vec![c.to_text()];
+        let mut seen = std::collections::HashSet::new();
+        let mut canvas = Canvas::new(100, 30, Color::Reset);
+        for _ in 0..40 {
+            b.tick(&ctx, BLINK, BLINK);
+            canvas.clear();
+            b.draw(&ctx, &mut canvas);
+            seen.insert(canvas.to_text());
+            assert!(b.next_change() <= BLINK);
+        }
+        frames.extend(seen);
+        assert!(frames.len() > 4, "the lights never change");
+    }
+
+    #[test]
+    fn ordinary_days_and_other_holidays_are_untouched() {
+        use crate::fiesta::Kind;
+        let theme = Theme::classic();
+        let (_, plain) = dressed(GROWN, &theme, Fiesta::NONE, 100, 30);
+        for fiesta in [
+            Fiesta::of_day(6, 15),
+            Fiesta::height(Kind::Candelaria),
+            Fiesta::height(Kind::Equinoccio),
+            Fiesta::height(Kind::Revolucion),
+            Fiesta::height(Kind::Nino),
+        ] {
+            let (b, c) = dressed(GROWN, &theme, fiesta, 100, 30);
+            assert_eq!(c.cells(), plain.cells(), "{fiesta:?}");
+            assert_eq!(b.next_change(), f32::INFINITY);
+        }
+    }
+
+    #[test]
+    fn navidad_comes_and_goes_through_retheme() {
+        let theme = Theme::classic();
+        let opts = Opts::new(INFO.options, GROWN.parse().unwrap());
+        let ctx = |fiesta| Ctx {
+            theme: &theme,
+            opts: &opts,
+            bg: Color::Reset,
+            seed: 1,
+            fiesta,
+        };
+        let plain = ctx(Fiesta::NONE);
+        let mut b = Bonsai::new(&plain);
+        b.resize(&plain, 100, 30);
+        b.retheme(&plain);
+        let draw = |b: &mut Bonsai, ctx: &Ctx| {
+            let mut c = Canvas::new(100, 30, Color::Reset);
+            b.draw(ctx, &mut c);
+            c
+        };
+        let before = draw(&mut b, &plain);
+        for (fiesta, mark) in [
+            (Fiesta::of_day(12, 24), "(*)v(*)"),
+            (Fiesta::of_day(11, 2), "~@~."),
+        ] {
+            let on = ctx(fiesta);
+            b.retheme(&on);
+            for _ in 0..20 {
+                b.tick(&on, 0.2, 0.2);
+            }
+            assert!(draw(&mut b, &on).to_text().contains(mark), "{mark}");
+            assert!(b.next_change() < 1.0);
+            b.retheme(&plain);
+            assert!(b.petals.is_empty());
+            assert_eq!(b.next_change(), f32::INFINITY);
+            assert_eq!(draw(&mut b, &plain).cells(), before.cells());
+        }
+    }
+
+    #[test]
+    fn navidad_survives_odd_sizes_and_huge_steps() {
+        let themes = [Theme::classic(), Theme::builtin("dracula").unwrap()];
+        let days = [(12, 12), (12, 20), (12, 24), (1, 3), (1, 6)];
+        for theme in &themes {
+            for opts in [
+                "",
+                "base = 2",
+                "base = 0\nmessage = 'hola'",
+                "geometry = '3,70'",
+                "leaves = '木,葉'",
+            ] {
+                for (w, h) in [(1, 1), (2, 3), (7, 2), (40, 6), (61, 20), (300, 90)] {
+                    for (m, d) in days {
+                        let opts = Opts::new(INFO.options, opts.parse().unwrap());
+                        let ctx = Ctx {
+                            theme,
+                            opts: &opts,
+                            bg: rgb(0x0d1117),
+                            seed: 5,
+                            fiesta: Fiesta::of_day(m, d),
+                        };
+                        let mut b = Bonsai::new(&ctx);
+                        b.resize(&ctx, w, h);
+                        b.retheme(&ctx);
+                        let mut c = Canvas::new(w, h, Color::Reset);
+                        for dt in [5.0, 0.01, 5.0, 1e6, 0.0, 5.0] {
+                            b.tick(&ctx, dt, dt);
+                            b.draw(&ctx, &mut c);
+                            assert!(b.next_change() >= 0.0);
+                        }
+                        assert!(b.petals.len() <= PETALS);
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn navidad_under_a_theme_uses_its_colors() {
+        let theme = Theme::builtin("dracula").unwrap();
+        let (_, c) = dressed(GROWN, &theme, Fiesta::of_day(12, 24), 100, 30);
+        // none of the classic hexes: dracula's red and its green, its yellow
+        // and its pink for the series and the esferas
+        for classic in [ROJO_NOCHEBUENA, VERDE_PINO, FOQUITOS[0], FOQUITOS[2]] {
+            assert_eq!(count(&c, |cell| cell.fg == classic), 0, "{classic:?}");
+        }
+        assert!(count(&c, |cell| cell.fg == rgb(0xff5555)) > 5);
+        assert!(count(&c, |cell| cell.fg == rgb(0x50fa7b)) > 5);
+    }
+
+    #[test]
+    fn user_leaves_keep_their_glyph_on_navidad() {
+        let theme = Theme::classic();
+        let opts = "seed = 42\nlive = false\ninfinite = false\nleaves = '#'";
+        let (_, c) = dressed(opts, &theme, Fiesta::of_day(12, 24), 100, 30);
+        assert_eq!(count(&c, |cell| cell.ch == '&'), 0);
+        assert!(count(&c, |cell| cell.ch == '#' && cell.fg.is_rgb()) > 20);
     }
 
     #[test]
