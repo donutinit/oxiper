@@ -50,6 +50,15 @@
 //! burn in the colors of the flowers, and the finale is the cross itself,
 //! drawn in sparks with a flower at each end.
 //!
+//! On Carnaval the city stays, its windows lit in rosa, turquesa and
+//! amarillo and some rooftops strung with colored lights blinking in chase
+//! and twinkle patterns. The shells burst in every bright color with
+//! golden sequins: showers of confetti that tumble as they fall,
+//! serpentinas (streamers that curl through the air leaving a ribbon of
+//! sparks behind) and carnival masks with a plume, drawn from a pixel mask;
+//! the finale is a mask between two serpentinas. More of them each day from
+//! Thursday to Martes de Carnaval.
+//!
 //! MIT License
 //!
 //! Copyright (c) 2026 Santiago Sánchez
@@ -140,6 +149,8 @@ const ROCKET: u8 = 8;
 const PETAL: u8 = 16;
 /// A wisp of copal smoke, rising and swaying.
 const SMOKE: u8 = 32;
+/// A serpentina: it curls through the air, leaving a ribbon behind.
+const CURL: u8 = 64;
 
 #[derive(Clone, Copy, PartialEq, Debug)]
 enum Shell {
@@ -170,6 +181,12 @@ enum Shell {
     Cohete,
     /// Día de la Santa Cruz: the cross hung with papel flowers.
     Cruz,
+    /// Carnaval: a mask with a plume, drawn in sparks.
+    Mascara,
+    /// Carnaval: a shower of confetti, tumbling in every color as it falls.
+    Confeti,
+    /// Carnaval: serpentinas, streamers that curl through the air.
+    Serpentina,
     /// A phrase written in sparks: its number in `TEXTS`.
     Text(u8),
 }
@@ -186,6 +203,7 @@ impl Shell {
                 | Shell::Campana
                 | Shell::Aguila
                 | Shell::Cruz
+                | Shell::Mascara
                 | Shell::Text(_)
         )
     }
@@ -432,6 +450,8 @@ const NAVIDAD_SEED: u64 = 0x6e61_7669_6461_6421;
 const PATRIAS_SEED: u64 = 0x7061_7472_6961_7321;
 /// And the Día de la Santa Cruz's.
 const CRUZ_SEED: u64 = 0x6372_757a_2033_6d79;
+/// And Carnaval's.
+const CARNAVAL_SEED: u64 = 0x6361_726e_6176_616c;
 
 // Navidad under `classic`; the shell colors are brightened to burn in the
 // night sky.
@@ -453,6 +473,15 @@ const SC_VERDE: V3 = c8(150, 220, 60);
 const CAL: V3 = c8(242, 239, 230);
 const TABIQUE: V3 = c8(181, 83, 47);
 const VARILLA: V3 = c8(122, 127, 134);
+// Carnaval under `classic`: confetti in every bright color and the golden
+// sequins, brightened for the sky.
+const CA_ROSA: V3 = c8(255, 40, 150);
+const CA_TURQUESA: V3 = c8(30, 215, 225);
+const CA_MORADO: V3 = c8(170, 90, 240);
+const CA_LIMON: V3 = c8(160, 230, 50);
+const CA_AMARILLO: V3 = c8(255, 214, 20);
+const CA_NARANJA: V3 = c8(255, 140, 30);
+const CA_ORO: V3 = c8(255, 204, 51);
 const ROJO_NOCHEBUENA: V3 = c8(200, 16, 46);
 const VERDE_PINO: V3 = c8(31, 111, 58);
 /// Series lights (foquitos): rojo, verde, azul, amarillo, rosa, naranja.
@@ -561,6 +590,30 @@ impl Fest {
                     SH_DORADO,
                 ],
             ),
+            (true, Kind::Carnaval) => (
+                CA_ROSA,
+                CA_LIMON,
+                CA_ORO,
+                SH_BLANCO,
+                [
+                    CA_ROSA,
+                    CA_TURQUESA,
+                    CA_MORADO,
+                    CA_LIMON,
+                    CA_AMARILLO,
+                    CA_NARANJA,
+                ],
+                // Every bright color, with sequins of oro.
+                vec![
+                    CA_ROSA,
+                    CA_TURQUESA,
+                    CA_MORADO,
+                    CA_LIMON,
+                    CA_AMARILLO,
+                    CA_NARANJA,
+                    CA_ORO,
+                ],
+            ),
             (true, _) => (
                 SH_ROJO,
                 SH_VERDE,
@@ -595,6 +648,11 @@ impl Fest {
         };
         let shape = match kind {
             Kind::SantaCruz => [gold, hues[0], hues[1], hues[2], hues[3], white, gold, gold],
+            // The mask: rosa, oro and the feathers in turquesa, morado,
+            // limón and amarillo.
+            Kind::Carnaval => [
+                hues[0], gold, hues[1], hues[2], hues[3], hues[4], hues[5], white,
+            ],
             Kind::Patrias => [
                 gold,
                 mix(gold, white, 0.55),
@@ -943,6 +1001,32 @@ const AGUILA: &[&str] = &[
     "   222222224444444433333333   ",
     "    222222224444444433333333  ",
     "   222222224444444433333333   ",
+];
+
+/// A carnival mask with a plume: `0` its rosa, `1` the golden trim and
+/// sequins, `2`, `3`, `4` and `5` the feathers in turquesa, morado, limón
+/// and amarillo, `7` a pearl on the brow.
+const MASCARA: &[&str] = &[
+    "                       2        ",
+    "                      25        ",
+    "                      252   3   ",
+    "                     2252 335   ",
+    "                     22523335   ",
+    "              1      22533553   ",
+    "            11111    22533533 4 ",
+    "        11111000111112553554444 ",
+    "    011110000000000011115344445 ",
+    "   010011100007010011100144455  ",
+    "  01011   110000011   11015544  ",
+    " 0101       10101       1014    ",
+    " 1001       10001       1001    ",
+    "  1011     1100011     1101     ",
+    "  10001111100000001111100 1     ",
+    "   10000000010000010000001      ",
+    "   10100000000000000000011      ",
+    "    110010001111100001011       ",
+    "     11110111   11101111        ",
+    "        111       111           ",
 ];
 
 /// The cross raised on a building site, one char per pixel: `w` its beams,
@@ -1457,6 +1541,22 @@ impl Fireworks {
             } else if roll < aguila + tricolor {
                 shell = Shell::Tricolor;
             }
+        } else if self.fiesta.is(Kind::Carnaval) {
+            // Carnaval: confetti, serpentinas and masks among the shells,
+            // more of them as the days go on to Martes de Carnaval.
+            let f = &mut self.frng;
+            let level = self.fiesta.level.clamp(0.0, 1.0);
+            color = self.fest.shells[f.usize(0..self.fest.shells.len())];
+            let (mascara, confeti) = (0.04 + 0.1 * level, 0.18 + 0.12 * level);
+            let roll = f.f32();
+            if roll < mascara {
+                shell = Shell::Mascara;
+                (x, vy) = fit_shape(w, hh, x, apex);
+            } else if roll < mascara + confeti {
+                shell = Shell::Confeti;
+            } else if roll < mascara + confeti + 0.14 + 0.12 * level {
+                shell = Shell::Serpentina;
+            }
         } else if self.fiesta.is(Kind::SantaCruz) {
             // Día de la Santa Cruz: the colors of the papel flowers, and
             // cohetes whistling up from the building sites.
@@ -1493,6 +1593,7 @@ impl Fireworks {
         self.fiesta.is(Kind::Navidad)
             || self.fiesta.is(Kind::Patrias)
             || self.fiesta.is(Kind::SantaCruz)
+            || self.fiesta.is(Kind::Carnaval)
     }
 
     /// Does this holiday end a finale with a gran final?
@@ -1501,6 +1602,7 @@ impl Fireworks {
             || self.fiesta.is(Kind::Navidad)
             || self.fiesta.is(Kind::Patrias)
             || self.fiesta.is(Kind::SantaCruz)
+            || self.fiesta.is(Kind::Carnaval)
     }
 
     /// The holiday's gran final, a big shaped shell between two smaller
@@ -1526,6 +1628,8 @@ impl Fireworks {
             (Shell::Aguila, Shell::Tricolor, self.fest.gold)
         } else if self.fiesta.is(Kind::SantaCruz) {
             (Shell::Cruz, Shell::Multi, self.fest.gold)
+        } else if self.fiesta.is(Kind::Carnaval) {
+            (Shell::Mascara, Shell::Serpentina, self.fest.gold)
         } else {
             return;
         };
@@ -1751,6 +1855,7 @@ impl Fireworks {
         match r.shell {
             Shell::Text(text) => return self.burst_text(r, text),
             Shell::Aguila => return self.burst_mask(r, AGUILA),
+            Shell::Mascara => return self.burst_mask(r, MASCARA),
             _ => {}
         }
         if r.shell.shaped() {
@@ -1883,7 +1988,44 @@ impl Fireworks {
             | Shell::Campana
             | Shell::Aguila
             | Shell::Cruz
+            | Shell::Mascara
             | Shell::Text(_) => {}
+            Shell::Confeti => {
+                // Bits of paper in every color: light, so they tumble down
+                // for a long while.
+                let drag = 0.93;
+                let v0 = radius * (1.0 - drag) * 0.9;
+                for _ in 0..base / 2 + 12 {
+                    let a = rng.f32() * TAU;
+                    let s = v0 * rangef(rng, 0.2, 1.0).sqrt();
+                    let life = rangef(rng, 110.0, 170.0);
+                    let col = if rng.u32(0..8) == 0 {
+                        ft.gold
+                    } else {
+                        ft.hues[rng.usize(0..6)]
+                    };
+                    spark(a.cos() * s, a.sin() * s - 0.1, life, col, drag, PETAL);
+                }
+            }
+            Shell::Serpentina => {
+                // Streamers thrown in every direction, each curling as it
+                // goes and leaving its ribbon behind.
+                let n = rng.usize(7..12);
+                for k in 0..n {
+                    let a = k as f32 / n as f32 * TAU + rangef(rng, -0.2, 0.2);
+                    let s = rangef(rng, 0.9, 1.5);
+                    let life = rangef(rng, 55.0, 85.0);
+                    let col = ft.hues[rng.usize(0..6)];
+                    spark(
+                        a.cos() * s,
+                        a.sin() * s - 0.2,
+                        life,
+                        col,
+                        0.96,
+                        TRAIL | CURL,
+                    );
+                }
+            }
             Shell::Cohete => {
                 // A bang: a tight, quick burst of white-gold sparks that
                 // crackle as they die.
@@ -2094,6 +2236,42 @@ impl Fireworks {
         self.build_plaza();
         self.build_zocalo();
         self.build_obras();
+        self.build_carnaval();
+    }
+
+    /// Carnaval keeps the city and strings colored lights along some of its
+    /// rooftops, blinking in chase and twinkle patterns.
+    fn build_carnaval(&mut self) {
+        let (w, ph) = (self.w, self.ph);
+        if !self.fiesta.is(Kind::Carnaval) || !self.show_city || w == 0 || self.skyline.len() != w {
+            return;
+        }
+        let rng = &mut fastrand::Rng::with_seed(self.seed ^ CARNAVAL_SEED);
+        let lit = 0.4 + 0.6 * self.fiesta.level.clamp(0.0, 1.0);
+        let mut x = 0;
+        while x < w {
+            let top = self.skyline[x];
+            let mut end = x + 1;
+            while end < w && self.skyline[end] == top {
+                end += 1;
+            }
+            // A flat roof, wide enough, not the bare ground.
+            if end - x >= 5 && top > 0 && (top as usize) < ph && rng.f32() < 0.55 {
+                let kind = 1 + rng.u8(0..2);
+                for xx in (x + 1..end - 1).step_by(2) {
+                    if rng.f32() < lit {
+                        self.bulbs.push(Bulb {
+                            x: xx as i32,
+                            y: top - 1,
+                            c: (xx / 2 % 6) as u8,
+                            kind,
+                            phase: rng.f32() * TAU,
+                        });
+                    }
+                }
+            }
+            x = end;
+        }
     }
 
     /// Puts a solid pixel into the town.
@@ -3576,6 +3754,11 @@ impl Fireworks {
                 p.vy = p.vy.min(0.22);
             } else if p.flags & SMOKE != 0 {
                 p.vx += 0.004 * (p.life * 0.07 + p.x * 0.3).sin();
+            } else if p.flags & CURL != 0 {
+                // A pull that turns round and round: loops along the way.
+                let a = p.life * 0.3 + p.max * 7.0;
+                p.vx += 0.11 * a.cos();
+                p.vy += 0.11 * a.sin();
             }
             p.x += p.vx;
             p.y += p.vy;
@@ -3608,12 +3791,15 @@ impl Fireworks {
                     self.burst(&p);
                     dead = true;
                 }
-            } else if p.flags & TRAIL != 0 && self.rng.f32() < 0.5 {
+            } else if p.flags & TRAIL != 0
+                && self.rng.f32() < if p.flags & CURL != 0 { 1.0 } else { 0.5 }
+            {
+                let life = if p.flags & CURL != 0 { 30.0 } else { 18.0 };
                 self.born.push(P {
                     vx: 0.0,
                     vy: 0.02,
-                    life: 18.0,
-                    max: 18.0,
+                    life,
+                    max: life,
                     drag: 0.9,
                     grav: 0.002,
                     flags: 0,
@@ -3743,6 +3929,11 @@ impl Scene for Fireworks {
         self.fiesta = ctx.fiesta;
         self.dress = Dress::new(ctx, &self.pal);
         self.fest = Fest::new(ctx, &self.pal);
+        if self.fiesta.is(Kind::Carnaval) {
+            // Windows in the colors of the party.
+            let h = self.fest.hues;
+            self.pal.windows = [scale(h[0], 0.7), scale(h[1], 0.7), scale(h[4], 0.7)];
+        }
         if self.fiesta.ano_nuevo() {
             // The new year is not far off.
             self.until_finale = self.until_finale.min(240);
@@ -3782,8 +3973,8 @@ impl Scene for Fireworks {
         let panteon = !self.town.is_empty();
         if panteon {
             self.light_candles();
-            self.light_bulbs();
         }
+        self.light_bulbs();
         self.px.clear();
         let known = matches!(ctx.bg, Color::Rgb(..));
         let b = self.pal.building;
@@ -3884,6 +4075,7 @@ impl Scene for Fireworks {
                 self.px.set(x, y, to_color(c));
             }
         }
+        self.draw_bulbs();
         self.draw_actors();
         self.px.blit(c);
     }
@@ -3928,6 +4120,7 @@ mod tests {
                     Fiesta::of_day(12, 31),
                     Fiesta::of_day(9, 15),
                     Fiesta::of_day(5, 3),
+                    Fiesta::height(Kind::Carnaval),
                 ] {
                     let (mut f, o) = make(v, &theme);
                     let ctx = Ctx {
@@ -4041,6 +4234,9 @@ mod tests {
             Shell::Tricolor,
             Shell::Cohete,
             Shell::Cruz,
+            Shell::Mascara,
+            Shell::Confeti,
+            Shell::Serpentina,
         ] {
             assert!(!shells.contains(&s), "{shells:?}");
         }
@@ -4080,6 +4276,7 @@ mod tests {
             Shell::Campana,
             Shell::Aguila,
             Shell::Cruz,
+            Shell::Mascara,
             Shell::Text(FELIZ_ANO),
             Shell::Text(VIVA_MEXICO),
         ] {
@@ -4304,7 +4501,7 @@ mod tests {
     /// The pixel pictures are rectangles.
     #[test]
     fn pictures_are_rectangles() {
-        for art in [KIOSCO, ABETO, NOCHEBUENA_POT, AGUILA, CRUZ] {
+        for art in [KIOSCO, ABETO, NOCHEBUENA_POT, AGUILA, CRUZ, MASCARA] {
             let w = art[0].chars().count();
             assert!(art.iter().all(|r| r.chars().count() == w), "{art:?}");
         }
@@ -4600,6 +4797,111 @@ mod tests {
         f.gran_final();
         let shells: Vec<Shell> = f.born.iter().map(|p| p.shell).collect();
         assert_eq!(shells, [Shell::Cruz, Shell::Multi, Shell::Multi]);
+    }
+
+    /// Carnaval keeps the city, lights its rooftops and its windows in the
+    /// colors of the party, and bursts confetti, serpentinas and masks.
+    #[test]
+    fn carnaval_dresses_up() {
+        for theme in [Theme::classic(), Theme::builtin("dracula").unwrap()] {
+            for fiesta in [Fiesta::height(Kind::Carnaval), Fiesta::of_date(2027, 2, 4)] {
+                assert!(fiesta.is(Kind::Carnaval));
+                let (mut f, o) = make("", &theme);
+                let plain = f.pal.windows;
+                holiday(&mut f, &theme, &o, fiesta);
+                assert!(f.pal.windows != plain, "{}", theme.name);
+                assert!(!f.bulbs.is_empty());
+                let (mut shells, mut curled) = (Vec::new(), false);
+                for _ in 0..4000 {
+                    f.step();
+                    curled |= f.ps.iter().any(|p| p.flags & CURL != 0);
+                    for p in &f.ps {
+                        if p.flags & ROCKET != 0 && !shells.contains(&p.shell) {
+                            shells.push(p.shell);
+                        }
+                    }
+                }
+                for s in [Shell::Mascara, Shell::Confeti, Shell::Serpentina] {
+                    assert!(shells.contains(&s), "{} {shells:?}", theme.name);
+                }
+                assert!(curled);
+            }
+        }
+    }
+
+    /// More lights and shapes towards Martes de Carnaval; the party comes
+    /// and goes through `retheme`, windows included.
+    #[test]
+    fn carnaval_comes_and_goes() {
+        let theme = Theme::classic();
+        let (mut f, o) = make("", &theme);
+        let plain = f.pal.windows;
+        holiday(&mut f, &theme, &o, Fiesta::of_date(2027, 2, 4));
+        let thursday = f.bulbs.len();
+        holiday(&mut f, &theme, &o, Fiesta::height(Kind::Carnaval));
+        assert!(f.bulbs.len() > thursday, "{thursday} {}", f.bulbs.len());
+        holiday(&mut f, &theme, &o, Fiesta::NONE);
+        assert!(f.bulbs.is_empty() && f.pal.windows == plain);
+        let (mut f, o) = make("skyline = false", &theme);
+        holiday(&mut f, &theme, &o, Fiesta::height(Kind::Carnaval));
+        assert!(f.bulbs.is_empty());
+    }
+
+    /// The gran final of Carnaval is a mask between two serpentinas.
+    #[test]
+    fn gran_final_is_a_mask() {
+        let theme = Theme::classic();
+        let (mut f, o) = make("", &theme);
+        holiday(&mut f, &theme, &o, Fiesta::height(Kind::Carnaval));
+        f.born.clear();
+        f.gran_final();
+        let shells: Vec<Shell> = f.born.iter().map(|p| p.shell).collect();
+        assert_eq!(
+            shells,
+            [Shell::Mascara, Shell::Serpentina, Shell::Serpentina]
+        );
+    }
+
+    /// A serpentina curls: its path is not a straight line, and it leaves a
+    /// ribbon of sparks that last longer than an ordinary trail.
+    #[test]
+    fn serpentinas_curl() {
+        let theme = Theme::classic();
+        let (mut f, o) = make("", &theme);
+        holiday(&mut f, &theme, &o, Fiesta::height(Kind::Carnaval));
+        f.ps.clear();
+        f.born.clear();
+        let r = P {
+            x: 60.0,
+            y: 30.0,
+            vx: 0.0,
+            vy: 0.0,
+            life: 1.0,
+            max: 1.0,
+            color: CA_ORO,
+            drag: 1.0,
+            grav: 0.0,
+            flags: ROCKET,
+            shell: Shell::Serpentina,
+        };
+        f.burst(&r);
+        let streamers = std::mem::take(&mut f.born);
+        assert!(streamers.len() >= 7 && streamers.iter().all(|p| p.flags & CURL != 0));
+        f.ps.extend(streamers.iter().copied());
+        let (x0, y0) = (f.ps[0].x, f.ps[0].y);
+        let mut turned = 0.0f32;
+        let mut ribbon = false;
+        let mut last = (f.ps[0].vx, f.ps[0].vy);
+        for _ in 0..40 {
+            f.step();
+            let p = f.ps[0];
+            turned += (p.vx * last.1 - p.vy * last.0).abs()
+                / (p.vx.hypot(p.vy) * last.0.hypot(last.1)).max(1e-3);
+            last = (p.vx, p.vy);
+            ribbon |= f.ps.iter().any(|t| t.flags == 0 && t.max == 30.0);
+        }
+        assert!(turned > 1.0, "{turned} from {x0} {y0}");
+        assert!(ribbon);
     }
 
     /// With the sky transparent nothing is painted before the first launch,
