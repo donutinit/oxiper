@@ -3,7 +3,8 @@
 //!
 //! Each holiday is a [`Piece`]: the Navidad's fogata at a posada with an olla
 //! of ponche steaming over it (`navidad.rs`), the fogón of the Grito with its
-//! pozolera, its comal and its luces de bengala (`patrias.rs`), and the rest
+//! pozolera, its comal and its luces de bengala (`patrias.rs`), the tamalera
+//! of the Candelaria with its jarro of atole (`candelaria.rs`), and the rest
 //! as they come. A
 //! piece sets its things out for the screen (`layout`), says where the fire's
 //! fuel burns (`fuel`) and how high its flames reach, and draws: first what
@@ -17,6 +18,7 @@
 //! Everything here rolls its own dice (seeded from the scene's seed), so the
 //! fire's random numbers on ordinary days are untouched.
 
+mod candelaria;
 mod navidad;
 mod patrias;
 
@@ -171,6 +173,7 @@ impl Fogon {
             let seed = self.seed ^ SALT;
             self.piece = match kind {
                 Kind::Navidad => Some(Box::new(navidad::Posada::new(seed))),
+                Kind::Candelaria => Some(Box::new(candelaria::Tamales::new(seed))),
                 Kind::Patrias => Some(Box::new(patrias::Grito::new(seed))),
                 _ => None,
             };

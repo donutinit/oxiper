@@ -18,7 +18,9 @@
 //! fogata at a posada, a big olla of ponche steaming over aafire's flames
 //! among farolitos (see `fire/fogon/navidad.rs`); on the Fiestas Patrias a
 //! fogón on the night of the Grito, with a pozolera bubbling, elotes roasting
-//! on the comal and luces de bengala sputtering (`fire/fogon/patrias.rs`).
+//! on the comal and luces de bengala sputtering (`fire/fogon/patrias.rs`); on
+//! the Candelaria a tamalera steaming on the fire with tamales in their husks
+//! peeking out of it and a jarro of atole beside it (`fire/fogon/candelaria.rs`).
 
 mod fogon;
 mod muertos;
@@ -1032,12 +1034,29 @@ mod tests {
         assert!(shows(&c, rgb(0xfffbe8)));
     }
 
+    /// The Candelaria puts a tamalera on the fire, tamales peeking out of it,
+    /// with atole and velitas beside it.
+    #[test]
+    fn candelaria_steams_tamales() {
+        let theme = Theme::classic();
+        let opts = Opts::new(INFO.options, toml::Table::new());
+        let fiesta = Fiesta::height(Kind::Candelaria);
+        let mut f = holiday_fire(&theme, &opts, fiesta, 120, 36);
+        let (tamales, jarros, velas) = f.fogon.counts();
+        assert!(f.fogon.on() && tamales >= 2 && jarros >= 1 && velas >= 2);
+        assert!(bottom_heat(&f) > 0, "the fire burns");
+        assert_eq!(edge_heat(&f), 0, "under the tamalera only");
+        // The husks of maize show.
+        let c = drawn(&mut f, &theme, &opts, fiesta, 120, 36);
+        assert!(shows(&c, rgb(0xd9c48a)));
+    }
+
     /// The fogata comes and goes through `retheme`.
     #[test]
     fn fogon_comes_and_goes() {
         let theme = Theme::builtin("dracula").unwrap();
         let opts = Opts::new(INFO.options, toml::Table::new());
-        for day in [(12, 20), (9, 15)] {
+        for day in [(12, 20), (9, 15), (2, 2)] {
             let mut f = holiday_fire(&theme, &opts, Fiesta::of_day(6, 15), 100, 30);
             assert!(!f.fogon.on() && edge_heat(&f) > 0);
             let mut ctx = Ctx {
@@ -1078,6 +1097,7 @@ mod tests {
                     Fiesta::height(Kind::Navidad),
                     Fiesta::of_day(9, 1),
                     Fiesta::height(Kind::Patrias),
+                    Fiesta::of_day(2, 2),
                 ] {
                     let opts = Opts::new(INFO.options, v.parse().unwrap());
                     for bg in [Color::Reset, theme.bg] {
