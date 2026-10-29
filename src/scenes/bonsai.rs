@@ -30,6 +30,14 @@
 //! angel arrive on Nochebuena. In January the Reyes Magos set out from the
 //! edge of the screen and come closer each day, reaching the pesebre on the
 //! 6th.
+//!
+//! On the Fiestas Patrias the leaves dress in the flag's colors: verde, white
+//! blossoms around the middle of the canopy and red flowers and tunas toward
+//! the right, more of them as the month climbs, and petals drift down from
+//! them. The pot is banded verde, blanco and rojo with banderitas planted in
+//! the soil (more by the Grito). At its foot grows the emblem: a nopal from a
+//! rock in the lake, a pad more each week, an eagle perching on it from the
+//! 11th and the serpent in its beak on the 15th and 16th.
 
 use crate::color::{self, Color, rgb};
 use crate::fiesta::{self, Fiesta};
@@ -1269,8 +1277,172 @@ fn adorno(x: i32, y: i32, seed: u32, built: f32, wood: bool, hangs: bool) -> Ado
 }
 
 // ---------------------------------------------------------------------------
-// The Navidad's sprites: ink letters are per holiday (see `Navidad::make`); a
-// space leaves the cell alone and a `.` clears it.
+// Fiestas Patrias: a tree in the colors of the flag
+
+const VERDE_BANDERA: Color = rgb(0x006847);
+const VERDE_CLARO: Color = rgb(0x1b9a63);
+const ROJO_BANDERA: Color = rgb(0xce1126);
+const ROJO_TUNA: Color = rgb(0xe8334a);
+const AGUILA: Color = rgb(0x7a4a1e);
+const AGUILA_CLARA: Color = rgb(0xa8743a);
+const NOPAL: Color = rgb(0x4f8a2a);
+const NOPAL_CLARO: Color = rgb(0x6fae3e);
+const ORO: Color = rgb(0xd4a017);
+const PIEDRA: Color = rgb(0x8d8a86);
+const AGUA: Color = rgb(0x3a8fb7);
+
+/// What a leaf becomes on the tree of the Fiestas Patrias.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum Tri {
+    Leaf,
+    /// A white blossom, in one of two shades.
+    Blanco(u8),
+    /// A red flower or tuna, in one of two.
+    Rojo(u8),
+}
+
+/// What the leaf at a cell of tree `seed` is today, given the pot's center
+/// column `cx`. Blossoms come in clumps, white around the middle of the tree
+/// and red toward the right, so the canopy reads left to right as the flag
+/// does: verde, blanco, rojo. More of them as the month climbs.
+fn tricolor(x: i32, y: i32, cx: i32, seed: u32, level: f32) -> Tri {
+    let (gx, gy) = (
+        (x + 2 * (y.div_euclid(2) & 1)).div_euclid(4),
+        y.div_euclid(2),
+    );
+    let clump = hash01(gx, gy, seed ^ 0x7472_6963);
+    let t = ((x - cx) as f32 / 44.0 + 0.5).clamp(0.0, 1.0);
+    let amount = 0.35 + 0.65 * level.clamp(0.0, 1.0);
+    let white = (0.1 + 0.6 * (1.0 - ((t - 0.45).abs() / 0.28).min(1.0))) * amount;
+    let red = (0.06 + 0.7 * ((t - 0.5) / 0.4).clamp(0.0, 1.0)) * amount;
+    let cell = hash01(x, y, seed ^ 0x7061_7472);
+    let shade = ((hash01(x, y, seed ^ 0x7368_6164) * 2.0) as u8).min(1);
+    if clump < white {
+        if cell < 0.8 {
+            return Tri::Blanco(shade);
+        }
+    } else if clump < white + red {
+        if cell < 0.8 {
+            return Tri::Rojo(shade);
+        }
+    } else if cell < 0.05 {
+        // a few strays among the green
+        return if hash01(x, y, seed ^ 0x7374_7279) < t {
+            Tri::Rojo(shade)
+        } else {
+            Tri::Blanco(shade)
+        };
+    }
+    Tri::Leaf
+}
+
+/// The Fiestas Patrias' colors.
+struct Patrias {
+    inks: Inks,
+    /// The leaves: dark and bright.
+    verde: [Color; 2],
+    /// White blossoms and red flowers, two shades each.
+    blanco: [Color; 2],
+    rojo: [Color; 2],
+    /// The banderitas: verde, blanco, rojo.
+    flag: [Color; 3],
+}
+
+impl Patrias {
+    /// The flag's own greens, unless the user chose the leaves' colors.
+    fn classic(pairs: &[Color; 5], own_leaves: bool) -> Patrias {
+        let verde = if own_leaves {
+            [pairs[LEAF_DARK as usize], pairs[LEAF_BRIGHT as usize]]
+        } else {
+            [VERDE_BANDERA, VERDE_CLARO]
+        };
+        Patrias::make(
+            pairs,
+            verde,
+            [BLANCO, BLANCO.lerp(CANA, 0.35)],
+            [ROJO_BANDERA, ROJO_TUNA],
+            [VERDE_BANDERA, BLANCO, ROJO_BANDERA],
+            [
+                AGUILA,
+                AGUILA_CLARA,
+                NOPAL,
+                NOPAL_CLARO,
+                ORO,
+                PIEDRA,
+                AGUA,
+                PLATA,
+            ],
+        )
+    }
+
+    /// The same dress in the theme's colors.
+    fn themed(ctx: &Ctx, pairs: &[Color; 5]) -> Patrias {
+        let t = ctx.theme;
+        let leaf = pairs[LEAF_BRIGHT as usize];
+        let wood = pairs[WOOD_BRIGHT as usize];
+        let rojo =
+            by_hue(&t.colors, 355.0, 35.0, None).unwrap_or_else(|| ctx.pick(0, ROJO_BANDERA));
+        let oro = by_hue(&t.colors, 45.0, 25.0, Some(rojo)).unwrap_or_else(|| ctx.pick(1, ORO));
+        let agua = by_hue(&t.colors, 200.0, 45.0, Some(rojo)).unwrap_or_else(|| ctx.pick(2, AGUA));
+        let nopal = by_hue(&t.colors, 100.0, 40.0, None).unwrap_or(leaf);
+        Patrias::make(
+            pairs,
+            [pairs[LEAF_DARK as usize], leaf],
+            [t.fg, ctx.fade(t.fg, 0.2)],
+            [rojo, rojo.scale(1.15)],
+            [leaf, t.fg, rojo],
+            [
+                wood,
+                wood.lerp(t.fg, 0.3),
+                nopal,
+                nopal.scale(1.2),
+                oro,
+                ctx.fade(t.fg, 0.4),
+                agua,
+                ctx.fade(t.fg, 0.2),
+            ],
+        )
+    }
+
+    /// `rest`: águila, águila clara, nopal, nopal claro, oro, piedra, agua,
+    /// serpiente.
+    fn make(
+        pairs: &[Color; 5],
+        verde: [Color; 2],
+        blanco: [Color; 2],
+        rojo: [Color; 2],
+        flag: [Color; 3],
+        rest: [Color; 8],
+    ) -> Patrias {
+        let [aguila, clara, nopal, claro, oro, piedra, agua, serpiente] = rest;
+        let inks = Inks::new(&[
+            (b'g', flag[0]),
+            (b'w', flag[1]),
+            (b'r', flag[2]),
+            (b'e', aguila),
+            (b'f', clara),
+            (b'n', nopal),
+            (b'N', claro),
+            (b'o', oro),
+            (b'k', piedra),
+            (b'a', agua),
+            (b's', serpiente),
+            (b'x', rojo[1]),
+            (b'W', pairs[WOOD_BRIGHT as usize]),
+        ]);
+        Patrias {
+            inks,
+            verde,
+            blanco,
+            rojo,
+            flag,
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// The sprites of both: ink letters are per holiday (see `Navidad::make` and
+// `Patrias::make`); a space leaves the cell alone and a `.` clears it.
 
 /// Cbonsai's pot one in foil, with nochebuenas on the soil: red bracts, a
 /// golden heart, green leaves between them.
@@ -1292,6 +1464,28 @@ const NOCHEBUENA_ONE: Sprite = Sprite {
 const NOCHEBUENA_TWO: Sprite = Sprite {
     art: &[r"(---./~~~\.---)", r" ((*)v(*)v(*)) ", r"  (_________)  "],
     ink: &["ooooWWWWWWWoooo", " rrorgrorgrorr ", "  rrrrrrrrrrr  "],
+};
+
+/// The same pots banded verde, blanco and rojo like the flag, a banderita
+/// planted in each (see `Bonsai::draw_banderitas`).
+const PATRIA_ONE: Sprite = Sprite {
+    art: &[
+        r":___________./~~~\.___________:",
+        r" \~.~.~.~.~.~.~.~.~.~.~.~.~.~/ ",
+        r"  \_________________________/ ",
+        r"  (_)                     (_)",
+    ],
+    ink: &[
+        "ooooooooooooWWWWWWWoooooooooooo",
+        " gggggggggwwwwwwwwwwwrrrrrrrrr ",
+        "  ggggggggwwwwwwwwwwwrrrrrrrr ",
+        "  ggg                     rrr",
+    ],
+};
+
+const PATRIA_TWO: Sprite = Sprite {
+    art: &[r"(---./~~~\.---)", r" (~.~.~.~.~.~) ", r"  (_________)  "],
+    ink: &["ooooWWWWWWWoooo", " ggggwwwwwrrrr ", "  gggwwwwwrrr  "],
 };
 
 /// The pesebre: a thatched roof on two posts, 26 wide. The holy family and
@@ -1435,6 +1629,46 @@ const PASTORES: [(f32, i32, &Sprite); 6] = [
 const PASTORES_W: i32 = 40;
 
 // ---------------------------------------------------------------------------
+// The emblem at the foot of the Fiestas Patrias' tree: an eagle on a nopal
+// that grows from a rock in the lake.
+
+/// The rock in the lake, ripples around it.
+const ROCA: Sprite = Sprite {
+    art: &[r"    ,-^^^^^^^-,    ", r"~ ~ /#########\ ~ ~"],
+    ink: &["    kkkkkkkkkkk    ", "a a kkkkkkkkkkk a a"],
+};
+const EMBLEMA_W: i32 = 19;
+
+/// A pad of the nopal.
+const PENCA: Sprite = Sprite {
+    art: &["(:)"],
+    ink: &["nNn"],
+};
+
+/// The eagle in profile, its wings raised, perched on the nopal; the
+/// serpent's place is the two columns before the beak.
+const AGUILA_SPRITE: Sprite = Sprite {
+    art: &[
+        r"    ,\\  |  //,",
+        r"  <(o)\\\|///-'",
+        r"     `-\\||//-'",
+        r"        /||\   ",
+    ],
+    ink: &[
+        "    eff  e  ffe",
+        "  oewefffefffee",
+        "     ffeeeeeeff",
+        "        oooo   ",
+    ],
+};
+
+/// The serpent in the eagle's beak, hanging from it.
+const SERPIENTE: Sprite = Sprite {
+    art: &["~s", ".~", "~'"],
+    ink: &["ss", "ss", "ss"],
+};
+
+// ---------------------------------------------------------------------------
 // The scene
 
 /// The holiday the tree is dressed for. Any other holiday leaves it as it is
@@ -1444,6 +1678,7 @@ enum Look {
     Plain,
     Muertos,
     Navidad,
+    Patrias,
 }
 
 impl Look {
@@ -1451,6 +1686,7 @@ impl Look {
         match f.kind {
             fiesta::Kind::Muertos => Look::Muertos,
             fiesta::Kind::Navidad => Look::Navidad,
+            fiesta::Kind::Patrias => Look::Patrias,
             _ => Look::Plain,
         }
     }
@@ -1508,14 +1744,15 @@ struct Bonsai {
     look: Look,
     dress: Dress,
     navidad: Navidad,
+    patrias: Patrias,
     /// Leaves may turn into blossom glyphs (only with the default `&` leaves;
     /// leaves the user chose keep their glyph and only change color).
     bloom_glyphs: bool,
     /// The holiday's own randomness.
     frng: fastrand::Rng,
     petals: Vec<Petal>,
-    /// Petals owed, and seconds for the candles' flicker (scene time) and for
-    /// the series' blinking (wall clock).
+    /// Petals owed, and seconds for the candles' flicker and the banderitas'
+    /// waving (scene time), and for the series' blinking (wall clock).
     spawn: f32,
     clock: f32,
 }
@@ -1597,6 +1834,7 @@ impl Bonsai {
             look: Look::of(ctx.fiesta),
             dress: Dress::CLASSIC,
             navidad: Navidad::classic(&CLASSIC),
+            patrias: Patrias::classic(&CLASSIC, false),
             bloom_glyphs,
             frng: fastrand::Rng::with_seed(ctx.seed ^ FIESTA_SALT),
             petals: Vec::with_capacity(PETALS),
@@ -1899,7 +2137,11 @@ impl Bonsai {
                 self.petals.swap_remove(i);
             }
         }
-        self.spawn += dt * (0.8 + 3.2 * self.fiesta.level);
+        self.spawn += dt
+            * match self.look {
+                Look::Patrias => 0.5 + 2.0 * self.fiesta.level,
+                _ => 0.8 + 3.2 * self.fiesta.level,
+            };
         while self.spawn >= 1.0 {
             self.spawn -= 1.0;
             if self.petals.len() < PETALS {
@@ -1921,10 +2163,17 @@ impl Bonsai {
                 continue;
             }
             let d = &self.dress;
-            let (color, shade) = match bloom(x, y, self.seed, self.fiesta.level) {
-                Bloom::Marigold(_) => (d.marigold[2], d.marigold[1]),
-                Bloom::Velvet(_) => (d.velvet[1], d.velvet[0]),
-                _ => continue,
+            let (color, shade) = match self.look {
+                Look::Patrias => match tricolor(x, y, self.mid(), self.seed, self.fiesta.level) {
+                    Tri::Blanco(_) => (self.patrias.blanco[0], self.patrias.blanco[1]),
+                    Tri::Rojo(_) => (self.patrias.rojo[0], self.patrias.rojo[1]),
+                    Tri::Leaf => continue,
+                },
+                _ => match bloom(x, y, self.seed, self.fiesta.level) {
+                    Bloom::Marigold(_) => (d.marigold[2], d.marigold[1]),
+                    Bloom::Velvet(_) => (d.velvet[1], d.velvet[0]),
+                    _ => continue,
+                },
             };
             let phase = self.frng.f32() * std::f32::consts::TAU;
             let px = x as f32 + 0.5;
@@ -1944,7 +2193,7 @@ impl Bonsai {
     }
 }
 
-// -- Navidad --
+// -- Navidad and the Fiestas Patrias --
 
 /// Where the pesebre stands: its left column, the side of the pot (1 right,
 /// -1 left), and whether it is the full one or the narrow one.
@@ -1961,10 +2210,17 @@ impl Belen {
 }
 
 impl Bonsai {
+    /// The pot's middle column.
+    fn mid(&self) -> i32 {
+        let (l, r, _) = self.foot();
+        (l + r) / 2
+    }
+
     /// The color of a sprite's ink letter for the holiday on.
     fn ink_of(&self, k: u8) -> Color {
         match self.look {
             Look::Navidad => self.navidad.inks.get(k),
+            Look::Patrias => self.patrias.inks.get(k),
             _ => Color::Reset,
         }
     }
@@ -2003,11 +2259,16 @@ impl Bonsai {
         fits(prefer).or_else(|| fits(-prefer))
     }
 
-    /// The pot of the Navidad in place of cbonsai's.
+    /// The pot of the holiday in place of cbonsai's.
     fn draw_pot(&self, ctx: &Ctx, c: &mut Canvas) {
+        let (one, two) = match self.look {
+            Look::Navidad => (&NOCHEBUENA_ONE, &NOCHEBUENA_TWO),
+            Look::Patrias => (&PATRIA_ONE, &PATRIA_TWO),
+            _ => return,
+        };
         let (pot, bold) = match self.base {
-            1 => (&NOCHEBUENA_ONE, true),
-            2 => (&NOCHEBUENA_TWO, false),
+            1 => (one, true),
+            2 => (two, false),
             _ => return,
         };
         let ground = self.base_y + pot.art.len() as i32 - 1;
@@ -2043,6 +2304,17 @@ impl Bonsai {
                     (glyph('o'), ctx.fade(color, 0.7), 0)
                 }
             }
+        }
+    }
+
+    /// What a leaf is on the Fiestas Patrias: its glyph and color.
+    fn patriotic(&self, x: i32, y: i32, mid: i32, cell: GCell) -> (char, Color) {
+        let p = &self.patrias;
+        let glyph = |g: char| if self.bloom_glyphs { g } else { cell.ch };
+        match tricolor(x, y, mid, self.seed, self.fiesta.level) {
+            Tri::Leaf => (cell.ch, p.verde[(cell.style & 7 == LEAF_BRIGHT) as usize]),
+            Tri::Blanco(s) => (glyph('*'), p.blanco[s as usize]),
+            Tri::Rojo(s) => (glyph('@'), p.rojo[s as usize]),
         }
     }
 
@@ -2248,6 +2520,83 @@ impl Bonsai {
         let star = if self.step() & 1 == 0 { '*' } else { '+' };
         c.set_attr(x0 + 5, ground - 5, star, k, BOLD);
     }
+
+    /// The emblem at the foot of the tree: an eagle on a nopal growing from a
+    /// rock in the lake. The nopal gains a pad as the month climbs and ripens
+    /// its tunas, the eagle perches on it from September 11, and on the 15th
+    /// and 16th it holds the serpent in its beak.
+    fn draw_emblema(&self, ctx: &Ctx, c: &mut Canvas) {
+        let Some((ex, _)) = self.room(EMBLEMA_W, -1) else {
+            return;
+        };
+        let (_, _, ground) = self.foot();
+        let level = self.fiesta.level;
+        self.plot(ctx, c, (ex, ground), &ROCA, 0, 0.0);
+        let pads = if level < 0.3 {
+            1
+        } else if level < 0.45 {
+            2
+        } else {
+            3
+        };
+        let mut top = ex + 8;
+        for (i, dx) in [8, 10, 8].into_iter().take(pads).enumerate() {
+            let (x, y) = (ex + dx, ground - 2 - i as i32);
+            self.plot(ctx, c, (x, y), &PENCA, 0, 0.0);
+            if level >= 0.4 {
+                // a tuna ripening on the side
+                let tx = if i % 2 == 0 { x + 3 } else { x - 1 };
+                c.set_attr(tx, y, 'o', self.patrias.inks.get(b'x'), BOLD);
+            }
+            top = x;
+        }
+        if level >= 0.5 {
+            let feet = ground - 2 - pads as i32;
+            self.plot(ctx, c, (top - 8, feet), &AGUILA_SPRITE, 0, 0.0);
+            if self.fiesta.date() >= (9, 15) {
+                self.plot(ctx, c, (top - 8, feet), &SERPIENTE, 0, 0.0);
+            }
+        }
+    }
+
+    /// Banderitas planted in the soil of the pot, waving; one at first, and
+    /// more as the month climbs.
+    fn draw_banderitas(&self, c: &mut Canvas) {
+        let bw = base_size(self.base).0;
+        if bw == 0 {
+            return;
+        }
+        let level = self.fiesta.level;
+        let step = (self.clock * 2.0) as i32;
+        let pole = self.pairs[WOOD_BRIGHT as usize];
+        // from what level, the pot's column, which way it flies, how tall
+        for (from, col, dir, tall) in [
+            (0.0, 3, 1, 4),
+            (0.5, 27, -1, 4),
+            (0.8, 8, 1, 3),
+            (0.95, 22, -1, 3),
+        ] {
+            if level < from {
+                continue;
+            }
+            let x = self.base_x + col * (bw - 1) / 30;
+            for dy in 1..=tall {
+                c.set(x, self.base_y - dy, '|', pole);
+            }
+            for k in 0..3 {
+                // the green at the pole, the red at the fly
+                let flag = self.patrias.flag[if dir > 0 { k } else { 2 - k } as usize];
+                let (top, bottom) = if (step + k).rem_euclid(2) == 0 {
+                    ('█', '▀')
+                } else {
+                    ('▄', '█')
+                };
+                let fx = x + dir * (k + 1);
+                c.set(fx, self.base_y - tall, top, flag);
+                c.set(fx, self.base_y - tall + 1, bottom, flag);
+            }
+        }
+    }
 }
 
 impl Scene for Bonsai {
@@ -2298,15 +2647,25 @@ impl Scene for Bonsai {
             Dress::themed(ctx, self.pairs[TEXT as usize])
         };
         let look = Look::of(ctx.fiesta);
-        if look == Look::Navidad {
-            self.navidad = if ctx.theme.native {
-                Navidad::classic(&self.pairs)
-            } else {
-                Navidad::themed(ctx, &self.pairs)
-            };
+        match look {
+            Look::Navidad => {
+                self.navidad = if ctx.theme.native {
+                    Navidad::classic(&self.pairs)
+                } else {
+                    Navidad::themed(ctx, &self.pairs)
+                };
+            }
+            Look::Patrias => {
+                self.patrias = if ctx.theme.native {
+                    Patrias::classic(&self.pairs, self.user_colors.is_some())
+                } else {
+                    Patrias::themed(ctx, &self.pairs)
+                };
+            }
+            _ => {}
         }
         // petals belong to the holiday that dropped them
-        if look != self.look || look != Look::Muertos {
+        if look != self.look || !matches!(look, Look::Muertos | Look::Patrias) {
             self.petals.clear();
         }
         self.look = look;
@@ -2318,7 +2677,7 @@ impl Scene for Bonsai {
 
     fn tick(&mut self, _ctx: &Ctx, dt: f32, real: f32) {
         match self.look {
-            Look::Muertos => self.tick_fiesta(dt, real),
+            Look::Muertos | Look::Patrias => self.tick_fiesta(dt, real),
             // the series blinks on the wall clock, however fast the scene runs
             Look::Navidad => self.clock = (self.clock + real.clamp(0.0, 1.0)).rem_euclid(3600.0),
             Look::Plain => {}
@@ -2363,7 +2722,7 @@ impl Scene for Bonsai {
     }
 
     fn next_change(&self) -> f32 {
-        if self.look == Look::Muertos {
+        if matches!(self.look, Look::Muertos | Look::Patrias) {
             // candles flicker and petals fall
             return 0.0;
         }
@@ -2389,8 +2748,10 @@ impl Scene for Bonsai {
                 self.draw_musgo(c);
                 self.draw_pot(ctx, c);
             }
+            Look::Patrias => self.draw_pot(ctx, c),
             Look::Plain => self.draw_base(c),
         }
+        let mid = self.mid();
         let g = &self.grid;
         if let Some((x0, y0, x1, y1)) = g.bbox {
             for y in y0..=y1 {
@@ -2409,6 +2770,10 @@ impl Scene for Bonsai {
                             Look::Navidad if leaf || matches!(pair, WOOD_DARK | WOOD_BRIGHT) => {
                                 self.trim(ctx, x, y, cell, attr)
                             }
+                            Look::Patrias if leaf => {
+                                let (ch, fg) = self.patriotic(x, y, mid, cell);
+                                (ch, fg, attr)
+                            }
                             _ => (cell.ch, self.pairs[pair as usize], attr),
                         };
                         c.set_attr(x, y, ch, fg, attr);
@@ -2419,6 +2784,12 @@ impl Scene for Bonsai {
         match self.look {
             Look::Muertos => self.draw_ofrenda(ctx, c),
             Look::Navidad => self.draw_belen(ctx, c),
+            Look::Patrias => {
+                self.lying_petals(ctx, c);
+                self.draw_emblema(ctx, c);
+                self.draw_banderitas(c);
+                self.flying_petals(c);
+            }
             Look::Plain => {}
         }
         self.draw_message(c);
@@ -2747,6 +3118,8 @@ mod tests {
         for s in [
             &NOCHEBUENA_ONE,
             &NOCHEBUENA_TWO,
+            &PATRIA_ONE,
+            &PATRIA_TWO,
             &PORTAL,
             &PORTAL_COMPACT,
             &CUNA,
@@ -2762,6 +3135,10 @@ mod tests {
             &MELCHOR,
             &GASPAR,
             &BALTASAR,
+            &ROCA,
+            &PENCA,
+            &AGUILA_SPRITE,
+            &SERPIENTE,
         ] {
             assert_eq!(s.art.len(), s.ink.len(), "{:?}", s.art);
             for (art, ink) in s.art.iter().zip(s.ink) {
@@ -2770,6 +3147,7 @@ mod tests {
         }
         assert_eq!(PORTAL.art[0].len() as i32, PORTAL_W);
         assert_eq!(PORTAL_COMPACT.art[0].len() as i32, COMPACT_W);
+        assert_eq!(ROCA.art[0].len() as i32, EMBLEMA_W);
     }
 
     /// The nacimiento's side of the screen: the bottom rows, without the
@@ -2967,7 +3345,7 @@ mod tests {
     }
 
     #[test]
-    fn navidad_comes_and_goes_through_retheme() {
+    fn navidad_and_the_patrias_come_and_go_through_retheme() {
         let theme = Theme::classic();
         let opts = Opts::new(INFO.options, GROWN.parse().unwrap());
         let ctx = |fiesta| Ctx {
@@ -2989,6 +3367,7 @@ mod tests {
         let before = draw(&mut b, &plain);
         for (fiesta, mark) in [
             (Fiesta::of_day(12, 24), "(*)v(*)"),
+            (Fiesta::of_day(9, 15), "(:)"),
             (Fiesta::of_day(11, 2), "~@~."),
         ] {
             let on = ctx(fiesta);
@@ -3006,9 +3385,18 @@ mod tests {
     }
 
     #[test]
-    fn navidad_survives_odd_sizes_and_huge_steps() {
+    fn navidad_and_the_patrias_survive_odd_sizes_and_huge_steps() {
         let themes = [Theme::classic(), Theme::builtin("dracula").unwrap()];
-        let days = [(12, 12), (12, 20), (12, 24), (1, 3), (1, 6)];
+        let days = [
+            (12, 12),
+            (12, 20),
+            (12, 24),
+            (1, 3),
+            (1, 6),
+            (9, 1),
+            (9, 12),
+            (9, 15),
+        ];
         for theme in &themes {
             for opts in [
                 "",
@@ -3057,12 +3445,102 @@ mod tests {
     }
 
     #[test]
-    fn user_leaves_keep_their_glyph_on_navidad() {
+    fn the_patrias_dress_the_tree_in_the_flags_colors() {
+        let theme = Theme::classic();
+        let p = Patrias::classic(&CLASSIC, false);
+        let (b, c) = dressed(GROWN, &theme, Fiesta::of_day(9, 15), 100, 30);
+        let text = c.to_text();
+        let verde = count(&c, |cell| cell.ch == '&' && p.verde.contains(&cell.fg));
+        let blanco = count(&c, |cell| cell.ch == '*' && p.blanco.contains(&cell.fg));
+        let rojo = count(&c, |cell| cell.ch == '@' && p.rojo.contains(&cell.fg));
+        assert!(
+            verde > 20 && blanco > 5 && rojo > 5,
+            "{verde} {blanco} {rojo}\n{text}"
+        );
+        // white toward the middle, red toward the right
+        let mean = |color: &[Color], ch| {
+            let (mut sum, mut n) = (0, 0);
+            for y in 0..30 {
+                for x in 0..100 {
+                    let cell = c.get(x, y).unwrap();
+                    if cell.ch == ch && color.contains(&cell.fg) {
+                        (sum, n) = (sum + x, n + 1);
+                    }
+                }
+            }
+            sum as f32 / n as f32
+        };
+        assert!(mean(&p.blanco, '*') < mean(&p.rojo, '@'), "{text}");
+        // the pot banded like the flag, banderitas in the soil
+        assert!(count(&c, |cell| cell.ch == '~' && cell.fg == VERDE_BANDERA) > 3);
+        assert!(count(&c, |cell| cell.ch == '~' && cell.fg == ROJO_BANDERA) > 3);
+        assert!(
+            count(&c, |cell| "█▀▄".contains(cell.ch)
+                && cell.fg == VERDE_BANDERA)
+                >= 2
+        );
+        assert!(
+            count(&c, |cell| "█▀▄".contains(cell.ch)
+                && cell.fg == ROJO_BANDERA)
+                >= 2
+        );
+        // the emblem: the eagle with the serpent in its beak on a nopal on a rock
+        for piece in [",-^^^^^^^-,", "(:)", r"<(o)\\\|///-'", "~s<"] {
+            assert!(text.contains(piece), "{piece}\n{text}");
+        }
+        assert!(count(&c, |cell| cell.ch == 'o' && cell.fg == ROJO_TUNA) >= 1);
+        assert!(count(&c, |cell| cell.fg == NOPAL || cell.fg == NOPAL_CLARO) >= 3);
+        // petals fall from the blossoms, white and red
+        assert!(!b.petals.is_empty());
+    }
+
+    #[test]
+    fn the_emblem_grows_as_the_month_climbs() {
+        let theme = Theme::classic();
+        let look = |d| {
+            let (_, c) = dressed(GROWN, &theme, Fiesta::of_day(9, d), 100, 30);
+            let t = c.to_text();
+            (
+                t.matches("(:)").count(),
+                t.contains(r"<(o)\\\|///"),
+                t.contains("~s<"),
+                count(&c, |cell| {
+                    "█▀▄".contains(cell.ch) && cell.fg == VERDE_BANDERA
+                }),
+            )
+        };
+        assert_eq!(look(1), (1, false, false, 2));
+        assert_eq!(look(6), (2, false, false, 2));
+        let (pads, eagle, serpent, flags) = look(10);
+        assert_eq!((pads, eagle, serpent), (3, false, false));
+        assert!(look(12).1);
+        assert!(!look(14).2);
+        // the serpent only at the Grito and the parade
+        assert!(look(15).2 && look(16).2);
+        assert!(flags >= 2 && look(15).3 > flags);
+    }
+
+    #[test]
+    fn the_patrias_under_a_theme_use_its_colors() {
+        let theme = Theme::builtin("dracula").unwrap();
+        let (_, c) = dressed(GROWN, &theme, Fiesta::of_day(9, 15), 100, 30);
+        for classic in [VERDE_BANDERA, ROJO_BANDERA, ROJO_TUNA, NOPAL] {
+            assert_eq!(count(&c, |cell| cell.fg == classic), 0, "{classic:?}");
+        }
+        // dracula's red for the flowers, its foreground for the blossoms
+        assert!(count(&c, |cell| cell.ch == '@' && cell.fg == rgb(0xff5555)) > 3);
+        assert!(count(&c, |cell| cell.ch == '*' && cell.fg == theme.fg) > 3);
+    }
+
+    #[test]
+    fn user_leaves_keep_their_glyph_on_every_holiday() {
         let theme = Theme::classic();
         let opts = "seed = 42\nlive = false\ninfinite = false\nleaves = '#'";
-        let (_, c) = dressed(opts, &theme, Fiesta::of_day(12, 24), 100, 30);
-        assert_eq!(count(&c, |cell| cell.ch == '&'), 0);
-        assert!(count(&c, |cell| cell.ch == '#' && cell.fg.is_rgb()) > 20);
+        for day in [(12, 24), (9, 15)] {
+            let (_, c) = dressed(opts, &theme, Fiesta::of_day(day.0, day.1), 100, 30);
+            assert_eq!(count(&c, |cell| cell.ch == '&'), 0);
+            assert!(count(&c, |cell| cell.ch == '#' && cell.fg.is_rgb()) > 20);
+        }
     }
 
     #[test]
