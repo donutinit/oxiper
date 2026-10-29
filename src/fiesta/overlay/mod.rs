@@ -66,12 +66,21 @@
 //! behind the first. Three rows, six with two strings. Under any theme but
 //! `classic` everything takes the theme's colors.
 //!
+//! The Guelaguetza hangs papel picado in the colors of Oaxacan embroidery
+//! (grana cochinilla, amarillo, verde, rosa, morado, turquesa) with cut-out
+//! piñas, plumas of the Danza de la Pluma, flowers, marmotas and bordados,
+//! and flower petals (rosa, amarillo, morado, rojo) drift down over
+//! everything, more of them as the fiesta builds up. The second string hangs
+//! on the Lunes del Cerro. Four rows, six with two strings. Under any theme
+//! but `classic` the paper and the petals take the theme's colors.
+//!
 //! On an ordinary day, and on a holiday without an overlay, it draws nothing.
 
 mod bunting;
 mod carnaval;
 mod cord;
 mod drift;
+mod guelaguetza;
 mod muertos;
 mod navidad;
 mod nino;
@@ -169,6 +178,7 @@ impl Look {
             Kind::Nino => Some(nino::look(fiesta)),
             Kind::Revolucion => Some(revolucion::look(fiesta)),
             Kind::Carnaval => Some(carnaval::look(fiesta)),
+            Kind::Guelaguetza => Some(guelaguetza::look(fiesta)),
             _ => None,
         }
     }
