@@ -57,9 +57,19 @@
 //! darker as they turn. They keep to the top three rows. Under any theme but
 //! `classic` the tricolor is the theme's own.
 //!
+//! Carnaval hangs the banderines in every bright color (rosa, turquesa,
+//! amarillo, verde limón, morado, naranja, never two alike side by side) on a
+//! cord of lentejuela dorada, and lets confetti drift down over everything
+//! and serpentinas fall, a little roll with its ribbon curling behind it. They
+//! build up from the Thursday to Martes de Carnaval: more confetti and more
+//! serpentinas each day, and from Domingo a second, lower string of banderines
+//! behind the first. Three rows, six with two strings. Under any theme but
+//! `classic` everything takes the theme's colors.
+//!
 //! On an ordinary day, and on a holiday without an overlay, it draws nothing.
 
 mod bunting;
+mod carnaval;
 mod cord;
 mod drift;
 mod muertos;
@@ -158,6 +168,7 @@ impl Look {
             Kind::Patrias => Some(patrias::look(fiesta)),
             Kind::Nino => Some(nino::look(fiesta)),
             Kind::Revolucion => Some(revolucion::look(fiesta)),
+            Kind::Carnaval => Some(carnaval::look(fiesta)),
             _ => None,
         }
     }
