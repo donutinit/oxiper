@@ -27,6 +27,20 @@
 //! shapes, day by day. On Año Nuevo the show counts down from 10 in big
 //! digits, then the finale writes "FELIZ AÑO NUEVO" in sparks.
 //!
+//! On the Fiestas Patrias the city becomes the Zócalo on the night of the
+//! Grito: the Palacio Nacional across the back, washed in verde, blanco y
+//! rojo by the floodlights, its windows lit, the Dolores bell swinging in
+//! its niche over the balcony and tricolor lights along its roof, with a
+//! crowd of silhouettes and banderitas in front, flags rippling on their
+//! poles and a castillo (a tower of fireworks wheels) that is lit now and
+//! then: its wheels spin tier by tier from the bottom up, spitting sparks
+//! along their spokes, and a tricolor shell bursts from its crown. The
+//! shells burst in verde, blanco y rojo, some as rings of the three, some
+//! as an águila with its wings raised over the colors of the flag, and the
+//! finale cries "VIVA MÉXICO" in sparks or shows the águila between two
+//! rings. The further the month has come, the more lights, flags, crowd,
+//! eagles and cries there are, and at the Grito the bell rings wide.
+//!
 //! MIT License
 //!
 //! Copyright (c) 2026 Santiago Sánchez
@@ -138,6 +152,11 @@ enum Shell {
     Nochebuena,
     /// Navidad: a bell.
     Campana,
+    /// Fiestas Patrias: an águila with its wings raised, over the colors of
+    /// the flag.
+    Aguila,
+    /// Fiestas Patrias: rings of verde, blanco y rojo, one inside the next.
+    Tricolor,
     /// A phrase written in sparks: its number in `TEXTS`.
     Text(u8),
 }
@@ -152,6 +171,7 @@ impl Shell {
                 | Shell::Estrella
                 | Shell::Nochebuena
                 | Shell::Campana
+                | Shell::Aguila
                 | Shell::Text(_)
         )
     }
@@ -393,8 +413,9 @@ impl Dress {
     }
 }
 
-/// Seeds Navidad's own random numbers.
+/// Seeds Navidad's and the Fiestas Patrias's own random numbers.
 const NAVIDAD_SEED: u64 = 0x6e61_7669_6461_6421;
+const PATRIAS_SEED: u64 = 0x7061_7472_6961_7321;
 
 // Navidad under `classic`; the shell colors are brightened to burn in the
 // night sky.
@@ -403,6 +424,10 @@ const SH_VERDE: V3 = c8(52, 230, 110);
 const SH_DORADO: V3 = c8(255, 204, 72);
 const SH_PLATA: V3 = c8(214, 220, 240);
 const SH_BLANCO: V3 = c8(244, 241, 234);
+// The Fiestas Patrias under `classic`, brightened the same way.
+const PA_VERDE: V3 = c8(40, 222, 110);
+const PA_ROJO: V3 = c8(255, 44, 64);
+const PA_ORO: V3 = c8(255, 204, 64);
 const ROJO_NOCHEBUENA: V3 = c8(200, 16, 46);
 const VERDE_PINO: V3 = c8(31, 111, 58);
 /// Series lights (foquitos): rojo, verde, azul, amarillo, rosa, naranja.
@@ -424,10 +449,13 @@ struct Fest {
     white: V3,
     red: V3,
     green: V3,
-    /// The colors a shaped shell's strokes pick from: rojo, verde, dorado,
-    /// plata, blanco and a deeper rojo.
+    /// The colors a shaped shell's strokes and masks pick from, by the
+    /// number their chars or strokes carry: for Navidad rojo, verde,
+    /// dorado, plata, blanco and a deeper rojo; for the Fiestas Patrias
+    /// dorado, a paler dorado, verde, rojo and blanco.
     shape: [V3; 8],
-    /// The series lights, in the order they come on the string.
+    /// The series lights, in the order they come on the string; the colors
+    /// of the day, in whatever order its pictures use them.
     hues: [V3; 6],
     stone: V3,
     /// Plaster of the facades by night.
@@ -440,33 +468,100 @@ struct Fest {
     wood: V3,
     /// The wire the lights hang from.
     cable: V3,
+    /// Caña, the cane that castillos and cartonería are made of.
+    cane: V3,
 }
 
 impl Fest {
     fn new(ctx: &Ctx, pal: &Palette) -> Fest {
         let t = ctx.theme;
-        if t.native {
-            let stone = scale(pal.building, 1.25);
-            Fest {
+        let kind = ctx.fiesta.kind;
+        let colors: Vec<V3> = t.colors.iter().map(|&c| v3(c)).collect();
+        let hue = |i: usize| {
+            if colors.is_empty() {
+                pal.gold
+            } else {
+                colors[i % colors.len()]
+            }
+        };
+        let stone = if t.native {
+            scale(pal.building, 1.25)
+        } else {
+            pal.building
+        };
+        // The day's colors: red, green, gold, white, silver, the series
+        // lights and the shells.
+        let silver = if t.native {
+            SH_PLATA
+        } else {
+            mix(pal.white, stone, 0.2)
+        };
+        let (red, green, gold, white, hues, shells) = match (t.native, kind) {
+            (true, Kind::Patrias) => (
+                PA_ROJO,
+                PA_VERDE,
+                PA_ORO,
+                SH_BLANCO,
+                [PA_VERDE, SH_BLANCO, PA_ROJO, PA_VERDE, SH_BLANCO, PA_ROJO],
+                // Verde, blanco y rojo, with oro between.
+                vec![
+                    PA_VERDE, PA_VERDE, SH_BLANCO, SH_BLANCO, PA_ROJO, PA_ROJO, PA_ORO,
+                ],
+            ),
+            (true, _) => (
+                SH_ROJO,
+                SH_VERDE,
+                SH_DORADO,
+                SH_BLANCO,
+                FOQUITOS,
                 // Mostly rojo and verde, with dorado and plata between.
-                shells: vec![
+                vec![
                     SH_ROJO, SH_ROJO, SH_VERDE, SH_VERDE, SH_DORADO, SH_DORADO, SH_PLATA, SH_BLANCO,
                 ],
-                gold: SH_DORADO,
-                white: SH_BLANCO,
-                red: SH_ROJO,
-                green: SH_VERDE,
-                shape: [
-                    SH_ROJO,
-                    SH_VERDE,
-                    SH_DORADO,
-                    SH_PLATA,
-                    SH_BLANCO,
-                    scale(SH_ROJO, 0.7),
-                    SH_DORADO,
-                    SH_DORADO,
-                ],
-                hues: FOQUITOS,
+            ),
+            (false, Kind::Patrias) => (
+                hue(0),
+                hue(1),
+                pal.gold,
+                pal.white,
+                [hue(1), pal.white, hue(0), hue(1), pal.white, hue(0)],
+                vec![hue(1), pal.white, hue(0), pal.gold],
+            ),
+            (false, _) => (
+                hue(0),
+                hue(1),
+                pal.gold,
+                pal.white,
+                [hue(0), hue(1), hue(2), hue(3), hue(4), hue(5)],
+                if colors.is_empty() {
+                    vec![pal.gold]
+                } else {
+                    colors.clone()
+                },
+            ),
+        };
+        let shape = match kind {
+            Kind::Patrias => [
+                gold,
+                mix(gold, white, 0.55),
+                green,
+                red,
+                white,
+                red,
+                gold,
+                gold,
+            ],
+            _ => [red, green, gold, silver, white, scale(red, 0.7), gold, gold],
+        };
+        if t.native {
+            Fest {
+                shells,
+                gold,
+                white,
+                red,
+                green,
+                shape,
+                hues,
                 stone,
                 wall: [
                     mix(stone, c8(230, 200, 140), 0.3),
@@ -479,52 +574,30 @@ impl Fest {
                 pine: scale(VERDE_PINO, 0.8),
                 wood: c8(70, 40, 20),
                 cable: c8(30, 80, 45),
+                cane: c8(201, 178, 107),
             }
         } else {
-            let colors: Vec<V3> = t.colors.iter().map(|&c| v3(c)).collect();
-            let hue = |i: usize| {
-                if colors.is_empty() {
-                    pal.gold
-                } else {
-                    colors[i % colors.len()]
-                }
-            };
-            let stone = pal.building;
-            let (red, green) = (hue(0), hue(1));
-            let silver = mix(pal.white, stone, 0.2);
             Fest {
-                shells: if colors.is_empty() {
-                    vec![pal.gold]
-                } else {
-                    colors.clone()
-                },
-                gold: pal.gold,
-                white: pal.white,
+                shells,
+                gold,
+                white,
                 red,
                 green,
-                shape: [
-                    red,
-                    green,
-                    pal.gold,
-                    silver,
-                    pal.white,
-                    scale(red, 0.7),
-                    pal.gold,
-                    pal.gold,
-                ],
-                hues: [hue(0), hue(1), hue(2), hue(3), hue(4), hue(5)],
+                shape,
+                hues,
                 stone,
                 wall: [
                     mix(stone, hue(2), 0.22),
                     mix(stone, hue(0), 0.22),
                     mix(stone, hue(3), 0.22),
                 ],
-                ground: mix(stone, pal.white, 0.12),
-                window: scale(pal.gold, 0.7),
+                ground: mix(stone, white, 0.12),
+                window: scale(gold, 0.7),
                 roof: scale(red, 0.55),
                 pine: scale(green, 0.55),
-                wood: mix(stone, pal.gold, 0.3),
+                wood: mix(stone, gold, 0.3),
                 cable: scale(green, 0.5),
+                cane: mix(stone, gold, 0.6),
             }
         }
     }
@@ -768,6 +841,40 @@ fn fit_text(text: &'static str, w: f32, ph: f32) -> Option<TextFit> {
     (best.cell >= 0.9).then_some(best)
 }
 
+/// An águila with its wings raised, the colors of the flag under its feet:
+/// `0` its plumage, `1` the paler feathers, `2` verde, `3` rojo, `4` blanco.
+const AGUILA: &[&str] = &[
+    "      0                0      ",
+    "   0  0010 1      1 0100  0   ",
+    "    0 0010 1 000  1 0100 0    ",
+    "    110001 100000 1 100011    ",
+    "    010001 001000 1 100010    ",
+    "    0011010000000 1 101100    ",
+    "  0000010001 000  1100100000  ",
+    "  110000101100000 1101000011  ",
+    "    1110011100000 11100111    ",
+    "   000111110000000111111000   ",
+    " 0000000011000000011100000000 ",
+    "  11111111001111100111111111  ",
+    "     00000000000000000000     ",
+    "    0000000011111000000000    ",
+    "   000000000000000000000000   ",
+    "  00     000111110 00     00  ",
+    "           0000000            ",
+    "           0000000            ",
+    "           0000010            ",
+    "          001010010           ",
+    "          0010100100          ",
+    "        000010100100000       ",
+    "          010010001           ",
+    "         0 100100 10          ",
+    "            0 1 0             ",
+    "                              ",
+    "   222222224444444433333333   ",
+    "    222222224444444433333333  ",
+    "   222222224444444433333333   ",
+];
+
 /// The panteón is drawn from these, one char per pixel, standing on the
 /// ground. `#` stone, `+` a painted cross or a stone face, `%` cypress, `=`
 /// earth; `o O x` marigolds, `t` terciopelo and `n` nube cover a grave once
@@ -949,6 +1056,54 @@ impl Bulb {
     }
 }
 
+/// What moves in a holiday's scenery.
+#[derive(Clone, Copy, PartialEq, Debug)]
+enum Role {
+    /// A flag on its pole, rippling in the wind.
+    Flag,
+    /// The Dolores bell on the balcony of the Palacio Nacional, swinging.
+    Bell,
+    /// A castillo: a tower of fireworks wheels that burns tier by tier.
+    Castillo,
+}
+
+/// Something that moves in the scenery, drawn over it every frame.
+#[derive(Clone, Copy)]
+struct Actor {
+    role: Role,
+    /// Where it stands, in pixels: a flag's top (its pole hangs from it), a
+    /// bell's hook, a castillo's base (its feet, at the middle).
+    x: f32,
+    y: f32,
+    /// How big it is: a flag's height, a bell's height, a castillo's height.
+    size: f32,
+    /// Where it is in its cycle, and for how many steps more.
+    state: u8,
+    left: i32,
+    /// Its own phase, so that two of a kind do not move in unison.
+    seed: f32,
+}
+
+/// How long each tier of a castillo spins, in steps.
+const WHEEL_STEPS: i32 = 80;
+
+/// How many tiers a castillo of this height has.
+fn castillo_tiers(size: f32) -> usize {
+    ((size / 9.0) as usize).clamp(2, 5)
+}
+
+/// The middle and radius of the wheel of a castillo's tier, counting from
+/// the bottom.
+fn castillo_wheel(a: &Actor, tier: usize, tiers: usize) -> (f32, f32, f32) {
+    let th = a.size / tiers as f32;
+    let width = (a.size / 3.0).max(7.0);
+    (
+        a.x,
+        a.y - th * (tier as f32 + 0.5),
+        (width * 0.4).min(th * 0.42).max(1.5),
+    )
+}
+
 /// Stamps `art` into the town, drawn in blocks of `k` pixels, its left edge
 /// on `x` and its bottom row on `base`. `paint` gets each char with the
 /// top-left pixel of its block and answers what stands there: 1 solid or 2 a
@@ -1052,6 +1207,8 @@ struct Fireworks {
     candles: Vec<Candle>,
     /// Lights that blink in the town.
     bulbs: Vec<Bulb>,
+    /// What moves in the town: flags, a bell, a castillo.
+    actors: Vec<Actor>,
     /// Steps left of the countdown to the new year, or 0.
     count: i32,
     /// Steps until the gran final, or 0.
@@ -1080,9 +1237,10 @@ fn fit_shape(w: f32, hh: f32, x: f32, apex: f32) -> (f32, f32) {
 /// The countdown to the new year, in steps: ten seconds.
 const COUNT_STEPS: i32 = 300;
 /// The phrases the sparks write, by the number a `Shell::Text` carries.
-const TEXTS: [&str; 1] = ["FELIZ AÑO NUEVO"];
-/// The phrase the new year is greeted with.
+const TEXTS: [&str; 2] = ["FELIZ AÑO NUEVO", "VIVA MÉXICO"];
+/// The phrase the new year is greeted with, and the cry of the Grito.
 const FELIZ_ANO: u8 = 0;
+const VIVA_MEXICO: u8 = 1;
 
 impl Fireworks {
     fn new(ctx: &Ctx) -> Fireworks {
@@ -1110,6 +1268,7 @@ impl Fireworks {
             town_col: Vec::new(),
             candles: Vec::new(),
             bulbs: Vec::new(),
+            actors: Vec::new(),
             count: 0,
             copal: Vec::new(),
             gran: 0,
@@ -1196,6 +1355,20 @@ impl Fireworks {
                 };
                 (x, vy) = fit_shape(w, hh, x, apex);
             }
+        } else if self.fiesta.is(Kind::Patrias) {
+            // Fiestas Patrias: verde, blanco y rojo, with more águilas and
+            // tricolor rings as the month goes by.
+            let f = &mut self.frng;
+            let level = self.fiesta.level.clamp(0.0, 1.0);
+            color = self.fest.shells[f.usize(0..self.fest.shells.len())];
+            let (aguila, tricolor) = (0.04 + 0.14 * level, 0.12 + 0.18 * level);
+            let roll = f.f32();
+            if roll < aguila {
+                shell = Shell::Aguila;
+                (x, vy) = fit_shape(w, hh, x, apex);
+            } else if roll < aguila + tricolor {
+                shell = Shell::Tricolor;
+            }
         }
         self.born.push(P {
             x,
@@ -1212,16 +1385,25 @@ impl Fireworks {
         });
     }
 
+    /// Is it a holiday dressed in the day's colors (`fest`), whose shells
+    /// all burn in them?
+    fn fest_day(&self) -> bool {
+        self.fiesta.is(Kind::Navidad) || self.fiesta.is(Kind::Patrias)
+    }
+
     /// Does this holiday end a finale with a gran final?
     fn has_gran(&self) -> bool {
-        self.fiesta.is(Kind::Muertos) || self.fiesta.is(Kind::Navidad)
+        self.fiesta.is(Kind::Muertos)
+            || self.fiesta.is(Kind::Navidad)
+            || self.fiesta.is(Kind::Patrias)
     }
 
     /// The holiday's gran final, a big shaped shell between two smaller
     /// ones (just the big one when there is no room for them): Día de
     /// Muertos ends with a calavera between two marigolds, Navidad with an
     /// estrella de siete picos between two bells, and on Año Nuevo with the
-    /// year's greeting in sparks.
+    /// year's greeting in sparks; the Fiestas Patrias with the águila
+    /// between two tricolor rings, or "VIVA MÉXICO" in sparks.
     fn gran_final(&mut self) {
         if self.fiesta.ano_nuevo() && self.write(FELIZ_ANO) {
             return;
@@ -1230,6 +1412,13 @@ impl Fireworks {
             (Shell::Calavera, Shell::Marigold, self.dress.bone)
         } else if self.fiesta.is(Kind::Navidad) {
             (Shell::Estrella, Shell::Campana, self.fest.gold)
+        } else if self.fiesta.is(Kind::Patrias) {
+            // The cry of the Grito, more often the nearer the 15th; or the
+            // eagle between two tricolor rings.
+            if self.frng.f32() < self.fiesta.level && self.write(VIVA_MEXICO) {
+                return;
+            }
+            (Shell::Aguila, Shell::Tricolor, self.fest.gold)
         } else {
             return;
         };
@@ -1286,6 +1475,64 @@ impl Fireworks {
         true
     }
 
+    /// Spawns the sparks of a picture drawn from a mask into `born`: one or
+    /// a few for each pixel, thrown (as in `burst_shape`) to come to rest
+    /// where the pixel is, in the color its digit stands for.
+    fn burst_mask(&mut self, r: &P, art: &[&str]) {
+        let size = (self.w as f32).min(self.ph as f32);
+        let f = &mut self.frng;
+        let radius = size * rangef(f, SHAPE_SIZE.0, SHAPE_SIZE.1);
+        let cols = art.iter().map(|l| l.len()).max().unwrap_or(1) as f32;
+        let rows = art.len() as f32;
+        let cell = radius * 2.0 / cols.max(rows);
+        self.flashes.push(Flash {
+            x: r.x,
+            y: r.y,
+            radius: radius * 1.3 + 2.0,
+            color: r.color,
+            power: 0.25,
+        });
+        let colors = self.fest.shape;
+        let drag = 0.93;
+        let throw = (1.0 - drag) / drag;
+        let n = (cell / 1.5).ceil().max(1.0) as i32;
+        let sub = cell / n as f32;
+        let mut room = MAX_PARTICLES.saturating_sub(self.ps.len() + self.born.len());
+        for (y, row) in art.iter().enumerate() {
+            for (x, ch) in row.bytes().enumerate() {
+                if ch == b' ' {
+                    continue;
+                }
+                let color = colors[ch.wrapping_sub(b'0') as usize % 8];
+                for (sx, sy) in (0..n).flat_map(|i| (0..n).map(move |j| (i, j))) {
+                    if room == 0 {
+                        return;
+                    }
+                    room -= 1;
+                    let tx =
+                        (x as f32 - cols / 2.0) * cell + (sx as f32 + rangef(f, 0.15, 0.85)) * sub;
+                    let ty =
+                        (y as f32 - rows / 2.0) * cell + (sy as f32 + rangef(f, 0.15, 0.85)) * sub;
+                    let j = rangef(f, 0.99, 1.01);
+                    let life = rangef(f, 85.0, 105.0);
+                    self.born.push(P {
+                        x: r.x,
+                        y: r.y,
+                        vx: tx * throw * j,
+                        vy: ty * throw * j,
+                        life,
+                        max: life,
+                        color,
+                        drag,
+                        grav: SPARK_G * 0.3,
+                        flags: 0,
+                        shell: r.shell,
+                    });
+                }
+            }
+        }
+    }
+
     /// Spawns a phrase's sparks into `born`: every pixel of every letter is
     /// a spark or a few, thrown so that they come to rest in place (as in
     /// `burst_shape`) and hold the writing for a few seconds as they sink.
@@ -1295,7 +1542,11 @@ impl Fireworks {
             return;
         };
         let ft = &self.fest;
-        let ink = [ft.gold, ft.red, ft.green];
+        let ink = if self.fiesta.is(Kind::Patrias) {
+            [ft.green, ft.white, ft.red]
+        } else {
+            [ft.gold, ft.red, ft.green]
+        };
         self.flashes.push(Flash {
             x: r.x,
             y: r.y,
@@ -1337,8 +1588,10 @@ impl Fireworks {
                                 return;
                             }
                             room -= 1;
-                            let tx = (x0 + (at + col) as f32) * fit.cell + (sx as f32 + 0.5) * sub;
-                            let ty = (y0 + ry as f32) * fit.cell + (sy as f32 + 0.5) * sub;
+                            let tx = (x0 + (at + col) as f32) * fit.cell
+                                + (sx as f32 + rangef(f, 0.15, 0.85)) * sub;
+                            let ty = (y0 + ry as f32) * fit.cell
+                                + (sy as f32 + rangef(f, 0.15, 0.85)) * sub;
                             let j = rangef(f, 0.99, 1.01);
                             let life = rangef(f, 115.0, 140.0);
                             self.born.push(P {
@@ -1388,12 +1641,15 @@ impl Fireworks {
 
     /// Spawns a shell's sparks into `born`.
     fn burst(&mut self, r: &P) {
-        if let Shell::Text(text) = r.shell {
-            return self.burst_text(r, text);
+        match r.shell {
+            Shell::Text(text) => return self.burst_text(r, text),
+            Shell::Aguila => return self.burst_mask(r, AGUILA),
+            _ => {}
         }
         if r.shell.shaped() {
             return self.burst_shape(r);
         }
+        let festive = self.fest_day();
         let size = (self.w as f32).min(self.ph as f32);
         let rng = &mut self.rng;
         let radius = size * rangef(rng, 0.18, 0.33);
@@ -1427,17 +1683,16 @@ impl Fireworks {
             }
         };
         let (pal, dress, ft) = (&self.pal, &self.dress, &self.fest);
-        let navidad = self.fiesta.is(Kind::Navidad);
         let gold = if self.fiesta.is(Kind::Muertos) {
             dress.gold
-        } else if navidad {
+        } else if festive {
             ft.gold
         } else {
             pal.gold
         };
         // A color for a multicolor shell or a second ring.
         let shell_color = |rng: &mut fastrand::Rng| {
-            if navidad {
+            if festive {
                 ft.shells[rng.usize(0..ft.shells.len())]
             } else {
                 pal.shell_color(rng)
@@ -1518,7 +1773,21 @@ impl Fireworks {
             | Shell::Estrella
             | Shell::Nochebuena
             | Shell::Campana
+            | Shell::Aguila
             | Shell::Text(_) => {}
+            Shell::Tricolor => {
+                // Rings of verde, blanco y rojo, one inside the next.
+                let drag = 0.95;
+                let v0 = radius * (1.0 - drag);
+                let n = (base / 2).max(16);
+                for (ring, col) in [(1.0, ft.green), (0.7, ft.white), (0.4, ft.red)] {
+                    for k in 0..n {
+                        let a = k as f32 / n as f32 * TAU;
+                        let life = rangef(rng, 45.0, 60.0);
+                        spark(a.cos() * v0 * ring, a.sin() * v0 * ring, life, col, drag, 0);
+                    }
+                }
+            }
             Shell::Palm => {
                 let drag = 0.955;
                 let v0 = radius * (1.0 - drag) * 1.1;
@@ -1694,10 +1963,12 @@ impl Fireworks {
     /// has something: the panteón on Día de Muertos, the plaza on Navidad.
     fn build_town(&mut self) {
         self.bulbs.clear();
+        self.actors.clear();
         // Each of them starts by clearing the town, and builds on it only on
         // its own holiday.
         self.build_panteon();
         self.build_plaza();
+        self.build_zocalo();
     }
 
     /// Puts a solid pixel into the town.
@@ -1750,50 +2021,36 @@ impl Fireworks {
         }
     }
 
-    /// Lays out the town plaza that stands in for the city during Navidad:
-    /// a row of facades with lit windows, a kiosco in the middle with pines
-    /// either side, nochebuenas in their pots, farolitos along the ground
-    /// and strings of foquitos from the rooftops to the kiosco. The layout
-    /// depends only on the seed and the size; the level decides how many
-    /// lights are on and how many strings hang.
-    fn build_plaza(&mut self) {
+    /// Lays the ground of a town over its bottom rows (from `gy` down).
+    fn lay_ground(&mut self, rng: &mut fastrand::Rng, gy: usize) {
         let (w, ph) = (self.w, self.ph);
-        if !self.fiesta.is(Kind::Navidad) || !self.show_city || w == 0 || ph < 12 {
-            return;
-        }
-        self.town.resize(w * ph, 0);
-        self.town_col.resize(w * ph, [0.0; 3]);
-        let rng = &mut fastrand::Rng::with_seed(self.seed ^ NAVIDAD_SEED);
-        let level = self.fiesta.level.clamp(0.0, 1.0);
-        let lit = 0.3 + 0.7 * level;
-        let strings = 1 + (level * 3.0).round() as usize;
-        let ft = &self.fest;
-        let (wall, window, ground_c) = (ft.wall, ft.window, ft.ground);
-        let (stone, white, wood) = (ft.stone, ft.white, ft.wood);
-        let (roof, pine, red, green) = (ft.roof, ft.pine, ft.red, ft.green);
-        let trim = mix(stone, white, 0.35);
-        let iron = scale(stone, 1.5);
-        let wi = w as i32;
-        // On a big screen everything is drawn bigger, in blocks of `k`.
-        let k = (ph / 50).clamp(1, 3);
-
-        // The cobbled ground.
-        let ground = (if ph >= 40 { 2 } else { 1 }) * k;
-        let gy = ph - ground;
         for y in gy..ph {
             for x in 0..w {
                 self.town[y * w + x] = 1;
-                self.town_col[y * w + x] = scale(ground_c, rangef(rng, 0.8, 1.15));
+                self.town_col[y * w + x] = scale(self.fest.ground, rangef(rng, 0.8, 1.15));
             }
         }
+    }
 
-        // The facades on the far side of the plaza, most windows lit, a few
-        // roofs strung with lights.
+    /// Builds a row of facades over the columns `from..to`, standing on the
+    /// ground row `gy`, drawn in blocks of `k` pixels: most windows lit, a
+    /// few roofs strung with lights. `tops` gets the top row of each column.
+    fn facades(
+        &mut self,
+        rng: &mut fastrand::Rng,
+        (from, to): (usize, usize),
+        gy: usize,
+        k: usize,
+        lit: f32,
+        tops: &mut [i32],
+    ) {
+        let (w, ph) = (self.w, self.ph);
+        let ft = &self.fest;
+        let (wall, window, white) = (ft.wall, ft.window, ft.white);
         let max_h = (ph / 6 / k).clamp(3, 14);
-        let mut tops = vec![gy as i32; w];
-        let mut x = 0;
-        while x < w {
-            let bw = (rng.usize(7..15) * k).min(w - x);
+        let mut x = from;
+        while x < to {
+            let bw = (rng.usize(7..15) * k).min(to - x);
             let top = gy - rng.usize(3..max_h + 1) * k;
             let base = scale(wall[rng.usize(0..3)], rangef(rng, 0.8, 1.15));
             tops[x..x + bw].fill(top as i32);
@@ -1832,6 +2089,76 @@ impl Fireworks {
             }
             x += bw;
         }
+    }
+
+    /// A crowd of silhouettes along the ground row `gy`, in blocks of `k`
+    /// pixels; `density` is the share of places taken, and some raise a
+    /// banderita (a small flag in the colors of the day) over their heads.
+    fn crowd(&mut self, rng: &mut fastrand::Rng, gy: usize, k: usize, density: f32, flags: f32) {
+        let w = self.w;
+        let body = scale(self.fest.stone, 0.45);
+        let tri = [self.fest.hues[0], self.fest.hues[1], self.fest.hues[2]];
+        let mut x = 0;
+        while x < w {
+            if rng.f32() < density {
+                let (hw, hh) = (rng.usize(1..3) * k, rng.usize(1..4) * k);
+                let shade = rangef(rng, 0.8, 1.3);
+                for y in gy.saturating_sub(hh)..gy {
+                    for xx in x..(x + hw).min(w) {
+                        self.town[y * w + xx] = 1;
+                        self.town_col[y * w + xx] = scale(body, shade);
+                    }
+                }
+                if rng.f32() < flags && gy > hh + 4 * k {
+                    // A banderita on a stick, held high.
+                    let top = gy - hh - 3 * k;
+                    for y in top..gy - hh {
+                        self.put(x as i32, y as i32, scale(self.fest.white, 0.5));
+                    }
+                    for (i, c) in tri.iter().enumerate() {
+                        for dy in 0..k {
+                            self.put((x + 1 + i * k) as i32, (top + dy) as i32, *c);
+                        }
+                    }
+                }
+            }
+            x += rng.usize(1..3) * k;
+        }
+    }
+
+    /// Lays out the town plaza that stands in for the city during Navidad:
+    /// a row of facades with lit windows, a kiosco in the middle with pines
+    /// either side, nochebuenas in their pots, farolitos along the ground
+    /// and strings of foquitos from the rooftops to the kiosco. The layout
+    /// depends only on the seed and the size; the level decides how many
+    /// lights are on and how many strings hang.
+    fn build_plaza(&mut self) {
+        let (w, ph) = (self.w, self.ph);
+        if !self.fiesta.is(Kind::Navidad) || !self.show_city || w == 0 || ph < 12 {
+            return;
+        }
+        self.town.resize(w * ph, 0);
+        self.town_col.resize(w * ph, [0.0; 3]);
+        let rng = &mut fastrand::Rng::with_seed(self.seed ^ NAVIDAD_SEED);
+        let level = self.fiesta.level.clamp(0.0, 1.0);
+        let lit = 0.3 + 0.7 * level;
+        let strings = 1 + (level * 3.0).round() as usize;
+        let ft = &self.fest;
+        let (window, gold) = (ft.window, ft.gold);
+        let (stone, white, wood) = (ft.stone, ft.white, ft.wood);
+        let (roof, pine, red, green) = (ft.roof, ft.pine, ft.red, ft.green);
+        let trim = mix(stone, white, 0.35);
+        let iron = scale(stone, 1.5);
+        let wi = w as i32;
+        // On a big screen everything is drawn bigger, in blocks of `k`.
+        let k = (ph / 50).clamp(1, 3);
+
+        // The cobbled ground, and the facades on the far side of the plaza.
+        let ground = (if ph >= 40 { 2 } else { 1 }) * k;
+        let gy = ph - ground;
+        self.lay_ground(rng, gy);
+        let mut tops = vec![gy as i32; w];
+        self.facades(rng, (0, w), gy, k, lit, &mut tops);
 
         // The kiosco in the middle, lit from inside, with pines either side.
         let (ki, wd) = (k as i32, 19 * k as i32);
@@ -1954,7 +2281,7 @@ impl Fireworks {
                     |ch, _, _| match ch {
                         b'r' => Some((1, scale(red, 0.8))),
                         b'g' => Some((1, scale(green, 0.45))),
-                        b'y' => Some((1, scale(ft.gold, 0.7))),
+                        b'y' => Some((1, scale(gold, 0.7))),
                         _ => Some((1, mix(wood, c8(140, 74, 30), 0.6))),
                     },
                 );
@@ -2004,6 +2331,201 @@ impl Fireworks {
             let kind = if s % 2 == 0 { 1 } else { 2 };
             let ends = ((a, tops[a as usize] - 1), (b, tops[b as usize] - 1));
             self.hang_lights(ends.0, ends.1, sag, 4 * ki, kind, lit, rng);
+        }
+    }
+
+    /// Lays out the Zócalo that stands in for the city during the Fiestas
+    /// Patrias, on the night of the Grito: the Palacio Nacional across the
+    /// back, washed in verde, blanco y rojo by the floodlights, with the
+    /// Dolores bell in its niche over the central balcony, flags and
+    /// tricolor lights along its roof; facades on either side, a crowd with
+    /// banderitas in front, a monumental flag and a castillo waiting to be
+    /// lit. The layout depends only on the seed and the size; the level
+    /// decides how many lights and windows are on, how big the crowd is and
+    /// how many flags fly.
+    #[allow(clippy::needless_range_loop)]
+    fn build_zocalo(&mut self) {
+        let (w, ph) = (self.w, self.ph);
+        if !self.fiesta.is(Kind::Patrias) || !self.show_city || w == 0 || ph < 12 {
+            return;
+        }
+        self.town.resize(w * ph, 0);
+        self.town_col.resize(w * ph, [0.0; 3]);
+        let rng = &mut fastrand::Rng::with_seed(self.seed ^ PATRIAS_SEED);
+        let level = self.fiesta.level.clamp(0.0, 1.0);
+        let lit = 0.3 + 0.7 * level;
+        let ft = &self.fest;
+        let (stone, white, green, red, gold) = (ft.stone, ft.white, ft.green, ft.red, ft.gold);
+        let (window, wall_dark) = (ft.window, scale(ft.stone, 0.35));
+        let k = (ph / 50).clamp(1, 3);
+        let ground = (if ph >= 40 { 2 } else { 1 }) * k;
+        let gy = ph - ground;
+        self.lay_ground(rng, gy);
+        let mut tops = vec![gy as i32; w];
+        let palace = w >= 30 && ph >= 24;
+        let (x0, x1) = if w >= 50 {
+            (w * 19 / 100, w * 81 / 100)
+        } else {
+            (2, w.max(4) - 2)
+        };
+        if !palace {
+            self.facades(rng, (0, w), gy, k, lit, &mut tops);
+            self.crowd(rng, gy, k, 0.35 + 0.65 * level, 0.1);
+            return;
+        }
+        self.facades(rng, (0, x0), gy, k, lit, &mut tops);
+        self.facades(rng, (x1, w), gy, k, lit, &mut tops);
+
+        // The Palacio, washed in the three colors left to right, brighter
+        // towards the floodlights at its foot.
+        let hp = ((ph as f32 * 0.23) as usize).clamp(8, 60).min(gy - 2);
+        let ty = gy - hp;
+        let pw = x1 - x0;
+        let cw = (pw / 5).max(8) | 1;
+        let cx = (x0 + x1) / 2;
+        let (c0, c1) = (cx - cw / 2, cx - cw / 2 + cw);
+        let ped = cw / 4 + 1;
+        let ct = ty.saturating_sub(hp / 4).max(ped + 2);
+        let glow = 0.28 + 0.2 * level;
+        let bands = [green, white, red];
+        let tint = |x: usize, y: usize| {
+            let band = ((x - x0) * 3 / pw).min(2);
+            let low = (y.saturating_sub(ty) as f32 / hp as f32).min(1.0);
+            scale(mix(stone, bands[band], glow), 0.65 + 0.55 * low)
+        };
+        for x in x0..x1 {
+            let top = if (c0..c1).contains(&x) { ct } else { ty };
+            tops[x] = top as i32;
+            for y in top..gy {
+                self.town[y * w + x] = 1;
+                self.town_col[y * w + x] = tint(x, y);
+            }
+            // The cornice catches the light.
+            for y in top..top + k {
+                self.town_col[y * w + x] = mix(tint(x, top), white, 0.3);
+            }
+        }
+        // The pediment over the central block.
+        for i in 0..ped {
+            for x in c0 + i + 1..c1.saturating_sub(i + 1) {
+                self.put(x as i32, (ct - 1 - i) as i32, mix(tint(x, ty), white, 0.3));
+                tops[x] = (ct - 1 - i) as i32;
+            }
+        }
+        // Windows, floor by floor, most of them lit.
+        let floors = (hp / (4 * k)).clamp(1, 3);
+        let sp = hp / floors;
+        for j in 0..floors {
+            let wy = ty + j * sp + sp / 4;
+            let wh = (sp / 2).clamp(k, 3 * k);
+            for x in (x0 + 2 * k..x1.saturating_sub(2 * k)).step_by(3 * k) {
+                if x + k > c0 + k && x < c1.saturating_sub(k) {
+                    continue;
+                }
+                let col = if rng.f32() < lit {
+                    window
+                } else {
+                    scale(tint(x, wy), 0.55)
+                };
+                for (dx, dy) in (0..k).flat_map(|i| (0..wh).map(move |j| (i, j))) {
+                    self.put((x + dx) as i32, (wy + dy) as i32, col);
+                }
+            }
+        }
+        // The three doors at its foot.
+        let dh = (hp * 35 / 100).max(3 * k);
+        for (dx, wd) in [(cx, 3 * k), (x0 + pw / 6, 2 * k), (x1 - pw / 6, 2 * k)] {
+            for y in gy - dh..gy {
+                for x in dx.saturating_sub(wd / 2)..dx + wd.div_ceil(2) {
+                    self.put(x as i32, y as i32, wall_dark);
+                }
+            }
+        }
+        // The balcony of the Grito, lit gold, and the niche over it where
+        // the Dolores bell hangs.
+        let yb = ty + (hp * 55 / 100).max(k);
+        for x in c0 + k..c1 - k {
+            for y in yb..yb + k {
+                self.put(x as i32, y as i32, scale(gold, 0.8));
+            }
+            if (x - c0) % 2 == 0 {
+                self.put(x as i32, yb as i32 - 1, scale(gold, 0.45));
+            }
+        }
+        let (nw, nt) = (3 * k, ct + 2 * k);
+        let nh = (yb - 1).saturating_sub(nt);
+        for y in nt..nt + nh {
+            for x in cx - nw / 2..cx - nw / 2 + nw {
+                self.put(x as i32, y as i32, wall_dark);
+            }
+        }
+        if nh >= 3 {
+            self.actors.push(Actor {
+                role: Role::Bell,
+                x: cx as f32,
+                y: nt as f32,
+                size: nh as f32,
+                state: 0,
+                left: 0,
+                seed: 0.0,
+            });
+        }
+        // Tricolor lights along the roof and up the pediment.
+        for x in (x0..x1).step_by(3 * k) {
+            let top = tops[x];
+            if rng.f32() < lit && top > 0 {
+                self.bulbs.push(Bulb {
+                    x: x as i32,
+                    y: top - 1,
+                    c: (x / (3 * k) % 6) as u8,
+                    kind: 1,
+                    phase: 0.0,
+                });
+            }
+        }
+        // Flags: one on the pediment, two more at the ends as the month goes.
+        let flag = |x: usize, y: i32, size: f32, seed: f32| Actor {
+            role: Role::Flag,
+            x: x as f32,
+            y: y as f32 - (size * 2.2).round(),
+            size,
+            state: 0,
+            left: 0,
+            seed,
+        };
+        let fh = (2 * k + 1) as f32;
+        self.actors.push(flag(cx, (ct - ped) as i32, fh, 0.0));
+        if level > 0.35 {
+            self.actors.push(flag(x0 + 1, ty as i32, fh, 1.7));
+            self.actors.push(flag(x1 - 2, ty as i32, fh, 3.1));
+        }
+        // Strings of lights from the rooftops either side to the palace.
+        if level > 0.5 {
+            let (l, r) = (rng.usize(0..x0.max(1)), rng.usize(x1..w));
+            let roof = ty as i32 - 1;
+            let sag = |a: usize, b: usize| (b as f32 - a as f32).abs() * 0.1;
+            let ends = ((l as i32, tops[l] - 1), (x0 as i32, roof));
+            self.hang_lights(ends.0, ends.1, sag(l, x0), 4 * k as i32, 1, lit, rng);
+            let ends = ((x1 as i32 - 1, roof), (r as i32, tops[r] - 1));
+            self.hang_lights(ends.0, ends.1, sag(x1, r), 4 * k as i32, 1, lit, rng);
+        }
+        // The crowd, with its banderitas.
+        self.crowd(rng, gy, k, 0.35 + 0.65 * level, 0.04 + 0.12 * level);
+        // The monumental flag, and a castillo to light.
+        let big = (ph as f32 * 0.1).clamp(5.0, 24.0);
+        if w >= 60 && ph >= 30 {
+            self.actors.push(flag(w / 10, gy as i32, big, 2.3));
+        }
+        if w >= 70 && ph >= 36 {
+            self.actors.push(Actor {
+                role: Role::Castillo,
+                x: (w * 9 / 10) as f32,
+                y: gy as f32,
+                size: (ph as f32 * 0.45).clamp(16.0, 120.0),
+                state: 0,
+                left: rng.i32(120..240),
+                seed: rng.f32() * TAU,
+            });
         }
     }
 
@@ -2227,6 +2749,241 @@ impl Fireworks {
             let c = self.fest.hues[b.c as usize % 6];
             for (ox, oy) in [(-1, 0), (1, 0), (0, -1), (0, 1)] {
                 self.plot(b.x + ox, b.y + oy, c, 0.07 * g);
+            }
+        }
+    }
+
+    /// Moves the scenery's actors one step.
+    fn act(&mut self) {
+        for k in 0..self.actors.len() {
+            let mut a = self.actors[k];
+            if a.role == Role::Castillo {
+                self.burn_castillo(&mut a);
+            }
+            self.actors[k] = a;
+        }
+    }
+
+    /// The shell that crowns a castillo as its last tier burns out.
+    fn crown(&self) -> Shell {
+        Shell::Tricolor
+    }
+
+    /// One step in the life of a castillo: it waits to be lit, then its
+    /// wheels burn one tier after the other from the bottom up, each
+    /// spinning and spitting sparks along its spokes, and a shell bursts
+    /// from its crown; then it stands burnt until it is built anew.
+    fn burn_castillo(&mut self, a: &mut Actor) {
+        let tiers = castillo_tiers(a.size);
+        let state = a.state as usize;
+        a.left -= 1;
+        if state == 0 {
+            if a.left <= 0 {
+                a.state = 1;
+                a.left = WHEEL_STEPS;
+            }
+        } else if state <= tiers {
+            let (cx, cy, r) = castillo_wheel(a, state - 1, tiers);
+            let spent = (WHEEL_STEPS - a.left) as f32;
+            let dir = if state.is_multiple_of(2) { -1.0 } else { 1.0 };
+            let angle = a.seed + dir * spent * 0.38;
+            let ft = &self.fest;
+            let ink = [ft.gold, ft.white, ft.hues[(state - 1) % 3]];
+            let f = &mut self.frng;
+            for j in 0..4 {
+                if f.f32() < 0.55 && self.ps.len() + self.born.len() < MAX_PARTICLES {
+                    // Thrown along the spoke's tangent, as the wheel turns.
+                    let (sa, ca) = (angle + j as f32 * FRAC_PI_2).sin_cos();
+                    let life = rangef(f, 22.0, 34.0);
+                    self.born.push(P {
+                        x: cx + ca * r,
+                        y: cy + sa * r,
+                        vx: -sa * dir * 0.55 + ca * 0.12 + rangef(f, -0.05, 0.05),
+                        vy: ca * dir * 0.55 + sa * 0.12 - 0.04 + rangef(f, -0.05, 0.05),
+                        life,
+                        max: life,
+                        color: ink[f.usize(0..3)],
+                        drag: 0.95,
+                        grav: SPARK_G * 0.6,
+                        flags: 0,
+                        shell: Shell::Sphere,
+                    });
+                }
+            }
+            if a.left % 5 == 0 {
+                self.flashes.push(Flash {
+                    x: cx,
+                    y: cy,
+                    radius: 7.0 + r,
+                    color: ft.gold,
+                    power: 0.1,
+                });
+            }
+            if a.left <= 0 {
+                a.state += 1;
+                a.left = WHEEL_STEPS;
+            }
+        } else if state == tiers + 1 {
+            // The crown bursts.
+            let top = P {
+                x: a.x,
+                y: a.y - a.size,
+                vx: 0.0,
+                vy: 0.0,
+                life: 1.0,
+                max: 1.0,
+                color: self.fest.gold,
+                drag: 1.0,
+                grav: 0.0,
+                flags: ROCKET,
+                shell: self.crown(),
+            };
+            self.burst(&top);
+            a.state += 1;
+            a.left = 150;
+        } else if a.left <= 0 {
+            // Built anew, to be lit in a while: sooner as the holiday comes.
+            let level = self.fiesta.level.clamp(0.0, 1.0);
+            a.state = 0;
+            a.left = (self.frng.i32(360..720) as f32 * (1.3 - level)) as i32;
+        }
+    }
+
+    /// Draws the scenery's actors over it.
+    fn draw_actors(&mut self) {
+        for k in 0..self.actors.len() {
+            let a = self.actors[k];
+            match a.role {
+                Role::Flag => self.draw_flag(&a),
+                Role::Bell => self.draw_bell(&a),
+                Role::Castillo => self.draw_castillo(&a),
+            }
+        }
+    }
+
+    /// A flag on its pole, rippling: the ripple grows towards the free end.
+    fn draw_flag(&mut self, a: &Actor) {
+        let ft = &self.fest;
+        let (tri, pole) = ([ft.green, ft.white, ft.red], scale(ft.white, 0.55));
+        let fh = a.size.round().max(1.0) as i32;
+        let fw = fh * 7 / 4;
+        let (x, y) = (a.x.round() as i32, a.y.round() as i32);
+        let t = self.frame as f32 * 0.18 + a.seed;
+        for i in 0..(a.size * 2.2).round() as i32 {
+            self.px.set(x, y + i, to_color(pole));
+        }
+        for cx in 0..fw {
+            let wave = (t + cx as f32 * 0.6).sin();
+            let dy = (wave * (cx as f32 / fw as f32) * fh as f32 * 0.25).round() as i32;
+            let band = (cx * 3 / fw).min(2) as usize;
+            let c = to_color(scale(tri[band], 0.78 + 0.22 * wave));
+            for cy in 0..fh {
+                self.px.set(x + 1 + cx, y + cy + dy, c);
+            }
+        }
+    }
+
+    /// The Dolores bell, swinging in its niche: a little on any day of the
+    /// month, a lot at the Grito and while the finale goes on.
+    fn draw_bell(&mut self, a: &Actor) {
+        let level = self.fiesta.level.clamp(0.0, 1.0);
+        let ring = if self.finale > 0 { 1.0 } else { 0.0 };
+        let amp = (0.25 + (level - 0.5).max(0.0) * 3.0 + ring) * a.size / 8.0;
+        let swing = (self.frame as f32 * 0.22 + a.seed).sin() * amp;
+        let h = a.size.round().max(2.0) as i32;
+        let gold = self.fest.gold;
+        let (x, y) = (a.x, a.y.round() as i32);
+        for i in 0..h {
+            // A dome that flares into a lip, swinging from its hook.
+            let hw = 0.6 + 0.4 * i as f32 + if i + 1 >= h { 0.7 } else { 0.0 };
+            let shift = swing * i as f32 / h as f32;
+            let (l, r) = (
+                (x + shift - hw).round() as i32,
+                (x + shift + hw).round() as i32,
+            );
+            let c = to_color(scale(gold, 0.8 + 0.2 * (i as f32 / h as f32)));
+            for xx in l..=r {
+                self.px.set(xx, y + i, c);
+            }
+        }
+        self.px.set(
+            (x + swing).round() as i32,
+            y + h,
+            to_color(scale(gold, 0.7)),
+        );
+    }
+
+    /// A castillo: a frame of cane, its wheels on their tiers. Unlit they
+    /// are crosses of spokes; the lit one spins, white-hot; the ones that
+    /// have burned are charred.
+    fn draw_castillo(&mut self, a: &Actor) {
+        let tiers = castillo_tiers(a.size);
+        let state = a.state as usize;
+        let ft = &self.fest;
+        let (cane, gold, white) = (ft.cane, ft.gold, ft.white);
+        // Burnt cane is darker.
+        let frame_c = to_color(scale(cane, if state > tiers { 0.4 } else { 0.75 }));
+        let brace_c = to_color(scale(cane, if state > tiers { 0.3 } else { 0.55 }));
+        let width = (a.size / 3.0).max(7.0);
+        let (l, r) = (
+            (a.x - width / 2.0).round() as i32,
+            (a.x + width / 2.0).round() as i32,
+        );
+        let (base, top) = (a.y.round() as i32, (a.y - a.size).round() as i32);
+        for y in top..=base {
+            self.px.set(l, y, frame_c);
+            self.px.set(r, y, frame_c);
+        }
+        let th = a.size / tiers as f32;
+        for i in 0..=tiers {
+            let y = (a.y - th * i as f32).round() as i32;
+            for x in l..=r {
+                self.px.set(x, y, frame_c);
+            }
+            if i < tiers {
+                // Braces across the tier.
+                let y2 = (a.y - th * (i + 1) as f32).round() as i32;
+                let n = (y - y2).max(1);
+                for s in 0..=n {
+                    let x = l + (r - l) * s / n;
+                    self.px.set(x, y - s, brace_c);
+                    self.px.set(r - (r - l) * s / n, y - s, brace_c);
+                }
+            }
+        }
+        // The crown: a little tuft over the last tier.
+        for (dx, dy) in [(0, -1), (-1, -2), (0, -2), (1, -2), (0, -3)] {
+            self.px.set(a.x.round() as i32 + dx, top + dy, frame_c);
+        }
+        // The wheels.
+        for tier in 0..tiers {
+            let (cx, cy, rad) = castillo_wheel(a, tier, tiers);
+            let (lit, spent) = (state == tier + 1, state > tier + 1);
+            let dir = if (tier + 1) % 2 == 0 { -1.0 } else { 1.0 };
+            let angle = if lit {
+                a.seed + dir * (WHEEL_STEPS - a.left) as f32 * 0.38
+            } else {
+                a.seed
+            };
+            let c = if lit {
+                let flick = 0.5 + 0.5 * (self.frame as f32 * 1.3).sin();
+                to_color(mix(gold, white, flick))
+            } else if spent {
+                to_color(scale(cane, 0.25))
+            } else {
+                to_color(scale(cane, 0.9))
+            };
+            let n = (rad * 2.0).ceil() as i32;
+            for arm in 0..4 {
+                let (sa, ca) = (angle + arm as f32 * FRAC_PI_2).sin_cos();
+                for s in 0..=n {
+                    let u = s as f32 / n.max(1) as f32 * rad;
+                    self.px.set(
+                        (cx + ca * u).round() as i32,
+                        (cy + sa * u).round() as i32,
+                        c,
+                    );
+                }
             }
         }
     }
@@ -2476,6 +3233,9 @@ impl Fireworks {
         }
         if !self.town.is_empty() {
             self.burn_copal();
+        }
+        if !self.actors.is_empty() {
+            self.act();
         }
 
         let ph = self.ph as f32;
@@ -2775,6 +3535,7 @@ impl Scene for Fireworks {
                     .set(k.x, k.y, to_color(scale(flame, 0.4 + 0.6 * k.power)));
             }
             self.draw_bulbs();
+            self.draw_actors();
             self.px.blit(c);
             return;
         }
@@ -2796,6 +3557,7 @@ impl Scene for Fireworks {
                 self.px.set(x, y, to_color(c));
             }
         }
+        self.draw_actors();
         self.px.blit(c);
     }
 }
@@ -2837,6 +3599,7 @@ mod tests {
                     Fiesta::of_day(11, 2),
                     Fiesta::of_day(12, 24),
                     Fiesta::of_day(12, 31),
+                    Fiesta::of_day(9, 15),
                 ] {
                     let (mut f, o) = make(v, &theme);
                     let ctx = Ctx {
@@ -2935,7 +3698,7 @@ mod tests {
         let theme = Theme::classic();
         let (mut f, _) = make("", &theme);
         assert!(f.town.is_empty() && f.candles.is_empty() && f.copal.is_empty());
-        assert!(f.bulbs.is_empty() && f.count == 0);
+        assert!(f.bulbs.is_empty() && f.actors.is_empty() && f.count == 0);
         let (shells, wisps) = watch(&mut f, 3000);
         assert!(!wisps);
         for s in [
@@ -2945,6 +3708,8 @@ mod tests {
             Shell::Estrella,
             Shell::Nochebuena,
             Shell::Campana,
+            Shell::Aguila,
+            Shell::Tricolor,
         ] {
             assert!(!shells.contains(&s), "{shells:?}");
         }
@@ -2982,7 +3747,9 @@ mod tests {
             Shell::Estrella,
             Shell::Nochebuena,
             Shell::Campana,
+            Shell::Aguila,
             Shell::Text(FELIZ_ANO),
+            Shell::Text(VIVA_MEXICO),
         ] {
             f.born.clear();
             let r = P {
@@ -3185,9 +3952,10 @@ mod tests {
     /// and it fits a screen only when it can be read.
     #[test]
     fn greeting_is_legible() {
-        for ch in TEXTS[0].chars().filter(|&c| c != ' ') {
+        for ch in TEXTS.iter().flat_map(|t| t.chars()).filter(|&c| c != ' ') {
             assert!(glyph(ch).0.iter().any(|&r| r != 0), "{ch}");
         }
+        assert!(fit_text(TEXTS[VIVA_MEXICO as usize], 100.0, 60.0).is_some());
         for n in '0'..='9' {
             assert!(glyph(n).0.iter().any(|&r| r != 0), "{n}");
         }
@@ -3204,7 +3972,7 @@ mod tests {
     /// The pixel pictures are rectangles.
     #[test]
     fn pictures_are_rectangles() {
-        for art in [KIOSCO, ABETO, NOCHEBUENA_POT] {
+        for art in [KIOSCO, ABETO, NOCHEBUENA_POT, AGUILA] {
             let w = art[0].chars().count();
             assert!(art.iter().all(|r| r.chars().count() == w), "{art:?}");
         }
@@ -3239,6 +4007,166 @@ mod tests {
         f.gran_final();
         assert_eq!(f.born.len(), 1);
         assert_eq!(f.born[0].shell, Shell::Estrella);
+    }
+
+    /// The Fiestas Patrias turn the city into the Zócalo, with the palace,
+    /// the bell, flags and a castillo, and burst águilas and tricolor rings.
+    #[test]
+    fn patrias_dresses_up() {
+        for theme in [Theme::classic(), Theme::builtin("dracula").unwrap()] {
+            for (m, d) in [(9, 15), (9, 1), (9, 16)] {
+                let fiesta = Fiesta::of_day(m, d);
+                let (mut f, o) = make("", &theme);
+                holiday(&mut f, &theme, &o, fiesta);
+                assert!(f.town.contains(&1) && !f.bulbs.is_empty(), "{m}-{d}");
+                for role in [Role::Flag, Role::Bell, Role::Castillo] {
+                    assert!(f.actors.iter().any(|a| a.role == role), "{m}-{d} {role:?}");
+                }
+                let (shells, _) = watch(&mut f, 4000);
+                for s in [Shell::Aguila, Shell::Tricolor] {
+                    assert!(shells.contains(&s), "{m}-{d} {shells:?}");
+                }
+                // Everything is drawn over the town without leaving the screen.
+                let ctx = Ctx {
+                    theme: &theme,
+                    opts: &o,
+                    bg: Color::Reset,
+                    seed: 3,
+                    fiesta,
+                };
+                let mut c = Canvas::new(120, 36, Color::Reset);
+                f.draw(&ctx, &mut c);
+                assert!(c.cells()[35 * 120..].iter().all(|cell| cell.ch != ' '));
+            }
+        }
+    }
+
+    /// More lights, flags and crowd as the month goes by; the Zócalo comes
+    /// and goes with the holiday and fits any size.
+    #[test]
+    fn patrias_comes_and_goes() {
+        let theme = Theme::classic();
+        let (mut f, o) = make("", &theme);
+        holiday(&mut f, &theme, &o, Fiesta::of_day(9, 1));
+        let (bulbs, flags) = (
+            f.bulbs.len(),
+            f.actors.iter().filter(|a| a.role == Role::Flag).count(),
+        );
+        let crowd = f.town.iter().filter(|&&t| t == 1).count();
+        holiday(&mut f, &theme, &o, Fiesta::of_day(9, 15));
+        assert!(f.bulbs.len() > bulbs, "{bulbs} {}", f.bulbs.len());
+        assert!(f.actors.iter().filter(|a| a.role == Role::Flag).count() > flags);
+        assert!(f.town.iter().filter(|&&t| t == 1).count() > crowd);
+        holiday(&mut f, &theme, &o, Fiesta::NONE);
+        assert!(f.town.is_empty() && f.bulbs.is_empty() && f.actors.is_empty());
+        // Another holiday builds its own town, not this one.
+        holiday(&mut f, &theme, &o, Fiesta::of_day(12, 24));
+        assert!(f.actors.is_empty());
+        let (mut f, o) = make("skyline = false", &theme);
+        holiday(&mut f, &theme, &o, Fiesta::of_day(9, 15));
+        assert!(f.town.is_empty() && f.actors.is_empty());
+        let (mut f, o) = make("", &theme);
+        let ctx = Ctx {
+            theme: &theme,
+            opts: &o,
+            bg: Color::Reset,
+            seed: 3,
+            fiesta: Fiesta::of_day(9, 15),
+        };
+        for (w, h) in [
+            (1, 1),
+            (3, 6),
+            (20, 8),
+            (30, 12),
+            (50, 14),
+            (80, 24),
+            (200, 60),
+            (500, 150),
+        ] {
+            f.resize(&ctx, w, h);
+            f.retheme(&ctx);
+            let (wi, hi) = (w as i32, h as i32 * 2);
+            assert!(
+                f.bulbs
+                    .iter()
+                    .all(|b| b.x >= 0 && b.y >= 0 && b.x < wi && b.y < hi)
+            );
+            let mut c = Canvas::new(w, h, Color::Reset);
+            for _ in 0..20 {
+                f.update(&ctx, 1.0 / 30.0);
+                f.draw(&ctx, &mut c);
+            }
+        }
+    }
+
+    /// A castillo waits, burns its tiers from the bottom up, each spitting
+    /// sparks from its spokes, crowns itself with a shell and is built anew.
+    #[test]
+    fn castillo_burns_tier_by_tier() {
+        let theme = Theme::classic();
+        let (mut f, o) = make("", &theme);
+        holiday(&mut f, &theme, &o, Fiesta::of_day(9, 15));
+        let k = f
+            .actors
+            .iter()
+            .position(|a| a.role == Role::Castillo)
+            .unwrap();
+        let tiers = castillo_tiers(f.actors[k].size);
+        assert!(tiers >= 3);
+        let mut seen = Vec::new();
+        let mut sparks = vec![0; tiers];
+        for _ in 0..6000 {
+            f.step();
+            let a = f.actors[k];
+            if seen.last() != Some(&a.state) {
+                seen.push(a.state);
+            }
+            let s = a.state as usize;
+            if (1..=tiers).contains(&s) {
+                let (cx, cy, r) = castillo_wheel(&a, s - 1, tiers);
+                // Thrown from the tips of the spokes of the burning wheel.
+                sparks[s - 1] += f
+                    .born
+                    .iter()
+                    .filter(|p| {
+                        (p.x - cx).hypot(p.y - cy) < r + 0.5 && p.flags == 0 && p.max < 40.0
+                    })
+                    .count();
+            }
+        }
+        let first: Vec<u8> = (0..=tiers as u8 + 2).collect();
+        assert_eq!(seen[..first.len()], first[..], "{seen:?}");
+        assert!(sparks.iter().all(|&n| n > 40), "{sparks:?}");
+        // It comes round again.
+        assert!(seen.len() > first.len(), "{seen:?}");
+    }
+
+    /// The Grito's gran final is "VIVA MÉXICO" in sparks, more often the
+    /// nearer the 15th, and otherwise the águila between two tricolor rings.
+    #[test]
+    fn gran_final_is_the_grito() {
+        let theme = Theme::classic();
+        let (mut f, o) = make("", &theme);
+        holiday(&mut f, &theme, &o, Fiesta::of_day(9, 15));
+        for _ in 0..20 {
+            f.born.clear();
+            f.gran_final();
+            let shells: Vec<Shell> = f.born.iter().map(|p| p.shell).collect();
+            assert_eq!(shells, [Shell::Text(VIVA_MEXICO)]);
+        }
+        holiday(&mut f, &theme, &o, Fiesta::of_day(9, 1));
+        let (mut cries, mut eagles) = (0, 0);
+        for _ in 0..60 {
+            f.born.clear();
+            f.gran_final();
+            let shells: Vec<Shell> = f.born.iter().map(|p| p.shell).collect();
+            match shells[..] {
+                [Shell::Text(VIVA_MEXICO)] => cries += 1,
+                [Shell::Aguila, Shell::Tricolor, Shell::Tricolor] => eagles += 1,
+                _ => panic!("{shells:?}"),
+            }
+        }
+        assert!(eagles > cries && cries > 0, "{cries} {eagles}");
     }
 
     /// With the sky transparent nothing is painted before the first launch,
