@@ -1,5 +1,6 @@
-//! Small pixel-art helpers the holiday visitors share: lines, rectangles and
-//! a tiny font.
+//! Small pixel-art helpers the holiday visitors share: lines, rectangles, a
+//! tiny font, sprites at any scale and a hash for the little irregularities
+//! that make drawn things look hand made.
 //!
 //! Like the rest of the visitors' art it all works in half-block pixels (see
 //! [`pixel`](super::pixel)): `x` counts columns and `y` half rows, and
@@ -30,6 +31,16 @@ pub(crate) fn trace((mut x, mut y): (i32, i32), (x1, y1): (i32, i32), mut f: imp
             y += sy;
         }
     }
+}
+
+/// A hash of two numbers in 0 to 1: the same answer every time, so stone
+/// and brick keep their grain from one frame to the next.
+pub(crate) fn hash(a: i32, b: i32) -> f32 {
+    let mut h = (a as u32).wrapping_mul(0x9e37_79b1) ^ (b as u32).wrapping_mul(0x85eb_ca6b);
+    h ^= h >> 15;
+    h = h.wrapping_mul(0x2c1b_3c6d);
+    h ^= h >> 12;
+    (h & 0xffff) as f32 / 65536.0
 }
 
 /// The 3x5 font's letters and digits, five rows of three bits each.
@@ -111,6 +122,46 @@ pub(crate) fn text(c: &mut Canvas, (x, y): (i32, i32), s: &str, k: i32, color: C
     }
 }
 
+/// Draws pixel art (as [`sprite`](super::sprite) does, one character per
+/// pixel, `.` and spaces see-through) at any scale: each art pixel covers
+/// `scale` screen pixels, whole or not, so a head can be half again as big
+/// or a little smaller than it was drawn. `flip` mirrors it.
+pub(crate) fn blit(
+    c: &mut Canvas,
+    (x, y): (i32, i32),
+    rows: &[&str],
+    scale: f32,
+    flip: bool,
+    color: impl Fn(u8) -> Option<Color>,
+) {
+    let scale = scale.max(0.05);
+    let w = rows.iter().map(|r| r.len()).max().unwrap_or(0);
+    let (dw, dh) = (
+        (w as f32 * scale).ceil() as i32,
+        (rows.len() as f32 * scale).ceil() as i32,
+    );
+    // Only the part on the screen is walked, however big the art is.
+    let (x0, x1) = ((-x).max(0), dw.min(c.w() as i32 - x));
+    let (y0, y1) = ((-y).max(0), dh.min(c.h() as i32 * 2 - y));
+    for dy in y0..y1 {
+        let Some(row) = rows.get((dy as f32 / scale) as usize) else {
+            continue;
+        };
+        for dx in x0..x1 {
+            let sx = ((dx as f32 / scale) as usize).min(w.saturating_sub(1));
+            let sx = if flip { w - 1 - sx } else { sx };
+            match row.as_bytes().get(sx) {
+                None | Some(b'.' | b' ') => {}
+                Some(&ch) => {
+                    if let Some(col) = color(ch) {
+                        pixel(c, x + dx, y + dy, col);
+                    }
+                }
+            }
+        }
+    }
+}
+
 /// Fills a rectangle of pixels with a color (nothing if it is empty).
 pub(crate) fn fill(c: &mut Canvas, (x, y): (i32, i32), (w, h): (i32, i32), color: Color) {
     // Only the part on the screen is walked, however big the rectangle.
@@ -136,6 +187,52 @@ mod tests {
             assert_eq!((pts[0], *pts.last().unwrap()), (a, b));
             let steps = (b.0 - a.0).abs().max((b.1 - a.1).abs()) as usize;
             assert_eq!(pts.len(), steps + 1);
+        }
+    }
+
+    #[test]
+    fn the_hash_is_steady_and_spread() {
+        assert_eq!(hash(3, 9), hash(3, 9));
+        let mean = (0..400).map(|i| hash(i, i * 7 + 1)).sum::<f32>() / 400.0;
+        assert!((0.4..0.6).contains(&mean), "{mean}");
+        assert!((0..400).all(|i| (0.0..1.0).contains(&hash(i, -i))));
+    }
+
+    /// Art scales by any factor, mirrors, and clips at the screen's edges.
+    #[test]
+    fn art_scales_and_clips() {
+        let red = rgb(0xff0000);
+        let on = |c: &Canvas| {
+            (0..c.h() as i32 * 2)
+                .map(|y| {
+                    (0..c.w() as i32)
+                        .filter(|&x| {
+                            let (up, down) = super::super::halves(c.get(x, y / 2).unwrap());
+                            (if y % 2 == 0 { up } else { down }) == red
+                        })
+                        .count()
+                })
+                .sum::<usize>()
+        };
+        let art = ["R.", ".R"];
+        let mut c = Canvas::new(20, 10, Color::Reset);
+        blit(&mut c, (1, 1), &art, 1.0, false, |_| Some(red));
+        assert_eq!(on(&c), 2);
+        c.clear();
+        blit(&mut c, (1, 1), &art, 3.0, false, |_| Some(red));
+        assert_eq!(on(&c), 18);
+        c.clear();
+        blit(&mut c, (1, 1), &art, 2.5, true, |_| Some(red));
+        assert!((12..=18).contains(&on(&c)), "{}", on(&c));
+        // Off the screen, or at a silly scale: nothing goes wrong.
+        for (x, y, k) in [
+            (-40, -40, 3.0),
+            (19, 19, 2.0),
+            (100, 0, 1.0),
+            (0, 0, 0.0),
+            (0, 0, 1e6),
+        ] {
+            blit(&mut c, (x, y), &art, k, false, |_| Some(red));
         }
     }
 

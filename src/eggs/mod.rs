@@ -16,9 +16,11 @@ pub mod calaverita;
 mod candelaria;
 pub mod catrina;
 pub mod duckpond;
+mod equinoccio;
 pub mod grito;
 pub mod inocente;
 pub mod jarabe;
+pub mod kukulcan;
 pub mod mariachis;
 pub mod monarcas;
 mod muertos;
@@ -90,6 +92,7 @@ pub const ALL: &[&Info] = &[
     &pastorela::INFO,
     &inocente::INFO,
     &tamalero::INFO,
+    &kukulcan::INFO,
 ];
 
 /// An `egg_rate` at or above this plays an egg at once, again and again, and
