@@ -37,6 +37,14 @@
 //! (a wipe from the top down), falls upward for a while, its words rising
 //! out of the bottom, and spells ¡INOCENTE PALOMITA!, then turns back.
 //!
+//! On the Fiestas Patrias the rain falls in verde, blanco y rojo, the
+//! bandera's three colors, each a third of the droplets by the Grito. The
+//! words are VIVA MÉXICO, INDEPENDENCIA, DOLORES, GRITO, PATRIA, 1810, the
+//! heroes (HIDALGO, ALLENDE, JOSEFA ORTIZ, MORELOS) lighting up like names,
+//! and a word for the day (¡VIVA MÉXICO! at the Grito). Now and then the rain
+//! paints the eagle on the nopal, a serpent in its beak, or the Campana de
+//! Dolores with a sash in the three colors.
+//!
 //! Under other themes the rain takes the accents nearest in hue to those
 //! colors. It all draws from its own RNG on top of the screen neo keeps, so
 //! the rain falls exactly as it does on any other day.
@@ -1335,10 +1343,41 @@ const NAVIDAD_NAMES: &[&str] = &[
     "GILA",
 ];
 
+/// Words the rain carries in the mes patrio.
+const PATRIAS_WORDS: &[&str] = &[
+    "VIVA MÉXICO",
+    "INDEPENDENCIA",
+    "DOLORES",
+    "1810",
+    "GRITO",
+    "PATRIA",
+    "LIBERTAD",
+    "MES PATRIO",
+    "CAMPANA DE DOLORES",
+    "VERDE BLANCO Y ROJO",
+    "CHILES EN NOGADA",
+    "POZOLE",
+    "ÁGUILA Y NOPAL",
+    "16 DE SEPTIEMBRE",
+];
+
+/// The heroes of the Independencia, who light up like names.
+const PATRIAS_NAMES: &[&str] = &[
+    "HIDALGO",
+    "ALLENDE",
+    "JOSEFA ORTIZ",
+    "LA CORREGIDORA",
+    "MORELOS",
+    "ALDAMA",
+    "LEONA VICARIO",
+    "VICENTE GUERRERO",
+];
+
 /// The words and the names a holiday hides in the rain.
 fn lexicon(kind: Kind) -> (&'static [&'static str], &'static [&'static str]) {
     match kind {
         Kind::Navidad => (NAVIDAD_WORDS, NAVIDAD_NAMES),
+        Kind::Patrias => (PATRIAS_WORDS, PATRIAS_NAMES),
         _ => (MUERTOS_WORDS, MUERTOS_NAMES),
     }
 }
@@ -1376,6 +1415,24 @@ fn day_words(f: Fiesta) -> &'static [&'static str] {
                 "MELCHOR, GASPAR Y BALTASAR",
                 "ROSCA DE REYES",
             ],
+            _ => &[],
+        };
+    }
+    if f.is(Kind::Patrias) {
+        return match f.date() {
+            (9, 15) => &[
+                "¡VIVA MÉXICO!",
+                "EL GRITO",
+                "¡VIVA LA INDEPENDENCIA!",
+                "¡VIVAN LOS HÉROES!",
+            ],
+            (9, 16) => &[
+                "DESFILE MILITAR",
+                "16 DE SEPTIEMBRE",
+                "INDEPENDENCIA",
+                "¡VIVA MÉXICO!",
+            ],
+            (9, 1..=14) => &["MES PATRIO", "1810", "15 DE SEPTIEMBRE", "¡VIVA MÉXICO!"],
             _ => &[],
         };
     }
@@ -1554,10 +1611,99 @@ const NOCHEBUENAS: &[&[&str]] = &[
     ],
 ];
 
+/// The eagle on the nopal: `a` and `h` its feathers, `e` its beak and talons,
+/// `g` the serpent, `n` the nopal with its tunas `p`, `s` the rock.
+const AGUILAS: &[&[&str]] = &[
+    &[
+        "      aaaaaa ",
+        "  hhhaaaaaaaa",
+        "gehhhaaaahaa ",
+        "gg  aaaaaa   ",
+        " g paaaaaaap ",
+        " ggnneneaaan ",
+        "    nnnnnn   ",
+        "   ssssssss  ",
+    ],
+    &[
+        "          aaaaaaaa ",
+        "    hh   aaaaaaaaaa",
+        "  ehhhhhaaaaaaaaaa ",
+        "ggehhhhaaaaaaaaah  ",
+        "gg   aaaaaaaaaa    ",
+        " gg   aaaaaaaaa    ",
+        " gg pn aaaaaaaaapp ",
+        " gggnnnnenenaaaaa  ",
+        "   ggnnnnnnnnnnnn  ",
+        "       nnnnnnn     ",
+        "    ssssssssssss   ",
+    ],
+    &[
+        "              aaaaaaaa  ",
+        "            aaaaaaaaahha",
+        "    hhhhhh aaaaaahhaaaaa",
+        " eeehhhhhhaaahhaaahhhaaa",
+        " ggehhhhhaaaaahhhaaahh  ",
+        "gg     aaaaaaaaahhaaa   ",
+        " gg     aaaaaaaaaaa     ",
+        "  gg     aaaaaaaaaaa    ",
+        "  gg ppnnneeaeaaaaaaappp",
+        "  ggg nnnneeneenaaaaaan ",
+        "    ggnnnnennnennaaaann ",
+        "        nnnnnnnnnnnn    ",
+        "        sssnnnnnnss     ",
+        "    ssssssssssssssssss  ",
+    ],
+];
+
+/// The Campana de Dolores: `a` its yoke, `e` the bell and `E` its shine, a
+/// sash in `v`erde, `w` blanco and `r`ojo.
+const CAMPANAS: &[&[&str]] = &[
+    &[
+        "aaaaaaaaaaa",
+        "    eae    ",
+        "   eEeee   ",
+        "   eeeee   ",
+        "   vwwwr   ",
+        "  evwwwre  ",
+        " eeeeeeeee ",
+        "eeeeeeeeeee",
+    ],
+    &[
+        "aaaaaaaaaaaaaaa",
+        "      aaa      ",
+        "     eeeee     ",
+        "    eEeeeee    ",
+        "    eEeeeee    ",
+        "   eEEeeeeee   ",
+        "   vvwwwwwrr   ",
+        "  evvewwwerre  ",
+        " eeeeeeeeeeeee ",
+        "eeeeeeeeeeeeeee",
+        "      aaa      ",
+    ],
+    &[
+        "aaaaaaaaaaaaaaaaaaaaa",
+        "aaaaaaaaaaaaaaaaaaaaa",
+        "        eeaee        ",
+        "       eeeeeee       ",
+        "      eEEeeeeee      ",
+        "      eEeeeeeee      ",
+        "     eeEeeeeeeee     ",
+        "     vvEeeeeeeer     ",
+        "    vvvvwwwwwwrrr    ",
+        "    vvvvwwwwwwrrr    ",
+        "   eeeeeeeeeeeeeee   ",
+        " eeeeeeeeeeeeeeeeeee ",
+        "eeeeeeeeeeeeeeeeeeeee",
+        "         aaa         ",
+    ],
+];
+
 /// The paintings a holiday has, each in three sizes, small to big.
 fn paintings(kind: Kind) -> &'static [&'static [&'static [&'static str]]] {
     match kind {
         Kind::Navidad => &[PINATAS, ESTRELLAS, NOCHEBUENAS],
+        Kind::Patrias => &[AGUILAS, CAMPANAS],
         _ => &[SKULLS],
     }
 }
@@ -1672,7 +1818,8 @@ struct Holiday {
     dense: Vec<char>,
     /// The other palettes some droplets fall in (as long as the scene's pair
     /// table): rosa mexicano on Día de Muertos; rojo nochebuena and dorado on
-    /// Navidad. Empty when the rain keeps the user's colors.
+    /// Navidad; blanco and rojo on the Fiestas Patrias. Empty when the rain
+    /// keeps the user's colors.
     alt: [Vec<Color>; 2],
     word: Color,
     name: Color,
@@ -1762,7 +1909,7 @@ impl Holiday {
     fn retheme(&mut self, ctx: &Ctx, auto: bool, native: bool) -> Option<Vec<Color>> {
         let was = self.kind;
         self.kind = match ctx.fiesta.kind {
-            k @ (Kind::Muertos | Kind::Navidad) => k,
+            k @ (Kind::Muertos | Kind::Navidad | Kind::Patrias) => k,
             _ => Kind::None,
         };
         self.fiesta = ctx.fiesta;
@@ -1789,6 +1936,7 @@ impl Holiday {
         self.inks = [[Color::Reset; INKS]; 2];
         match self.kind {
             Kind::Navidad => self.navidad(ctx, auto, native),
+            Kind::Patrias => self.patrias(ctx, auto, native),
             _ => self.muertos(ctx, auto, native),
         }
     }
@@ -1895,9 +2043,69 @@ impl Holiday {
         Some(main)
     }
 
+    /// Fiestas Patrias: the rain in verde, blanco y rojo, the colors of the
+    /// bandera, with an oro bell and an eagle on a nopal painted out of it.
+    /// Under other themes, the accents nearest in hue to those colors.
+    fn patrias(&mut self, ctx: &Ctx, auto: bool, native: bool) -> Option<Vec<Color>> {
+        let theme = ctx.theme;
+        let green = nearest(theme, VERDE_BANDERA, None);
+        let red = nearest(theme, ROJO_BANDERA, Some(green));
+        let gold = nearest(theme, ORO, None);
+        if theme.native {
+            self.word = ORO;
+            self.name = BLANCO;
+            self.flash = Color::Rgb(255, 250, 236);
+            self.ink(b'a', AGUILA);
+            self.ink(b'h', AGUILA.lerp(ORO, 0.5));
+            self.ink(b'e', ORO);
+            self.ink(b'E', ORO.lerp(WHITE, 0.4));
+            self.ink(b'n', NOPAL);
+            self.ink(b'p', ROJO_BANDERA);
+            self.ink(b'g', VERDE_BANDERA.lerp(WHITE, 0.25));
+            self.ink(b's', PIEDRA);
+            self.ink(b'v', VERDE_BANDERA.lerp(WHITE, 0.1));
+            self.ink(b'w', BLANCO);
+            self.ink(b'r', ROJO_BANDERA);
+        } else {
+            let brown = nearest(theme, AGUILA, None);
+            self.word = gold;
+            self.name = theme.fg;
+            self.flash = theme.fg.lerp(WHITE, 0.8);
+            self.ink(b'a', brown);
+            self.ink(b'h', brown.lerp(WHITE, 0.3));
+            self.ink(b'e', gold);
+            self.ink(b'E', gold.lerp(WHITE, 0.4));
+            self.ink(b'n', nearest(theme, NOPAL, None));
+            self.ink(b'p', red);
+            self.ink(b'g', green.lerp(WHITE, 0.2));
+            self.ink(b's', theme.fg);
+            self.ink(b'v', green);
+            self.ink(b'w', theme.fg.lerp(WHITE, 0.3));
+            self.ink(b'r', red);
+        }
+        if !auto {
+            return None;
+        }
+        let (main, whites, reds) = if native {
+            (
+                rain_table(VERDE_BANDERA_RAIN),
+                rain_table(BLANCO_RAIN),
+                rain_table(ROJO_BANDERA_RAIN),
+            )
+        } else {
+            (
+                accent_pairs(ctx, green, green.lerp(WHITE, 0.75)),
+                accent_pairs(ctx, theme.fg, WHITE),
+                accent_pairs(ctx, red, red.lerp(WHITE, 0.7)),
+            )
+        };
+        self.alt = [whites, reds];
+        Some(main)
+    }
+
     /// The palette of a new droplet (0 the scene's, 1 and 2 the others): more
-    /// fall in rosa mexicano as Día de Muertos comes, and in rojo nochebuena
-    /// and dorado as Navidad does.
+    /// fall in rosa mexicano as Día de Muertos comes, in rojo nochebuena and
+    /// dorado as Navidad does, and in blanco and rojo as the mes patrio goes.
     fn hue(&mut self) -> u8 {
         if self.alt[0].is_empty() {
             return 0;
@@ -1908,6 +2116,17 @@ impl Holiday {
                 let gold = 0.04 + 0.08 * self.level;
                 let red = 0.15 + 0.3 * self.level;
                 if r < gold { 2 } else { (r < gold + red) as u8 }
+            }
+            Kind::Patrias => {
+                // From a sixth of each at the start of the month to a third at the Grito.
+                let third = 0.12 + 0.22 * self.level;
+                if r < third {
+                    1
+                } else if r < 2.0 * third {
+                    2
+                } else {
+                    0
+                }
             }
             _ => (r < 0.2 + 0.25 * self.level) as u8,
         }
@@ -2277,6 +2496,12 @@ const VERDE_PINO: Color = Color::Rgb(31, 111, 58);
 const ROJO_NOCHEBUENA: Color = Color::Rgb(200, 16, 46);
 const DORADO: Color = Color::Rgb(242, 182, 50);
 const BLANCO: Color = Color::Rgb(244, 241, 234);
+const VERDE_BANDERA: Color = Color::Rgb(0, 104, 71);
+const ROJO_BANDERA: Color = Color::Rgb(206, 17, 38);
+const ORO: Color = Color::Rgb(212, 160, 23);
+const AGUILA: Color = Color::Rgb(122, 74, 30);
+const NOPAL: Color = Color::Rgb(79, 138, 42);
+const PIEDRA: Color = Color::Rgb(150, 150, 156);
 
 /// The papel de china of a piñata, by painting marker.
 const PAPEL: [(u8, Color); 6] = [
@@ -2348,6 +2573,39 @@ const DORADO_RAIN: &[(u8, u8, u8)] = &[
     (242, 182, 50),
     (255, 214, 110),
     (255, 248, 214),
+];
+
+/// The rain in verde bandera under `classic` on the Fiestas Patrias.
+const VERDE_BANDERA_RAIN: &[(u8, u8, u8)] = &[
+    (0, 28, 18),
+    (0, 54, 36),
+    (0, 80, 55),
+    (0, 104, 71),
+    (14, 140, 96),
+    (80, 200, 150),
+    (206, 255, 232),
+];
+
+/// In blanco, from gray to white.
+const BLANCO_RAIN: &[(u8, u8, u8)] = &[
+    (40, 40, 38),
+    (84, 83, 79),
+    (132, 130, 124),
+    (180, 178, 170),
+    (222, 220, 212),
+    (244, 241, 234),
+    (255, 255, 255),
+];
+
+/// And in rojo.
+const ROJO_BANDERA_RAIN: &[(u8, u8, u8)] = &[
+    (44, 4, 8),
+    (96, 8, 18),
+    (150, 12, 28),
+    (206, 17, 38),
+    (236, 52, 70),
+    (250, 124, 140),
+    (255, 214, 214),
 ];
 
 /// The theme's accent closest in hue to `to` (grays come last), other than `not`.
@@ -2603,7 +2861,7 @@ mod tests {
     #[test]
     fn figures_fit_their_slabs() {
         let fits = |w: &str| w.chars().count() <= SLAB && w.chars().all(|c| !odd_width(c));
-        for kind in [Kind::Muertos, Kind::Navidad] {
+        for kind in [Kind::Muertos, Kind::Navidad, Kind::Patrias] {
             let (words, names) = lexicon(kind);
             for w in words.iter().chain(names) {
                 assert!(fits(w), "{w}");
@@ -2637,6 +2895,11 @@ mod tests {
                 "{m}-{d}"
             );
         }
+        // And of the mes patrio.
+        for d in 1..=16 {
+            let words = day_words(Fiesta::of_day(9, d));
+            assert!(!words.is_empty() && words.iter().all(|w| fits(w)), "9-{d}");
+        }
     }
 
     /// Every marker of every painting has an ink, under `classic` and a theme.
@@ -2644,7 +2907,7 @@ mod tests {
     fn paintings_are_fully_inked() {
         let opts = Opts::new(INFO.options, toml::Table::new());
         for theme in [Theme::classic(), Theme::builtin("nord").unwrap()] {
-            for fiesta in [Fiesta::of_day(11, 2), Fiesta::of_day(12, 24)] {
+            for fiesta in [(11, 2), (12, 24), (9, 15)].map(|(m, d)| Fiesta::of_day(m, d)) {
                 let n = dressed(&theme, &opts, fiesta, 40, 12);
                 for set in paintings(n.holiday.kind) {
                     for rows in *set {
@@ -2705,7 +2968,17 @@ mod tests {
             seed: 11,
             fiesta: Fiesta::NONE,
         };
-        for kind in [Kind::Candelaria, Kind::Nino, Kind::Revolucion] {
+        let others = [
+            Kind::Candelaria,
+            Kind::Carnaval,
+            Kind::Equinoccio,
+            Kind::Judas,
+            Kind::Nino,
+            Kind::SantaCruz,
+            Kind::Guelaguetza,
+            Kind::Revolucion,
+        ];
+        for kind in others {
             let fiesta = Fiesta::height(kind);
             assert!(fiesta.on(), "{kind:?}");
             let ctx = Ctx { fiesta, ..plain };
@@ -2740,7 +3013,7 @@ mod tests {
         for _ in 0..400 {
             a.tick(&plain, 1.0 / 30.0, 1.0 / 30.0);
         }
-        for (m, d) in [(11, 2), (12, 24), (12, 28), (1, 6)] {
+        for (m, d) in [(11, 2), (12, 24), (12, 28), (1, 6), (9, 3), (9, 15)] {
             let fiesta = Fiesta::of_day(m, d);
             let ctx = Ctx { fiesta, ..plain };
             let mut b = dressed(&theme, &opts, fiesta, 90, 26);
@@ -2834,6 +3107,94 @@ mod tests {
             most[1] > most[0],
             "more is hidden in the rain at the height: {most:?}"
         );
+    }
+
+    /// What the Fiestas Patrias add shows: the rain in verde, blanco y rojo
+    /// (more of the last two as the month goes), words and heroes that land in
+    /// place, the eagle on the nopal and the Campana de Dolores painted in
+    /// their own colors.
+    #[test]
+    fn patrias_light_the_rain() {
+        let theme = Theme::classic();
+        let opts = Opts::new(INFO.options, toml::Table::new());
+        let mut most = Vec::new();
+        let mut shares = Vec::new();
+        for fiesta in [Fiesta::of_day(9, 3), Fiesta::of_day(9, 15)] {
+            let ctx = Ctx {
+                theme: &theme,
+                opts: &opts,
+                bg: Color::Rgb(13, 17, 23),
+                seed: 11,
+                fiesta,
+            };
+            let mut n = dressed(&theme, &opts, fiesta, 110, 32);
+            assert!(n.holiday.kind == Kind::Patrias && !n.holiday.prank);
+            assert_eq!(n.pairs, rain_table(VERDE_BANDERA_RAIN));
+            assert_eq!(n.holiday.alt[0], rain_table(BLANCO_RAIN));
+            assert_eq!(n.holiday.alt[1], rain_table(ROJO_BANDERA_RAIN));
+            let (mut word, mut name, mut painted, mut figs) = (false, false, [false; 2], 0);
+            let mut seen = [0usize; 3];
+            run(&mut n, &ctx, 150.0, |n, c| {
+                figs = figs.max(n.holiday.figs.len());
+                for g in n.screen.iter().filter(|g| g.pair != 0) {
+                    seen[g.hue as usize] += 1;
+                }
+                for f in &n.holiday.figs {
+                    if n.holiday.clock >= f.born + f.life - FADE {
+                        continue;
+                    }
+                    let lit = (0..f.w * f.h).all(|k| {
+                        let (dx, dy) = (k % f.w, k / f.w);
+                        !f.shape.has(dx, dy) || n.holiday.touched[f.slot * SLAB + k] >= 0.0
+                    });
+                    match f.shape {
+                        Shape::Word(w, is_name) => {
+                            let landed = lit && row_is(c, f.x, f.y, w);
+                            word |= landed && !is_name;
+                            name |= landed && is_name;
+                        }
+                        Shape::Art(rows, _) if lit => {
+                            let (mut inked, mut cells) = (0, 0);
+                            for (dy, row) in rows.iter().enumerate() {
+                                for (dx, m) in row.bytes().enumerate() {
+                                    if matches!(m, b' ' | b'.') {
+                                        continue;
+                                    }
+                                    cells += 1;
+                                    let cell = c.get((f.x + dx) as i32, (f.y + dy) as i32);
+                                    inked += cell
+                                        .is_some_and(|x| x.fg == n.holiday.inks[0][slot(m)])
+                                        as usize;
+                                }
+                            }
+                            if inked * 2 > cells {
+                                // An eagle has a nopal `n`, a bell its shine `E`.
+                                let which = b"nE"
+                                    .iter()
+                                    .position(|&m| rows.iter().any(|r| r.as_bytes().contains(&m)));
+                                painted[which.unwrap()] = true;
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+            });
+            assert!(word && name, "words and heroes landed in the rain");
+            if fiesta.level >= 1.0 {
+                assert!(painted == [true; 2], "the eagle and the bell: {painted:?}");
+            }
+            assert!(
+                seen.iter().all(|&k| k > 0),
+                "all three colors fell: {seen:?}"
+            );
+            shares.push(seen[0] as f32 / seen.iter().sum::<usize>() as f32);
+            most.push(figs);
+        }
+        assert!(
+            shares[0] > shares[1] + 0.1,
+            "less green, more blanco and rojo at the Grito: {shares:?}"
+        );
+        assert!(most[1] > most[0], "more is hidden at the Grito: {most:?}");
     }
 
     /// The Santos Inocentes: now and then the rain turns upside down, falls
@@ -3006,6 +3367,49 @@ mod tests {
         run(&mut blue, &ctx, 5.0, |_, _| {});
     }
 
+    /// The mes patrio comes and goes through `retheme` too.
+    #[test]
+    fn patrias_come_and_go() {
+        let theme = Theme::builtin("dracula").unwrap();
+        let opts = Opts::new(INFO.options, toml::Table::new());
+        let mut ctx = Ctx {
+            theme: &theme,
+            opts: &opts,
+            bg: Color::Rgb(13, 17, 23),
+            seed: 11,
+            fiesta: Fiesta::NONE,
+        };
+        let mut n = dressed(&theme, &opts, Fiesta::NONE, 100, 30);
+        let plain = n.pairs.clone();
+        run(&mut n, &ctx, 3.0, |_, _| {});
+        ctx.fiesta = Fiesta::of_day(9, 15);
+        n.retheme(&ctx);
+        assert!(n.holiday.kind == Kind::Patrias && n.pairs != plain);
+        assert!(n.holiday.alt.iter().all(|a| a.len() == n.pairs.len()));
+        let mut seen = false;
+        run(&mut n, &ctx, 30.0, |n, _| {
+            seen |= !n.holiday.figs.is_empty()
+        });
+        assert!(seen, "words or paintings were hidden");
+        // Straight from one holiday to another.
+        ctx.fiesta = Fiesta::of_day(10, 28);
+        n.retheme(&ctx);
+        assert!(n.holiday.kind == Kind::Muertos && n.holiday.figs.is_empty());
+        ctx.fiesta = Fiesta::NONE;
+        n.retheme(&ctx);
+        assert!(!n.holiday.on() && n.pairs == plain);
+        assert!(n.holiday.alt.iter().all(|a| a.is_empty()));
+        run(&mut n, &ctx, 30.0, |n, _| {
+            assert!(n.holiday.figs.is_empty())
+        });
+        // A palette picked by the user stays theirs.
+        let opts = Opts::new(INFO.options, "colors = 'blue'".parse().unwrap());
+        let mut blue = dressed(&theme, &opts, Fiesta::of_day(9, 15), 100, 30);
+        assert!(blue.holiday.on() && blue.holiday.alt[0].is_empty());
+        assert_eq!(blue.pairs, neo_scheme("blue").unwrap());
+        run(&mut blue, &ctx, 5.0, |_, _| {});
+    }
+
     /// The rain that turns upside down survives odd sizes and huge steps.
     #[test]
     fn inocentes_survive() {
@@ -3051,7 +3455,16 @@ mod tests {
         for (i, case) in cases.iter().enumerate() {
             let opts = Opts::new(INFO.options, case.parse().unwrap());
             for theme in [Theme::classic(), Theme::builtin("nord").unwrap()] {
-                let days = [(10, 28), (11, 2), (12, 16), (12, 24), (12, 28), (1, 6)];
+                let days = [
+                    (10, 28),
+                    (11, 2),
+                    (12, 16),
+                    (12, 24),
+                    (12, 28),
+                    (1, 6),
+                    (9, 3),
+                    (9, 15),
+                ];
                 for fiesta in days.map(|(m, d)| Fiesta::of_day(m, d)) {
                     let ctx = Ctx {
                         theme: &theme,
