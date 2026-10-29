@@ -52,6 +52,16 @@
 //! then at the start of the mes patrio and bursts all over the sky by the
 //! night of the Grito. `look = "volcanes"` shows it on any day.
 //!
+//! On the spring equinox the night moves to Teotihuacán at dawn: the sun
+//! rises behind the Pirámide del Sol, whose stairs and terraces stand dark
+//! against the light with a gold rim, the Calzada de los Muertos runs to its
+//! foot between low temple platforms, and people in white, their arms raised
+//! to the sun, fill the avenue, the stairs and the summit, the raised arms
+//! rolling through the crowd like a wave. The curtains burn in the sun's
+//! gold, orange, sky blue and jade. More people have come on the 20th and
+//! 21st than on the 19th and 22nd, when the sun also rises a little to one
+//! side of the summit. `look = "teotihuacan"` shows it on any day.
+//!
 //! MIT License
 //!
 //! Copyright (c) 2026 Santiago Sánchez
@@ -101,7 +111,7 @@ pub const INFO: SceneInfo = SceneInfo {
         Opt {
             key: "look",
             default: Val::S("cycle"),
-            help: "cycle, or one look to stay on: tanim, emerald, crimson, ultraviolet, ice, synthwave, ember, prism, starry, patzcuaro (Día de Muertos), belen (Navidad), volcanes (Fiestas Patrias)",
+            help: "cycle, or one look to stay on: tanim, emerald, crimson, ultraviolet, ice, synthwave, ember, prism, starry, patzcuaro (Día de Muertos), belen (Navidad), volcanes (Fiestas Patrias), teotihuacan (Equinoccio)",
         },
         Opt {
             key: "stay",
@@ -189,6 +199,10 @@ struct Look {
     /// curtains' colors reach up the sky (a tricolor needs less room).
     volcanes: f32,
     reach: f32,
+    /// How much of the Equinoccio's dawn at Teotihuacán shows: the rising
+    /// sun, the Pirámide del Sol, the Calzada de los Muertos and the people
+    /// in white.
+    teotihuacan: f32,
 }
 
 /// tanim's night.
@@ -220,16 +234,19 @@ const TANIM: Look = Look {
     belen: 0.0,
     volcanes: 0.0,
     reach: 1.0,
+    teotihuacan: 0.0,
 };
 
 /// The looks the cycle picks from on an ordinary day: all but the holidays'.
 const ORDINARY: usize = 9;
-/// The holidays' places in `LOOKS`: Pátzcuaro's, Belén's, the volcanoes'.
+/// The holidays' places in `LOOKS`: Pátzcuaro's, Belén's, the volcanoes' and
+/// Teotihuacán's.
 const PATZCUARO: usize = 9;
 const BELEN: usize = 10;
 const VOLCANES: usize = 11;
+const TEOTIHUACAN: usize = 12;
 
-const LOOKS: [(&str, Look); 12] = [
+const LOOKS: [(&str, Look); 13] = [
     ("tanim", TANIM),
     (
         "emerald",
@@ -458,6 +475,33 @@ const LOOKS: [(&str, Look); 12] = [
             ..TANIM
         },
     ),
+    (
+        "teotihuacan",
+        Look {
+            // The dawn: the sun's gold at the lower edge, orange, cielo and
+            // jade.
+            glow: [
+                c8(255, 207, 74),
+                c8(255, 140, 80),
+                c8(126, 200, 227),
+                c8(46, 139, 87),
+            ],
+            sky_top: c8(14, 18, 44),
+            sky_low: c8(120, 72, 84),
+            far: c8(50, 40, 40),
+            near: c8(30, 22, 22),
+            snow: c8(75, 60, 60),
+            pine: c8(30, 22, 22),
+            water: c8(30, 24, 30),
+            star: c8(255, 240, 210),
+            glint: c8(255, 207, 74),
+            rim: c8(255, 207, 74),
+            rim_k: 0.5,
+            forest: 0.0,
+            teotihuacan: 1.0,
+            ..TANIM
+        },
+    ),
 ];
 
 /// Van Gogh's brushstrokes, from the deepest blue to the palest yellow.
@@ -505,6 +549,7 @@ impl Look {
             belen: f(self.belen, o.belen),
             volcanes: f(self.volcanes, o.volcanes),
             reach: f(self.reach, o.reach),
+            teotihuacan: f(self.teotihuacan, o.teotihuacan),
         }
     }
 
@@ -721,6 +766,7 @@ fn fiesta_look(kind: Kind) -> Option<usize> {
         Kind::Muertos => Some(PATZCUARO),
         Kind::Navidad => Some(BELEN),
         Kind::Patrias => Some(VOLCANES),
+        Kind::Equinoccio => Some(TEOTIHUACAN),
         _ => None,
     }
 }
@@ -979,6 +1025,112 @@ impl Volcan {
             pole: mix(mid, high, 0.5),
         }
     }
+}
+
+/// The colors of Teotihuacán at the equinox. The sun keeps its own gold
+/// under every theme; the rest comes from the theme.
+#[derive(Clone, Copy)]
+struct Piramide {
+    /// The pyramid in contraluz, its stairs, and the gold the sun gives its
+    /// edges.
+    body: V3,
+    stair: V3,
+    rim: V3,
+    /// The Calzada's paving, the ground around it, and the temple platforms
+    /// along it: their lit tops and their sides.
+    road: V3,
+    ground: V3,
+    platform: [V3; 2],
+    /// The sun.
+    sun: V3,
+    /// The people in white and their faces, and the magueyes.
+    robe: V3,
+    skin: V3,
+    jade: V3,
+}
+
+impl Piramide {
+    fn new(t: &Theme) -> Piramide {
+        let sun = c8(255, 207, 74);
+        if t.native {
+            // Piedra caliza, sombra, sol and jade.
+            return Piramide {
+                body: c8(66, 55, 42),
+                stair: c8(140, 120, 88),
+                rim: c8(224, 172, 60),
+                road: c8(110, 96, 72),
+                ground: c8(56, 46, 36),
+                platform: [c8(150, 128, 94), c8(84, 70, 52)],
+                sun,
+                robe: c8(244, 241, 234),
+                skin: c8(140, 92, 62),
+                jade: c8(46, 139, 87),
+            };
+        }
+        let at = |k: f32| v3(t.grad.at(k));
+        let (low, mid, high, bg) = (at(0.0), at(0.5), at(1.0), v3(t.bg));
+        Piramide {
+            body: mix(low, mid, 0.3),
+            stair: mix(mid, high, 0.2),
+            rim: mix(mid, high, 0.8),
+            road: mix(low, mid, 0.3),
+            ground: mix(bg, low, 0.4),
+            platform: [mix(mid, high, 0.2), scale(low, 0.8)],
+            sun,
+            robe: high,
+            skin: mix(mid, high, 0.3),
+            jade: at(0.3),
+        }
+    }
+}
+
+/// A person in white with arms raised to the sun, and with them down: `w`
+/// the robe, `o` the head.
+const PERSON: [[&str; 7]; 2] = [
+    [
+        "w...w", "w.o.w", ".www.", "..w..", "..w..", ".w.w.", ".w.w.",
+    ],
+    [
+        "..o..", ".www.", ".www.", "..w..", "..w..", ".w.w.", ".w.w.",
+    ],
+];
+/// The same, far away.
+const PERSON_FAR: [[&str; 5]; 2] = [
+    ["w.w", "wow", ".w.", ".w.", "w.w"],
+    [".o.", "www", ".w.", ".w.", "w.w"],
+];
+
+/// Are the arms up? Most of the time, the raising rolling through the crowd
+/// as a wave (`phase` goes with where they stand).
+fn arms_up(t: f32, phase: f32) -> bool {
+    (t * 0.03 + phase).sin() > -0.4
+}
+
+/// Someone at the equinox: where their feet are, whether they are near
+/// enough to be drawn large, a random number that decides when they have
+/// arrived, and where in the wave of raised arms they stand.
+struct Person {
+    x: i32,
+    y: i32,
+    big: bool,
+    r: f32,
+    phase: f32,
+}
+
+/// A low temple platform along the Calzada: its lower left corner, width and
+/// height.
+struct Platform {
+    x: i32,
+    y: i32,
+    w: i32,
+    h: i32,
+}
+
+/// A maguey by the avenue: where it grows and how tall its leaves are.
+struct Maguey {
+    x: i32,
+    y: i32,
+    size: f32,
 }
 
 /// One pixel of a garland: where, what (0 to 2 a bulb of the flag's green,
@@ -1424,6 +1576,74 @@ impl Layer<'_> {
     }
 }
 
+/// What the Equinoccio's dawn draws with.
+impl Layer<'_> {
+    /// The rising sun at (x, y), `r` across, `k` bright: a halo, the disc
+    /// and rays fanning out, slowly turning. All of it is light, so it shows
+    /// over a transparent sky.
+    fn sun(&mut self, (x, y): (f32, f32), r: f32, k: f32, col: V3) {
+        let (xi, yi) = (x.round() as i32, y.round() as i32);
+        let k = k * (0.95 + 0.05 * (self.t * 0.07).sin());
+        let warm = mix(col, [1.0; 3], 0.25);
+        self.halo(xi, yi, (r * 4.5) as i32, (r * 3.2) as i32, col, 0.5 * k);
+        self.halo(xi, yi, (r * 2.2) as i32, (r * 2.2) as i32, warm, 0.7 * k);
+        let reach = r.ceil() as i32;
+        for dy in -reach..=reach {
+            for dx in -reach..=reach {
+                if (dx * dx + dy * dy) as f32 <= r * r {
+                    self.shine(xi + dx, yi + dy, warm, 1.1 * k);
+                }
+            }
+        }
+        let rays = 18;
+        for i in 0..rays {
+            let a = TAU * i as f32 / rays as f32 + self.t * 0.002;
+            let len = r * if i % 2 == 0 { 7.0 } else { 4.5 };
+            let (c, s) = (a.cos(), a.sin());
+            for step in (r as i32 + 1)..len as i32 {
+                let a = 0.4 * k * (1.0 - step as f32 / len).powf(1.5);
+                self.shine(
+                    (x + c * step as f32).round() as i32,
+                    (y + s * step as f32).round() as i32,
+                    col,
+                    a,
+                );
+            }
+        }
+    }
+
+    /// A maguey: a rosette of pointed leaves.
+    fn maguey(&mut self, m: &Maguey, col: V3) {
+        let (x, y) = (m.x as f32, m.y as f32);
+        for k in 0..9 {
+            let a = PI * (0.08 + 0.84 * k as f32 / 8.0);
+            let tip = (x + a.cos() * m.size, y - a.sin() * m.size);
+            self.stroke((x, y), tip, 1.4, col);
+        }
+    }
+
+    /// A person in white, their arms up or down.
+    fn person(&mut self, p: &Person, up: bool, n: &Piramide) {
+        let frame = usize::from(!up);
+        let rows: &[&str] = if p.big {
+            &PERSON[frame]
+        } else {
+            &PERSON_FAR[frame]
+        };
+        let (w, h) = (rows[0].len() as i32, rows.len() as i32);
+        for (r, row) in rows.iter().enumerate() {
+            for (k, ch) in row.bytes().enumerate() {
+                let col = match ch {
+                    b'w' => n.robe,
+                    b'o' => n.skin,
+                    _ => continue,
+                };
+                self.lamp(p.x - w / 2 + k as i32, p.y - h + 1 + r as i32, col);
+            }
+        }
+    }
+}
+
 /// What the Fiestas Patrias' night draws with.
 impl Layer<'_> {
     /// A puff of smoke: a soft disc `r` wide, `a` thick at its heart. It is
@@ -1744,6 +1964,18 @@ struct Aurora {
     crater: (f32, f32),
     bulbs: Vec<Bulb>,
     flag: Option<(i32, i32, i32, i32)>,
+    /// Teotihuacán: its colors, the Pirámide del Sol (half its width on each
+    /// row from the summit down, the same for its stairs, and where its
+    /// summit is), the sun behind it (x, y, radius), the platforms along the
+    /// Calzada, the crowd and the magueyes.
+    piramide: Piramide,
+    pyr: Vec<i32>,
+    stairs: Vec<i32>,
+    pyr_at: (i32, i32),
+    sun: (f32, f32, f32),
+    platforms: Vec<Platform>,
+    crowd: Vec<Person>,
+    magueyes: Vec<Maguey>,
 }
 
 impl Aurora {
@@ -1756,6 +1988,7 @@ impl Aurora {
             "pátzcuaro" | "muertos" => "patzcuaro",
             "belén" | "navidad" | "nacimiento" => "belen",
             "volcán" | "patrias" | "independencia" => "volcanes",
+            "teotihuacán" | "equinoccio" | "pirámide" => "teotihuacan",
             l => l,
         };
         let fixed = LOOKS.iter().position(|(n, _)| *n == look);
@@ -1834,6 +2067,14 @@ impl Aurora {
             crater: (0.0, 0.0),
             bulbs: Vec::new(),
             flag: None,
+            piramide: Piramide::new(ctx.theme),
+            pyr: Vec::new(),
+            stairs: Vec::new(),
+            pyr_at: (0, 0),
+            sun: (0.0, 0.0, 0.0),
+            platforms: Vec::new(),
+            crowd: Vec::new(),
+            magueyes: Vec::new(),
             rng,
             hrng,
         }
@@ -1960,6 +2201,7 @@ impl Aurora {
         self.build_patzcuaro();
         self.build_belen();
         self.build_volcanes();
+        self.build_teotihuacan();
     }
 
     /// Pátzcuaro's night for this size, from the holiday's own RNG: the
@@ -2328,6 +2570,139 @@ impl Aurora {
         let base = shore(fx) + 1;
         let top = base - (hzf * 0.28).clamp(7.0, 26.0) as i32;
         self.flag = Some((fx, base, top, fw));
+    }
+
+    /// Half the width of the Calzada de los Muertos on row `y`: as wide as the
+    /// stairs at the pyramid's foot, widening toward the viewer.
+    fn road_half(&self, y: i32) -> f32 {
+        let (ph, hz) = (self.ph as i32, self.horizon as i32);
+        let f = ((y - hz - 2) as f32 / (ph - hz - 2).max(1) as f32).clamp(0.0, 1.0);
+        let foot = self.stairs.last().map_or(2, |s| *s) as f32 + 1.0;
+        foot + (0.36 * self.w as f32 - foot) * f
+    }
+
+    /// Where the sun rises as a share of the pyramid's half width: behind the
+    /// summit on the 20th and 21st, a little to one side on the 19th and 22nd.
+    fn sun_shift(&self) -> f32 {
+        let f = self.fiesta;
+        match f.date() {
+            (3, 19) if f.is(Kind::Equinoccio) => -0.25,
+            (3, 20) if f.is(Kind::Equinoccio) => -0.05,
+            (3, 21) if f.is(Kind::Equinoccio) => 0.05,
+            (3, 22) if f.is(Kind::Equinoccio) => 0.25,
+            _ => 0.0,
+        }
+    }
+
+    /// Teotihuacán at dawn for this size, from its own RNG so that the layout
+    /// only depends on the size and the seed: the Pirámide del Sol with its
+    /// stairs, the sun behind it, the temple platforms along the Calzada de
+    /// los Muertos, the crowd and the magueyes.
+    fn build_teotihuacan(&mut self) {
+        let (w, ph, hz) = (self.w as i32, self.ph as i32, self.horizon as i32);
+        let (wf, hzf) = (w as f32, hz as f32);
+        let mut rng = fastrand::Rng::with_seed(self.seed ^ 0x7E07_1204);
+        self.pyr.clear();
+        self.stairs.clear();
+        self.platforms.clear();
+        self.crowd.clear();
+        self.magueyes.clear();
+        self.sun = (0.0, 0.0, 0.0);
+        let depth = ph - hz;
+        if !self.landscape || w < 24 || hz < 12 || depth < 8 {
+            return;
+        }
+        // The pyramid: four terraces, each sloping a little and then stepping
+        // in, with a staircase up the middle.
+        let xc = (wf * 0.5) as i32;
+        let bw = (wf * 0.3).clamp(10.0, 80.0);
+        let h = ((bw * 0.62).min(hzf * 0.55) as i32).max(6);
+        let top = hz + 2 - h;
+        for r in 0..=h {
+            let t = r as f32 / (h + 1) as f32 * 4.0;
+            let hw = bw * (0.26 + 0.74 * (t.floor() + 0.75 * t.fract()) / 4.0);
+            self.pyr.push(hw.round() as i32);
+            let st = bw * 0.17 * (0.6 + 0.4 * r as f32 / h as f32);
+            self.stairs.push(st.round().max(1.0) as i32);
+        }
+        self.pyr_at = (xc, top);
+        // The sun, behind the summit and above the hills.
+        let r = (hzf * 0.07).clamp(3.0, 9.0);
+        let ridge = self.far[(xc as usize).min(w as usize - 1)] as f32;
+        self.sun = (
+            xc as f32,
+            (top as f32 - 3.0).min(ridge - 2.0).max(r + 2.0),
+            r,
+        );
+        // Low temple platforms along both sides of the avenue, in perspective.
+        for side in [-1, 1] {
+            for k in 0..4 {
+                let f = ((k as f32 + 0.5 + rangef(&mut rng, -0.2, 0.2)) / 4.0).powf(1.6);
+                let y = hz + 3 + (f * (depth - 4) as f32) as i32;
+                let sc = 0.3 + 0.9 * f;
+                let pw = (wf * 0.13 * sc).max(3.0) as i32;
+                let edge = self.road_half(y) as i32 + 2;
+                let x = if side < 0 { xc - edge - pw } else { xc + edge };
+                self.platforms.push(Platform {
+                    x,
+                    y,
+                    w: pw,
+                    h: (hzf * 0.13 * sc).max(2.0) as i32,
+                });
+            }
+        }
+        // The crowd, near and far on the avenue, up the stairs and on the
+        // summit, the farthest drawn first.
+        let near = (w / 16).clamp(4, 16);
+        let far = (w / 6).clamp(6, 40);
+        let climbing = (h / 2).clamp(3, 16);
+        for k in 0..near + far + climbing + 3 {
+            let (x, y, big) = if k < near {
+                let y = ph - 2 - range(&mut rng, 0, (depth * 35 / 100).max(2));
+                let half = self.road_half(y);
+                (
+                    (xc as f32 + rangef(&mut rng, -1.0, 1.0) * half) as i32,
+                    y,
+                    true,
+                )
+            } else if k < near + far {
+                let y = hz + 4 + range(&mut rng, 0, (depth / 2).max(2));
+                let half = self.road_half(y);
+                (
+                    (xc as f32 + rangef(&mut rng, -0.9, 0.9) * half) as i32,
+                    y,
+                    false,
+                )
+            } else if k < near + far + climbing {
+                let row = range(&mut rng, 3, h + 1) as usize;
+                let half = self.stairs[row] as f32;
+                (
+                    (xc as f32 + rangef(&mut rng, -0.8, 0.8) * half) as i32,
+                    top + row as i32,
+                    false,
+                )
+            } else {
+                (xc + (k - near - far - climbing) * 3 - 3, top, false)
+            };
+            let r = rng.f32();
+            self.crowd.push(Person {
+                x,
+                y,
+                big: big && ph >= 80,
+                r,
+                phase: x as f32 * 0.08 + r * 3.0,
+            });
+        }
+        self.crowd.sort_by_key(|p| p.y);
+        // Magueyes in the foreground corners.
+        let size = (ph as f32 * 0.07).clamp(3.0, 14.0);
+        for (fx, k) in [(0.04, 1.0), (0.1, 0.7), (0.93, 1.0), (0.87, 0.7)] {
+            self.magueyes.push(Maguey {
+                x: (wf * fx) as i32,
+                y: ph - 1 - range(&mut rng, 0, 2),
+                size: size * k,
+            });
+        }
     }
 
     /// Paddles the canoes, drifts the veladoras and flies the monarchs `dt`
@@ -2831,6 +3206,9 @@ impl Aurora {
                 }
             }
         }
+        if look.teotihuacan > 0.01 && self.sun.2 > 0.0 {
+            self.rising_sun(look);
+        }
         let mut ambient = [0.0f32; 3];
         for (p, g) in self.px.iter_mut().zip(&self.glow) {
             *p = add(*p, *g);
@@ -2957,6 +3335,9 @@ impl Aurora {
                 );
                 self.solid[i] |= s >= 0.5;
             }
+        }
+        if look.teotihuacan > 0.01 {
+            self.paint_teotihuacan(look, lift.min(1.5));
         }
     }
 
@@ -3228,6 +3609,129 @@ impl Aurora {
         }
     }
 
+    /// The sun rising behind the Pirámide del Sol, before the land is drawn
+    /// over it.
+    fn rising_sun(&mut self, look: &Look) {
+        let (w, ph, hz) = (self.w as i32, self.ph as i32, self.horizon as i32);
+        let (xc, y, r) = self.sun;
+        let bw = self.pyr.last().map_or(0.0, |v| *v as f32);
+        let x = xc + self.sun_shift() * bw;
+        let (sun, k) = (self.piramide.sun, 0.7 + 0.3 * self.level(Kind::Equinoccio));
+        let mut l = Layer {
+            px: &mut self.px,
+            solid: &mut self.solid,
+            w,
+            h: ph,
+            m: look.teotihuacan,
+            lift: 1.0,
+            water: None,
+            t: self.t,
+            hz,
+        };
+        l.sun((x, y), r, k, sun);
+    }
+
+    /// The ground in place of the lake, the Calzada de los Muertos running to
+    /// the foot of the Pirámide del Sol between low temple platforms, the
+    /// pyramid itself in contraluz with the gold of the sun on its edges, the
+    /// magueyes and the crowd in white, arms raised.
+    fn paint_teotihuacan(&mut self, look: &Look, lift: f32) {
+        if self.pyr.is_empty() {
+            return;
+        }
+        let (w, ph, hz) = (self.w as i32, self.ph as i32, self.horizon as i32);
+        let (n, level) = (self.piramide, self.level(Kind::Equinoccio));
+        let ((xc, top), seed) = (self.pyr_at, self.seed);
+        let mut l = Layer {
+            px: &mut self.px,
+            solid: &mut self.solid,
+            w,
+            h: ph,
+            m: look.teotihuacan,
+            lift,
+            water: None,
+            t: self.t,
+            hz,
+        };
+        // The ground, the paving between its joints and the kerb.
+        let depth = (ph - hz).max(2) as f32;
+        let joints: [i32; 12] = std::array::from_fn(|k| {
+            hz + 2 + ((depth - 2.0) * ((k + 1) as f32 / 12.0).powf(1.8)) as i32
+        });
+        let (foot, wide) = (
+            self.stairs.last().map_or(2, |s| *s) as f32 + 1.0,
+            0.36 * w as f32,
+        );
+        for y in (hz - 1).max(0)..ph {
+            let f = ((y - hz - 2) as f32 / (depth - 2.0)).clamp(0.0, 1.0);
+            let half = foot + (wide - foot) * f;
+            let near = 0.85 + 0.3 * f;
+            let joint = joints.contains(&y);
+            for x in 0..w {
+                let grain = 0.9 + 0.2 * (hash(x, y, seed ^ 0x6C) % 16) as f32 / 16.0;
+                let d = (x - xc).abs() as f32;
+                let col = if d <= half - 1.0 {
+                    scale(n.road, grain * near * if joint { 0.75 } else { 1.0 })
+                } else if d <= half {
+                    scale(n.platform[0], 0.8 * near)
+                } else {
+                    scale(n.ground, grain * near)
+                };
+                l.put(x, y, col);
+            }
+        }
+        // The temple platforms: a lit top over a sloping side.
+        for p in &self.platforms {
+            for r in 0..p.h {
+                let y = p.y - r;
+                let (x0, x1) = (p.x + r / 2, p.x + p.w - 1 - r / 2);
+                let col = if r == p.h - 1 {
+                    n.platform[0]
+                } else {
+                    n.platform[1]
+                };
+                for x in x0..=x1 {
+                    l.put(x, y, col);
+                }
+            }
+        }
+        // The pyramid: gold along each terrace's edge and down its sides,
+        // the stairs lit between their balustrades.
+        let rows = self.pyr.len() as i32;
+        for (r, (&hw, &st)) in self.pyr.iter().zip(&self.stairs).enumerate() {
+            let y = top + r as i32;
+            let terrace = (r as i32 * 4) % rows < 4;
+            // Each terrace is a slope under a lighter vertical band.
+            let band = (r as f32 / rows as f32 * 4.0).fract() > 0.72;
+            for x in xc - hw..=xc + hw {
+                let d = (x - xc).abs();
+                let col = if d < st {
+                    scale(n.stair, if r % 2 == 0 { 1.0 } else { 0.82 })
+                } else if d == st {
+                    scale(n.body, 0.6)
+                } else if d >= hw - 1 {
+                    scale(n.rim, 0.75)
+                } else if terrace {
+                    scale(n.rim, 0.55)
+                } else if band {
+                    scale(n.body, 1.25)
+                } else {
+                    n.body
+                };
+                l.put(x, y, col);
+            }
+        }
+        for m in &self.magueyes {
+            l.maguey(m, scale(n.jade, 0.6 * lift));
+        }
+        // The crowd, more of it as the equinox comes, their arms rising
+        // and falling in a wave.
+        let arrived = 0.35 + 0.65 * level;
+        for p in self.crowd.iter().filter(|p| p.r < arrived) {
+            l.person(p, arms_up(l.t, p.phase), &n);
+        }
+    }
+
     /// One column of the volcanoes, weighted by `k` as the look fades in: the
     /// rock lit on the sides that face left, the snow above its line, grain
     /// in both and a little darker toward the foot.
@@ -3438,6 +3942,7 @@ impl Scene for Aurora {
         self.fest = Fest::new(ctx.theme);
         self.nac = Nacimiento::new(ctx.theme);
         self.volcan = Volcan::new(ctx.theme);
+        self.piramide = Piramide::new(ctx.theme);
     }
 
     fn update(&mut self, _ctx: &Ctx, dt: f32) {
@@ -4286,6 +4791,156 @@ mod tests {
                         (17, 9),
                         (23, 12),
                         (24, 20),
+                        (300, 90),
+                    ] {
+                        a.resize(&ctx, w, h);
+                        a.retheme(&ctx);
+                        let mut c = Canvas::new(w, h, Color::Reset);
+                        for k in 0..120 {
+                            let dt = if k % 50 == 49 { 5.0 } else { 1.0 / 30.0 };
+                            a.tick(&ctx, dt, dt);
+                            c.clear();
+                            a.draw(&ctx, &mut c);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /// The Equinoccio opens on Teotihuacán from its first day: the pyramid
+    /// with its stairs and the avenue between its platforms, the sun rising
+    /// behind it and the crowd in white, more of it on the 20th and 21st.
+    #[test]
+    fn teotihuacan_comes_with_the_holiday() {
+        let mut crowd = Vec::new();
+        for theme in [Theme::classic(), Theme::builtin("dracula").unwrap()] {
+            for (m, d) in [(3, 19), (3, 20)] {
+                let a = frame("", &theme, Fiesta::of_day(m, d), 120, 36);
+                assert_eq!(a.which, TEOTIHUACAN);
+                assert!(!a.pyr.is_empty() && !a.crowd.is_empty() && !a.platforms.is_empty());
+                // The sun's heart is lit, and the people arrive.
+                let (xc, y, _) = a.sun;
+                let bw = *a.pyr.last().unwrap() as f32;
+                let x = (xc + a.sun_shift() * bw) as usize;
+                assert!(a.px[y as usize * a.w + x][0] > 0.8, "{m}-{d}: no sun");
+                crowd.push(hued(&a, a.piramide.robe));
+            }
+        }
+        assert!(crowd[0] > 0 && crowd[0] < crowd[1], "{crowd:?}");
+    }
+
+    /// The sun rises behind the summit on the 20th and 21st, a little to one
+    /// side on the 19th and 22nd.
+    #[test]
+    fn the_sun_rises_beside_the_summit() {
+        let theme = Theme::classic();
+        let shift = |m, d| frame("", &theme, Fiesta::of_day(m, d), 120, 36).sun_shift();
+        assert!(shift(3, 19) < -0.2 && shift(3, 22) > 0.2);
+        assert!(shift(3, 20).abs() < 0.1 && shift(3, 21).abs() < 0.1);
+        assert_eq!(
+            frame("look = 'teotihuacan'", &theme, Fiesta::NONE, 120, 36).sun_shift(),
+            0.0
+        );
+    }
+
+    /// The holiday shows Teotihuacán most of the time; ordinary days never.
+    #[test]
+    fn teotihuacan_only_on_the_holiday() {
+        let theme = Theme::classic();
+        for (fiesta, lo, hi) in [(Fiesta::of_day(3, 20), 0.75, 1.0), (Fiesta::NONE, 0.0, 0.0)] {
+            let (mut a, o) = make_on("stay = 10.0", &theme, fiesta, 80, 24);
+            let ctx = ctx_on(&theme, &o, Color::Reset, fiesta);
+            let mut c = Canvas::new(80, 24, Color::Reset);
+            let (mut on, n) = (0, 30 * 600);
+            for k in 0..n {
+                a.tick(&ctx, 1.0 / 30.0, 1.0 / 30.0);
+                on += usize::from(a.which == TEOTIHUACAN);
+                if k % 300 == 0 && !fiesta.is(Kind::Equinoccio) {
+                    a.draw(&ctx, &mut c);
+                    assert_eq!(a.look().teotihuacan, 0.0);
+                }
+            }
+            let share = on as f32 / n as f32;
+            assert!((lo..=hi).contains(&share), "{share}");
+        }
+    }
+
+    /// Through `retheme` the sky fades into the dawn at Teotihuacán when the
+    /// equinox comes and out of it when it goes.
+    #[test]
+    fn the_equinoccio_comes_and_goes() {
+        let theme = Theme::classic();
+        let (mut a, o) = make_on("", &theme, Fiesta::NONE, 80, 24);
+        let off = ctx_on(&theme, &o, Color::Reset, Fiesta::NONE);
+        let on = ctx_on(&theme, &o, Color::Reset, Fiesta::of_day(3, 19));
+        assert_ne!(a.which, TEOTIHUACAN);
+        a.retheme(&on);
+        for _ in 0..(30 * 15) {
+            a.tick(&on, 1.0 / 30.0, 1.0 / 30.0);
+        }
+        assert_eq!(a.which, TEOTIHUACAN);
+        assert!(a.look().teotihuacan > 0.99);
+        a.retheme(&off);
+        for _ in 0..(30 * 15) {
+            a.tick(&off, 1.0 / 30.0, 1.0 / 30.0);
+        }
+        assert!(a.which < ORDINARY);
+        assert_eq!(a.look().teotihuacan, 0.0);
+        let mut c = Canvas::new(80, 24, Color::Reset);
+        a.draw(&off, &mut c);
+        assert_eq!(a.look().teotihuacan, 0.0);
+    }
+
+    /// The crowd's arms are up most of the time and come down now and then,
+    /// the wave rolling from one person to the next.
+    #[test]
+    fn the_crowd_raises_its_arms() {
+        let up = (0..2000).filter(|k| arms_up(*k as f32 * 0.5, 1.0)).count();
+        assert!(up > 1000 && up < 1800, "{up}");
+        let apart = (0..400)
+            .filter(|k| arms_up(*k as f32, 0.0) != arms_up(*k as f32, 2.5))
+            .count();
+        assert!(apart > 20, "{apart}");
+    }
+
+    /// Teotihuacán can be asked for on any day.
+    #[test]
+    fn teotihuacan_on_any_day() {
+        let theme = Theme::classic();
+        for name in ["teotihuacan", "teotihuacán", "equinoccio"] {
+            let a = frame(&format!("look = '{name}'"), &theme, Fiesta::NONE, 160, 48);
+            assert_eq!(a.which, TEOTIHUACAN);
+            assert!(!a.pyr.is_empty() && hued(&a, a.piramide.robe) > 0);
+        }
+    }
+
+    /// The Equinoccio survives odd options and sizes, long runs and huge
+    /// steps, from the 19th to the 22nd.
+    #[test]
+    fn the_equinoccio_survives() {
+        let variants = [
+            "",
+            "sky = true\nlook = 'teotihuacan'\nspeed = 4.0",
+            "landscape = false\nstars = false\nlook = 'teotihuacan'",
+            "speed = nan\ncurtains = -5\nstay = nan\nvisitors = inf",
+        ];
+        for v in variants {
+            for theme in [Theme::classic(), Theme::builtin("dracula").unwrap()] {
+                for fiesta in [
+                    Fiesta::of_day(3, 19),
+                    Fiesta::of_day(3, 20),
+                    Fiesta::of_day(3, 22),
+                ] {
+                    let (mut a, o) = make_on(v, &theme, fiesta, 80, 24);
+                    let ctx = ctx_on(&theme, &o, theme.bg, fiesta);
+                    for (w, h) in [
+                        (1, 1),
+                        (2, 3),
+                        (16, 4),
+                        (17, 9),
+                        (24, 12),
+                        (25, 20),
                         (300, 90),
                     ] {
                         a.resize(&ctx, w, h);
