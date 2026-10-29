@@ -44,6 +44,19 @@
 //! small lights strung out behind the xolo, and when one has walked with it a
 //! good while and passes the ofrenda it rises over the candles and is home.
 //! The holiday rolls its own dice, so ordinary days are untouched.
+//!
+//! On Navidad (the Guadalupe–Reyes) the dog wears a suéter navideño, red with
+//! a green band and a cream collar, and the meadow's fence gives way to a
+//! street of houses over an empedrado: flat roofs with farolitos on their
+//! parapets or red tiles, doors with a wreath, windows holding a nacimiento,
+//! nochebuenas in clay pots on the banqueta, and strings of foquitos along
+//! the eaves, around the doors and over the windows, chasing, alternating and
+//! fading in six colors. The Estrella de Belén crowns the tallest roof. The
+//! houses light up and the farolitos glow by night, and during the posadas
+//! (December 16 to 24) a procession of peregrinos walks the street after
+//! dark: José with his lantern, María on the burro, children with candles and
+//! luces de bengala. Lights, farolitos, nacimientos, pots and peregrinos come
+//! as the days go by toward Nochebuena. Like Muertos it rolls its own dice.
 
 use std::f32::consts::PI;
 
@@ -630,6 +643,90 @@ const SOUL_GLOW: Rgb = Rgb(255, 178, 92);
 /// Seeds the holiday's own dice, so ordinary days keep theirs.
 const MUERTOS_SEED: u64 = 0x0D1A_DE3E_3705;
 
+// Navidad.
+const ROJO_NOCHEBUENA: Rgb = Rgb(200, 16, 46);
+const VERDE_PINO: Rgb = Rgb(31, 111, 58);
+const DORADO: Rgb = Rgb(242, 182, 50);
+const BLANCO: Rgb = Rgb(244, 241, 234);
+/// The foquitos of a string of series lights: rojo, verde, azul, amarillo,
+/// rosa and naranja.
+const FOQUITOS: [Rgb; 6] = [
+    Rgb(255, 59, 59),
+    Rgb(59, 209, 111),
+    Rgb(59, 123, 255),
+    Rgb(255, 210, 59),
+    Rgb(255, 95, 180),
+    Rgb(255, 140, 26),
+];
+/// The houses' walls: ocre, terracota, turquesa, crema, rosa and azul de pueblo.
+const MUROS: [Rgb; 6] = [
+    Rgb(224, 183, 92),
+    Rgb(201, 105, 74),
+    Rgb(74, 167, 160),
+    Rgb(239, 227, 200),
+    Rgb(217, 138, 160),
+    Rgb(91, 134, 184),
+];
+const TEJA: Rgb = Rgb(181, 83, 47);
+const CANELA: Rgb = Rgb(139, 74, 30);
+const HENO: Rgb = Rgb(154, 165, 138);
+const CANA: Rgb = Rgb(201, 178, 107);
+/// The paper of a farolito: a bag with a candle in it.
+const KRAFT: Rgb = Rgb(196, 160, 104);
+/// What the peregrinos wear: the cloths of the children, the adults' hair.
+const TUNICAS: [Rgb; 4] = [
+    Rgb(200, 16, 46),
+    Rgb(31, 111, 58),
+    Rgb(242, 182, 50),
+    Rgb(59, 123, 255),
+];
+const CABELLOS: [Rgb; 3] = [Rgb(40, 28, 24), Rgb(92, 58, 34), Rgb(150, 112, 70)];
+const PIEL: Rgb = Rgb(222, 170, 126);
+/// Seeds the Navidad's own dice.
+const NAVIDAD_SEED: u64 = 0x004E_4156_4944_4144;
+
+/// A nacimiento in a window, 6 by 5: `s` the Estrella de Belén, `r` the roof
+/// of the portal, `m` María, `n` the Niño Dios, `j` José, `o` the ox, `h` heno.
+const BELEN: Sprite = &["......", "..s...", ".rrrr.", ".mnjo.", "hhhhhh"];
+
+/// A nochebuena in its clay pot, 5 by 7: `R` the bracts, `y` the flowers
+/// at their heart, `g` and `G` leaves, `P` the pot.
+const NOCHEBUENA: Sprite = &[
+    ".R.R.", "RRyRR", ".RRR.", "GgGgG", "..g..", "PPPPP", ".PPP.",
+];
+
+/// The Estrella de Belén on a roof.
+const ESTRELLA: Sprite = &["..G..", ".GGG.", "GGGGG", ".GGG.", ".G.G."];
+
+/// A peregrino walking, 5 by 10, facing right, in its two steps: `h` hair or
+/// hat, `s` face, `c` clothes, `d` legs.
+const PEREGRINO: [Sprite; 2] = [
+    &[
+        ".hhh.", ".sss.", ".sss.", "ccccc", "ccccc", "ccccc", ".ccc.", ".d.d.", ".d.d.", ".d.d.",
+    ],
+    &[
+        ".hhh.", ".sss.", ".sss.", "ccccc", "ccccc", "ccccc", ".ccc.", "..d..", "..d..", "..d..",
+    ],
+];
+
+/// María on the burro, 14 by 12, facing right: `v` her veil, `s` her face,
+/// `m` her mantle, `b` the burro's coat, `w` its muzzle and belly, `t` its
+/// tail, `d` its legs.
+const BURRO: Sprite = &[
+    "....vv........",
+    "....vs........",
+    "...mmmm.......",
+    "...mmmm...bb..",
+    "...mmmm..bbbb.",
+    "..bbmmbbbbbbww",
+    ".tbbbbbbbbbbbw",
+    ".tbbbbbbbbbbb.",
+    "..bwwwwwwwbb..",
+    "..bb.bb..bb.b.",
+    "..d..d...d..d.",
+    "..d..d...d..d.",
+];
+
 #[derive(Clone, Copy, PartialEq)]
 enum State {
     Run,
@@ -977,6 +1074,379 @@ impl Muertos {
     }
 }
 
+/// A holiday's colors: its own under `classic`, the theme's accents (the
+/// `first`th on) under any other theme.
+fn themed<const N: usize>(ctx: &Ctx, native: [Rgb; N], first: usize) -> [Rgb; N] {
+    std::array::from_fn(|i| rgb_of(ctx.pick(first + i, col(native[i]))).unwrap_or(native[i]))
+}
+
+/// What the dog wears for a holiday.
+#[derive(Clone, Copy, PartialEq)]
+enum Wear {
+    Bare,
+    /// A suéter navideño: rojo, verde and cream.
+    Sueter([Rgb; 3]),
+}
+
+impl Wear {
+    fn of(ctx: &Ctx) -> Wear {
+        if ctx.fiesta.is(Kind::Navidad) {
+            Wear::Sueter(themed(ctx, [ROJO_NOCHEBUENA, VERDE_PINO, BLANCO], 6))
+        } else {
+            Wear::Bare
+        }
+    }
+}
+
+/// A house of the street.
+struct House {
+    x: i32,
+    w: i32,
+    /// First row of the wall; the roof stands above it.
+    top: i32,
+    wall: Rgb,
+    /// Red tiles rather than a flat roof with a parapet.
+    gable: bool,
+    /// Left edge of the door.
+    door: i32,
+    /// Left edge of each window, and whether it holds a nacimiento.
+    windows: [Option<(i32, bool)>; 2],
+    wreath: bool,
+}
+
+impl House {
+    /// How high the roof's tiles climb.
+    fn tiles(&self) -> i32 {
+        (self.w / 2).min(7)
+    }
+
+    /// The highest row of the roof.
+    fn peak(&self) -> i32 {
+        if self.gable {
+            self.top - self.tiles()
+        } else {
+            self.top - 4
+        }
+    }
+}
+
+/// A foquito on a string of series lights.
+struct Bulb {
+    x: i32,
+    y: i32,
+    color: Rgb,
+    /// How the string blinks, see [`blink`].
+    pattern: u8,
+    /// Its place on the string, for the chase.
+    i: u32,
+    /// Whether a cord joins it to the bulb before it.
+    cord: bool,
+}
+
+/// How bright a foquito of a string is at this step, from 0.2 to 1: the
+/// strings glow steadily, chase, alternate or fade.
+fn blink(pattern: u8, i: u32, tick: u32) -> f32 {
+    match pattern {
+        0 => 1.0,
+        1 => {
+            if (tick / 6 + i).is_multiple_of(3) {
+                1.0
+            } else {
+                0.25
+            }
+        }
+        2 => {
+            if (tick / 12 + i).is_multiple_of(2) {
+                1.0
+            } else {
+                0.25
+            }
+        }
+        _ => 0.6 + 0.4 * (tick as f32 * 0.07 + i as f32 * 0.9).sin(),
+    }
+}
+
+#[derive(Clone, Copy, PartialEq)]
+enum Walker {
+    Jose,
+    Maria,
+    Nino,
+    Adulto,
+}
+
+/// A peregrino of the posada.
+struct Pilgrim {
+    kind: Walker,
+    /// How far behind the head of the procession it walks.
+    off: f32,
+    /// Where it is (its middle), in world pixels.
+    x: f32,
+    hair: Rgb,
+    cloth: Rgb,
+    /// Carries a luz de bengala instead of a candle.
+    bengala: bool,
+}
+
+/// Navidad in the meadow, laid out for one world: a street of houses with
+/// their lights, farolitos, nacimientos and nochebuenas, and during the
+/// posadas the peregrinos who walk it by night.
+struct Navidad {
+    /// The row where the houses meet the banqueta.
+    base: i32,
+    houses: Vec<House>,
+    bulbs: Vec<Bulb>,
+    /// Farolitos: middle column and bottom row.
+    farolitos: Vec<(i32, i32)>,
+    /// Nochebuenas in their pots: middle column.
+    pots: Vec<i32>,
+    /// The Estrella de Belén over the tallest roof: middle column and top row.
+    star: Option<(i32, i32)>,
+    pilgrims: Vec<Pilgrim>,
+    /// How far the head of the procession has got, and which way it goes.
+    walk: f32,
+    way: f32,
+    /// The procession's length from head to tail.
+    length: f32,
+    red: Rgb,
+    green: Rgb,
+}
+
+impl Navidad {
+    /// The holiday for this world, if it is on.
+    fn of(ctx: &Ctx, m: &Meadow) -> Option<Navidad> {
+        ctx.fiesta
+            .is(Kind::Navidad)
+            .then(|| Navidad::new(ctx, m.w, m.fence))
+    }
+
+    fn new(ctx: &Ctx, w: i32, fence: i32) -> Navidad {
+        let level = ctx.fiesta.level.clamp(0.0, 1.0);
+        let mut rng = Rng::with_seed(ctx.seed ^ NAVIDAD_SEED);
+        let base = fence + 4;
+        let bulb_colors = themed(ctx, FOQUITOS, 0);
+        // A theme's bright accents are paled a little to be walls.
+        let walls = themed(ctx, MUROS, 2).map(|c| {
+            if ctx.theme.native {
+                c
+            } else {
+                c.lerp(BLANCO, 0.35)
+            }
+        });
+        let [red, green] = themed(ctx, [ROJO_NOCHEBUENA, VERDE_PINO], 6);
+        // Something of the holiday comes with every day of it, and more with
+        // each day that goes by toward Nochebuena.
+        let on = |rng: &mut Rng, lo: f32| rng.f32() < lo + (1.0 - lo) * level;
+
+        // The street, house by house: a door and one or two windows.
+        let mut houses = Vec::new();
+        let mut x = -rng.range(0, 8);
+        while x < w {
+            let hw = rng.range(30, 42);
+            let parts: &[u8] = match rng.range(0, 3) {
+                0 => b"DW",
+                1 => b"WD",
+                _ => b"WDW",
+            };
+            let used: i32 = parts.iter().map(|&p| if p == b'D' { 7 } else { 8 }).sum();
+            let gap = (hw - used) / (parts.len() as i32 + 1);
+            let mut px = x + gap + (hw - used - gap * (parts.len() as i32 + 1)) / 2;
+            let (mut door, mut windows, mut n) = (x + 3, [None; 2], 0);
+            for &p in parts {
+                if p == b'D' {
+                    door = px;
+                    px += 7 + gap;
+                } else {
+                    windows[n] = Some((px, on(&mut rng, 0.3)));
+                    n += 1;
+                    px += 8 + gap;
+                }
+            }
+            houses.push(House {
+                x,
+                w: hw,
+                top: base - rng.range(17, 22),
+                wall: *rng.pick(&walls),
+                gable: rng.chance(0.4),
+                door,
+                windows,
+                wreath: on(&mut rng, 0.0),
+            });
+            x += hw + rng.range(0, 3);
+        }
+
+        // Strings of foquitos: along the eaves, around the doors, over the
+        // windows.
+        let mut bulbs = Vec::new();
+        let mut string = |on: bool, pts: &mut dyn Iterator<Item = (i32, i32)>, pattern: u8| {
+            if !on {
+                return;
+            }
+            let shift = pattern as usize * 2 + bulbs.len();
+            for (i, (x, y)) in pts.enumerate() {
+                bulbs.push(Bulb {
+                    x,
+                    y,
+                    color: bulb_colors[(i + shift) % 6],
+                    pattern,
+                    i: i as u32,
+                    cord: i > 0,
+                });
+            }
+        };
+        for hs in &houses {
+            let n = ((hs.w - 2) / 4).max(2);
+            let eave = hs.top + 1;
+            let mut pts = (0..n).map(|i| {
+                let t = (i as f32 + 0.5) / n as f32;
+                (
+                    hs.x + 1 + (t * (hs.w - 3) as f32) as i32,
+                    eave + (3.0 * (PI * t).sin()) as i32,
+                )
+            });
+            string(on(&mut rng, 0.35), &mut pts, rng.range(0, 4) as u8);
+            let (d, b) = (hs.door, base);
+            let arch = [
+                (d - 1, b - 3),
+                (d - 1, b - 6),
+                (d - 1, b - 9),
+                (d + 1, b - 12),
+                (d + 3, b - 12),
+                (d + 5, b - 12),
+                (d + 7, b - 9),
+                (d + 7, b - 6),
+                (d + 7, b - 3),
+            ];
+            string(
+                on(&mut rng, 0.2),
+                &mut arch.into_iter(),
+                rng.range(0, 4) as u8,
+            );
+            for &(wx, _) in hs.windows.iter().flatten() {
+                let lights = [0, 2, 4, 6, 8].map(|dx| (wx - 1 + dx, b - 15));
+                string(
+                    on(&mut rng, 0.25),
+                    &mut lights.into_iter(),
+                    rng.range(0, 4) as u8,
+                );
+            }
+        }
+
+        // Farolitos on the parapets and along the banqueta.
+        let mut farolitos = Vec::new();
+        for hs in houses.iter().filter(|h| !h.gable) {
+            for i in 0..(hs.w - 4) / 6 {
+                if on(&mut rng, 0.25) {
+                    farolitos.push((hs.x + 3 + i * 6, hs.top - 5));
+                }
+            }
+        }
+        for x in (3..w).step_by(11) {
+            if on(&mut rng, 0.2) {
+                farolitos.push((x, base + 3));
+            }
+        }
+
+        // Nochebuenas by the doors and under the windows.
+        let mut pots = Vec::new();
+        for hs in &houses {
+            for x in [hs.door - 3, hs.door + 10] {
+                if on(&mut rng, 0.3) {
+                    pots.push(x);
+                }
+            }
+            for &(wx, _) in hs.windows.iter().flatten() {
+                if on(&mut rng, 0.2) {
+                    pots.push(wx + 4);
+                }
+            }
+        }
+
+        let star = houses
+            .iter()
+            .min_by_key(|h| h.peak())
+            .filter(|_| level >= 0.55)
+            .map(|h| (h.x + h.w / 2, h.peak() - 6));
+
+        // The posadas: José and his lantern, María on the burro, and children
+        // and grown-ups with candles behind them.
+        let mut pilgrims = Vec::new();
+        let mut off = 0.0;
+        if ctx.fiesta.posadas() {
+            let n = 5 + (5.0 * level).round() as usize;
+            for i in 0..n {
+                let kind = match i {
+                    0 => Walker::Jose,
+                    1 => Walker::Maria,
+                    _ if rng.chance(0.55) => Walker::Nino,
+                    _ => Walker::Adulto,
+                };
+                pilgrims.push(Pilgrim {
+                    kind,
+                    off,
+                    x: 0.0,
+                    hair: *rng.pick(&CABELLOS),
+                    cloth: *rng.pick(&TUNICAS),
+                    bengala: i > 1 && rng.chance(0.25),
+                });
+                off += match kind {
+                    Walker::Jose => 15.0,
+                    Walker::Maria => 14.0,
+                    _ => 8.0 + rng.rangef(0.0, 3.0),
+                };
+            }
+        }
+        Navidad {
+            base,
+            houses,
+            bulbs,
+            farolitos,
+            pots,
+            star,
+            pilgrims,
+            walk: rng.rangef(0.0, w as f32),
+            way: if rng.bool() { 1.0 } else { -1.0 },
+            length: off,
+            red,
+            green,
+        }
+    }
+
+    /// Where a peregrino's light is, if it has one.
+    fn lamp(&self, p: &Pilgrim, feet: i32) -> Option<(i32, i32)> {
+        let front = p.x.round() as i32 + 3 * self.way as i32;
+        match p.kind {
+            Walker::Maria => None,
+            Walker::Jose => Some((front, feet - 12)),
+            Walker::Nino => Some((front, feet - 5)),
+            Walker::Adulto => Some((front, feet - 7)),
+        }
+    }
+
+    /// The rows of the meadow the street covers, which the grass leaves clear.
+    fn cleared(&self, ground: i32, fence: i32) -> (i32, i32) {
+        (fence + 1, ground + 5)
+    }
+
+    /// One step of the procession: it walks the street from one end to the
+    /// other and comes round again.
+    fn step(&mut self, w: f32) {
+        if self.pilgrims.is_empty() {
+            return;
+        }
+        self.walk += 0.2;
+        if self.walk - self.length > w + 12.0 {
+            self.walk = -12.0;
+        }
+        for p in self.pilgrims.iter_mut() {
+            p.x = if self.way > 0.0 {
+                self.walk - p.off
+            } else {
+                w - self.walk + p.off
+            };
+        }
+    }
+}
+
 /// What part of the world is on screen: top-left corner in world pixels and
 /// screen pixels per world pixel.
 #[derive(Clone, Copy)]
@@ -1129,6 +1599,12 @@ struct Meadow {
     /// Día de Muertos, when it is on; the dog is then a xoloitzcuintle.
     muertos: Option<Muertos>,
     xolo: bool,
+    /// Navidad, when it is on: a street of houses stands in the meadow.
+    navidad: Option<Navidad>,
+    /// Rows of the meadow where no grass grows for the holiday's street.
+    street: Option<(i32, i32)>,
+    /// What the dog wears.
+    wear: Wear,
 }
 
 impl Meadow {
@@ -1263,6 +1739,9 @@ impl Meadow {
             set,
             muertos: None,
             xolo: false,
+            navidad: None,
+            street: None,
+            wear: Wear::Bare,
         };
         m.update_sky();
         m
@@ -1272,6 +1751,12 @@ impl Meadow {
     fn dress(&mut self, ctx: &Ctx) {
         self.muertos = Muertos::of(ctx, self);
         self.xolo = self.muertos.is_some();
+        self.navidad = Navidad::of(ctx, self);
+        self.street = self
+            .navidad
+            .as_ref()
+            .map(|nv| nv.cleared(self.ground, self.fence));
+        self.wear = Wear::of(ctx);
     }
 
     fn cloud(rng: &mut Rng, w: i32, horizon: i32, anywhere: bool) -> Cloud {
@@ -1383,6 +1868,9 @@ impl Meadow {
             let (w, ph) = (self.w as f32, self.ph as f32);
             mu.update(cx, self.dog.dir, self.daylight(), w, ph);
             self.muertos = Some(mu);
+        }
+        if let Some(nv) = &mut self.navidad {
+            nv.step(self.w as f32);
         }
         for z in self.zs.iter_mut() {
             z.age += 1;
@@ -1656,11 +2144,18 @@ impl Meadow {
         }
         self.draw_trees();
         self.draw_fence();
+        let nv = self.navidad.take();
+        if let Some(nv) = &nv {
+            self.draw_street(nv);
+        }
         let split = self.blades.partition_point(|b| b.y < self.ground);
         let mu = self.muertos.take();
         match &mu {
             None => {
                 self.draw_blades(0, split, None);
+                if let Some(nv) = &nv {
+                    self.draw_pilgrims(nv);
+                }
                 self.draw_dog();
                 self.draw_blades(split, self.blades.len(), None);
                 self.draw_butterfly();
@@ -1682,6 +2177,7 @@ impl Meadow {
             }
         }
         self.muertos = mu;
+        self.navidad = nv;
     }
 
     fn draw_sun_moon(&mut self) {
@@ -1827,8 +2323,11 @@ impl Meadow {
                 let b = &self.blades[i];
                 (b.x, b.y, b.h, b.color, b.flower)
             };
-            // The path of petals is trodden clear of grass.
-            if mu.is_some_and(|mu| mu.on_path(x, y)) {
+            // The path of petals is trodden clear of grass, and so are
+            // the holiday's streets.
+            if mu.is_some_and(|mu| mu.on_path(x, y))
+                || self.street.is_some_and(|(a, b)| (a..=b).contains(&y))
+            {
                 continue;
             }
             let sway =
@@ -1941,6 +2440,7 @@ impl Meadow {
                         _ => continue,
                     }
                 };
+                let c = self.worn(ch, rx as i32, ry as i32).unwrap_or(c);
                 // The cempasúchil collar keeps some of its glow at night.
                 let c = if self.xolo && matches!(ch, b'c' | b'o' | b'm') {
                     self.candlelit(c)
@@ -2267,6 +2767,10 @@ impl Meadow {
             self.draw_candlelight(&mu, v, night);
             self.muertos = Some(mu);
         }
+        if let Some(nv) = self.navidad.take() {
+            self.draw_navidad_lights(&nv, v, night);
+            self.navidad = Some(nv);
+        }
     }
 
     /// The sleeping dog's z's, as letters over the picture.
@@ -2295,6 +2799,410 @@ impl Meadow {
         let v = self.view();
         self.project(v);
         self.draw_lights(v);
+    }
+}
+
+// ----- the holidays' scenery -----
+
+impl Meadow {
+    /// Fills a rectangle of the world.
+    fn fill(&mut self, x: i32, y: i32, w: i32, h: i32, c: Rgb) {
+        for yy in y.max(0)..(y + h).min(self.ph) {
+            for xx in x.max(0)..(x + w).min(self.w) {
+                self.px[(yy * self.w + xx) as usize] = c;
+            }
+        }
+    }
+
+    /// A pixel over the world, `a` opaque.
+    #[inline]
+    fn dab(&mut self, x: i32, y: i32, c: Rgb, a: f32) {
+        if a >= 1.0 {
+            self.put(x, y, c);
+        } else {
+            self.blend(x, y, c, a);
+        }
+    }
+
+    /// A line of pixels between two points.
+    fn line(&mut self, from: (i32, i32), to: (i32, i32), c: Rgb) {
+        let n = (to.0 - from.0).abs().max((to.1 - from.1).abs());
+        for s in 0..=n {
+            let t = if n == 0 { 0.0 } else { s as f32 / n as f32 };
+            let x = from.0 as f32 + (to.0 - from.0) as f32 * t;
+            let y = from.1 as f32 + (to.1 - from.1) as f32 * t;
+            self.put(x.round() as i32, y.round() as i32, c);
+        }
+    }
+
+    /// Stamps pixel art with its top-left corner at `(x0, y0)`, mirrored
+    /// when `flip` and `a` opaque. `paint` gives the color of a letter and
+    /// whether it keeps its glow by night; other letters are left clear.
+    fn stamp(
+        &mut self,
+        art: &[&str],
+        x0: i32,
+        y0: i32,
+        flip: bool,
+        a: f32,
+        paint: impl Fn(u8) -> Option<(Rgb, bool)>,
+    ) {
+        for (ry, row) in art.iter().enumerate() {
+            let n = row.len() as i32;
+            for (rx, ch) in row.bytes().enumerate() {
+                let Some((c, lit)) = paint(ch) else { continue };
+                let c = if lit {
+                    self.candlelit(c)
+                } else {
+                    self.shade(c)
+                };
+                let sx = if flip { n - 1 - rx as i32 } else { rx as i32 };
+                self.dab(x0 + sx, y0 + ry as i32, c, a);
+            }
+        }
+    }
+
+    /// Whether a light at screen pixel `(x, y)` with radius `r` can be seen.
+    #[inline]
+    fn visible(&self, x: i32, y: i32, r: i32) -> bool {
+        x >= -r && y >= -r && x <= self.sw + r && y <= self.sph + r
+    }
+
+    // ----- what the dog wears -----
+
+    /// The dog's trunk in its sprite, as (first row, last row, first column,
+    /// last column): where a sweater goes.
+    fn trunk(&self) -> (i32, i32, i32, i32) {
+        match self.dog.state {
+            State::Sit => (7, 10, 9, 15),
+            State::Sniff => (4, 7, 5, 13),
+            State::Nap => (2, 5, 4, 12),
+            _ => (6, 9, 5, 13),
+        }
+    }
+
+    /// What the dog wears over the sprite pixel `ch` at column `rx`, row
+    /// `ry`, if anything: the suéter navideño has a green band with cream
+    /// stitches, a dotted red body and a cream hem and collar.
+    fn worn(&self, ch: u8, rx: i32, ry: i32) -> Option<Rgb> {
+        let Wear::Sueter([red, green, cream]) = self.wear else {
+            return None;
+        };
+        if ch == b'c' {
+            return Some(cream);
+        }
+        let (r0, r1, c0, c1) = self.trunk();
+        if !matches!(ch, b'B' | b'D' | b'w') || !(r0..=r1).contains(&ry) || !(c0..=c1).contains(&rx)
+        {
+            return None;
+        }
+        let j = rx - c0;
+        Some(match ry - r0 {
+            _ if ry == r1 => cream,
+            1 => {
+                if j % 2 == 0 {
+                    cream
+                } else {
+                    green
+                }
+            }
+            2 if j % 3 == 1 => cream,
+            _ => red,
+        })
+    }
+
+    // ----- Navidad -----
+
+    /// The street: banqueta, curb and empedrado, the houses with their
+    /// lights, then the farolitos and nochebuenas standing in front of them.
+    fn draw_street(&mut self, nv: &Navidad) {
+        let (w, b) = (self.w, nv.base);
+        let banqueta = self.shade(Rgb(178, 172, 162));
+        let curb = self.shade(Rgb(210, 204, 192));
+        self.fill(0, b + 1, w, 3, banqueta);
+        self.fill(0, b + 4, w, 1, curb);
+        let stones =
+            [Rgb(128, 118, 108), Rgb(112, 104, 98), Rgb(138, 126, 112)].map(|c| self.shade(c));
+        let mortar = self.shade(Rgb(84, 78, 74));
+        for y in b + 5..=self.ground + 5 {
+            let r = (y - b - 5) / 3;
+            for x in 0..w {
+                let o = x + 2 * (r & 1);
+                let c = if (y - b - 5) % 3 == 2 || o % 5 == 4 {
+                    mortar
+                } else {
+                    stones[(hash(o / 5, r, 0x5701) % 3) as usize]
+                };
+                self.put(x, y, c);
+            }
+        }
+        for hs in &nv.houses {
+            self.draw_house(nv, hs);
+        }
+        if let Some((sx, sy)) = nv.star {
+            self.stamp(ESTRELLA, sx - 2, sy, false, 1.0, |ch| {
+                (ch == b'G').then_some((DORADO, true))
+            });
+        }
+        self.draw_foquitos(nv);
+        for &(cx, bottom) in &nv.farolitos {
+            self.draw_farolito(cx, bottom);
+        }
+        for &cx in &nv.pots {
+            let (red, green) = (nv.red, nv.green);
+            self.stamp(NOCHEBUENA, cx - 2, b - 3, false, 1.0, |ch| match ch {
+                b'R' => Some((red, false)),
+                b'y' => Some((DORADO, false)),
+                b'G' => Some((green, false)),
+                b'g' => Some((green.scale(1.3), false)),
+                b'P' => Some((Rgb(170, 88, 52), false)),
+                _ => None,
+            });
+        }
+    }
+
+    /// Whether a window is lit from inside by night: those with a nacimiento
+    /// always are.
+    fn window_lit(x: i32, belen: bool) -> bool {
+        belen || hash(x, 7, 0x717).is_multiple_of(2)
+    }
+
+    fn draw_house(&mut self, nv: &Navidad, hs: &House) {
+        let (b, x, w, top) = (nv.base, hs.x, hs.w, hs.top);
+        let wall = self.shade(hs.wall);
+        self.fill(x, top, w, b - top + 1, wall);
+        self.fill(x, top + 3, w, 1, self.shade(hs.wall.scale(0.82)));
+        self.fill(x, b - 1, w, 2, self.shade(hs.wall.scale(0.6)));
+        if hs.gable {
+            // A roof of red tiles, climbing a row at a time.
+            let tiles = [self.shade(TEJA), self.shade(TEJA.scale(0.82))];
+            for r in 0..hs.tiles() {
+                self.fill(
+                    x - 1 + r,
+                    top - 1 - r,
+                    w + 2 - 2 * r,
+                    1,
+                    tiles[(r & 1) as usize],
+                );
+            }
+        } else {
+            // A flat roof: a cornice and a parapet for the farolitos.
+            let light = hs.wall.lerp(Rgb::WHITE, 0.3);
+            self.fill(x - 1, top - 2, w + 2, 2, self.shade(light));
+            self.fill(x, top - 4, w, 2, self.shade(hs.wall.lerp(Rgb::WHITE, 0.12)));
+        }
+        // The door, with a wreath on it from the middle of the holiday.
+        let (dx, dy) = (hs.door, b - 11);
+        self.fill(dx - 1, dy - 1, 9, 13, self.shade(Rgb(236, 226, 200)));
+        let (plank, seam) = (self.shade(Rgb(124, 78, 44)), self.shade(Rgb(98, 60, 34)));
+        self.fill(dx, dy, 7, 12, plank);
+        for i in [1, 3, 5] {
+            self.fill(dx + i, dy + 1, 1, 10, seam);
+        }
+        self.put(dx + 5, dy + 7, self.shade(DORADO));
+        if hs.wreath {
+            let green = self.shade(nv.green);
+            for (ox, oy) in [
+                (2, 2),
+                (3, 2),
+                (4, 2),
+                (2, 3),
+                (4, 3),
+                (2, 4),
+                (3, 4),
+                (4, 4),
+            ] {
+                self.put(dx + ox, dy + oy, green);
+            }
+            self.put(dx + 3, dy + 5, self.shade(nv.red));
+        }
+        // The windows, some with a nacimiento in them.
+        let (frame, warm) = (self.shade(Rgb(236, 226, 200)), Rgb(255, 224, 150));
+        for &(wx, belen) in hs.windows.iter().flatten() {
+            let wy = b - 14;
+            self.fill(wx, wy, 8, 7, frame);
+            if belen {
+                self.stamp(BELEN, wx + 1, wy + 1, false, 1.0, |ch| {
+                    Some(match ch {
+                        b's' => (DORADO, true),
+                        b'r' => (CANELA, true),
+                        b'm' => (Rgb(46, 92, 190), true),
+                        b'n' => (BLANCO, true),
+                        b'j' => (Rgb(110, 70, 40), true),
+                        b'o' => (Rgb(120, 116, 112), true),
+                        b'h' => (HENO, true),
+                        _ => (warm, true),
+                    })
+                });
+            } else {
+                let glass = if Self::window_lit(wx, false) {
+                    self.candlelit(warm.scale(0.9))
+                } else {
+                    self.shade(Rgb(88, 112, 140))
+                };
+                self.fill(wx + 1, wy + 1, 6, 5, glass);
+                self.fill(wx + 4, wy + 1, 1, 5, frame);
+            }
+        }
+    }
+
+    /// The strings of foquitos: a cord and bulbs hanging from it.
+    fn draw_foquitos(&mut self, nv: &Navidad) {
+        let cord = self.shade(Rgb(22, 64, 38));
+        for (i, b) in nv.bulbs.iter().enumerate().skip(1) {
+            if b.cord {
+                let p = &nv.bulbs[i - 1];
+                self.line((p.x, p.y), (b.x, b.y), cord);
+            }
+        }
+        for b in &nv.bulbs {
+            let k = blink(b.pattern, b.i, self.tick);
+            let c = self.candlelit(b.color.lerp(Rgb::BLACK, 0.6 * (1.0 - k)));
+            self.put(b.x, b.y + 1, c);
+            self.put(b.x, b.y + 2, c.scale(0.75));
+        }
+    }
+
+    /// A farolito: a paper bag with a candle in it, standing on `bottom`.
+    fn draw_farolito(&mut self, cx: i32, bottom: i32) {
+        let kraft = self.candlelit(KRAFT.scale(0.75));
+        let lit = self.candlelit(KRAFT.lerp(FLAMA, 0.75));
+        self.fill(cx - 1, bottom - 3, 3, 4, kraft);
+        self.put(cx, bottom - 2, lit);
+        self.put(cx, bottom - 1, lit);
+    }
+
+    /// The peregrinos of the posada, who only come out after dark.
+    fn draw_pilgrims(&mut self, nv: &Navidad) {
+        let a = ((0.7 - self.daylight()) / 0.3).clamp(0.0, 1.0);
+        if a <= 0.0 {
+            return;
+        }
+        let feet = self.ground - 3;
+        let flip = nv.way < 0.0;
+        for (i, p) in nv.pilgrims.iter().enumerate() {
+            let step = ((self.tick / 6 + i as u32) % 2) as usize;
+            let x = p.x.round() as i32;
+            let (hair, cloth) = (p.hair, p.cloth);
+            if p.kind == Walker::Maria {
+                self.stamp(BURRO, x - 7, feet - 11 - step as i32, flip, a, |ch| {
+                    Some(match ch {
+                        b'v' => (BLANCO, true),
+                        b's' => (PIEL, true),
+                        b'm' => (Rgb(46, 92, 190), true),
+                        b'b' => (Rgb(128, 122, 118), false),
+                        b'w' => (Rgb(206, 200, 190), false),
+                        b't' => (Rgb(80, 76, 74), false),
+                        b'd' => (Rgb(92, 88, 86), false),
+                        _ => return None,
+                    })
+                });
+                continue;
+            }
+            let short = p.kind == Walker::Nino;
+            let mut kid = [""; 8];
+            let art = PEREGRINO[step];
+            kid[..5].copy_from_slice(&art[..5]);
+            kid[5..].copy_from_slice(&art[7..]);
+            let (art, rows): (&[&str], i32) = if short { (&kid[..], 8) } else { (art, 10) };
+            let (hat, tunic) = if p.kind == Walker::Jose {
+                (CANA, CANELA)
+            } else {
+                (hair, cloth)
+            };
+            self.stamp(art, x - 2, feet - rows + 1, flip, a, |ch| {
+                Some(match ch {
+                    b'h' => (hat, true),
+                    b's' => (PIEL, true),
+                    b'c' => (tunic, true),
+                    b'd' => (Rgb(60, 44, 36), false),
+                    _ => return None,
+                })
+            });
+            let front = x + 3 * nv.way as i32;
+            if p.kind == Walker::Jose {
+                // His staff, with the lantern on top.
+                let staff = self.shade(CANA);
+                for y in feet - 11..=feet {
+                    self.dab(front, y, staff, a);
+                }
+                self.dab(front, feet - 12, self.candlelit(FLAMA), a);
+            } else {
+                let wax = self.shade(BLANCO);
+                let hand = feet - rows + 5;
+                self.dab(front, hand - 1, wax, a);
+                self.dab(front, hand, wax, a);
+            }
+        }
+    }
+
+    /// Navidad's lights, straight onto the screen: the foquitos, the
+    /// farolitos, the windows, the Estrella de Belén and the peregrinos'
+    /// candles.
+    fn draw_navidad_lights(&mut self, nv: &Navidad, v: View, night: f32) {
+        let tick = self.tick;
+        let k = ((night - 0.2) / 0.5).clamp(0.0, 1.0);
+        if k <= 0.0 {
+            return;
+        }
+        let flicker = |i: usize| 0.8 + 0.2 * (tick as f32 * 0.6 + i as f32 * 1.9).sin();
+        for b in &nv.bulbs {
+            let br = blink(b.pattern, b.i, tick);
+            if br < 0.5 {
+                continue;
+            }
+            let r = 1.8 + 1.3 * v.z;
+            let (x, y) = v.to_screen(b.x as f32 + 0.5, b.y as f32 + 1.5);
+            if self.visible(x, y, r.ceil() as i32) {
+                self.glow(x, y, r, b.color, 0.5 * k * br);
+            }
+        }
+        for (i, &(cx, bottom)) in nv.farolitos.iter().enumerate() {
+            let r = 2.5 + 1.8 * v.z;
+            let (x, y) = v.to_screen(cx as f32 + 0.5, bottom as f32 - 1.0);
+            if self.visible(x, y, r.ceil() as i32) {
+                self.glow(x, y, r, FLAMA_EDGE, 0.55 * k * flicker(i));
+            }
+        }
+        let b = nv.base;
+        for hs in &nv.houses {
+            for &(wx, belen) in hs.windows.iter().flatten() {
+                if Self::window_lit(wx, belen) {
+                    let (x, y) = v.to_screen(wx as f32 + 4.0, (b - 11) as f32);
+                    let r = 6.0 * v.z.max(0.7);
+                    if self.visible(x, y, r.ceil() as i32) {
+                        self.glow(x, y, r, FLAMA, 0.28 * k);
+                    }
+                }
+            }
+        }
+        if let Some((sx, sy)) = nv.star {
+            let (x, y) = v.to_screen(sx as f32 + 0.5, sy as f32 + 2.5);
+            self.glow(x, y, 4.0 + 3.0 * v.z, DORADO, 0.5 * k);
+        }
+        // The peregrinos' candles and luces de bengala.
+        let a = ((0.7 - self.daylight()) / 0.3).clamp(0.0, 1.0) * k;
+        let feet = self.ground - 3;
+        for (i, p) in nv.pilgrims.iter().enumerate() {
+            let Some((lx, ly)) = nv.lamp(p, feet) else {
+                continue;
+            };
+            let (x, y) = v.to_screen(lx as f32 + 0.5, ly as f32 + 0.5);
+            let r = 3.0 + 2.0 * v.z;
+            if !self.visible(x, y, r.ceil() as i32) {
+                continue;
+            }
+            self.glow(x, y, r, FLAMA_EDGE, 0.6 * a * flicker(i));
+            self.blend_out(x, y, FLAMA, a);
+            if p.bengala {
+                // Sparks leaping off the sparkler.
+                for j in 0..4 {
+                    let h = hash(i as i32, j + (tick / 2) as i32, 0x5BA6);
+                    let (dx, dy) = ((h % 5) as i32 - 2, ((h >> 4) % 4) as i32 - 2);
+                    self.blend_out(x + dx, y + dy, Rgb(255, 250, 220), 0.9 * a);
+                }
+            }
+        }
     }
 }
 
@@ -2647,15 +3555,14 @@ mod tests {
         assert!(!painted(&s.m, s.m.shade(XOLO_SKIN)));
     }
 
-    /// The holiday comes and goes through `retheme`, and once it has gone the
+    /// A holiday comes and goes through `retheme`, and once it has gone the
     /// meadow is exactly what it would have been without it: the holiday
     /// rolls its own dice.
-    #[test]
-    fn the_holiday_comes_and_goes() {
+    fn comes_and_goes(fiesta: Fiesta, dressed: fn(&Meadow) -> bool) {
         let theme = Theme::classic();
         let opts = Opts::new(INFO.options, "day = 30".parse().unwrap());
         let plain = ctx(&theme, &opts);
-        let fiesta = holiday(&theme, &opts, Fiesta::of_day(11, 1));
+        let fiesta = holiday(&theme, &opts, fiesta);
         let (mut a, mut b) = (DogScene::new(&plain), DogScene::new(&plain));
         a.resize(&plain, 100, 30);
         b.resize(&plain, 100, 30);
@@ -2666,11 +3573,11 @@ mod tests {
         for i in 0..900 {
             if i == 100 {
                 b.retheme(&fiesta);
-                assert!(b.m.muertos.is_some() && b.m.xolo);
+                assert!(dressed(&b.m));
             }
             if i == 600 {
                 b.retheme(&plain);
-                assert!(b.m.muertos.is_none() && !b.m.xolo);
+                assert!(!dressed(&b.m));
             }
             let c = if (100..600).contains(&i) {
                 &fiesta
@@ -2686,6 +3593,11 @@ mod tests {
             let same = ca.cells() == cb.cells();
             assert_eq!(same, !(100..600).contains(&i), "step {i}");
         }
+    }
+
+    #[test]
+    fn the_holiday_comes_and_goes() {
+        comes_and_goes(Fiesta::of_day(11, 1), |m| m.muertos.is_some() && m.xolo);
     }
 
     /// By night the souls string out behind the xolo, and now and then one
@@ -2735,22 +3647,200 @@ mod tests {
     fn the_holiday_keeps_a_see_through_sky_empty() {
         let theme = Theme::classic();
         let opts = Opts::new(INFO.options, "sky = false".parse().unwrap());
-        let c = holiday(&theme, &opts, Fiesta::of_day(11, 2));
-        for t in [0.0, 0.5] {
-            let mut s = DogScene::new(&c);
-            s.resize(&c, 120, 36);
-            s.m.t = t;
-            s.m.update_sky();
-            let mut cv = Canvas::new(120, 36, Color::Reset);
-            for _ in 0..60 {
-                s.tick(&c, 0.05, 0.05);
-                cv.clear();
-                s.draw(&c, &mut cv);
-                for x in 0..120 {
-                    assert_eq!(cv.get(x, 0).map(|c| c.ch), Some(' '), "t = {t}, x = {x}");
+        for fiesta in [Fiesta::of_day(11, 2), Fiesta::of_day(12, 20)] {
+            let c = holiday(&theme, &opts, fiesta);
+            for t in [0.0, 0.5] {
+                let mut s = DogScene::new(&c);
+                s.resize(&c, 120, 36);
+                s.m.t = t;
+                s.m.update_sky();
+                let mut cv = Canvas::new(120, 36, Color::Reset);
+                for _ in 0..60 {
+                    s.tick(&c, 0.05, 0.05);
+                    cv.clear();
+                    s.draw(&c, &mut cv);
+                    for x in 0..120 {
+                        assert_eq!(cv.get(x, 0).map(|c| c.ch), Some(' '), "t = {t}, x = {x}");
+                    }
                 }
             }
         }
+    }
+
+    /// Holidays the dog has no costume for leave the meadow exactly as an
+    /// ordinary day does.
+    #[test]
+    fn holidays_without_a_costume_stay_ordinary() {
+        let theme = Theme::classic();
+        let opts = Opts::new(INFO.options, "day = 30".parse().unwrap());
+        let plain = ctx(&theme, &opts);
+        let mut want = Vec::new();
+        let mut s = DogScene::new(&plain);
+        s.resize(&plain, 100, 30);
+        let mut cv = Canvas::new(100, 30, Color::Reset);
+        for _ in 0..400 {
+            s.tick(&plain, 1.0 / 30.0, 1.0 / 30.0);
+            cv.clear();
+            s.draw(&plain, &mut cv);
+            want.push(cv.cells().to_vec());
+        }
+        for kind in [
+            Kind::Candelaria,
+            Kind::Carnaval,
+            Kind::Equinoccio,
+            Kind::Judas,
+            Kind::Nino,
+            Kind::SantaCruz,
+            Kind::Guelaguetza,
+            Kind::Patrias,
+            Kind::Revolucion,
+        ] {
+            let c = holiday(&theme, &opts, Fiesta::height(kind));
+            let mut s = DogScene::new(&c);
+            s.resize(&c, 100, 30);
+            s.retheme(&c);
+            for (i, frame) in want.iter().enumerate() {
+                s.tick(&c, 1.0 / 30.0, 1.0 / 30.0);
+                cv.clear();
+                s.draw(&c, &mut cv);
+                assert!(cv.cells() == frame.as_slice(), "{kind:?}: step {i}");
+            }
+        }
+    }
+
+    /// From the Virgen de Guadalupe to Reyes the dog wears a sweater and
+    /// the meadow has a street of houses with their lights, farolitos,
+    /// nacimientos and nochebuenas; more of it on Nochebuena. On an ordinary
+    /// day, none of it.
+    #[test]
+    fn navidad_dresses_the_street() {
+        let theme = Theme::classic();
+        let opts = Opts::new(INFO.options, toml::Table::new());
+        let mut counts = Vec::new();
+        for fiesta in [Fiesta::of_day(12, 12), Fiesta::height(Kind::Navidad)] {
+            let c = holiday(&theme, &opts, fiesta);
+            let mut s = DogScene::new(&c);
+            s.resize(&c, 160, 48);
+            s.retheme(&c);
+            let mut cv = Canvas::new(160, 48, Color::Reset);
+            s.m.t = 0.4;
+            s.m.update_sky();
+            s.tick(&c, 0.05, 0.05);
+            s.draw(&c, &mut cv);
+            let nv = s.m.navidad.as_ref().expect("dressed");
+            assert!(matches!(s.m.wear, Wear::Sueter(_)));
+            assert!(!nv.houses.is_empty() && !nv.bulbs.is_empty() && !nv.farolitos.is_empty());
+            assert!(s.m.street.is_some());
+            for c in [KRAFT.lerp(FLAMA, 0.75), DORADO, VERDE_PINO, ROJO_NOCHEBUENA] {
+                assert!(painted(&s.m, c), "{fiesta:?}: {c:?} missing");
+            }
+            // The sweater: red body, green band.
+            assert!(s.m.worn(b'B', 8, 6) == Some(ROJO_NOCHEBUENA), "{fiesta:?}");
+            assert!(s.m.worn(b'B', 8, 7) == Some(VERDE_PINO), "{fiesta:?}");
+            assert!(
+                nv.houses
+                    .iter()
+                    .any(|h| h.windows.iter().flatten().any(|w| w.1))
+            );
+            counts.push((nv.bulbs.len(), nv.farolitos.len(), nv.pots.len()));
+        }
+        let (early, full) = (counts[0], counts[1]);
+        assert!(
+            full.0 > early.0 && full.1 > early.1 && full.2 > early.2,
+            "{counts:?}"
+        );
+
+        let c = ctx(&theme, &opts);
+        let mut s = DogScene::new(&c);
+        s.resize(&c, 160, 48);
+        let mut cv = Canvas::new(160, 48, Color::Reset);
+        s.draw(&c, &mut cv);
+        assert!(s.m.navidad.is_none() && s.m.street.is_none() && s.m.wear == Wear::Bare);
+        assert!(!painted(&s.m, TEJA) && !painted(&s.m, VERDE_PINO));
+        assert!(s.m.worn(b'B', 8, 6).is_none());
+    }
+
+    #[test]
+    fn navidad_comes_and_goes() {
+        comes_and_goes(Fiesta::of_day(12, 24), |m| {
+            m.navidad.is_some() && m.street.is_some() && m.wear != Wear::Bare
+        });
+    }
+
+    /// During the posadas the peregrinos walk the street after dark, and
+    /// only then: by day, and on the days that are not posadas, there are none.
+    #[test]
+    fn the_posadas_walk_by_night() {
+        let theme = Theme::classic();
+        let opts = Opts::new(INFO.options, toml::Table::new());
+        for (fiesta, walkers) in [
+            (Fiesta::of_day(12, 12), false),
+            (Fiesta::of_day(12, 20), true),
+            (Fiesta::of_day(12, 24), true),
+            (Fiesta::of_day(12, 26), false),
+            (Fiesta::of_day(1, 6), false),
+        ] {
+            let c = holiday(&theme, &opts, fiesta);
+            let mut s = DogScene::new(&c);
+            s.resize(&c, 160, 48);
+            let nv = s.m.navidad.as_mut().expect("dressed");
+            assert_eq!(!nv.pilgrims.is_empty(), walkers, "{fiesta:?}");
+            if !walkers {
+                continue;
+            }
+            // María rides, José leads.
+            assert!(nv.pilgrims[0].kind == Walker::Jose && nv.pilgrims[1].kind == Walker::Maria);
+            // Put the head of the procession in the middle of the street.
+            nv.walk = s.m.w as f32 / 2.0;
+            nv.step(s.m.w as f32);
+            assert!(nv.pilgrims.iter().any(|p| p.x > 0.0 && p.x < s.m.w as f32));
+            let mut seen = Vec::new();
+            for t in [0.5, 0.0] {
+                s.m.t = t;
+                s.m.update_sky();
+                s.m.draw();
+                let with = s.m.px.clone();
+                let mut nv = s.m.navidad.take().unwrap();
+                let walkers = std::mem::take(&mut nv.pilgrims);
+                s.m.navidad = Some(nv);
+                s.m.draw();
+                seen.push(with != s.m.px);
+                s.m.navidad.as_mut().unwrap().pilgrims = walkers;
+            }
+            assert_eq!(
+                seen,
+                [false, true],
+                "{fiesta:?}: by day none, by night some"
+            );
+        }
+    }
+
+    /// The procession goes along the street, comes round again, and stays
+    /// in the world.
+    #[test]
+    fn the_procession_comes_round() {
+        let theme = Theme::classic();
+        let opts = Opts::new(INFO.options, toml::Table::new());
+        let c = holiday(&theme, &opts, Fiesta::of_day(12, 20));
+        let mut s = DogScene::new(&c);
+        s.resize(&c, 120, 36);
+        let w = s.m.w as f32;
+        let mut rng = Rng::with_seed(1);
+        let (mut laps, mut last) = (0, s.m.navidad.as_ref().unwrap().walk);
+        for _ in 0..40_000 {
+            s.m.update(&mut rng);
+            let nv = s.m.navidad.as_ref().unwrap();
+            assert!(
+                nv.pilgrims
+                    .iter()
+                    .all(|p| p.x.is_finite() && p.x.abs() < 2.0 * w + nv.length)
+            );
+            if nv.walk < last {
+                laps += 1;
+            }
+            last = nv.walk;
+        }
+        assert!(laps >= 1, "the procession never came round");
     }
 
     /// Odd sizes, steps and options survive with the holiday on, under the
@@ -2765,6 +3855,10 @@ mod tests {
                     Fiesta::of_day(10, 28),
                     Fiesta::of_day(11, 2),
                     Fiesta::of_day(11, 3),
+                    Fiesta::of_day(12, 12),
+                    Fiesta::of_day(12, 20),
+                    Fiesta::height(Kind::Navidad),
+                    Fiesta::of_day(1, 6),
                 ] {
                     let c = holiday(theme, &opts, fiesta);
                     let mut s = (INFO.make)(&c);
