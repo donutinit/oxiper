@@ -59,8 +59,18 @@
 //! with the hat. At a corner the sombrero is raised, its brim curling up
 //! and the brass gleaming, confeti, sparks of brass and the dust of the road
 //! fly off, and the banner reads "¡TIERRA Y LIBERTAD!".
+//!
+//! In the Carnaval the logo is a carnival mask with gold lentejuelas that
+//! takes a confetti color on every bounce (rosa, turquesa, morado, verde
+//! limón, naranja), plumas fanning out over it in the colors after its own:
+//! three from the Thursday of the quema del mal humor, all five from Sunday
+//! on. It leaves a shower of confeti behind, thicker as the days go by. At a
+//! corner the mask winks and a sparkle catches its sequins, a burst of
+//! confeti, lentejuelas and serpentinas flies off, and the banner reads
+//! "¡VIVA EL CARNAVAL!".
 
 mod candelaria;
+mod carnaval;
 mod muertos;
 mod navidad;
 mod nino;
@@ -284,6 +294,7 @@ struct Look {
 fn look_for(f: Fiesta) -> Option<&'static Look> {
     match f.kind {
         Kind::Candelaria => Some(&candelaria::LOOK),
+        Kind::Carnaval => Some(&carnaval::LOOK),
         Kind::Muertos => Some(&muertos::LOOK),
         Kind::Navidad => Some(navidad::look(f)),
         Kind::Nino => Some(&nino::LOOK),
@@ -1476,6 +1487,8 @@ mod tests {
             ("candelaria", Fiesta::of_day(2, 2)),
             ("niño", Fiesta::of_day(4, 30)),
             ("revolución", Fiesta::of_day(11, 20)),
+            ("carnaval", Fiesta::height(Kind::Carnaval)),
+            ("jueves de carnaval", Fiesta::of_date(2027, 2, 4)),
         ]
     }
 
@@ -2151,6 +2164,39 @@ mod tests {
             assert!(d.laugh.parts.contains(&b'B'));
             assert_ne!(d.laugh.cells, d.sprite.cells);
             assert!(d.bits.len() > 20);
+        }
+    }
+
+    #[test]
+    fn the_carnaval_wears_plumas_that_grow_with_the_days() {
+        let o = crate::scene::Opts::new(INFO.options, toml::Table::new());
+        for theme in ["classic", "dracula"] {
+            let th = crate::theme::Theme::builtin(theme).unwrap();
+            let mut plumas = Vec::new();
+            // From the Thursday of the quema del mal humor to the Martes.
+            for f in [Fiesta::of_date(2027, 2, 4), Fiesta::height(Kind::Carnaval)] {
+                assert!(f.is(Kind::Carnaval));
+                let ctx = ctx(&th, &o, f);
+                let mut d = dressed(&ctx, 120, 44);
+                // A mask with its lentejuelas, and plumas over it.
+                for p in b"mg" {
+                    assert!(parts(&d, &[*p]) > 0, "{}", *p as char);
+                }
+                plumas.push(parts(&d, b"pqrtu"));
+                if th.native {
+                    assert_eq!(d.palette, super::carnaval::LOOK.classic.to_vec());
+                    let c = play(&mut d, &ctx, 15.0);
+                    assert!(c.cells().iter().any(|cell| cell.fg == rgb(0xffcc33)));
+                }
+                let banner = Sprite::fit_lines(&["¡Viva el", "Carnaval!"], 120, 44);
+                assert_eq!(d.banner.cells, banner.cells);
+                // At a corner the mask winks and a sparkle catches the light.
+                assert_eq!(parts(&d, b"w"), 0);
+                d.celebrate(0);
+                assert!(d.laugh.parts.contains(&b'w'));
+                assert!(d.bits.len() > 20);
+            }
+            assert!(plumas[0] > 0 && plumas[1] > plumas[0], "{plumas:?}");
         }
     }
 }
