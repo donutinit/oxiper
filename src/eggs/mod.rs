@@ -16,14 +16,20 @@ pub mod calaverita;
 pub mod catrina;
 pub mod duckpond;
 pub mod grito;
+pub mod inocente;
 pub mod jarabe;
 pub mod mariachis;
 pub mod monarcas;
 mod muertos;
+mod navidad;
 pub mod nyan;
 pub(crate) mod palette;
+pub mod pastorela;
 mod patrias;
+pub mod pinata;
+pub mod posada;
 mod revolucion;
+pub mod reyes;
 pub mod sl;
 mod stage;
 pub mod tren;
@@ -75,6 +81,11 @@ pub const ALL: &[&Info] = &[
     &aguila::INFO,
     &adelitas::INFO,
     &tren::INFO,
+    &posada::INFO,
+    &pinata::INFO,
+    &reyes::INFO,
+    &pastorela::INFO,
+    &inocente::INFO,
 ];
 
 /// An `egg_rate` at or above this plays an egg at once, again and again, and
@@ -564,6 +575,46 @@ mod tests {
         keep_to(&["adelitas", "tren"], Kind::Revolucion, &[(11, 20)]);
     }
 
+    /// The Navidad visitors come during the Guadalupe–Reyes, never on an
+    /// ordinary day or another holiday; the Reyes only on their days, and the
+    /// prank only on the Santos Inocentes.
+    #[test]
+    fn the_visitors_keep_to_navidad() {
+        let navidad = [
+            (12, 12),
+            (12, 16),
+            (12, 24),
+            (12, 25),
+            (12, 28),
+            (12, 31),
+            (1, 1),
+        ]
+        .into_iter()
+        .chain((2..=6).map(|d| (1, d)))
+        .collect::<Vec<_>>();
+        let others = [(6, 15), (8, 20), (9, 15), (11, 2), (2, 2), (4, 30), (5, 3)];
+        let plays = |info: &'static Info, m, d| {
+            let mut e = Eggs::new(80, 24);
+            e.start(&[info], Fiesta::of_day(m, d));
+            e.active()
+        };
+        for name in ["posada", "pinata", "reyes", "pastorela", "inocente"] {
+            let info = ALL.iter().find(|i| i.name == name).unwrap();
+            assert_eq!(info.fiesta, Kind::Navidad, "{name}");
+            for (m, d) in navidad.iter().chain(&others) {
+                let wanted = match name {
+                    "reyes" => *m == 1 && *d >= 2,
+                    "inocente" => (*m, *d) == (12, 28),
+                    _ => navidad.contains(&(*m, *d)),
+                };
+                assert_eq!(plays(info, *m, *d), wanted, "{name} on {m}-{d}");
+            }
+            let mut e = Eggs::new(80, 24);
+            e.start(&[info], Fiesta::NONE);
+            assert!(!e.active(), "{name} came on an ordinary day");
+        }
+    }
+
     /// Any egg survives tiny and huge screens and long steps, under any theme.
     #[test]
     fn eggs_survive_odd_sizes_and_huge_steps() {
@@ -579,8 +630,8 @@ mod tests {
                         c.clear();
                         e.draw(&mut c, t);
                     }
-                    // The visitors are done within 30 s at any size (the
-                    // scheduler cuts the others short).
+                    // A holiday's visitors are done within 30 s at any size
+                    // (the scheduler cuts the others short).
                     if info.fiesta != Kind::None {
                         let mut secs = 0.0;
                         while !e.done() && secs <= 30.0 {
