@@ -25,6 +25,8 @@ pub enum Mood {
     Rest,
     /// Filter feeding: cruising under the surface, mouth wide.
     Feed,
+    /// On Navidad, going for the piñata sinking nearby, snout first.
+    Ram,
 }
 
 /// A fish riding along: a remora under the belly or a pilot fish ahead.
@@ -234,6 +236,10 @@ impl Sea {
         self.shark.steps += 1;
         let (vw, _) = self.view_size();
         let night = self.daylight < 0.25;
+        // On Navidad a sinking piñata is hard to ignore.
+        if self.shark.mood != Mood::Ram && self.notices_pinata() {
+            self.set_mood(Mood::Ram);
+        }
         let steps = self.shark.steps;
         match self.shark.mood {
             Mood::Cruise => {
@@ -374,6 +380,14 @@ impl Sea {
                     self.cruise_to(rng);
                 }
             }
+            Mood::Ram => match self.pinata_aim() {
+                Some((x, y)) if steps < 30 * 30 => (self.shark.tx, self.shark.ty) = (x, y),
+                // Burst, gone, or out of reach: back to patrolling.
+                _ => {
+                    self.set_mood(Mood::Cruise);
+                    self.cruise_to(rng);
+                }
+            },
             Mood::Rest => {
                 let bed = self.bed(self.shark.tx) as f32;
                 let s = &mut self.shark;
@@ -481,6 +495,7 @@ impl Sea {
             Mood::Glide => (rig.cruise * 0.8, 0.015),
             Mood::Rest => (rig.cruise * 0.4, 0.015),
             Mood::Feed => (rig.cruise * 0.8, 0.015),
+            Mood::Ram => ((rig.burst * 0.5).max(rig.cruise * 1.2), 0.05),
         };
         s.speed += (want - s.speed) * accel;
         // Turn round when where it is going is behind it.

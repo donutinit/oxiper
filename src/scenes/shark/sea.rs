@@ -4,9 +4,12 @@
 use super::art::Kind;
 use super::hunter::Shark;
 use super::life::Life;
-use super::muertos::{Dress, Muertos};
+use super::muertos::Muertos;
+use super::navidad::Navidad;
 use super::water::{self, Col, RAY_LEVELS, SandRow};
-use super::{Dice, KEY, Light, Pal, Rgb, Rng, STEP, Settings, WORLD_H, ZOOMS, col, keys, noise};
+use super::{
+    Dice, Dressing, KEY, Light, Pal, Rgb, Rng, STEP, Settings, WORLD_H, ZOOMS, col, keys, noise,
+};
 use crate::render::Pixels;
 
 /// Mean row of the waterline; above it is the sky, seen through the surface.
@@ -110,6 +113,8 @@ pub struct Sea {
     weights: Vec<u32>,
     /// Día de Muertos, when it is on.
     pub muertos: Option<Muertos>,
+    /// Navidad, when it is on.
+    pub navidad: Option<Navidad>,
 }
 
 impl Sea {
@@ -120,7 +125,7 @@ impl Sea {
         pal: Pal,
         set: Settings,
         kind: Kind,
-        dress: Option<Dress>,
+        dressing: Dressing,
     ) -> Sea {
         let (sw, sph) = (cols.max(1) as i32, 2 * rows.max(1) as i32);
         let seed = rng.u32(..);
@@ -158,6 +163,7 @@ impl Sea {
             taps_y: Vec::new(),
             weights: Vec::new(),
             muertos: None,
+            navidad: None,
         };
         let (vw, vh) = sea.view_size();
         let (bw, bh) = (vw.ceil() as usize + 3, vh.ceil() as usize + 3);
@@ -173,8 +179,14 @@ impl Sea {
             .populate(&sea.shark, sea.tropical, sea.set.fish, vw, rng);
         sea.place_schools(rng);
         sea.update_light();
-        sea.dress(dress);
+        sea.wear(dressing);
         sea
+    }
+
+    /// Puts on (or takes off) the dress of whichever holiday is on.
+    pub fn wear(&mut self, dressing: Dressing) {
+        self.dress(dressing.muertos);
+        self.dress_navidad(dressing.navidad);
     }
 
     pub fn cam(&self) -> (f32, f32) {
@@ -270,6 +282,7 @@ impl Sea {
         self.update_shark(rng);
         self.update_life(rng);
         self.update_muertos();
+        self.update_navidad();
         self.follow();
         self.rebase();
     }
@@ -353,6 +366,9 @@ impl Sea {
         self.cam_x -= shift;
         self.shark.shift(shift);
         self.life.shift(shift);
+        if let Some(n) = &mut self.navidad {
+            n.shift(shift);
+        }
     }
 
     pub fn view(&self) -> View {
@@ -436,6 +452,7 @@ impl Sea {
         self.paint_backdrop(v);
         self.paint_floor(v);
         self.paint_ofrendas();
+        self.paint_navidad();
         self.draw_life_behind();
         self.draw_shark();
         self.draw_life_front();

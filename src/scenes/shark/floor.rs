@@ -55,6 +55,12 @@ impl Sea {
         Feature::Bare
     }
 
+    /// Whether a holiday has a sunken spot on the floor's cell at local
+    /// columns `x0..x0 + w`, which then stays bare.
+    fn sunken_on(&self, x0: i32, w: i32) -> bool {
+        self.ofrenda_on(x0, w) || self.portal_on(x0, w)
+    }
+
     /// What grows and lies on the floor: kelp standing in the haze on the
     /// near reef, then, on the sand under the shark, cell by cell, rocks,
     /// gardens, meadows, kelp and the odd starfish.
@@ -89,8 +95,9 @@ impl Sea {
         );
         for c in lo.div_euclid(CELL as i64) as i32..=hi.div_euclid(CELL as i64) as i32 {
             let x0 = c * CELL - shift as i32;
-            // On Día de Muertos the sand is cleared for the ofrendas.
-            if self.muertos.is_some() && self.ofrenda_on(x0, CELL) {
+            // On a holiday the sand is cleared for its sunken spots: the
+            // ofrendas, the portales.
+            if self.sunken_on(x0, CELL) {
                 continue;
             }
             match self.feature(c) {

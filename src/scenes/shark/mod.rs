@@ -21,6 +21,7 @@
 //! - `sea.rs`: light by depth and time of day, the camera, and the
 //!   projection onto the screen.
 //! - `muertos.rs`: Día de Muertos, below.
+//! - `navidad.rs`: Navidad, below.
 //!
 //! On Día de Muertos the shark wears calavera face paint (a sugar skull's
 //! white face, marigold eye sockets, a stitched grin, gill slits in papel
@@ -29,6 +30,14 @@
 //! lit, a path of cempasúchil petals leading to each; the higher the level,
 //! the fuller they are. Petals float on the surface and sink slowly to the
 //! sand. None of it exists on an ordinary day, and its randomness is its own.
+//!
+//! On Navidad the jellyfish glow like strings of foquitos, in red, green,
+//! blue and gold, blinking in turns; a piñata of siete picos is dropped into
+//! the sea now and then and sinks slowly, turning, until the shark rams it
+//! and colación, tejocotes, cañas and mandarinas scatter and sink to the
+//! sand; and the spots where Día de Muertos puts its ofrendas hold a portal
+//! de Belén thatched in heno, strung with foquitos and lit by farolitos. The
+//! further into the posadas, the more of all of it.
 //!
 //! The only things done to the sprites at run time are tilting and bending
 //! them (whole pixels moved, none lost or doubled) and lighting them. The
@@ -41,13 +50,13 @@ mod floor;
 mod hunter;
 mod life;
 mod muertos;
+mod navidad;
 mod sea;
 mod water;
 
 use crate::color::Color;
 use crate::render::Canvas;
 use crate::scene::{Ctx, Opt, Scene, SceneInfo, Val};
-use muertos::Dress;
 use sea::Sea;
 
 pub const INFO: SceneInfo = SceneInfo {
@@ -348,6 +357,22 @@ struct Settings {
     rest_scale: f32,
 }
 
+/// What the holiday on today dresses the sea in: at most one of them is set.
+#[derive(Clone, Copy, Default)]
+struct Dressing {
+    muertos: Option<muertos::Dress>,
+    navidad: Option<navidad::Dress>,
+}
+
+impl Dressing {
+    fn of(ctx: &Ctx) -> Dressing {
+        Dressing {
+            muertos: muertos::Dress::of(ctx),
+            navidad: navidad::Dress::of(ctx),
+        }
+    }
+}
+
 /// The scene: the sea, stepped at a steady pace.
 struct SharkScene {
     sea: Sea,
@@ -362,8 +387,8 @@ struct SharkScene {
     dirty: bool,
     /// The time of day last painted.
     drawn_t: f32,
-    /// Día de Muertos's colors and level, when it is on.
-    dress: Option<Dress>,
+    /// Today's holiday, dressed in the theme's colors.
+    dressing: Dressing,
 }
 
 impl SharkScene {
@@ -387,8 +412,8 @@ impl SharkScene {
             KindOpt::One(k) => k,
             KindOpt::Random => art::Kind::ALL[rng.usize(..art::Kind::ALL.len())],
         };
-        let dress = Dress::of(ctx);
-        let sea = Sea::new(80, 24, &mut rng, Pal::new(ctx), set, kind, dress);
+        let dressing = Dressing::of(ctx);
+        let sea = Sea::new(80, 24, &mut rng, Pal::new(ctx), set, kind, dressing);
         SharkScene {
             sea,
             rng,
@@ -398,7 +423,7 @@ impl SharkScene {
             acc: 0.0,
             dirty: true,
             drawn_t: 0.0,
-            dress,
+            dressing,
         }
     }
 }
@@ -415,7 +440,7 @@ impl Scene for SharkScene {
             self.sea.pal,
             self.set,
             kind,
-            self.dress,
+            self.dressing,
         );
         self.sea.t = t;
         self.sea.update_light();
@@ -425,8 +450,8 @@ impl Scene for SharkScene {
     fn retheme(&mut self, ctx: &Ctx) {
         self.sea.pal = Pal::new(ctx);
         self.sea.update_light();
-        self.dress = Dress::of(ctx);
-        self.sea.dress(self.dress);
+        self.dressing = Dressing::of(ctx);
+        self.sea.wear(self.dressing);
         self.dirty = true;
     }
 

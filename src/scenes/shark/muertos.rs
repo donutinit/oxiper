@@ -194,9 +194,9 @@ impl Dab {
 // ----- the ofrendas -----
 
 /// Width of the stretch of sand each ofrenda may stand in.
-const SPAN: i64 = 230;
+pub const SPAN: i64 = 230;
 /// An ofrenda's width; its middle is between columns 18 and 19.
-const OFR_W: i32 = 38;
+pub const OFR_W: i32 = 38;
 /// The three steps, from the bottom: first and last column, and how high
 /// above the foot the cloth on top lies.
 const TIERS: [(i32, i32, i32); 3] = [(0, 37, 5), (3, 34, 13), (7, 30, 21)];
@@ -498,11 +498,26 @@ impl Sea {
     fn ofrendas(
         &self,
         (level, first): (f32, i64),
+        range: (f32, f32),
+        reach: f32,
+        out: &mut [(i64, i32); 4],
+    ) -> usize {
+        self.spots(0.45 + 0.45 * level, first, range, reach, out)
+    }
+
+    /// The middle (local column) of every sunken spot within `reach` of local
+    /// columns `lo..hi`, with its number: each stretch of sand of [`SPAN`]
+    /// has one with chance `p`, dealt by hashing, and there is always one
+    /// where the shark starts out, at `first`. Other holidays dress the same
+    /// spots.
+    pub fn spots(
+        &self,
+        p: f32,
+        first: i64,
         (lo, hi): (f32, f32),
         reach: f32,
         out: &mut [(i64, i32); 4],
     ) -> usize {
-        let p = 0.45 + 0.45 * level;
         let (a, b) = (
             (self.base as f64 + (lo - reach) as f64).floor() as i64,
             (self.base as f64 + (hi + reach) as f64).ceil() as i64,
@@ -634,7 +649,7 @@ impl Sea {
 
     /// A pixel of the ofrenda, lit for its depth.
     #[inline]
-    fn dot(&mut self, x: i32, y: i32, c: Rgb) {
+    pub fn dot(&mut self, x: i32, y: i32, c: Rgb) {
         let c = self.shade(c, y, 0.05);
         self.put(x, y, c);
     }

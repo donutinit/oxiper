@@ -103,11 +103,36 @@ pub struct Visitor {
 
 /// A jellyfish, pulsing up and sinking back.
 #[derive(Clone, Copy)]
-struct Jelly {
-    x: f32,
-    y: f32,
-    phase: f32,
-    front: bool,
+pub struct Jelly {
+    pub x: f32,
+    pub y: f32,
+    pub phase: f32,
+    /// Drawn in front of the shark rather than behind it.
+    pub front: bool,
+}
+
+impl Jelly {
+    /// One step of its drifting: a pulse lifts it, short of the surface;
+    /// between pulses it sinks a little. Once left far behind, it comes back
+    /// in from the other side.
+    pub fn drift(&mut self, cam: f32, reach: f32, rng: &mut impl Dice) {
+        self.phase = (self.phase + 0.035) % std::f32::consts::TAU;
+        self.y += if self.phase < 1.2 && self.y > SURF as f32 + 18.0 {
+            -0.16
+        } else {
+            0.035
+        };
+        self.x += 0.04;
+        if (self.x - cam).abs() > reach || self.y > 115.0 {
+            self.x = cam
+                + if self.x < cam {
+                    reach - 5.0
+                } else {
+                    5.0 - reach
+                };
+            self.y = rng.rangef(40.0, 105.0);
+        }
+    }
 }
 
 /// A lanternfish: up from the deep at night, its lights blinking.
@@ -127,7 +152,7 @@ pub struct Life {
     bubbles: Vec<Bubble>,
     pub flecks: Vec<Fleck>,
     pub visitors: Vec<Visitor>,
-    jellies: Vec<Jelly>,
+    pub jellies: Vec<Jelly>,
     lanterns: Vec<Lantern>,
 }
 
@@ -609,19 +634,7 @@ impl Sea {
         let (cam, _) = self.cam();
         let reach = vw * 0.75 + 30.0;
         for j in &mut self.life.jellies {
-            j.phase = (j.phase + 0.035) % std::f32::consts::TAU;
-            // A pulse lifts it, short of the surface; between pulses it sinks
-            // a little.
-            j.y += if j.phase < 1.2 && j.y > SURF as f32 + 18.0 {
-                -0.16
-            } else {
-                0.035
-            };
-            j.x += 0.04;
-            if (j.x - cam).abs() > reach || j.y > 115.0 {
-                j.x = cam + if j.x < cam { reach - 5.0 } else { 5.0 - reach };
-                j.y = rng.rangef(40.0, 105.0);
-            }
+            j.drift(cam, reach, rng);
         }
         for l in &mut self.life.lanterns {
             l.phase += 0.2;
@@ -667,19 +680,43 @@ impl Sea {
             if j.front != front {
                 continue;
             }
-            let sprite = art::JELLY[(j.phase < 1.2) as usize];
-            let w = sprite[0].len() as i32;
-            let (x0, y0) = ((j.x - w as f32 / 2.0).round() as i32, j.y.round() as i32);
-            for (r, row) in sprite.iter().enumerate() {
-                for (c, ch) in row.bytes().enumerate() {
-                    let Some(&(_, color)) = art::JELLY_COLORS.iter().find(|(k, _)| *k == ch) else {
-                        continue;
-                    };
-                    let y = y0 + r as i32;
-                    let a = if ch == b't' { 0.32 } else { 0.55 };
-                    let color = self.shade(color, y, 0.0);
-                    self.blend(x0 + c as i32, y, color, a);
-                }
+            let glow = self.jelly_glow(i);
+            self.draw_jelly(j, glow);
+        }
+        self.draw_lamps(front);
+    }
+
+    /// One jellyfish, see-through. On a holiday it may glow instead, in a
+    /// color and at a brightness (0 to 1).
+    pub fn draw_jelly(&mut self, j: Jelly, glow: Option<(Rgb, f32)>) {
+        let sprite = art::JELLY[(j.phase < 1.2) as usize];
+        let w = sprite[0].len() as i32;
+        let (x0, y0) = ((j.x - w as f32 / 2.0).round() as i32, j.y.round() as i32);
+        if let Some((light, k)) = glow {
+            self.jelly_halo(x0 + w / 2, y0 + 2, light, k);
+        }
+        for (r, row) in sprite.iter().enumerate() {
+            for (c, ch) in row.bytes().enumerate() {
+                let Some(&(_, color)) = art::JELLY_COLORS.iter().find(|(k, _)| *k == ch) else {
+                    continue;
+                };
+                let y = y0 + r as i32;
+                let mut a = if ch == b't' { 0.32 } else { 0.55 };
+                let color = match glow {
+                    // Lit from inside: the rings white-hot, the bell paler
+                    // than its rim, all of it brighter as it blinks.
+                    Some((light, k)) => {
+                        a += 0.3 * k;
+                        let c = match ch {
+                            b'g' => light.lerp(Rgb::WHITE, 0.7),
+                            b'A' => light.lerp(Rgb::WHITE, 0.3),
+                            _ => light,
+                        };
+                        c.scale(0.75 + 0.5 * k)
+                    }
+                    None => self.shade(color, y, 0.0),
+                };
+                self.blend(x0 + c as i32, y, color, a);
             }
         }
     }
@@ -718,6 +755,17 @@ impl Sea {
         }
     }
 
+    /// How a holiday colors a speck of marine snow, if it does: its color
+    /// and strength.
+    fn fiesta_mote(&self, i: usize, near: f32, phase: f32) -> Option<(Rgb, f32)> {
+        self.navidad_mote(i, near, phase)
+    }
+
+    /// The color of the lights lanternfish `i` carries on a holiday.
+    fn fiesta_lamp(&self, i: usize) -> Option<Rgb> {
+        self.navidad_lamp(i)
+    }
+
     /// Marine snow and flecks of light, straight onto the screen: one pixel
     /// each, so zooming out cannot blur them away.
     pub fn draw_motes(&mut self, v: View) {
@@ -745,7 +793,10 @@ impl Sea {
                     let a = (0.25 + 0.45 * near) * (0.45 + 0.55 * dark) * twinkle;
                     self.blend_out(sx, sy, muertos::GLOW, a);
                 }
-                _ => self.blend_out(sx, sy, c, a),
+                _ => match self.fiesta_mote(i, near, m.phase) {
+                    Some((fc, fa)) => self.blend_out(sx, sy, fc, fa),
+                    None => self.blend_out(sx, sy, c, a),
+                },
             }
         }
         let tick = self.tick;
@@ -767,6 +818,7 @@ impl Sea {
                 }
                 let face = if l.vx >= 0.0 { 1.0 } else { -1.0 };
                 let blink = 0.55 + 0.45 * (l.phase * 0.31).sin();
+                let lamp = self.fiesta_lamp(i).unwrap_or(lamp);
                 let (sx, sy) = v.to_screen(l.x + face * 1.5, y + 0.6);
                 self.blend_out(sx, sy, lamp, dark * blink);
                 let (sx, sy) = v.to_screen(l.x - face * 1.2, y + 0.6);
@@ -776,6 +828,7 @@ impl Sea {
                 let j = self.life.jellies[i];
                 let (sx, sy) = v.to_screen(j.x, j.y + 2.0);
                 let glow = dark * (0.35 + 0.25 * (j.phase).sin());
+                let jelly = self.jelly_glow(i).map_or(jelly, |(c, _)| c);
                 self.blend_out(sx, sy, jelly, glow);
             }
         }
