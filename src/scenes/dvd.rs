@@ -31,9 +31,19 @@
 //! sparks of gold come out of it. From January 2 to 6 the logo is a rosca de
 //! reyes, with more candied fruit on it as the Reyes come closer; at a
 //! corner the muñeco shows in its hole: "¡TE SALIÓ EL MUÑECO!".
+//!
+//! In the Fiestas Patrias the logo is a sombrero de charro with gold
+//! embroidery and a band in the colors of the flag, which a bounce turns
+//! around the crown a stripe. It sheds papelitos verde, blanco y rojo that
+//! pile up along the bottom row, more as the month goes on, and banderitas
+//! go up on its crown (one in the first week, three after that). At a corner
+//! the sombrero is tipped, its brim curling up in a smile, a burst of
+//! papelitos and sparks of gold flies off and the banner reads "¡VIVA
+//! MÉXICO!".
 
 mod muertos;
 mod navidad;
+mod patrias;
 
 use crate::color::{Color, rgb};
 use crate::fiesta::{Fiesta, Kind};
@@ -251,6 +261,7 @@ fn look_for(f: Fiesta) -> Option<&'static Look> {
     match f.kind {
         Kind::Muertos => Some(&muertos::LOOK),
         Kind::Navidad => Some(navidad::look(f)),
+        Kind::Patrias => Some(&patrias::LOOK),
         _ => None,
     }
 }
@@ -338,6 +349,7 @@ fn glyph_es(ch: char) -> Option<[u8; 5]> {
     match ch {
         '¡' => Some([0x04, 0x00, 0x04, 0x04, 0x04]),
         'ó' | 'Ó' => Some([0x02, 0x0e, 0x11, 0x11, 0x0e]),
+        'é' | 'É' => Some([0x02, 0x1f, 0x10, 0x1c, 0x1f]),
         'ñ' | 'Ñ' => Some([0x0a, 0x19, 0x15, 0x13, 0x11]),
         _ => glyph(ch),
     }
@@ -1426,6 +1438,8 @@ mod tests {
             ("año nuevo", Fiesta::of_day(12, 31)),
             ("reyes", Fiesta::of_day(1, 3)),
             ("rosca", Fiesta::of_day(1, 6)),
+            ("mes patrio", Fiesta::of_day(9, 2)),
+            ("grito", Fiesta::of_day(9, 15)),
         ]
     }
 
@@ -1908,5 +1922,73 @@ mod tests {
                 assert!(d.joke_t >= PARTY && !d.logos[0].jest);
             }
         }
+    }
+
+    #[test]
+    fn patrias_dresses_the_logo() {
+        let o = crate::scene::Opts::new(INFO.options, toml::Table::new());
+        let flag = [rgb(0x006847), rgb(0xf4f1ea), rgb(0xce1126)];
+        for theme in ["classic", "gruvbox"] {
+            let th = crate::theme::Theme::builtin(theme).unwrap();
+            let mut banderas = Vec::new();
+            for day in [2, 15] {
+                let ctx = ctx(&th, &o, Fiesta::of_day(9, day));
+                let mut d = dressed(&ctx, 120, 40);
+                // A sombrero: felt, gold and the three stripes of the band.
+                for p in b"fdgvwr" {
+                    assert!(parts(&d, &[*p]) > 0, "{}", *p as char);
+                }
+                banderas.push(parts(&d, b"vwr"));
+                let c = play(&mut d, &ctx, 20.0);
+                if th.native {
+                    // The band is the flag, whichever way it has turned.
+                    for col in flag {
+                        assert!(c.cells().iter().any(|cell| cell.fg == col), "{col:?}");
+                    }
+                    assert_eq!(d.palette, flag.to_vec());
+                }
+                assert!(!d.bits.is_empty() || d.floor.iter().any(|f| f.life > 0.0));
+                let banner = Sprite::fit_lines(&["¡VIVA", "MÉXICO!"], 120, 40);
+                assert_eq!(d.banner.cells, banner.cells);
+                // At a corner the sombrero is tipped, its brim curling up.
+                d.celebrate(0);
+                let mut c = Canvas::new(120, 40, Color::Reset);
+                d.draw(&ctx, &mut c);
+                assert_ne!(d.laugh.cells, d.sprite.cells);
+                assert!(c.to_text().contains("esquinas: 1"));
+            }
+            // More banderitas as the mes patrio goes on.
+            assert!(banderas[1] > banderas[0], "{banderas:?}");
+        }
+    }
+
+    #[test]
+    fn the_band_turns_with_each_bounce() {
+        let o = crate::scene::Opts::new(INFO.options, toml::Table::new());
+        let th = crate::theme::Theme::builtin("classic").unwrap();
+        let ctx = ctx(&th, &o, Fiesta::of_day(9, 15));
+        let mut d = dressed(&ctx, 120, 40);
+        let mut left = Vec::new();
+        for color in 0..3 {
+            d.logos[0].color = color;
+            d.logos[0].x = 0.0;
+            d.logos[0].y = 0.0;
+            let mut c = Canvas::new(120, 40, Color::Reset);
+            d.draw(&ctx, &mut c);
+            // The stripe at the left end of the band.
+            let x = d.sprite.parts.chunks(d.sprite.w as usize).find_map(|row| {
+                let first = row.iter().position(|p| *p == b'v')?;
+                Some(first)
+            });
+            let y = d
+                .sprite
+                .parts
+                .chunks(d.sprite.w as usize)
+                .position(|r| r.contains(&b'v'));
+            left.push(c.get(x.unwrap() as i32, y.unwrap() as i32).unwrap().fg);
+        }
+        left.sort_by_key(|c| format!("{c:?}"));
+        left.dedup();
+        assert_eq!(left.len(), 3, "each stripe in turn");
     }
 }
