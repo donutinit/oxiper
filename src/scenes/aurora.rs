@@ -32,6 +32,16 @@
 //! `look = "patzcuaro"` shows it on any day. Its randomness has its own RNG,
 //! so ordinary days stay exactly as they were.
 //!
+//! During the Navidad the night moves to the desert hills of the nacimiento:
+//! the little town of Belén lit on its hills with the portal at its heart,
+//! the Estrella de Belén hanging over it with a long tail, pastores around
+//! their fogata with their sheep, palms and dunes under the stars, and the
+//! Reyes Magos on horse, camel and elephant crossing the sand, a little
+//! closer each day of January until they reach the portal on the 6th. More
+//! windows are lit and the star burns brighter as the posadas go, the Niño
+//! Dios lies in the manger from Nochebuena on, and the cycle shows Belén
+//! most of the time; `look = "belen"` shows it on any day.
+//!
 //! MIT License
 //!
 //! Copyright (c) 2026 Santiago Sánchez
@@ -54,7 +64,7 @@
 //! OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 //! SOFTWARE.
 
-use std::f32::consts::PI;
+use std::f32::consts::{PI, TAU};
 
 use crate::color::{Color, ansi_rgb};
 use crate::eggs::{self, Egg};
@@ -81,7 +91,7 @@ pub const INFO: SceneInfo = SceneInfo {
         Opt {
             key: "look",
             default: Val::S("cycle"),
-            help: "cycle, or one look to stay on: tanim, emerald, crimson, ultraviolet, ice, synthwave, ember, prism, starry, patzcuaro (Día de Muertos)",
+            help: "cycle, or one look to stay on: tanim, emerald, crimson, ultraviolet, ice, synthwave, ember, prism, starry, patzcuaro (Día de Muertos), belen (Navidad)",
         },
         Opt {
             key: "stay",
@@ -159,6 +169,11 @@ struct Look {
     /// How much of Pátzcuaro's Día de Muertos night shows: Janitzio and its
     /// candles, the butterfly-net canoes and the monarchs.
     muertos: f32,
+    /// How much of the pine forest on the near shore shows (the desert has
+    /// none), and how much of Belén's Navidad night: the town, the star, the
+    /// dunes and the Reyes Magos.
+    forest: f32,
+    belen: f32,
 }
 
 /// tanim's night.
@@ -186,14 +201,17 @@ const TANIM: Look = Look {
     prism: 0.0,
     starry: 0.0,
     muertos: 0.0,
+    forest: 1.0,
+    belen: 0.0,
 };
 
-/// The looks the cycle picks from on an ordinary day: all but Pátzcuaro.
+/// The looks the cycle picks from on an ordinary day: all but the holidays'.
 const ORDINARY: usize = 9;
-/// Pátzcuaro's place in `LOOKS`.
+/// The holidays' places in `LOOKS`: Pátzcuaro's, Belén's.
 const PATZCUARO: usize = 9;
+const BELEN: usize = 10;
 
-const LOOKS: [(&str, Look); 10] = [
+const LOOKS: [(&str, Look); 11] = [
     ("tanim", TANIM),
     (
         "emerald",
@@ -368,6 +386,33 @@ const LOOKS: [(&str, Look); 10] = [
             ..TANIM
         },
     ),
+    (
+        "belen",
+        Look {
+            // Dorado at the lower edge, plata, verde pino and a breath of
+            // rojo nochebuena at the top, over a deep blue night.
+            glow: [
+                c8(242, 182, 50),
+                c8(201, 204, 214),
+                c8(46, 150, 84),
+                c8(200, 16, 46),
+            ],
+            sky_top: c8(4, 6, 22),
+            sky_low: c8(22, 26, 60),
+            far: c8(40, 30, 28),
+            near: c8(24, 17, 14),
+            snow: c8(60, 45, 42),
+            pine: c8(24, 17, 14),
+            water: c8(6, 8, 20),
+            star: c8(255, 244, 214),
+            glint: c8(242, 182, 50),
+            rim: c8(242, 182, 50),
+            rim_k: 0.25,
+            forest: 0.0,
+            belen: 1.0,
+            ..TANIM
+        },
+    ),
 ];
 
 /// Van Gogh's brushstrokes, from the deepest blue to the palest yellow.
@@ -411,6 +456,8 @@ impl Look {
             prism: f(self.prism, o.prism),
             starry: f(self.starry, o.starry),
             muertos: f(self.muertos, o.muertos),
+            forest: f(self.forest, o.forest),
+            belen: f(self.belen, o.belen),
         }
     }
 
@@ -615,10 +662,222 @@ struct Monarch {
     flap: f32,
 }
 
-/// The share of looks that are Pátzcuaro's while the holiday is on: most of
+/// The share of looks that are the holiday's own while it is on: most of
 /// them from the first day, nearly all at its height.
-fn patzcuaro_share(level: f32) -> f32 {
+fn fiesta_share(level: f32) -> f32 {
     0.6 + 0.35 * level.clamp(0.0, 1.0)
+}
+
+/// The look a holiday moves the cycle to, for the holidays aurora has one for.
+fn fiesta_look(kind: Kind) -> Option<usize> {
+    match kind {
+        Kind::Muertos => Some(PATZCUARO),
+        Kind::Navidad => Some(BELEN),
+        _ => None,
+    }
+}
+
+/// The colors of Belén's night. Lamps, the fire and the Niño Dios keep their
+/// own hue under every theme; the rest comes from the theme.
+#[derive(Clone, Copy)]
+struct Nacimiento {
+    /// The sand, from the farthest dunes to the nearest.
+    dune: [V3; 3],
+    /// The town: walls in shade, and the parapets and domes the star lights.
+    adobe: [V3; 2],
+    /// A lit window and the Niño Dios' light.
+    lamp: [V3; 2],
+    /// The portal's roof and its straw.
+    roof: V3,
+    straw: V3,
+    /// The Estrella de Belén: its heart and its tail.
+    star: [V3; 2],
+    /// A palm's fronds and trunk.
+    palm: [V3; 2],
+    /// A sheep's wool and a shepherd's cloak.
+    wool: V3,
+    cloak: V3,
+    /// The Reyes: Melchor's, Gaspar's and Baltasar's robes; their crowns and
+    /// gifts, the cloth under them, their skin and the elephant's tusks.
+    robe: [V3; 3],
+    gold: V3,
+    cloth: V3,
+    skin: V3,
+    tusk: V3,
+    /// The horse, the camel and the elephant.
+    beast: [V3; 3],
+}
+
+impl Nacimiento {
+    fn new(t: &Theme) -> Nacimiento {
+        let lamp = [c8(255, 196, 84), c8(255, 226, 150)];
+        if t.native {
+            return Nacimiento {
+                dune: [c8(58, 44, 40), c8(76, 53, 38), c8(100, 68, 40)],
+                adobe: [c8(74, 52, 40), c8(130, 96, 64)],
+                lamp,
+                roof: c8(110, 84, 46),
+                straw: c8(170, 146, 86),
+                star: [c8(255, 248, 230), c8(242, 182, 50)],
+                palm: [c8(31, 111, 58), c8(100, 60, 30)],
+                wool: c8(228, 224, 214),
+                cloak: c8(139, 74, 30),
+                robe: [c8(200, 16, 46), c8(31, 111, 58), c8(201, 204, 214)],
+                gold: c8(242, 182, 50),
+                cloth: c8(180, 130, 40),
+                skin: c8(150, 100, 70),
+                tusk: c8(244, 241, 234),
+                beast: [c8(120, 64, 28), c8(160, 138, 86), c8(130, 132, 140)],
+            };
+        }
+        let at = |k: f32| v3(t.grad.at(k));
+        let (low, mid, high, bg) = (at(0.0), at(0.5), at(1.0), v3(t.bg));
+        Nacimiento {
+            dune: [mix(bg, low, 0.5), mix(bg, mid, 0.3), mix(bg, mid, 0.5)],
+            adobe: [mix(low, mid, 0.35), mix(mid, high, 0.5)],
+            lamp,
+            roof: scale(low, 0.6),
+            straw: mix(mid, high, 0.6),
+            star: [high, mix(mid, high, 0.5)],
+            palm: [mix(low, mid, 0.5), scale(low, 0.6)],
+            wool: mix(mid, high, 0.85),
+            cloak: mix(low, mid, 0.5),
+            robe: [at(1.0), at(0.5), at(0.75)],
+            gold: high,
+            cloth: at(0.4),
+            skin: mix(mid, high, 0.4),
+            tusk: high,
+            beast: [
+                scale(mix(low, mid, 0.3), 0.6),
+                scale(mix(low, mid, 0.5), 0.7),
+                scale(mix(low, mid, 0.4), 0.65),
+            ],
+        }
+    }
+}
+
+/// One piece of a king or his mount, in units (a pixel at scale 1) with x
+/// forward and y up from the feet (so negative).
+#[derive(Clone, Copy)]
+enum Part {
+    /// A filled ellipse: center and radii.
+    Ell(f32, f32, f32, f32),
+    /// A thick line: from, to and thickness.
+    Seg(f32, f32, f32, f32, f32),
+    /// A leg swinging with the gait: hip, length, thickness and where in the
+    /// step it is.
+    Leg(f32, f32, f32, f32, f32),
+}
+use Part::{Ell, Leg, Seg};
+
+/// What a part is painted in: the beast, the king's robe, gold, the cloth
+/// under the king, skin, tusk, the ear.
+const BEAST: u8 = 0;
+const ROBE: u8 = 1;
+const GOLD: u8 = 2;
+const CLOTH: u8 = 3;
+const SKIN: u8 = 4;
+const TUSK: u8 = 5;
+const EAR: u8 = 6;
+
+/// Melchor on his horse, Gaspar on his camel and Baltasar on his elephant,
+/// each crowned and carrying a gift.
+const HORSE: [(Part, u8); 15] = [
+    (Leg(-4.5, -6.0, 6.0, 1.2, 0.0), BEAST),
+    (Leg(-3.0, -6.0, 6.0, 1.2, PI), BEAST),
+    (Ell(0.0, -8.2, 6.4, 3.1), BEAST),
+    (Seg(4.6, -9.6, 7.6, -14.0, 1.8), BEAST),
+    (Seg(7.6, -14.2, 10.8, -12.8, 1.7), BEAST),
+    (Seg(-6.0, -9.2, -8.8, -5.4, 0.9), BEAST),
+    (Leg(3.5, -6.0, 6.0, 1.2, PI), BEAST),
+    (Leg(5.0, -6.0, 6.0, 1.2, 0.0), BEAST),
+    (Ell(0.0, -10.4, 3.4, 0.9), CLOTH),
+    (Seg(-0.5, -12.4, -4.5, -10.2, 1.6), ROBE),
+    (Ell(0.6, -12.6, 2.1, 2.3), ROBE),
+    (Ell(0.8, -16.0, 1.2, 1.2), SKIN),
+    (Ell(0.8, -17.4, 1.5, 0.8), GOLD),
+    (Ell(3.2, -12.2, 0.9, 0.9), GOLD),
+    (Ell(-0.8, -11.0, 1.0, 1.0), GOLD),
+];
+const CAMEL: [(Part, u8); 18] = [
+    (Leg(-6.0, -7.5, 7.5, 1.3, 0.0), BEAST),
+    (Leg(-3.8, -7.5, 7.5, 1.3, PI), BEAST),
+    (Ell(0.0, -10.2, 7.6, 3.3), BEAST),
+    (Ell(-1.2, -13.6, 2.6, 2.0), BEAST),
+    (Seg(6.6, -11.6, 9.6, -15.8, 1.8), BEAST),
+    (Seg(9.6, -15.8, 11.4, -17.4, 1.7), BEAST),
+    (Seg(11.4, -17.2, 14.0, -16.6, 1.7), BEAST),
+    (Seg(-7.4, -11.0, -8.6, -7.4, 0.9), BEAST),
+    (Leg(4.6, -7.5, 7.5, 1.3, PI), BEAST),
+    (Leg(6.6, -7.5, 7.5, 1.3, 0.0), BEAST),
+    (Ell(-1.2, -15.0, 3.4, 1.1), CLOTH),
+    (Seg(-2.6, -17.2, -6.5, -14.6, 1.4), ROBE),
+    (Ell(-1.0, -17.4, 2.0, 2.3), ROBE),
+    (Ell(-0.8, -20.6, 1.2, 1.2), SKIN),
+    (Ell(-0.8, -22.0, 1.5, 0.8), GOLD),
+    (Ell(1.8, -17.0, 0.9, 0.9), GOLD),
+    (Ell(-1.6, -13.0, 0.9, 0.9), GOLD),
+    (Ell(-4.0, -14.4, 0.7, 0.7), GOLD),
+];
+const ELEPHANT: [(Part, u8); 17] = [
+    (Leg(-6.5, -6.0, 6.0, 2.6, 0.0), BEAST),
+    (Leg(-3.6, -6.0, 6.0, 2.6, PI), BEAST),
+    (Ell(0.0, -10.2, 9.0, 5.2), BEAST),
+    (Ell(9.6, -11.4, 3.6, 4.2), BEAST),
+    (Ell(7.0, -11.8, 2.0, 3.2), EAR),
+    (Seg(12.2, -9.6, 13.8, -5.0, 2.2), BEAST),
+    (Seg(13.8, -5.0, 13.0, -2.4, 1.5), BEAST),
+    (Seg(11.8, -8.2, 14.6, -7.4, 0.9), TUSK),
+    (Seg(-9.0, -10.5, -10.6, -5.2, 0.8), BEAST),
+    (Leg(3.8, -6.0, 6.0, 2.6, PI), BEAST),
+    (Leg(6.8, -6.0, 6.0, 2.6, 0.0), BEAST),
+    (Ell(0.2, -14.6, 6.0, 1.3), CLOTH),
+    (Ell(0.2, -17.2, 2.3, 2.2), ROBE),
+    (Ell(0.4, -20.2, 1.2, 1.2), SKIN),
+    (Ell(0.4, -21.6, 1.5, 0.8), GOLD),
+    (Ell(3.0, -17.0, 0.9, 0.9), GOLD),
+    (Ell(-3.2, -15.6, 0.8, 0.8), GOLD),
+];
+
+/// The portal de Belén: the stable's roof (`r`) and posts (`p`), the straw
+/// (`h`), María (`m`), José (`j`) and the Niño Dios in the manger (`n`).
+const PORTAL: [&str; 9] = [
+    "      r      ",
+    "     rrr     ",
+    "    rrrrr    ",
+    "   rrrrrrr   ",
+    "  rrrrrrrrr  ",
+    "p rrrrrrrrr p",
+    "p  m  n  j  p",
+    "p  m hhh j  p",
+    "hhhhhhhhhhhhh",
+];
+/// The portal on a smaller screen.
+const PORTAL_S: [&str; 5] = ["   r   ", "  rrr  ", "p m n j", "p mhhhj", "hhhhhhh"];
+
+/// One pixel of Belén's town or portal: where, what (0 wall, 1 window, 2 a
+/// lit parapet or dome, 4 roof, 5 post, 6 straw, 7 the Niño Dios, 8 José,
+/// 9 María), and a random number that decides when a window is lit.
+struct Spot {
+    x: i32,
+    y: i32,
+    part: u8,
+    r: f32,
+}
+
+/// A date palm on the dunes.
+struct Palm {
+    x: i32,
+    y: i32,
+    h: f32,
+    lean: f32,
+}
+
+/// A sheep grazing by the shepherds' fire, and how it wanders.
+struct Sheep {
+    x: f32,
+    y: i32,
+    phase: f32,
 }
 
 /// Where Pátzcuaro's night draws: the picture, which pixels are solid, its
@@ -782,6 +1041,200 @@ impl Layer<'_> {
         if let Some(i) = self.at(x, y) {
             self.px[i] = mix(self.px[i], c, self.m);
             self.solid[i] |= self.m >= 0.5;
+        }
+    }
+}
+
+/// What the Navidad's night draws with: shapes, fires, palms and the star.
+impl Layer<'_> {
+    /// A dark thing's color, brighter over a transparent sky.
+    fn dark(&self, col: V3) -> V3 {
+        scale(col, self.lift)
+    }
+
+    /// A filled ellipse, never thinner than a pixel.
+    fn ellipse(&mut self, cx: f32, cy: f32, rx: f32, ry: f32, col: V3) {
+        let (rx, ry) = (rx.max(0.7), ry.max(0.7));
+        let (y0, y1) = (
+            ((cy - ry).floor() as i32).max(0),
+            ((cy + ry).ceil() as i32).min(self.h - 1),
+        );
+        let (x0, x1) = (
+            ((cx - rx).floor() as i32).max(0),
+            ((cx + rx).ceil() as i32).min(self.w - 1),
+        );
+        for y in y0..=y1 {
+            for x in x0..=x1 {
+                let (u, v) = ((x as f32 + 0.5 - cx) / rx, (y as f32 + 0.5 - cy) / ry);
+                if u * u + v * v <= 1.0 {
+                    self.lamp(x, y, col);
+                }
+            }
+        }
+    }
+
+    /// A line `thick` pixels across, from one point to another.
+    fn stroke(&mut self, (ax, ay): (f32, f32), (bx, by): (f32, f32), thick: f32, col: V3) {
+        let r = thick.max(1.0) / 2.0;
+        let (dx, dy) = (bx - ax, by - ay);
+        let len2 = (dx * dx + dy * dy).max(1e-6);
+        let (y0, y1) = (
+            ((ay.min(by) - r).floor() as i32).max(0),
+            ((ay.max(by) + r).ceil() as i32).min(self.h - 1),
+        );
+        let (x0, x1) = (
+            ((ax.min(bx) - r).floor() as i32).max(0),
+            ((ax.max(bx) + r).ceil() as i32).min(self.w - 1),
+        );
+        for y in y0..=y1 {
+            for x in x0..=x1 {
+                let (px, py) = (x as f32 + 0.5 - ax, y as f32 + 0.5 - ay);
+                let t = ((px * dx + py * dy) / len2).clamp(0.0, 1.0);
+                let (qx, qy) = (px - t * dx, py - t * dy);
+                if qx * qx + qy * qy <= r * r {
+                    self.lamp(x, y, col);
+                }
+            }
+        }
+    }
+
+    /// A soft glow around (x, y), `rx` wide and `ry` high, `a` bright at its
+    /// heart.
+    fn halo(&mut self, x: i32, y: i32, rx: i32, ry: i32, col: V3, a: f32) {
+        let (rx, ry) = (rx.max(1), ry.max(1));
+        for dy in -ry..=ry {
+            for dx in -rx..=rx {
+                let d = (dx as f32 / rx as f32).powi(2) + (dy as f32 / ry as f32).powi(2);
+                if d < 1.0 {
+                    self.shine(x + dx, y + dy, col, a * (1.0 - d) * (1.0 - d));
+                }
+            }
+        }
+    }
+
+    /// A date palm: a leaning trunk and a crown of drooping fronds.
+    fn palm(&mut self, p: &Palm, n: &Nacimiento) {
+        let (x, y) = (p.x as f32, p.y as f32);
+        let top = (x + p.lean, y - p.h);
+        let (trunk, frond) = (self.dark(n.palm[1]), self.dark(n.palm[0]));
+        let mid = (x + p.lean * 0.3, y - p.h * 0.5);
+        let thick = 1.0 + p.h * 0.05;
+        self.stroke((x, y), mid, thick, trunk);
+        self.stroke(mid, top, thick, trunk);
+        let len = p.h * 0.5 + 1.0;
+        for k in 0..7 {
+            let a = PI * (0.08 + 0.84 * k as f32 / 6.0);
+            let (c, s) = (a.cos(), a.sin());
+            let tip = (
+                top.0 + c * len,
+                top.1 - s * len * 0.55 + c.abs() * len * 0.4,
+            );
+            self.stroke(top, tip, 1.0, frond);
+        }
+    }
+
+    /// A king on his mount at (x, foot), `s` times its size, walking when
+    /// `step` is more than 0 (`gait` is where in the stride it is).
+    fn rey(
+        &mut self,
+        kind: usize,
+        (x, foot): (f32, f32),
+        s: f32,
+        gait: f32,
+        step: f32,
+        n: &Nacimiento,
+    ) {
+        let parts: &[(Part, u8)] = match kind {
+            0 => &HORSE,
+            1 => &CAMEL,
+            _ => &ELEPHANT,
+        };
+        let colors = [
+            n.beast[kind.min(2)],
+            n.robe[kind.min(2)],
+            n.gold,
+            n.cloth,
+            n.skin,
+            n.tusk,
+            scale(n.beast[kind.min(2)], 0.8),
+        ];
+        // The rider rocks with the stride.
+        let bob = step * 0.5 * gait.sin().abs();
+        for &(part, c) in parts {
+            let col = colors[c as usize];
+            match part {
+                Part::Ell(cx, cy, rx, ry) => {
+                    self.ellipse(x + cx * s, foot + (cy + bob) * s, rx * s, ry * s, col);
+                }
+                Part::Seg(ax, ay, bx, by, th) => {
+                    let (a, b) = (
+                        (x + ax * s, foot + (ay + bob) * s),
+                        (x + bx * s, foot + (by + bob) * s),
+                    );
+                    self.stroke(a, b, th * s, col);
+                }
+                Part::Leg(hx, hy, len, th, ph) => {
+                    let swing = step * 1.8 * (gait + ph).sin();
+                    let lift = step * 1.4 * (gait + ph).cos().max(0.0);
+                    let a = (x + hx * s, foot + (hy + bob) * s);
+                    let b = (x + (hx + swing) * s, foot + (hy + len - lift) * s);
+                    self.stroke(a, b, th * s, col);
+                }
+            }
+        }
+    }
+
+    /// The Estrella de Belén at (x, y), `k` bright: four long rays, a halo
+    /// and a tail streaming away toward `from`, swaying like a comet's.
+    fn estrella(&mut self, (x, y): (f32, f32), from: (f32, f32), k: f32, col: [V3; 2]) {
+        let (xi, yi) = (x.round() as i32, y.round() as i32);
+        let k = k * (0.9 + 0.1 * (self.t * 0.11).sin());
+        let r = (self.h as f32 * 0.12).clamp(5.0, 14.0);
+        self.halo(xi, yi, r as i32, r as i32, col[1], 0.5 * k);
+        let reach = (r * 1.8) as i32;
+        for s in 1..=reach {
+            let a = k * (1.0 - s as f32 / (reach + 1) as f32).powi(2);
+            for (dx, dy) in [(s, 0), (-s, 0), (0, s), (0, -s)] {
+                self.shine(xi + dx, yi + dy, col[0], a);
+            }
+            if s <= reach / 3 {
+                for (dx, dy) in [(s, s), (s, -s), (-s, s), (-s, -s)] {
+                    self.shine(xi + dx, yi + dy, col[1], a * 0.7);
+                }
+            }
+        }
+        for (dx, dy) in [(0, 0), (1, 0), (-1, 0), (0, 1), (0, -1)] {
+            self.lamp(
+                xi + dx,
+                yi + dy,
+                scale(col[0], k.min(1.0) * if dx + dy == 0 { 1.0 } else { 0.85 }),
+            );
+        }
+        for (dx, dy) in [(1, 1), (1, -1), (-1, 1), (-1, -1)] {
+            self.lamp(xi + dx, yi + dy, scale(col[0], k.min(1.0) * 0.6));
+        }
+        let (dx, dy) = (from.0 - x, from.1 - y);
+        let len = dx.hypot(dy).max(1.0);
+        let (ux, uy) = (dx / len, dy / len);
+        for i in 3..len as i32 {
+            let u = i as f32 / len;
+            let sway = (i as f32 * 0.3 - self.t * 0.12).sin() * (0.3 + 1.6 * u);
+            let (cx, cy) = (x + ux * i as f32 - uy * sway, y + uy * i as f32 + ux * sway);
+            let a = k
+                * (1.0 - u).powf(1.5)
+                * 1.0
+                * (0.85 + 0.15 * (i as f32 * 0.9 - self.t * 0.2).sin());
+            let c = mix(col[0], col[1], u);
+            let (cxi, cyi) = (cx.round() as i32, cy.round() as i32);
+            self.shine(cxi, cyi, c, a);
+            // The tail widens and thins as it goes.
+            let side = if ux.abs() > uy.abs() { (0, 1) } else { (1, 0) };
+            self.shine(cxi + side.0, cyi + side.1, c, a * 0.5);
+            self.shine(cxi - side.0, cyi - side.1, c, a * 0.5);
+            if u > 0.25 {
+                self.shine(cxi + 2 * side.0, cyi + 2 * side.1, c, a * 0.2);
+                self.shine(cxi - 2 * side.0, cyi - 2 * side.1, c, a * 0.2);
+            }
         }
     }
 }
@@ -1031,6 +1484,23 @@ struct Aurora {
     canoes: Vec<Canoe>,
     floats: Vec<Float>,
     monarchs: Vec<Monarch>,
+    /// Belén: its colors, the town on the hills and the portal, where the
+    /// star hangs, the dunes' crests (three layers, far to near), the palms,
+    /// the shepherds' fire and flock, and the Reyes' walk.
+    nac: Nacimiento,
+    town: Vec<Spot>,
+    portal: Vec<Spot>,
+    star: (f32, f32),
+    crests: Vec<i32>,
+    /// Where the wind has rippled the sand.
+    ripples: Vec<bool>,
+    palms: Vec<Palm>,
+    camp: Option<(i32, i32)>,
+    flock: Vec<Sheep>,
+    reyes_x: f32,
+    gait: f32,
+    /// The aurora's faint light on the land, as `compose` last worked it out.
+    amb: V3,
 }
 
 impl Aurora {
@@ -1041,15 +1511,15 @@ impl Aurora {
         let t = rangef(&mut rng, 0.0, 1000.0);
         let look = match o.s("look").trim() {
             "pátzcuaro" | "muertos" => "patzcuaro",
+            "belén" | "navidad" | "nacimiento" => "belen",
             l => l,
         };
         let fixed = LOOKS.iter().position(|(n, _)| *n == look);
         let which = fixed.unwrap_or_else(|| rng.usize(0..ORDINARY));
-        // The holiday opens on Pátzcuaro.
-        let which = if fixed.is_none() && ctx.fiesta.is(Kind::Muertos) {
-            PATZCUARO
-        } else {
-            which
+        // The holiday opens on its own look.
+        let which = match fiesta_look(ctx.fiesta.kind) {
+            Some(i) if fixed.is_none() => i,
+            _ => which,
         };
         let next = Self::pick_next(&mut rng, &mut hrng, which, fixed, ctx.fiesta);
         Aurora {
@@ -1102,14 +1572,26 @@ impl Aurora {
             canoes: Vec::new(),
             floats: Vec::new(),
             monarchs: Vec::new(),
+            nac: Nacimiento::new(ctx.theme),
+            town: Vec::new(),
+            portal: Vec::new(),
+            star: (0.0, 0.0),
+            crests: Vec::new(),
+            ripples: Vec::new(),
+            palms: Vec::new(),
+            camp: None,
+            flock: Vec::new(),
+            reyes_x: 0.0,
+            gait: 0.0,
+            amb: [0.0; 3],
             rng,
             hrng,
         }
     }
 
     /// The look after `which`: any other one, or the same when it is fixed.
-    /// During the holiday it is mostly Pátzcuaro, decided by the holiday's
-    /// own RNG.
+    /// During a holiday with a look of its own it is mostly that one,
+    /// decided by the holiday's own RNG.
     fn pick_next(
         rng: &mut fastrand::Rng,
         hrng: &mut fastrand::Rng,
@@ -1117,24 +1599,49 @@ impl Aurora {
         fixed: Option<usize>,
         fiesta: Fiesta,
     ) -> usize {
-        match fixed {
-            Some(i) => i,
-            None if fiesta.is(Kind::Muertos) && hrng.f32() < patzcuaro_share(fiesta.level) => {
-                PATZCUARO
-            }
-            None if which >= ORDINARY => rng.usize(0..ORDINARY),
-            None => (which + 1 + rng.usize(0..ORDINARY - 1)) % ORDINARY,
+        if let Some(i) = fixed {
+            return i;
+        }
+        if let Some(i) = fiesta_look(fiesta.kind)
+            && hrng.f32() < fiesta_share(fiesta.level)
+        {
+            return i;
+        }
+        if which >= ORDINARY {
+            rng.usize(0..ORDINARY)
+        } else {
+            (which + 1 + rng.usize(0..ORDINARY - 1)) % ORDINARY
         }
     }
 
-    /// How much of the holiday has come: all of it when Pátzcuaro is asked
-    /// for on another day.
-    fn level(&self) -> f32 {
-        if self.fiesta.is(Kind::Muertos) {
+    /// How much of `kind`'s holiday has come: all of it when its look is
+    /// asked for on another day.
+    fn level(&self, kind: Kind) -> f32 {
+        if self.fiesta.is(kind) {
             self.fiesta.level.clamp(0.0, 1.0)
         } else {
             1.0
         }
+    }
+
+    /// How far the Reyes Magos have come, from just seen on the far dunes
+    /// (0, January 2) to at the portal (1, January 6); not yet in December.
+    /// Halfway when Belén is asked for on another day.
+    fn reyes_way(&self) -> Option<f32> {
+        let f = self.fiesta;
+        if f.reyes() {
+            Some((f32::from(f.day) - 2.0).clamp(0.0, 4.0) / 4.0)
+        } else if f.is(Kind::Navidad) {
+            None
+        } else {
+            Some(0.5)
+        }
+    }
+
+    /// Does the Niño Dios lie in the manger? From Nochebuena on.
+    fn nino(&self) -> bool {
+        let f = self.fiesta;
+        !f.is(Kind::Navidad) || f.month == 1 || f.day >= 24
     }
 
     fn look_of(i: usize, theme: &Theme) -> Look {
@@ -1201,6 +1708,7 @@ impl Aurora {
         self.meteor = None;
         self.build_starry();
         self.build_patzcuaro();
+        self.build_belen();
     }
 
     /// Pátzcuaro's night for this size, from the holiday's own RNG: the
@@ -1324,6 +1832,157 @@ impl Aurora {
                 y: y.clamp(hz + 2, ph - 1),
                 vx: rangef(rng, -0.4, 0.4),
                 phase: rangef(rng, 0.0, 6.3),
+            });
+        }
+    }
+
+    /// Belén's night for this size, from its own RNG so that the layout only
+    /// depends on the size and the seed: the star over the portal, the town
+    /// stepping down the hill with its portal in front, three layers of
+    /// dunes, the shepherds' fire and flock, and the palms.
+    fn build_belen(&mut self) {
+        let (w, ph, hz) = (self.w as i32, self.ph as i32, self.horizon as i32);
+        let (wf, hzf) = (w as f32, hz as f32);
+        let mut rng = fastrand::Rng::with_seed(self.seed ^ 0x0B31_E412);
+        self.town.clear();
+        self.portal.clear();
+        self.crests.clear();
+        self.ripples.clear();
+        self.palms.clear();
+        self.flock.clear();
+        self.camp = None;
+        let cx = wf * rangef(&mut rng, 0.55, 0.7);
+        self.star = (cx, hzf * 0.42);
+        self.reyes_x = wf * 0.4;
+        let depth = ph - hz;
+        if !self.landscape || w < 16 || hz < 6 || depth < 6 {
+            return;
+        }
+        // The town: flat-roofed houses stepping down the hill from its
+        // crest, some with a dome, each with a window or two.
+        let ground = |x: i32| self.far[x.clamp(0, w - 1) as usize];
+        let span = (wf * 0.15).clamp(5.0, 36.0);
+        for tier in 0..2 {
+            let mut x = (cx - span) as i32 + tier * 2;
+            while (x as f32) < cx + span {
+                let bw = range(&mut rng, 3, 7);
+                let bh = range(&mut rng, 3, 6);
+                let (hi, lo) = (x..x + bw).fold((i32::MAX, i32::MIN), |(hi, lo), c| {
+                    (hi.min(ground(c)), lo.max(ground(c)))
+                });
+                let top = hi - bh + 2 + tier * 3;
+                let bottom = (top + bh).max(lo + 1 + tier * 2);
+                for c in x..x + bw {
+                    for y in top..=bottom {
+                        let part = if y == top { 2 } else { 0 };
+                        self.town.push(Spot {
+                            x: c,
+                            y,
+                            part,
+                            r: 1.0,
+                        });
+                    }
+                }
+                for _ in 0..range(&mut rng, 1, 3) {
+                    let wx = x + range(&mut rng, 0, bw);
+                    let wy = top + 1 + range(&mut rng, 0, (bottom - top - 1).max(1));
+                    self.town.push(Spot {
+                        x: wx,
+                        y: wy,
+                        part: 1,
+                        r: rng.f32(),
+                    });
+                }
+                if bw >= 5 && rng.f32() < 0.3 {
+                    let r = bw as f32 / 2.0 - 0.5;
+                    for dx in 1..bw - 1 {
+                        let u = (dx as f32 + 0.5 - bw as f32 / 2.0) / r;
+                        let rise = (r * (1.0 - u * u).max(0.0).sqrt()).round() as i32;
+                        for dy in 1..=rise.max(1) {
+                            self.town.push(Spot {
+                                x: x + dx,
+                                y: top - dy,
+                                part: 2,
+                                r: 1.0,
+                            });
+                        }
+                    }
+                }
+                x += bw + range(&mut rng, 0, 2);
+            }
+        }
+        // The portal in front of the town, a little down the slope.
+        let sprite: &[&str] = if hz >= 40 { &PORTAL } else { &PORTAL_S };
+        let (pw, pth) = (sprite[0].len() as i32, sprite.len() as i32);
+        let base = (ground(cx as i32) + 9).min(hz - 1);
+        for (r, row) in sprite.iter().enumerate() {
+            for (k, ch) in row.bytes().enumerate() {
+                let part = match ch {
+                    b'r' => 4,
+                    b'p' => 5,
+                    b'h' => 6,
+                    b'n' => 7,
+                    b'j' => 8,
+                    b'm' => 9,
+                    _ => continue,
+                };
+                self.portal.push(Spot {
+                    x: cx as i32 - pw / 2 + k as i32,
+                    y: base - pth + 1 + r as i32,
+                    part,
+                    r: 0.0,
+                });
+            }
+        }
+        // Three layers of dunes, rolling, from the far to the near.
+        let d = depth as f32;
+        for (i, (off, amp)) in [(-1.0, 2.0), (0.3 * d, 0.09 * d), (0.62 * d, 0.1 * d)]
+            .into_iter()
+            .enumerate()
+        {
+            let wl = wf * rangef(&mut rng, 0.3, 0.7) / (1.0 + 0.4 * (2 - i) as f32);
+            let (k1, p1) = (TAU / wl.max(8.0), rangef(&mut rng, 0.0, TAU));
+            let p2 = rangef(&mut rng, 0.0, TAU);
+            for x in 0..w {
+                let (xf, k2) = (x as f32, k1 * 2.3);
+                let v = ((k1 * xf + p1).sin() + 0.45 * (k2 * xf + p2).sin()) / 1.45;
+                self.crests.push((hzf + off + amp * v).round() as i32);
+            }
+        }
+        self.ripples = (0..ph * w)
+            .map(|i| ((i % w) as f32 * 0.4 + (i / w) as f32 * 2.1).sin() > 0.93)
+            .collect();
+        let crest = |i: usize, x: i32| self.crests[i * w as usize + x.clamp(0, w - 1) as usize];
+        // The shepherds' fire on the middle dunes, and the sheep around it.
+        if depth >= 12 {
+            let fx = (wf * rangef(&mut rng, 0.07, 0.17)) as i32;
+            self.camp = Some((fx, (crest(1, fx) + 3).min(crest(2, fx) - 2).min(ph - 2)));
+            let n = (w / 18).clamp(3, 9);
+            let step = (wf * 0.22 / n as f32).clamp(6.0, 14.0);
+            for k in 0..n {
+                let x = fx + 8 + (k as f32 * step + rangef(&mut rng, -1.5, 1.5)) as i32;
+                self.flock.push(Sheep {
+                    x: x as f32,
+                    y: (crest(1, x) + 2 + k % 3).min(crest(2, x) - 2),
+                    phase: rangef(&mut rng, 0.0, TAU),
+                });
+            }
+        }
+        // Palms around the town and by the fire.
+        let tall = (ph as f32 * 0.07).clamp(5.0, 18.0);
+        for (x, i, h) in [
+            (cx - wf * 0.24, 0, 0.8),
+            (cx + wf * 0.2, 0, 1.0),
+            (cx + wf * 0.27, 0, 0.7),
+            (wf * 0.06, 1, 1.0),
+            (wf * 0.36, 1, 1.15),
+        ] {
+            let x = (x as i32).clamp(1, w - 2);
+            self.palms.push(Palm {
+                x,
+                y: crest(i, x) + 1,
+                h: tall * h,
+                lean: rangef(&mut rng, -2.0, 2.0),
             });
         }
     }
@@ -1611,10 +2270,15 @@ impl Aurora {
         }
         if rate >= eggs::FORCE_RATE || self.rng.f64() < 1.0 - (-rate / 3600.0 * real as f64).exp() {
             // During a holiday its own visitors come by most of the time.
-            let kind = self.fiesta.kind;
-            let ours = || eggs::ALL.iter().filter(move |i| i.fiesta == kind);
+            let (kind, today) = (self.fiesta.kind, self.fiesta);
+            let ours = || {
+                eggs::ALL
+                    .iter()
+                    .filter(move |i| i.fiesta == kind && (i.when)(today))
+            };
             let seasonal = ours().count();
-            let info = if self.fiesta.is(Kind::Muertos) && seasonal > 0 && self.hrng.f32() < 0.8 {
+            let dressed = fiesta_look(kind).is_some();
+            let info = if dressed && seasonal > 0 && self.hrng.f32() < 0.8 {
                 ours()
                     .nth(self.hrng.usize(0..seasonal))
                     .unwrap_or(&&eggs::nyan::INFO)
@@ -1834,6 +2498,7 @@ impl Aurora {
         // The aurora faintly lights the snow and the mountainsides.
         let n = (w * hz).max(1) as f32;
         let amb = ambient.map(|a| (a / n * 1.5).min(60.0 / 255.0));
+        self.amb = amb;
         let lift = if self.paint_sky { 1.0 } else { LIFT };
         let (far, near, snow) = (
             scale(look.far, lift),
@@ -1861,6 +2526,8 @@ impl Aurora {
         let pine = scale(look.pine, lift);
         for &(x, hgt) in &self.pines {
             let foot = self.near[(x.max(0) as usize).min(w - 1)] + 1;
+            // The desert has no forest: the pines shrink away with the look.
+            let hgt = (hgt as f32 * look.forest).round() as i32;
             for k in 0..hgt {
                 let half = (hgt - k) / 3;
                 for dx in -half..=half {
@@ -1944,7 +2611,7 @@ impl Aurora {
     /// canoes, everything mirrored in the lake, and the monarchs above.
     fn draw_patzcuaro(&mut self, look: &Look, bg: Option<V3>) {
         let (w, ph, hz) = (self.w as i32, self.ph as i32, self.horizon as i32);
-        let (f, level) = (self.fest, self.level());
+        let (f, level) = (self.fest, self.level(Kind::Muertos));
         let mut l = Layer {
             px: &mut self.px,
             solid: &mut self.solid,
@@ -1997,6 +2664,217 @@ impl Aurora {
         }
     }
 
+    /// Belén's night over the picture: dunes in place of the lake, the town
+    /// on its hills with the portal below it, palms, the shepherds' fire and
+    /// flock, the Reyes Magos on their way and, over it all, the Estrella
+    /// de Belén.
+    fn draw_belen(&mut self, look: &Look) {
+        let (w, ph, hz) = (self.w as i32, self.ph as i32, self.horizon as i32);
+        let (n, f, level) = (self.nac, self.fest, self.level(Kind::Navidad));
+        let (way, nino) = (self.reyes_way(), self.nino());
+        let (wf, sc) = (w as f32, (ph as f32 / 120.0).clamp(0.45, 1.3));
+        let mut l = Layer {
+            px: &mut self.px,
+            solid: &mut self.solid,
+            w,
+            h: ph,
+            m: look.belen,
+            lift: if self.paint_sky { 1.0 } else { LIFT.min(1.3) },
+            water: None,
+            t: self.t,
+            hz,
+        };
+        let (sx, sy) = self.star;
+        if !self.crests.is_empty() {
+            // The dunes take the lake's place, their slopes lit where they
+            // face the star.
+            let wu = self.w;
+            let glow = scale(self.amb, 0.5);
+            for x in 0..wu {
+                for i in 0..3 {
+                    let row = &self.crests[i * wu..(i + 1) * wu];
+                    let top = row[x];
+                    let bottom = if i < 2 {
+                        self.crests[(i + 1) * wu + x]
+                    } else {
+                        ph
+                    };
+                    // How steeply the dune faces the star (negative: away).
+                    let slope = row[(x + 1).min(wu - 1)] - row[x.saturating_sub(1)];
+                    let face =
+                        (if sx > x as f32 { slope } else { -slope }).clamp(-3, 3) as f32 / 3.0;
+                    for y in top.max(0)..bottom.min(ph) {
+                        let d = (y - top) as f32;
+                        let mut k = (1.0 - 0.015 * d).max(0.65);
+                        if d < 4.0 {
+                            k *= 1.0 + (0.3 * face + 0.12) * (1.0 - d / 4.0);
+                        }
+                        if self.ripples[y as usize * wu + x] {
+                            k *= 1.18;
+                        }
+                        l.lamp(x as i32, y, add(scale(n.dune[i], k * l.lift), glow));
+                    }
+                }
+            }
+            for p in &self.palms {
+                l.palm(p, &n);
+            }
+            // The town's lamps glow over its hills; more are lit as the
+            // posadas go by.
+            let lit = 0.25 + 0.75 * level;
+            let ridge = self.far[(sx as usize).min(self.w - 1)];
+            l.halo(
+                sx as i32,
+                ridge,
+                (wf * 0.2) as i32,
+                (hz / 6).max(2),
+                n.lamp[0],
+                0.1 + 0.12 * level,
+            );
+            for p in &self.town {
+                match p.part {
+                    1 if p.r < lit => {
+                        let k = 0.8 + 0.2 * (l.t * 0.2 + p.r * 50.0).sin();
+                        l.lamp(p.x, p.y, scale(n.lamp[0], k));
+                        for (dx, dy) in [(-1, 0), (1, 0), (0, 1), (0, -1)] {
+                            l.shine(p.x + dx, p.y + dy, n.lamp[0], 0.12 * k);
+                        }
+                    }
+                    2 => l.put(p.x, p.y, n.adobe[1]),
+                    _ => l.put(p.x, p.y, n.adobe[0]),
+                }
+            }
+            // The portal: the Niño Dios lies in his manger from Nochebuena,
+            // and a ray of the star comes down to him.
+            let mut crib = None;
+            for p in &self.portal {
+                match p.part {
+                    4 => l.put(p.x, p.y, n.roof),
+                    5 => l.put(p.x, p.y, scale(n.roof, 0.55)),
+                    6 => l.put(p.x, p.y, scale(n.straw, 0.7)),
+                    7 => {
+                        crib = Some((p.x, p.y));
+                        let k = 0.9 + 0.1 * (l.t * 0.15).sin();
+                        if nino {
+                            l.halo(p.x, p.y, 4, 3, n.lamp[1], 0.4 * k);
+                            l.lamp(p.x, p.y, scale(n.lamp[1], k));
+                        } else {
+                            l.lamp(p.x, p.y, scale(n.lamp[0], 0.35));
+                        }
+                    }
+                    8 => l.put(p.x, p.y, n.cloak),
+                    _ => l.lamp(p.x, p.y, scale(n.robe[2], 0.8)),
+                }
+            }
+            if let (Some((bx, by)), true) = (crib, nino) {
+                for y in sy as i32 + 6..by - 2 {
+                    let half = 1.0 + (y as f32 - sy) * 0.04;
+                    for dx in -(half as i32 + 1)..=half as i32 + 1 {
+                        let a = 0.09 * (1.0 - dx.abs() as f32 / (half + 1.0)).max(0.0);
+                        l.shine(bx + dx, y, n.star[1], a);
+                    }
+                }
+            }
+            // The shepherds' fire, a shepherd by it and the flock around.
+            if let Some((cx, cy)) = self.camp {
+                let (fl, k) = flicker(&f.flame, l.t, 3.0);
+                l.halo(
+                    cx,
+                    cy - 1,
+                    (10.0 * sc) as i32,
+                    (6.0 * sc) as i32,
+                    fl,
+                    0.6 * k,
+                );
+                let logs = l.dark(n.roof);
+                l.stroke(
+                    (cx as f32 - 2.5, cy as f32 + 0.5),
+                    (cx as f32 + 2.5, cy as f32 - 0.2),
+                    1.2,
+                    logs,
+                );
+                for (dx, dy, b) in [
+                    (0, -1, 1.0),
+                    (-1, -1, 0.8),
+                    (1, -1, 0.8),
+                    (0, -2, 0.9),
+                    (0, -3, 0.6),
+                ] {
+                    let c = if dy < -1 { f.flame[1] } else { fl };
+                    l.lamp(cx + dx, cy + dy, scale(c, k * b));
+                }
+                // The shepherd stands by the fire with his staff.
+                let hx = cx as f32 - 6.0 * sc;
+                let (cloak, staff) = (l.dark(n.cloak), l.dark(n.roof));
+                l.stroke(
+                    (hx + 2.8 * sc, cy as f32 + 0.5),
+                    (hx + 2.8 * sc, cy as f32 - 10.0 * sc),
+                    1.0,
+                    staff,
+                );
+                l.ellipse(hx, cy as f32 - 2.2 * sc, 1.9 * sc, 2.8 * sc, cloak);
+                l.ellipse(hx, cy as f32 - 5.8 * sc, 1.1 * sc, 1.1 * sc, n.skin);
+                let shown = (self.flock.len() as f32 * (0.4 + 0.6 * level)).ceil() as usize;
+                for sh in self.flock.iter().take(shown) {
+                    let x = sh.x + 1.2 * (l.t * 0.02 + sh.phase).sin();
+                    let y = sh.y as f32;
+                    l.stroke(
+                        (x - 1.2 * sc, y + 1.0),
+                        (x - 1.2 * sc, y + 2.4 * sc),
+                        1.0,
+                        cloak,
+                    );
+                    l.stroke(
+                        (x + 1.2 * sc, y + 1.0),
+                        (x + 1.2 * sc, y + 2.4 * sc),
+                        1.0,
+                        cloak,
+                    );
+                    l.ellipse(x, y, 2.6 * sc, 1.6 * sc, n.wool);
+                    l.ellipse(
+                        x + 2.8 * sc,
+                        y - 0.2 * sc,
+                        1.0 * sc,
+                        1.0 * sc,
+                        scale(cloak, 0.45),
+                    );
+                }
+            }
+            // The Reyes Magos, a little closer each day of January: far on
+            // the dunes and small on the 2nd, at the portal on the 6th.
+            if let Some(p) = way.filter(|_| ph - hz >= 14) {
+                let s = sc * (0.32 + 0.58 * p);
+                let foot =
+                    (hz as f32 + 5.0 + p.powf(0.8) * ((ph - hz) as f32 - 8.0)).min(ph as f32 - 2.0);
+                let (gap, arrived) = (25.0 * s, p >= 0.999);
+                let lead = if arrived { sx + gap } else { self.reyes_x };
+                for k in 0..3 {
+                    let at = (lead - gap * k as f32, foot);
+                    l.rey(k, at, s, self.gait, if arrived { 0.0 } else { 1.0 }, &n);
+                }
+            }
+        }
+        // The Estrella de Belén, its tail longer and its light brighter as
+        // the holiday comes.
+        let reach = (0.4 * wf).min(sx - 2.0) * (0.55 + 0.45 * level);
+        let from = (sx - reach, sy - (0.45 * reach).min(sy - 3.0));
+        l.estrella((sx, sy), from, 0.6 + 0.4 * level, n.star);
+    }
+
+    /// Walks the Reyes Magos `dt` seconds on, sending them around again from
+    /// the left once they have crossed.
+    fn stroll(&mut self, dt: f32) {
+        self.gait = (self.gait + dt * 6.0) % TAU;
+        let Some(p) = self.reyes_way().filter(|p| *p < 0.999) else {
+            return;
+        };
+        let s = (self.ph as f32 / 120.0).clamp(0.45, 1.3) * (0.32 + 0.58 * p);
+        self.reyes_x += dt * 5.0 * s;
+        if self.reyes_x - 50.0 * s > self.w as f32 + 14.0 * s {
+            self.reyes_x = -14.0 * s;
+        }
+    }
+
     /// Turns accumulated light on a transparent sky into a visible pixel.
     /// Weak light fades toward the terminal background; with no known
     /// background it dims instead, and the faintest part is dropped so
@@ -2038,15 +2916,15 @@ impl Scene for Aurora {
 
     fn retheme(&mut self, ctx: &Ctx) {
         if ctx.fiesta != self.fiesta {
-            let (was, now) = (self.fiesta.is(Kind::Muertos), ctx.fiesta.is(Kind::Muertos));
+            let (was, now) = (fiesta_look(self.fiesta.kind), fiesta_look(ctx.fiesta.kind));
             self.fiesta = ctx.fiesta;
             if self.fixed.is_none() && was != now {
-                // The holiday comes or goes: fade into Pátzcuaro, or out of
+                // The holiday comes or goes: fade into its look, or out of
                 // it, starting now.
-                if now {
-                    self.next = PATZCUARO;
-                } else if self.next == PATZCUARO {
-                    self.next = self.rng.usize(0..ORDINARY);
+                match now {
+                    Some(i) => self.next = i,
+                    None if self.next >= ORDINARY => self.next = self.rng.usize(0..ORDINARY),
+                    None => {}
                 }
                 self.clock = self.clock.max(self.stay - BLEND);
             }
@@ -2055,6 +2933,7 @@ impl Scene for Aurora {
         self.nxt = Self::look_of(self.next, ctx.theme);
         self.paint = Paint::new(ctx.theme);
         self.fest = Fest::new(ctx.theme);
+        self.nac = Nacimiento::new(ctx.theme);
     }
 
     fn update(&mut self, _ctx: &Ctx, dt: f32) {
@@ -2078,6 +2957,9 @@ impl Scene for Aurora {
         }
         if self.cur.muertos > 0.0 || self.nxt.muertos > 0.0 {
             self.row(dt);
+        }
+        if self.cur.belen > 0.0 || self.nxt.belen > 0.0 {
+            self.stroll(dt);
         }
     }
 
@@ -2119,6 +3001,9 @@ impl Scene for Aurora {
         self.compose(&look, bg);
         if look.muertos > 0.01 {
             self.draw_patzcuaro(&look, bg);
+        }
+        if look.belen > 0.01 {
+            self.draw_belen(&look);
         }
         self.out.clear();
         for y in 0..ph {
@@ -2454,6 +3339,245 @@ mod tests {
                     let (mut a, o) = make_on(v, &theme, fiesta, 80, 24);
                     let ctx = ctx_on(&theme, &o, theme.bg, fiesta);
                     for (w, h) in [(1, 1), (2, 3), (16, 4), (17, 9), (300, 90)] {
+                        a.resize(&ctx, w, h);
+                        a.retheme(&ctx);
+                        let mut c = Canvas::new(w, h, Color::Reset);
+                        for k in 0..120 {
+                            let dt = if k % 50 == 49 { 5.0 } else { 1.0 / 30.0 };
+                            a.tick(&ctx, dt, dt);
+                            c.clear();
+                            a.draw(&ctx, &mut c);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /// Solid pixels painted in the hue of `col`, at some brightness: lit
+    /// windows, the Niño Dios' light, a king's robe.
+    fn hued(a: &Aurora, col: V3) -> usize {
+        let m = col[0].max(col[1]).max(col[2]);
+        a.px.iter()
+            .zip(&a.solid)
+            .filter(|(p, solid)| {
+                let k = p[0].max(p[1]).max(p[2]);
+                **solid && k > 0.5 && (0..3).all(|i| (p[i] / k - col[i] / m).abs() < 0.05)
+            })
+            .count()
+    }
+
+    /// One frame of the holiday, a moment after it opens.
+    fn frame(opts: &str, theme: &Theme, fiesta: Fiesta, w: u16, h: u16) -> Aurora {
+        let (mut a, o) = make_on(opts, theme, fiesta, w, h);
+        let ctx = ctx_on(theme, &o, Color::Reset, fiesta);
+        let mut c = Canvas::new(w, h, Color::Reset);
+        a.tick(&ctx, 1.0 / 30.0, 1.0 / 30.0);
+        a.draw(&ctx, &mut c);
+        a
+    }
+
+    /// The Navidad opens on Belén from its first day: the town with its
+    /// windows lit, the star, the dunes, and more windows as the posadas go.
+    #[test]
+    fn belen_comes_with_the_holiday() {
+        let mut lit = Vec::new();
+        for theme in [Theme::classic(), Theme::builtin("dracula").unwrap()] {
+            for (m, d) in [(12, 12), (12, 24)] {
+                let a = frame("", &theme, Fiesta::of_day(m, d), 120, 36);
+                assert_eq!(a.which, BELEN);
+                assert!(!a.town.is_empty() && !a.crests.is_empty() && !a.portal.is_empty());
+                let windows = hued(&a, a.nac.lamp[0]);
+                assert!(windows > 0, "{m}-{d}: {windows} windows");
+                // The star's heart is lit.
+                let (sx, sy) = (a.star.0 as usize, a.star.1 as usize);
+                assert!(a.px[sy * a.w + sx].iter().all(|c| *c > 0.5));
+                lit.push(windows);
+            }
+        }
+        assert!(lit[0] < lit[1] && lit[2] < lit[3], "{lit:?}");
+    }
+
+    /// The holiday shows Belén most of the time; ordinary days never.
+    #[test]
+    fn belen_only_on_the_holiday() {
+        let theme = Theme::classic();
+        for (fiesta, lo, hi) in [
+            (Fiesta::of_day(12, 24), 0.75, 1.0),
+            (Fiesta::NONE, 0.0, 0.0),
+        ] {
+            let (mut a, o) = make_on("stay = 10.0", &theme, fiesta, 80, 24);
+            let ctx = ctx_on(&theme, &o, Color::Reset, fiesta);
+            let mut c = Canvas::new(80, 24, Color::Reset);
+            let (mut on, n) = (0, 30 * 600);
+            for k in 0..n {
+                a.tick(&ctx, 1.0 / 30.0, 1.0 / 30.0);
+                on += usize::from(a.which == BELEN);
+                if k % 300 == 0 && !fiesta.is(Kind::Navidad) {
+                    a.draw(&ctx, &mut c);
+                    assert_eq!(hued(&a, a.nac.lamp[0]), 0);
+                }
+            }
+            let share = on as f32 / n as f32;
+            assert!((lo..=hi).contains(&share), "{share}");
+        }
+    }
+
+    /// Through `retheme` the sky fades into Belén when the Navidad comes
+    /// (at midnight) and out of it when it goes.
+    #[test]
+    fn the_navidad_comes_and_goes() {
+        let theme = Theme::classic();
+        let (mut a, o) = make_on("", &theme, Fiesta::NONE, 80, 24);
+        let off = ctx_on(&theme, &o, Color::Reset, Fiesta::NONE);
+        let on = ctx_on(&theme, &o, Color::Reset, Fiesta::of_day(12, 16));
+        assert_ne!(a.which, BELEN);
+        a.retheme(&on);
+        for _ in 0..(30 * 15) {
+            a.tick(&on, 1.0 / 30.0, 1.0 / 30.0);
+        }
+        assert_eq!(a.which, BELEN);
+        assert!(a.look().belen > 0.99);
+        // The next day is the same holiday: nothing changes.
+        let next = ctx_on(&theme, &o, Color::Reset, Fiesta::of_day(12, 17));
+        a.retheme(&next);
+        assert_eq!(a.which, BELEN);
+        a.retheme(&off);
+        for _ in 0..(30 * 15) {
+            a.tick(&off, 1.0 / 30.0, 1.0 / 30.0);
+        }
+        assert!(a.which < ORDINARY);
+        assert_eq!(a.look().belen, 0.0);
+        let mut c = Canvas::new(80, 24, Color::Reset);
+        a.draw(&off, &mut c);
+        assert_eq!(hued(&a, a.nac.lamp[0]), 0);
+    }
+
+    /// The Niño Dios lies in the manger from Nochebuena on, not before.
+    #[test]
+    fn the_nino_comes_on_nochebuena() {
+        let theme = Theme::classic();
+        let before = frame("", &theme, Fiesta::of_day(12, 23), 160, 48);
+        let after = frame("", &theme, Fiesta::of_day(12, 24), 160, 48);
+        assert_eq!(hued(&before, before.nac.lamp[1]), 0);
+        assert!(hued(&after, after.nac.lamp[1]) > 0);
+    }
+
+    /// The Reyes Magos are not there in December, show far away and small on
+    /// January 2 and come closer every day, to the portal on the 6th.
+    #[test]
+    fn the_reyes_come_closer() {
+        let theme = Theme::classic();
+        let robes = |m, d| {
+            let a = frame("", &theme, Fiesta::of_day(m, d), 160, 48);
+            hued(&a, a.nac.robe[0])
+        };
+        assert_eq!(robes(12, 25), 0);
+        assert_eq!(robes(1, 1), 0);
+        let seen: Vec<usize> = (2..=6).map(|d| robes(1, d)).collect();
+        assert!(seen[0] > 0, "{seen:?}");
+        assert!(seen.windows(2).all(|p| p[0] < p[1]), "{seen:?}");
+    }
+
+    /// The Reyes walk across the dunes, and go around again from the left.
+    #[test]
+    fn the_reyes_cross_the_dunes() {
+        let theme = Theme::classic();
+        let fiesta = Fiesta::of_day(1, 4);
+        let (mut a, o) = make_on("", &theme, fiesta, 100, 30);
+        let ctx = ctx_on(&theme, &o, Color::Reset, fiesta);
+        let (mut seen, mut last) = (0, a.reyes_x);
+        for _ in 0..(30 * 600) {
+            a.tick(&ctx, 1.0 / 30.0, 1.0 / 30.0);
+            if a.reyes_x < last {
+                seen += 1;
+            }
+            last = a.reyes_x;
+        }
+        assert!(seen >= 1, "they never went around");
+        // On the 6th they stand at the portal.
+        let fiesta = Fiesta::of_day(1, 6);
+        let (mut a, o) = make_on("", &theme, fiesta, 100, 30);
+        let ctx = ctx_on(&theme, &o, Color::Reset, fiesta);
+        let x = a.reyes_x;
+        for _ in 0..300 {
+            a.tick(&ctx, 1.0 / 30.0, 1.0 / 30.0);
+        }
+        assert_eq!(a.reyes_x, x);
+    }
+
+    /// A fixed look wins over the Navidad, and Belén can be asked for on any
+    /// day: with the Niño Dios in the manger and the Reyes on their way.
+    #[test]
+    fn belen_on_any_day() {
+        let theme = Theme::classic();
+        let fiesta = Fiesta::of_day(12, 24);
+        let (mut a, o) = make_on("look = 'ice'\nstay = 10.0", &theme, fiesta, 80, 24);
+        let ctx = ctx_on(&theme, &o, Color::Reset, fiesta);
+        for _ in 0..(30 * 60) {
+            a.tick(&ctx, 1.0 / 30.0, 1.0 / 30.0);
+            assert_eq!(LOOKS[a.which].0, "ice");
+        }
+        for name in ["belen", "belén", "navidad"] {
+            let a = frame(&format!("look = '{name}'"), &theme, Fiesta::NONE, 160, 48);
+            assert_eq!(a.which, BELEN);
+            assert!(hued(&a, a.nac.lamp[0]) > 5);
+            assert!(hued(&a, a.nac.lamp[1]) > 0);
+            assert!(hued(&a, a.nac.robe[0]) > 0);
+        }
+    }
+
+    /// Holidays aurora has no look for leave it exactly as on an ordinary day.
+    #[test]
+    fn other_holidays_are_ordinary_days() {
+        let theme = Theme::classic();
+        let run = |fiesta: Fiesta| {
+            let (mut a, o) = make_on("stay = 10.0", &theme, fiesta, 80, 24);
+            let ctx = ctx_on(&theme, &o, Color::Reset, fiesta);
+            let mut c = Canvas::new(80, 24, Color::Reset);
+            let mut frames = Vec::new();
+            for k in 0..(30 * 120) {
+                a.tick(&ctx, 1.0 / 30.0, 1.0 / 30.0);
+                if k % 300 == 0 {
+                    c.clear();
+                    a.draw(&ctx, &mut c);
+                    frames.push(c.cells().to_vec());
+                }
+            }
+            frames
+        };
+        let plain = run(Fiesta::NONE);
+        for kind in [
+            Kind::Candelaria,
+            Kind::Nino,
+            Kind::SantaCruz,
+            Kind::Revolucion,
+        ] {
+            assert!(plain == run(Fiesta::height(kind)), "{kind:?}");
+        }
+    }
+
+    /// The Navidad survives odd options and sizes, long runs and huge steps,
+    /// from Nochebuena to the Reyes.
+    #[test]
+    fn the_navidad_survives() {
+        let variants = [
+            "",
+            "sky = true\nlook = 'belen'\nspeed = 4.0",
+            "landscape = false\nstars = false\nlook = 'belen'",
+            "speed = nan\ncurtains = -5\nstay = nan\nvisitors = inf",
+        ];
+        for v in variants {
+            for theme in [Theme::classic(), Theme::builtin("dracula").unwrap()] {
+                for fiesta in [
+                    Fiesta::of_day(12, 12),
+                    Fiesta::of_day(12, 24),
+                    Fiesta::of_day(1, 2),
+                    Fiesta::of_day(1, 6),
+                ] {
+                    let (mut a, o) = make_on(v, &theme, fiesta, 80, 24);
+                    let ctx = ctx_on(&theme, &o, theme.bg, fiesta);
+                    for (w, h) in [(1, 1), (2, 3), (16, 4), (17, 9), (40, 12), (300, 90)] {
                         a.resize(&ctx, w, h);
                         a.retheme(&ctx);
                         let mut c = Canvas::new(w, h, Color::Reset);
