@@ -4,8 +4,8 @@
 //! Each holiday is a [`Piece`]: the Navidad's fogata at a posada with an olla
 //! of ponche steaming over it (`navidad.rs`), the fogón of the Grito with its
 //! pozolera, its comal and its luces de bengala (`patrias.rs`), the tamalera
-//! of the Candelaria with its jarro of atole (`candelaria.rs`), and the rest
-//! as they come. A
+//! of the Candelaria with its jarro of atole (`candelaria.rs`), and the
+//! cartonería Judas of the quema (`judas.rs`). A
 //! piece sets its things out for the screen (`layout`), says where the fire's
 //! fuel burns (`fuel`) and how high its flames reach, and draws: first what
 //! stays behind the flames (steam), then the vessels and the like, over which
@@ -19,6 +19,7 @@
 //! fire's random numbers on ordinary days are untouched.
 
 mod candelaria;
+mod judas;
 mod navidad;
 mod patrias;
 
@@ -106,7 +107,10 @@ pub(super) trait Piece {
     fn update(&mut self, dt: f32, wind: f32);
     /// Cools the flames where something stands in them: `heat` is the
     /// fire's buffer, `stride` its row length.
-    fn block(&self, heat: &mut [u16], stride: usize);
+    fn block(&self, _heat: &mut [u16], _stride: usize) {}
+    /// Sets flames of its own in the fire's buffer, `sw` simulation pixels
+    /// wide, once a simulation step: torches, a burning figure.
+    fn feed(&mut self, _heat: &mut [u16], _stride: usize, _sw: usize, _intensity: f32) {}
     /// The steam that rises behind the flames, and its color.
     fn steam(&self) -> Option<(&Steam, Color)>;
     /// Vessels and the like, over the flames.
@@ -173,6 +177,7 @@ impl Fogon {
             let seed = self.seed ^ SALT;
             self.piece = match kind {
                 Kind::Navidad => Some(Box::new(navidad::Posada::new(seed))),
+                Kind::Judas => Some(Box::new(judas::Quema::new(seed))),
                 Kind::Candelaria => Some(Box::new(candelaria::Tamales::new(seed))),
                 Kind::Patrias => Some(Box::new(patrias::Grito::new(seed))),
                 _ => None,
@@ -205,6 +210,13 @@ impl Fogon {
     pub fn update(&mut self, dt: f32, wind: f32) {
         if let Some(p) = &mut self.piece {
             p.update(dt, wind);
+        }
+    }
+
+    /// Flames of its own, fed in before each fire step.
+    pub fn feed(&mut self, heat: &mut [u16], stride: usize, sw: usize, intensity: f32) {
+        if let Some(p) = &mut self.piece {
+            p.feed(heat, stride, sw, intensity);
         }
     }
 

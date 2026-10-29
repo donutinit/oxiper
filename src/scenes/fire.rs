@@ -20,7 +20,10 @@
 //! fogón on the night of the Grito, with a pozolera bubbling, elotes roasting
 //! on the comal and luces de bengala sputtering (`fire/fogon/patrias.rs`); on
 //! the Candelaria a tamalera steaming on the fire with tamales in their husks
-//! peeking out of it and a jarro of atole beside it (`fire/fogon/candelaria.rs`).
+//! peeking out of it and a jarro of atole beside it (`fire/fogon/candelaria.rs`);
+//! and at the quema de Judas a cartonería devil stands over the fire, waiting
+//! unlit on Viernes Santo and, on Sábado de Gloria, catching, popping its
+//! firecrackers and spinning as it burns (`fire/fogon/judas.rs`).
 
 mod fogon;
 mod muertos;
@@ -421,6 +424,8 @@ impl Fire {
             // Like aafire, the pixel after a run keeps last frame's fuel.
             x += 1;
         }
+
+        self.fogon.feed(&mut self.heat, stride, sw, self.intensity);
 
         let wind = if self.wind == 0.0 {
             0.0
@@ -1051,12 +1056,96 @@ mod tests {
         assert!(shows(&c, rgb(0xd9c48a)));
     }
 
+    /// The Judas waits unlit on Viernes Santo, in the light of its torches.
+    /// On Sábado de Gloria it is raised, waits, catches, pops and burns away,
+    /// and a new one is put up.
+    #[test]
+    fn judas_waits_and_burns() {
+        let theme = Theme::classic();
+        let opts = Opts::new(INFO.options, toml::Table::new());
+        let ctx_of = |fiesta| Ctx {
+            theme: &theme,
+            opts: &opts,
+            bg: Color::Rgb(13, 17, 23),
+            seed: 9,
+            fiesta,
+        };
+        let viernes = Fiesta::of_date(2027, 3, 26);
+        assert!(viernes.is(Kind::Judas) && viernes.level < 1.0);
+        let mut f = holiday_fire(&theme, &opts, viernes, 120, 36);
+        for _ in 0..40 * 30 {
+            f.update(&ctx_of(viernes), 1.0 / 30.0);
+        }
+        let (crackers, torches, burnt) = f.fogon.counts();
+        assert!(crackers >= 9 && torches >= 2, "a Judas and its torches");
+        assert_eq!(burnt, 0, "unlit");
+        assert!(f.heat.iter().any(|&v| v > 0), "the torches burn");
+        assert_eq!(edge_heat(&f), 0);
+        let c = drawn(&mut f, &theme, &opts, viernes, 120, 36);
+        assert!(shows(&c, rgb(0xd1262b)), "in cartón rojo");
+
+        let sabado = Fiesta::height(Kind::Judas);
+        assert!(sabado.is(Kind::Judas) && sabado.level >= 1.0);
+        let mut f = holiday_fire(&theme, &opts, sabado, 120, 36);
+        let whole = f.fogon.counts().0;
+        let mut at = 2.0;
+        // Raised, waiting, the fuse, and then it catches and pops.
+        for (until, what) in [(14.0, "waiting"), (24.0, "burning"), (38.5, "a new one")] {
+            while at < until {
+                f.update(&ctx_of(sabado), 1.0 / 30.0);
+                at += 1.0 / 30.0;
+            }
+            let (crackers, _, burnt) = f.fogon.counts();
+            match what {
+                "waiting" => assert!(burnt == 0 && crackers == whole, "it waits unlit"),
+                "burning" => assert!(burnt > 0 && crackers < whole, "it burns and pops"),
+                _ => assert!(burnt == 0 && crackers == whole, "and a new one stands"),
+            }
+        }
+    }
+
+    /// A whole raising, burning and putting up of the Judas survives tiny
+    /// and big screens, in both styles.
+    #[test]
+    fn judas_survives_a_whole_burn() {
+        for v in ["style = 'blocks'", "style = 'ascii'"] {
+            for theme in [Theme::classic(), Theme::builtin("dracula").unwrap()] {
+                let opts = Opts::new(INFO.options, v.parse().unwrap());
+                let ctx = Ctx {
+                    theme: &theme,
+                    opts: &opts,
+                    bg: theme.bg,
+                    seed: 3,
+                    fiesta: Fiesta::height(Kind::Judas),
+                };
+                for (w, h) in [(1, 1), (20, 12), (61, 17), (120, 36), (300, 90)] {
+                    let mut s = (INFO.make)(&ctx);
+                    s.resize(&ctx, w, h);
+                    s.retheme(&ctx);
+                    let mut c = Canvas::new(w, h, Color::Reset);
+                    for frame in 0..45 * 30 {
+                        s.update(&ctx, if frame % 97 == 96 { 5.0 } else { 1.0 / 30.0 });
+                        if frame % 7 == 0 {
+                            c.clear();
+                            s.draw(&ctx, &mut c);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     /// The fogata comes and goes through `retheme`.
     #[test]
     fn fogon_comes_and_goes() {
         let theme = Theme::builtin("dracula").unwrap();
         let opts = Opts::new(INFO.options, toml::Table::new());
-        for day in [(12, 20), (9, 15), (2, 2)] {
+        for fiesta in [
+            Fiesta::of_day(12, 20),
+            Fiesta::of_day(9, 15),
+            Fiesta::of_day(2, 2),
+            Fiesta::height(Kind::Judas),
+        ] {
             let mut f = holiday_fire(&theme, &opts, Fiesta::of_day(6, 15), 100, 30);
             assert!(!f.fogon.on() && edge_heat(&f) > 0);
             let mut ctx = Ctx {
@@ -1064,7 +1153,7 @@ mod tests {
                 opts: &opts,
                 bg: theme.bg,
                 seed: 9,
-                fiesta: Fiesta::of_day(day.0, day.1),
+                fiesta,
             };
             f.retheme(&ctx);
             assert!(f.fogon.on() && f.fogon.counts().0 > 0);
@@ -1098,6 +1187,8 @@ mod tests {
                     Fiesta::of_day(9, 1),
                     Fiesta::height(Kind::Patrias),
                     Fiesta::of_day(2, 2),
+                    Fiesta::of_date(2027, 3, 26),
+                    Fiesta::height(Kind::Judas),
                 ] {
                     let opts = Opts::new(INFO.options, v.parse().unwrap());
                     for bg in [Color::Reset, theme.bg] {
