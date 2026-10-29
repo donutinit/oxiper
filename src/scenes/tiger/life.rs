@@ -1127,14 +1127,17 @@ impl Jungle {
             self.lit(Rgb(170, 96, 44)),
         ];
         // On Día de Muertos what falls from the trees is marigold, at Navidad
-        // the red and green and gold of the nochebuena, and on Fiestas Patrias
-        // confetti in verde, blanco y rojo.
+        // the red and green and gold of the nochebuena, on Fiestas Patrias
+        // confetti in verde, blanco y rojo, and at the Equinoccio the green
+        // and gold feathers of the quetzal.
         if let Some(d) = self.pal.fest {
             leaves = [d.marigold[1], d.marigold[2], d.marigold[0]].map(|c| self.lit(c));
         } else if let Some(d) = self.pal.navidad {
             leaves = [d.rojo, d.verde, d.dorado].map(|c| self.lit(c));
         } else if let Some(d) = self.pal.patrias {
             leaves = [d.verde.lerp(Rgb::WHITE, 0.25), d.blanco, d.rojo].map(|c| self.lit(c));
+        } else if let Some(d) = self.pal.equinoccio {
+            leaves = [d.jade, d.jade.lerp(d.sol, 0.5), d.sol].map(|c| self.lit(c));
         }
         for i in 0..self.life.specks.len() {
             let s = self.life.specks[i];

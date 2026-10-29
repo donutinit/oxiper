@@ -5,7 +5,7 @@
 use std::f32::consts::PI;
 
 use super::art::{self, HEAD_AT, HEAD_PIVOT};
-use super::body::{Gait, Legs, REAR, TailPose};
+use super::body::{Gait, Legs, REAR, SIT, TailPose};
 use super::fiestas::Visit;
 use super::jungle::{FEET, Jungle};
 use super::{Dice, Kind, Rgb, Rng};
@@ -86,6 +86,9 @@ pub struct Tiger {
     /// it is at stands.
     pub visit: f32,
     shrine: f32,
+    /// Whether it sits to watch what it calls on, and how far down it has sat, 0 to 1.
+    sits: bool,
+    pub sit: f32,
     /// Where it is going.
     pub tx: f32,
     trot: bool,
@@ -140,6 +143,8 @@ impl Tiger {
             thirst: rng.rangef(40.0, 120.0),
             visit: 12.0,
             shrine: 0.0,
+            sits: false,
+            sit: 0.0,
             tx: dir * 150.0,
             trot: false,
             prey: None,
@@ -215,6 +220,7 @@ impl Tiger {
         };
         let tall = match self.mood {
             Mood::Mark => 42.0,
+            Mood::Visit if self.sits => 33.0,
             Mood::Nap => 13.0,
             _ => 27.0,
         };
@@ -299,7 +305,7 @@ impl Jungle {
         }
         // On a holiday with ruins by the path, now and then it calls on them.
         if let Some(site) = self.pal.site()
-            && self.tiger.visit <= 0.0
+            && self.tiger.visit <= self.eagerness()
             && let Some(r) = self
                 .ruins(x - vw * 1.2, x + vw * 1.2)
                 .as_slice()
@@ -313,6 +319,7 @@ impl Jungle {
             self.tiger.shrine = r.x;
             self.tiger.tx = r.x + side * (site.stand + JAWS);
             self.tiger.visit = rng.rangef(60.0, 140.0) * self.set.rest_scale;
+            self.tiger.sits = self.pal.visit() == Visit::Sit;
             self.tiger.set(Mood::Visit);
             return;
         }
@@ -518,16 +525,22 @@ impl Jungle {
                 }
             }
             Mood::Visit => {
-                let cheer = self.pal.visit() == Visit::Cheer;
+                let style = self.pal.visit();
+                let cheer = style == Visit::Cheer;
                 let t = &mut self.tiger;
                 let mut shout = false;
                 if !t.lapping {
                     if (t.tx - t.x).abs() < 2.0 && t.turn == 0.0 {
-                        // Face the shrine and bow to it, or look up at the emblem and roar.
+                        // Face the shrine and bow to it, look up at the emblem and roar, or sit
+                        // down to watch it a good while.
                         t.lapping = true;
-                        t.clock = rng.rangef(7.0, 12.0);
+                        t.clock = if style == Visit::Sit {
+                            rng.rangef(16.0, 28.0)
+                        } else {
+                            rng.rangef(7.0, 12.0)
+                        };
                         t.dir = if t.shrine > t.x { 1.0 } else { -1.0 };
-                        if cheer {
+                        if style != Visit::Bow {
                             t.steps = 0;
                         } else {
                             let (hx, y) = (t.jaws(), FEET as f32 - 26.0);
@@ -600,7 +613,8 @@ impl Jungle {
     fn move_tiger(&mut self, rng: &mut Rng) {
         let water = self.water(self.tiger.x);
         let snowy = self.kind.snowy();
-        let cheer = self.pal.visit() == Visit::Cheer;
+        let style = self.pal.visit();
+        let cheer = style == Visit::Cheer;
         let (river, pool) = match water {
             Some(s) if !snowy => (s.river, !s.river),
             _ => (false, false),
@@ -687,11 +701,13 @@ impl Jungle {
         let crouch = match t.mood {
             Mood::Stalk => 1.0,
             Mood::Drink if t.lapping => 0.7,
-            Mood::Visit if t.lapping && !cheer => 0.3,
+            Mood::Visit if t.lapping && style == Visit::Bow => 0.3,
             Mood::Look => 0.35,
             _ => 0.0,
         };
         ease(&mut t.crouch, crouch, 0.08);
+        let sitting = t.mood == Mood::Visit && t.lapping && style == Visit::Sit;
+        ease(&mut t.sit, if sitting { 1.0 } else { 0.0 }, 0.06);
         ease(
             &mut t.lying,
             if t.mood == Mood::Feed { 1.0 } else { 0.0 },
@@ -713,6 +729,8 @@ impl Jungle {
             Mood::Feed => 0.62 + 0.07 * chew,
             Mood::Look => -0.4,
             Mood::Visit if t.lapping && cheer => -0.32 + 0.04 * (t.steps as f32 * 0.07).sin(),
+            // Sat up, the body turned nose up: the head level, and a little raised.
+            Mood::Visit if t.lapping && sitting => 0.4 + 0.03 * (t.steps as f32 * 0.05).sin(),
             Mood::Visit if t.lapping => 0.55 + 0.05 * (t.steps as f32 * 0.07).sin(),
             Mood::Roar | Mood::Fend if t.steps < 60 => -0.18,
             Mood::Carried => -0.3,
@@ -853,11 +871,13 @@ impl Jungle {
             Gait::Gallop => 1.2 * (1.0 - (2.0 * PI * t.phase).cos()),
             _ => 0.0,
         };
-        let drop = (t.crouch * 4.0 + t.lying * 9.0 + bob).round();
+        let drop = (t.crouch * 4.0 + t.lying * 9.0 + bob + t.sit * 8.0).round();
+        let sat = t.mood == Mood::Visit && t.sit > 0.02;
         let legs = match t.mood {
             Mood::Pounce => Legs::Reach((0.5 + t.vy * 0.4).clamp(0.0, 1.0)),
             Mood::Carried => Legs::Dangle(t.steps as f32 * 0.04),
             Mood::Mark if t.lapping => Legs::Rear(t.steps as f32 * 0.05),
+            _ if sat => Legs::Sit(t.sit),
             _ if t.lying > 0.5 => Legs::Fold,
             _ if t.sink > 0.5 => Legs::Gait(Gait::Paddle, t.phase),
             _ if t.speed > 0.04 => Legs::Gait(t.gait, t.phase),
@@ -888,6 +908,13 @@ impl Jungle {
                 sway: 1.0,
                 phase: t.tail_phase,
             },
+            // Sitting, it lets its tail lie behind it on the ground.
+            _ if sat => TailPose {
+                base: PI + 0.1,
+                curl: 0.02,
+                sway: 0.25,
+                phase: t.tail_phase,
+            },
             _ => TailPose {
                 base: 0.6 * PI,
                 curl: 0.075,
@@ -912,6 +939,10 @@ impl Jungle {
                 (skin.build.hind.hip.0 as i32, skin.build.hind.hip.1 as i32),
             ),
             Mood::Carried => (0.12 * (t.steps as f32 * 0.07).sin(), (MID, 6)),
+            _ if sat => (
+                SIT * t.sit,
+                (skin.build.hind.hip.0 as i32, skin.build.hind.hip.1 as i32),
+            ),
             // Galloping, the body rocks from the hind legs to the fore legs.
             _ if t.gait == Gait::Gallop && t.speed > 1.5 => {
                 (0.09 * (2.0 * PI * t.phase).sin(), (MID, 8))

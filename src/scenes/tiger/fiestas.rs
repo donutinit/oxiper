@@ -2,7 +2,7 @@
 //! theme, which holiday builds what (the ruin to call on, the flowers, the
 //! saucer's room, how the tiger calls on a ruin), and what a frame painted,
 //! for the tests. Each holiday keeps the rest to itself: `muertos.rs`,
-//! `navidad.rs`, `patrias.rs`.
+//! `navidad.rs`, `patrias.rs`, `equinoccio.rs`.
 
 use super::{Pal, Rgb};
 
@@ -74,6 +74,8 @@ pub enum Visit {
     Bow,
     /// Its head up, roaring "¡Viva México!" at the emblem over the wall.
     Cheer,
+    /// Sat on its haunches a good while, watching.
+    Sit,
 }
 
 impl Pal {
@@ -83,7 +85,17 @@ impl Pal {
             .fest
             .map(|d| d.level)
             .or(self.navidad.map(|d| d.level))
-            .or(self.patrias.map(|d| d.level))?;
+            .or(self.patrias.map(|d| d.level))
+            .or(self.equinoccio.map(|d| d.level))?;
+        // El Castillo is much bigger than a ruin, and there is nearly always one in sight.
+        if self.equinoccio.is_some() {
+            return Some(Site {
+                level,
+                half: super::equinoccio::CASTILLO_HALF,
+                chance: (0.62, 0.3),
+                stand: super::equinoccio::SIT_AT,
+            });
+        }
         Some(Site {
             level,
             half: 28.0,
@@ -101,6 +113,8 @@ impl Pal {
     pub fn visit(&self) -> Visit {
         if self.patrias.is_some() {
             Visit::Cheer
+        } else if self.equinoccio.is_some() {
+            Visit::Sit
         } else {
             Visit::Bow
         }
@@ -171,4 +185,8 @@ pub struct Painted {
     pub jaguar: bool,
     pub emblems: u32,
     pub campana: bool,
+    /// The Equinoccio: how many El Castillos were painted, and the most
+    /// triangles of light any of them showed on its stairway.
+    pub castillos: u32,
+    pub triangles: u32,
 }

@@ -115,6 +115,9 @@ impl Gait {
 /// How far a rearing animal is turned, nose up, about its hind hip.
 pub const REAR: f32 = -0.72;
 
+/// How far a sitting animal is turned, nose up, about its hind hip.
+pub const SIT: f32 = -0.5;
+
 /// What the legs are doing.
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub enum Legs {
@@ -132,6 +135,9 @@ pub enum Legs {
     /// Reared up against something, the body turned by [`REAR`]: fore paws
     /// up ahead of the shoulders, raking up and down with `phase`.
     Rear(f32),
+    /// Sitting on its haunches, the body turned by [`SIT`] times `k` (0 standing, 1 sat): the
+    /// fore paws straight down from the shoulders, the hind paws folded forward under it.
+    Sit(f32),
 }
 
 /// How the tail is carried.
@@ -440,6 +446,19 @@ fn foot(
         Legs::Dangle(phase) => {
             let kick = (phase * 2.0 * PI + slot as f32 * 1.7).sin();
             (hip.0 + kick * 2.5, hip.1 + reach * (0.85 + 0.1 * kick))
+        }
+        Legs::Sit(k) => {
+            // Planted on the ground in the world's frame, which is turned the other way in the
+            // body's frame while the body is turned by SIT.
+            let pivot = b.hind.hip;
+            let (c, s) = ((SIT * k).cos(), (SIT * k).sin());
+            let world = if spec.fore {
+                (rest_x, ground - drop)
+            } else {
+                (hip.0 + reach * 0.5, ground - drop)
+            };
+            let (px, py) = (world.0 - pivot.0, world.1 - pivot.1);
+            (pivot.0 + px * c + py * s, pivot.1 - px * s + py * c)
         }
         Legs::Rear(phase) => {
             if spec.fore {

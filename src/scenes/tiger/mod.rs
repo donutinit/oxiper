@@ -39,6 +39,13 @@
 //! Dolores, swinging on its yoke and ringing, and the fireflies glow in the
 //! three colors. The month builds up to the Grito on the 15th.
 //!
+//! At the Equinoccio the ruins become El Castillo of Chichén Itzá: nine
+//! terraces, the temple on top, the stairway up its north face. As the
+//! afternoon sun goes down, seven triangles of light slither one after another
+//! down the stairway's balustrade, as the shadows of the terraces do on March
+//! 20 and 21, to the stone head of Kukulcán at its foot, whose eyes light up
+//! when it arrives. The tiger comes to sit before it and watch.
+//!
 //! - `art.rs`: every sprite, drawn by hand one character per pixel: the
 //!   tiger's torso, heads (calm, blinking, snarling, roaring), its front view
 //!   and its sleep, and the alebrije's likenesses of them; deer, boar,
@@ -63,6 +70,8 @@
 //! - `navidad.rs`: Navidad: its colors, the foquitos and heno, the
 //!   nochebuenas, the nacimientos and farolitos, the Reyes' caravan and the
 //!   comet of the Estrella de Belén.
+//! - `equinoccio.rs`: the Equinoccio: its colors, El Castillo and the serpent
+//!   of light that comes down its stairway with the afternoon.
 //! - `patrias.rs`: Fiestas Patrias: its colors, the jaguar's, the papel picado
 //!   in three colors, the nopales, the ruins with their emblem and flags, and
 //!   the Campana de Dolores.
@@ -76,6 +85,7 @@
 
 mod art;
 mod body;
+mod equinoccio;
 mod fiestas;
 mod hunter;
 mod jungle;
@@ -299,6 +309,7 @@ struct Pal {
     fest: Option<muertos::Dress>,
     navidad: Option<navidad::Dress>,
     patrias: Option<patrias::Dress>,
+    equinoccio: Option<equinoccio::Dress>,
 }
 
 const DAY_TOP: Rgb = Rgb(84, 150, 214);
@@ -325,6 +336,15 @@ impl Pal {
             .fiesta
             .is(crate::fiesta::Kind::Patrias)
             .then(|| patrias::Dress::new(ctx));
+        let equinoccio = ctx
+            .fiesta
+            .is(crate::fiesta::Kind::Equinoccio)
+            .then(|| equinoccio::Dress::new(ctx));
+        // The sky of the equinox is a little bluer, under the native theme.
+        let (top, bot) = match equinoccio {
+            Some(d) if ctx.theme.native => (top.lerp(d.cielo, 0.3), bot.lerp(d.cielo, 0.25)),
+            _ => (top, bot),
+        };
         let native = Pal {
             day_top: top,
             day_bot: bot,
@@ -333,6 +353,7 @@ impl Pal {
             fest,
             navidad,
             patrias,
+            equinoccio,
         };
         if ctx.theme.native {
             return native;
@@ -951,6 +972,8 @@ mod tests {
         alebrije: bool,
         jaguar: bool,
         emblems: u32,
+        castillos: u32,
+        triangles: u32,
         flags: u32,
         blossoms: u32,
         ruins: u32,
@@ -968,6 +991,7 @@ mod tests {
             !self.alebrije
                 && !self.jaguar
                 && self.emblems == 0
+                && (self.castillos, self.triangles) == (0, 0)
                 && (self.flags, self.blossoms, self.ruins, self.candles) == (0, 0, 0, 0)
                 && (self.bulbs, self.heno, self.belenes, self.ninos, self.reyes) == (0, 0, 0, 0, 0)
         }
@@ -985,6 +1009,8 @@ mod tests {
             seen.alebrije |= p.alebrije;
             seen.jaguar |= p.jaguar;
             seen.emblems += p.emblems;
+            seen.castillos += p.castillos;
+            seen.triangles = seen.triangles.max(p.triangles);
             seen.flags += p.flags;
             seen.blossoms += p.blossoms;
             seen.ruins += p.ruins;
@@ -1229,7 +1255,10 @@ mod tests {
         use crate::fiesta::Kind as Day;
         let theme = Theme::classic();
         for kind in Day::ALL {
-            if matches!(kind, Day::Muertos | Day::Navidad | Day::Patrias) {
+            if matches!(
+                kind,
+                Day::Muertos | Day::Navidad | Day::Patrias | Day::Equinoccio
+            ) {
                 continue;
             }
             let fiesta = Fiesta::height(kind);
@@ -1634,6 +1663,202 @@ mod tests {
             }
             let papel = d.papel();
             assert!(papel.flags.iter().all(|f| *f != Rgb::BLACK), "{name}");
+        }
+    }
+
+    // ----- Equinoccio -----
+
+    /// On the days of the equinox the ruins are El Castillo, with the serpent of light coming
+    /// down its stairway in the afternoon; on an ordinary day there is none.
+    #[test]
+    fn equinoccio_dresses_the_jungle() {
+        let theme = Theme::classic();
+        for kind in ["bengal", "siberian", "white"] {
+            for fiesta in [Fiesta::of_day(3, 20), Fiesta::of_day(3, 19)] {
+                let seen = seen_over(fiesta, &theme, kind, 240);
+                assert!(
+                    !seen.alebrije && !seen.jaguar,
+                    "{kind} {fiesta:?}: {seen:?}"
+                );
+                assert!(seen.castillos > 0, "{kind} {fiesta:?}: {seen:?}");
+                assert!(seen.triangles > 0, "{kind} {fiesta:?}: {seen:?}");
+                assert_eq!(seen.ruins + seen.flags + seen.bulbs, 0, "{seen:?}");
+            }
+        }
+    }
+
+    /// The serpent forms with the afternoon sun, holds, and fades as it sets; the higher the
+    /// holiday, the further down it comes.
+    #[test]
+    fn the_serpent_follows_the_afternoon() {
+        let theme = Theme::classic();
+        let o = opts("ufo = 0");
+        let mut reach = Vec::new();
+        for day in [(3, 20), (3, 19)] {
+            let c = fiesta_ctx(&theme, &o, Fiesta::of_day(day.0, day.1));
+            let mut s = TigerScene::new(&c);
+            s.resize(&c, 100, 30);
+            s.retheme(&c);
+            let d = s.jungle.pal.equinoccio.expect("dressed");
+            let at = |s: &mut TigerScene, t: f32| {
+                s.jungle.t = t;
+                s.jungle.serpent(&d)
+            };
+            assert_eq!(at(&mut s, 0.3), 0.0, "morning");
+            assert_eq!(at(&mut s, 0.5), 0.0, "noon");
+            let (early, later, late) = (at(&mut s, 0.6), at(&mut s, 0.64), at(&mut s, 0.7));
+            assert!(
+                0.0 < early && early < later && later < late,
+                "{early} {later} {late}"
+            );
+            assert!(at(&mut s, 0.79) < late && at(&mut s, 0.79) > 0.0);
+            assert_eq!(at(&mut s, 0.9), 0.0, "night");
+            reach.push(late);
+        }
+        // At the height of the holiday it reaches the head; two days off it falls short.
+        assert!(reach[0] > 0.99 && reach[1] < 0.9, "{reach:?}");
+    }
+
+    /// Played through, El Castillo shows all seven triangles at the height of the holiday, and
+    /// fewer than that two days off.
+    #[test]
+    fn the_serpent_comes_down_the_stairway() {
+        let theme = Theme::classic();
+        let most = |fiesta: Fiesta| {
+            let o = opts("ufo = 0\nzoom = 0");
+            let c = fiesta_ctx(&theme, &o, fiesta);
+            let mut s = TigerScene::new(&c);
+            s.resize(&c, 200, 60);
+            s.retheme(&c);
+            let mut most = 0;
+            play(&mut s, &c, (200, 60), 400, 9, |s| {
+                most = most.max(s.jungle.painted.triangles);
+                false
+            });
+            most
+        };
+        let (height, edge) = (most(Fiesta::of_day(3, 20)), most(Fiesta::of_day(3, 19)));
+        assert_eq!(height, 7, "{height} {edge}");
+        assert!(0 < edge && edge < 7, "{height} {edge}");
+    }
+
+    /// With the equinox on the tiger comes to sit before El Castillo: it walks over, faces it,
+    /// and sits up on its haunches a good while, its mouth shut, then goes its way.
+    #[test]
+    fn the_tiger_sits_to_watch_the_serpent() {
+        let theme = Theme::classic();
+        let o = opts("ufo = 0\nday = 60");
+        let c = fiesta_ctx(&theme, &o, Fiesta::of_day(3, 20));
+        let mut s = TigerScene::new(&c);
+        s.resize(&c, 120, 36);
+        s.retheme(&c);
+        let (mut walked, mut sat, mut rose) = (false, false, false);
+        for _ in 0..30 * 60 * 12 {
+            s.tick(&c, 1.0 / 30.0, 1.0 / 30.0);
+            let t = &s.jungle.tiger;
+            if t.mood == Mood::Visit {
+                walked = true;
+                sat |= t.sit > 0.95 && t.mouth == 0.0 && t.speed < 0.02;
+            } else if sat && t.sit < 0.05 {
+                rose = true;
+            }
+            assert!(!t.gone && t.x.is_finite() && t.sit.is_finite());
+        }
+        assert!(
+            walked && sat && rose,
+            "walked {walked}, sat {sat}, rose {rose}"
+        );
+    }
+
+    /// Switching the equinox on and off through `retheme` builds and takes down El Castillo at
+    /// once, and a tiger on its way to sit before it is called off.
+    #[test]
+    fn equinoccio_comes_and_goes_with_retheme() {
+        let theme = Theme::classic();
+        let o = opts("ufo = 0\nzoom = 1");
+        let off = fiesta_ctx(&theme, &o, Fiesta::NONE);
+        let on = fiesta_ctx(&theme, &o, Fiesta::of_day(3, 20));
+        let mut s = TigerScene::new(&off);
+        s.resize(&off, 200, 50);
+        s.retheme(&off);
+        let mut cv = Canvas::new(200, 50, Color::Reset);
+        let mut built = false;
+        for _ in 0..4 {
+            for (c, dressed) in [(&on, true), (&off, false), (&on, true), (&off, false)] {
+                s.retheme(c);
+                for _ in 0..90 {
+                    s.tick(c, 1.0 / 30.0, 1.0 / 30.0);
+                }
+                cv.clear();
+                s.draw(c, &mut cv);
+                let p = &s.jungle.painted;
+                built |= p.castillos > 0;
+                if !dressed {
+                    assert_eq!((p.castillos, p.triangles), (0, 0), "{p:?}");
+                }
+            }
+        }
+        assert!(built);
+        s.retheme(&on);
+        s.jungle.tiger.set(Mood::Visit);
+        s.retheme(&off);
+        assert_ne!(s.jungle.tiger.mood, Mood::Visit);
+    }
+
+    /// Odd sizes, odd options and huge steps survive the equinox, on any of its days, under
+    /// classic and under other themes.
+    #[test]
+    fn equinoccio_survives_odd_sizes_and_steps() {
+        let cases = [
+            "speed = 50.0\nday = 1\nzoom = 99\nsky = false\nprey = 10.0\nkind = 'random'\nufo = 3600.0",
+            "speed = 0.0\nday = 999999999\nzoom = -4\nprey = -3.0\nkind = 'nope'\nufo = -1.0",
+            "kind = 'siberian'\nprey = 0\nufo = nan",
+            "kind = 'white'\nzoom = 6\nspeed = inf\nufo = 3600.0",
+        ];
+        let themes = [
+            Theme::classic(),
+            Theme::builtin("mono").unwrap(),
+            Theme::builtin("dracula").unwrap(),
+            Theme::terminal(&TermColors::default()),
+        ];
+        for case in cases {
+            let o = opts(case);
+            for theme in &themes {
+                for day in [(3, 19), (3, 20), (3, 21), (3, 22)] {
+                    let c = fiesta_ctx(theme, &o, Fiesta::of_day(day.0, day.1));
+                    let mut s = (INFO.make)(&c);
+                    for &(w, h) in &[(1u16, 1u16), (2, 3), (7, 2), (1, 40), (300, 90), (80, 24)] {
+                        s.resize(&c, w, h);
+                        s.retheme(&c);
+                        let mut cv = Canvas::new(w, h, Color::Reset);
+                        for dt in [0.0, f32::NAN, -1.0, f32::INFINITY, 0.05, 5.0, 1e9] {
+                            s.tick(&c, dt, 0.05);
+                            s.next_change();
+                            cv.clear();
+                            s.draw(&c, &mut cv);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /// The colors of the equinox come from the theme, and stay told apart.
+    #[test]
+    fn the_equinoccio_dress_keeps_its_colors_apart() {
+        for name in crate::theme::names() {
+            let Some(theme) = Theme::builtin(name) else {
+                continue;
+            };
+            let o = opts("");
+            let c = fiesta_ctx(&theme, &o, Fiesta::of_day(3, 20));
+            let d = equinoccio::Dress::new(&c);
+            assert_ne!(d.sol, d.jade, "{name}");
+            assert_ne!(d.caliza, d.sombra, "{name}");
+            let mut colors: Vec<Rgb> = d.serpiente().iter().map(|&(_, c)| c).collect();
+            colors.sort_by_key(|c| (c.0, c.1, c.2));
+            colors.dedup();
+            assert!(colors.len() >= 5, "{name}: {colors:?}");
         }
     }
 }

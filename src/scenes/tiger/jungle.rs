@@ -749,6 +749,7 @@ impl Jungle {
         self.paint_ruins();
         self.paint_belenes();
         self.paint_emblemas();
+        self.paint_castillos();
         self.paint_trees();
         self.paint_papel();
         self.paint_luces();
@@ -1608,8 +1609,9 @@ impl Jungle {
             }
         } else if night > 0.05 && !self.ufo.hushed() {
             // The fireflies of Día de Muertos are warm, like the candles, at
-            // Navidad they are foquitos of every color, and on Fiestas Patrias
-            // they glow in verde, blanco y rojo.
+            // Navidad they are foquitos of every color, on Fiestas Patrias
+            // they glow in verde, blanco y rojo, and at the Equinoccio in the
+            // jade of the quetzal's feathers.
             let glow = if self.pal.fest.is_some() {
                 Rgb(255, 200, 90)
             } else {
@@ -1622,6 +1624,8 @@ impl Jungle {
                 } else if let Some(d) = self.pal.patrias {
                     [d.verde.lerp(Rgb::WHITE, 0.35), d.blanco, d.rojo]
                         [(m.phase * 10.0) as usize % 3]
+                } else if let Some(d) = self.pal.equinoccio {
+                    d.jade.lerp(Rgb::WHITE, 0.3)
                 } else {
                     glow
                 };
@@ -1636,6 +1640,7 @@ impl Jungle {
         self.draw_ufo_lights(v);
         self.glow_lights(v);
         self.glow_belenes(v);
+        self.glow_castillos(v);
     }
 
     /// Notes as letters over the picture: z's, alarms.
