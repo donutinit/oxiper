@@ -20,11 +20,14 @@ mod equinoccio;
 pub mod grito;
 pub mod inocente;
 pub mod jarabe;
+pub mod juguetes;
 pub mod kukulcan;
+pub mod loteria;
 pub mod mariachis;
 pub mod monarcas;
 mod muertos;
 mod navidad;
+mod nino;
 pub mod nyan;
 pub(crate) mod palette;
 pub mod pastorela;
@@ -93,6 +96,8 @@ pub const ALL: &[&Info] = &[
     &inocente::INFO,
     &tamalero::INFO,
     &kukulcan::INFO,
+    &juguetes::INFO,
+    &loteria::INFO,
 ];
 
 /// An `egg_rate` at or above this plays an egg at once, again and again, and

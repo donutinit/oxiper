@@ -162,6 +162,25 @@ pub(crate) fn blit(
     }
 }
 
+/// Draws a one-pixel line from `a` to `b`, ends included.
+pub(crate) fn line(c: &mut Canvas, a: (i32, i32), b: (i32, i32), color: Color) {
+    // However far off the screen an end is, only a screenful is walked.
+    let far = 4 * (c.w() as i32 + c.h() as i32 * 2 + 64);
+    let near = |v: (i32, i32)| (v.0.clamp(-far, far), v.1.clamp(-far, far));
+    trace(near(a), near(b), |x, y| pixel(c, x, y, color));
+}
+
+/// Is pixel (`x`, `y`) of the font's letter `ch` lit? (False off the
+/// letter's 3x5 pixels, or for a character the font lacks.)
+pub(crate) fn glyph_on(ch: char, x: i32, y: i32) -> bool {
+    match glyph(ch) {
+        Some(rows) if (0..3).contains(&x) && (0..5).contains(&y) => {
+            rows[y as usize] >> (2 - x) & 1 == 1
+        }
+        _ => false,
+    }
+}
+
 /// Fills a rectangle of pixels with a color (nothing if it is empty).
 pub(crate) fn fill(c: &mut Canvas, (x, y): (i32, i32), (w, h): (i32, i32), color: Color) {
     // Only the part on the screen is walked, however big the rectangle.
