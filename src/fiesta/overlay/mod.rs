@@ -35,6 +35,16 @@
 //! Under any theme but `classic` the bulbs and the confetti take the theme's
 //! colors and the esferas the theme's closest to red, green, gold and silver.
 //!
+//! The Fiestas Patrias hang papel picado in verde, blanco y rojo, the flags
+//! following one another in that order along the string, with cut-out
+//! águilas, campanas de Dolores, estrellas, sombreros de charro, nopales and
+//! banderas on their poles, and a banderita (a little flag in three stripes)
+//! swaying between every two of them. At the Grito and the parade a second,
+//! lower string hangs behind the first. Tricolor confetti drifts down over
+//! everything, more of it as the month goes by. Four rows, six with two
+//! strings. Under any theme but `classic` the tricolor is the theme's own
+//! green, red and foreground.
+//!
 //! On an ordinary day, and on a holiday without an overlay, it draws nothing.
 
 mod cord;
@@ -42,10 +52,11 @@ mod drift;
 mod muertos;
 mod navidad;
 mod papel;
+mod patrias;
 mod ribbon;
 
 use super::{Fiesta, Kind};
-use crate::color::Color;
+use crate::color::{Color, rgb};
 use crate::render::{Canvas, Cell};
 use crate::theme::Theme;
 use cord::Hung;
@@ -63,6 +74,32 @@ const UPPER: u8 = 1;
 const LOWER: u8 = 2;
 /// The overlay's own seed: it never touches a scene's random numbers.
 const SEED: u64 = 0x6d75_6572_746f_7321;
+
+/// How a holiday's colors follow the theme under any theme but `classic`.
+#[derive(Clone, Copy, PartialEq)]
+enum Themed {
+    /// They stay as they are (marigold petals).
+    Never,
+    /// Each takes the theme's accent of its place in the palette.
+    Accents,
+    /// The first three colors are green, white and red as the theme paints
+    /// them (the Mexican flag), the rest follow in turn.
+    Tricolor,
+}
+
+impl Themed {
+    /// What the `i`th color of a palette, `native` under `classic`, becomes.
+    fn color(self, theme: &Theme, i: usize, native: Color) -> Color {
+        if theme.native {
+            return native;
+        }
+        match self {
+            Themed::Never => native,
+            Themed::Accents => solid(theme.colors.get(i % theme.colors.len().max(1)), native),
+            Themed::Tricolor => tricolor(theme)[i % 3],
+        }
+    }
+}
 
 /// What a holiday hangs and drops over the scene on one of its days.
 #[derive(Clone, Copy)]
@@ -97,6 +134,7 @@ impl Look {
         match fiesta.kind {
             Kind::Muertos => Some(muertos::look(fiesta)),
             Kind::Navidad => Some(navidad::look(fiesta)),
+            Kind::Patrias => Some(patrias::look(fiesta)),
             _ => None,
         }
     }
@@ -246,23 +284,71 @@ fn solid(c: Option<&Color>, fallback: Color) -> Color {
     }
 }
 
-/// The theme color closest to a classic one (the classic color itself under
-/// `classic`): a Christmas ball is red under any theme.
-fn like(theme: &Theme, native: Color) -> Color {
-    let Color::Rgb(r, g, b) = native else {
-        return native;
+/// The hue of a color in degrees, and its saturation (0 for a gray).
+fn hue(c: Color) -> Option<(f32, f32)> {
+    let Color::Rgb(r, g, b) = c else {
+        return None;
     };
-    let dist = |c: &&Color| match **c {
-        Color::Rgb(r2, g2, b2) => {
-            let d = |a: u8, b: u8| (a.abs_diff(b) as u32).pow(2);
-            d(r, r2) + d(g, g2) + d(b, b2)
+    let (r, g, b) = (r as f32, g as f32, b as f32);
+    let (hi, lo) = (r.max(g).max(b), r.min(g).min(b));
+    if hi <= 0.0 || hi == lo {
+        return Some((0.0, 0.0));
+    }
+    let d = hi - lo;
+    let h = if hi == r {
+        (g - b) / d
+    } else if hi == g {
+        2.0 + (b - r) / d
+    } else {
+        4.0 + (r - g) / d
+    };
+    Some(((h * 60.0).rem_euclid(360.0), d / hi))
+}
+
+/// The theme's accent closest in hue to `target` degrees, among the ones that
+/// have a color to speak of.
+fn nearest_hue(theme: &Theme, target: f32) -> Option<Color> {
+    let off = |c: &&Color| match hue(**c) {
+        Some((h, s)) if s > 0.2 => {
+            let d = (h - target).abs();
+            (d.min(360.0 - d) * 1000.0) as u32
         }
         _ => u32::MAX,
     };
+    theme
+        .colors
+        .iter()
+        .min_by_key(off)
+        .filter(|c| off(c) < u32::MAX)
+        .copied()
+}
+
+/// The theme color closest in hue to a classic one (the classic color itself
+/// under `classic`): a Christmas ball is red under any theme, and a gray or
+/// white one the theme's foreground.
+fn like(theme: &Theme, native: Color) -> Color {
     if theme.native {
         return native;
     }
-    solid(theme.colors.iter().min_by_key(dist), native)
+    match hue(native) {
+        Some((target, s)) if s > 0.2 => solid(nearest_hue(theme, target).as_ref(), native),
+        Some(_) => solid(Some(&theme.fg), native),
+        None => native,
+    }
+}
+
+/// Verde, blanco and rojo of the Mexican flag as a theme paints them: the
+/// accents closest to green and red, the foreground for white (under
+/// `classic`, the flag's own colors).
+fn tricolor(theme: &Theme) -> [Color; 3] {
+    if theme.native {
+        return [rgb(0x006847), rgb(0xf4f1ea), rgb(0xce1126)];
+    }
+    [
+        solid(nearest_hue(theme, 130.0).as_ref(), rgb(0x006847)),
+        solid(Some(&theme.fg), rgb(0xf4f1ea)),
+        solid(nearest_hue(theme, 0.0).as_ref(), rgb(0xce1126)),
+    ]
 }
 
 /// The colors a cell shows in its upper and lower half.

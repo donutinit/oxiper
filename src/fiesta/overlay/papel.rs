@@ -2,7 +2,8 @@
 //! staggered. The engine is shared by the holidays that hang it (each brings
 //! its own cut-outs and colors, a [`Papel`]).
 
-use super::{LOWER, LOWER_LEVEL, Overlay, UPPER, put2, solid, wave};
+use super::cord::{Hung, Piece};
+use super::{LOWER, LOWER_LEVEL, Overlay, Themed, UPPER, put, put2, solid, wave};
 use crate::color::Color;
 use crate::render::Canvas;
 use crate::theme::Theme;
@@ -10,10 +11,12 @@ use crate::theme::Theme;
 /// Flag size in pixels (one pixel is half a cell).
 pub(super) const FLAG_W: i32 = 7;
 pub(super) const FLAG_H: i32 = 8;
-/// Columns between two flags of a string, and of the upper string when the
-/// lower one's flags hang in between.
-const GAP: i32 = 2;
+/// Columns between two flags of the upper string when the lower one's flags
+/// hang in between.
 const GAP_TWO: i32 = 9;
+/// A banderita: a little flag in three stripes, five pixels wide and three
+/// tall.
+const BANDERITA_W: i32 = 5;
 /// Pixel row where the lower string's flags hang.
 pub(super) const LOWER_TOP: i32 = 4;
 /// About this many columns between two ties of the upper string.
@@ -31,6 +34,16 @@ pub(super) struct Papel {
     pub colors: [Color; 6],
     /// The cord, natural string.
     pub cord: Color,
+    /// Columns between two flags of a string.
+    pub gap: i32,
+    /// Do the first three colors follow each other along the strings, as in
+    /// the tricolor, instead of falling at random?
+    pub ordered: bool,
+    /// Banderitas (little flags in the first three colors) hang in the gaps
+    /// between the flags of the upper string.
+    pub banderitas: bool,
+    /// How the paper follows the theme.
+    pub themed: Themed,
 }
 
 pub(super) struct Flag {
@@ -54,10 +67,11 @@ impl Overlay {
         let two = self.level >= LOWER_LEVEL;
         self.flags.clear();
         self.ties.clear();
+        self.hung.clear();
 
         // The upper string, centered, its flags evenly spaced; wider apart
         // when the lower string's hang between them.
-        let gap = if two { GAP_TWO } else { GAP };
+        let gap = if two { GAP_TWO } else { papel.gap };
         let pitch = FLAG_W + gap;
         let n = ((w + gap) / pitch).max(0);
         let x0 = (w - (n * pitch - gap)) / 2;
@@ -67,9 +81,13 @@ impl Overlay {
         let mut lower = Vec::new();
         // Neighbors along the zigzag never share a design or a color.
         let (mut designs, mut colors) = ([u8::MAX; 2], [u8::MAX; 2]);
-        let mut add = |flags: &mut Vec<Flag>, x: i32, top: i32| {
+        let mut add = |flags: &mut Vec<Flag>, x: i32, top: i32, nth: usize| {
             let design = other(&mut rng, designs, papel.designs.len());
-            let color = other(&mut rng, colors, papel.colors.len());
+            let color = if papel.ordered {
+                (nth % 3) as u8
+            } else {
+                other(&mut rng, colors, papel.colors.len())
+            };
             designs = [designs[1], design];
             colors = [colors[1], color];
             flags.push(Flag {
@@ -82,10 +100,20 @@ impl Overlay {
         };
         for i in 0..n {
             let x = x0 + i * pitch;
-            add(&mut self.flags, x, 0);
+            add(&mut self.flags, x, 0, i as usize);
+            if papel.banderitas && i + 1 < n {
+                self.hung.push(Hung {
+                    x: x + FLAG_W + (gap - BANDERITA_W) / 2,
+                    piece: Piece::Banderita,
+                    color: 0,
+                    len: 0,
+                    phase: 1.7 * i as f32,
+                });
+            }
             let x = x + FLAG_W + (gap - FLAG_W) / 2;
             if two && x >= self.lower.0 && x + FLAG_W <= self.lower.1 {
-                add(&mut lower, x, LOWER_TOP);
+                // Neither of its neighbors' colors, in the tricolor.
+                add(&mut lower, x, LOWER_TOP, i as usize + 2);
             }
         }
         self.upper = self.flags.len();
@@ -121,7 +149,7 @@ impl Overlay {
         let mut cord = papel.cord;
         if !theme.native {
             for (i, slot) in colors.iter_mut().enumerate() {
-                *slot = solid(theme.colors.get(i % theme.colors.len().max(1)), *slot);
+                *slot = papel.themed.color(theme, i, *slot);
             }
             cord = solid(Some(&theme.fg), solid(theme.ramp.last(), papel.cord)).scale(0.85);
         }
@@ -132,6 +160,11 @@ impl Overlay {
             }
         }
         self.draw_upper_cord(c, cord);
+        for h in &self.hung {
+            if h.piece == Piece::Banderita {
+                self.draw_banderita(c, h, &colors);
+            }
+        }
         for f in &self.flags[..self.upper] {
             self.draw_flag(c, f, papel, &colors);
         }
@@ -194,6 +227,25 @@ impl Overlay {
         let gust = (0.5 + 0.5 * (wave(self.t, 0.23, 0.0) - 0.018 * x).sin()).powi(2);
         let amp = 0.45 + 0.9 * gust;
         amp * (wave(self.t, 1.9, 0.35 * phase) - 0.11 * x).sin()
+    }
+
+    /// A banderita on the cord between two flags: stripes of the first,
+    /// second and third color, the bottom swaying in the breeze.
+    fn draw_banderita(&self, c: &mut Canvas, h: &Hung, colors: &[Color; 6]) {
+        let s = self.sway(h.x, h.phase) * 0.8;
+        let top = self.sag(h.x + BANDERITA_W / 2);
+        for r in 0..3 {
+            let dx = (s * r as f32 / 2.0).round() as i32;
+            for i in 0..BANDERITA_W {
+                let col = colors[[0, 0, 1, 2, 2][i as usize % 5]];
+                put(
+                    c,
+                    h.x + i + dx,
+                    top + r,
+                    col.scale(if r == 0 { 0.8 } else { 1.0 }),
+                );
+            }
+        }
     }
 
     fn draw_flag(&self, c: &mut Canvas, f: &Flag, papel: &Papel, colors: &[Color; 6]) {

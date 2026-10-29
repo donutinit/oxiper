@@ -14,6 +14,8 @@ pub(super) enum Piece {
     Esfera,
     /// A swag of heno (Spanish moss) draped along the cord.
     Heno,
+    /// A banderita: a little flag in three stripes.
+    Banderita,
 }
 
 pub(super) struct Hung {

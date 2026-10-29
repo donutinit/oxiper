@@ -2,7 +2,7 @@
 
 use super::drift::Flecks;
 use super::papel::{Design, Papel};
-use super::{Fiesta, Look};
+use super::{Fiesta, Look, Themed};
 use crate::color::rgb;
 
 /// The cut-outs: a calavera, cempasúchil, a dove, a cross, a heart, a candle,
@@ -59,6 +59,10 @@ const PAPEL: Papel = Papel {
     ],
     // The cord, natural string.
     cord: rgb(0xbcae94),
+    gap: 2,
+    ordered: false,
+    banderitas: false,
+    themed: Themed::Accents,
 };
 
 /// Cempasúchil petals: the face in the light and the face in shade of the
@@ -70,7 +74,7 @@ const PETALS: Flecks = Flecks {
     ],
     share: 50,
     cells: 240,
-    themed: false,
+    themed: Themed::Never,
 };
 
 /// What Día de Muertos hangs: the same on each of its days (the second string

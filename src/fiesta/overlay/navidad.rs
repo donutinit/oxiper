@@ -4,7 +4,7 @@
 use super::cord::{Hung, Piece};
 use super::drift::{Flecks, tone};
 use super::ribbon::Ribbons;
-use super::{Fiesta, Look, Overlay, glow, like, put, solid, wave};
+use super::{Fiesta, Look, Overlay, Themed, glow, like, put, solid, wave};
 use crate::color::{Color, rgb};
 use crate::render::Canvas;
 use crate::theme::Theme;
@@ -90,7 +90,7 @@ const CONFETTI: Flecks = Flecks {
     ],
     share: 0,
     cells: 110,
-    themed: true,
+    themed: Themed::Accents,
 };
 
 /// And serpentinas.

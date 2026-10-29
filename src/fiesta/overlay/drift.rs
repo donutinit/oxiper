@@ -2,7 +2,7 @@
 //! swaying (cempasúchil petals, confetti). Each lays only its own pixels, and
 //! the few of them keep the scene visible.
 
-use super::{Overlay, put, solid, wave};
+use super::{Overlay, Themed, put, wave};
 use crate::color::{Color, rgb};
 use crate::render::Canvas;
 use crate::theme::Theme;
@@ -17,9 +17,8 @@ pub(super) struct Flecks {
     pub share: u8,
     /// Cells per fleck at the holiday's height.
     pub cells: i32,
-    /// Do the tones follow the theme's colors (in order) under any theme but
-    /// `classic`?
-    pub themed: bool,
+    /// How the tones follow the theme under any theme but `classic`.
+    pub themed: Themed,
 }
 
 /// A color and the shade of its other face.
@@ -90,9 +89,9 @@ impl Overlay {
         let mut tones = [(Color::Reset, Color::Reset); TONES];
         let k = flecks.tones.len().clamp(1, TONES);
         tones[..k].copy_from_slice(&flecks.tones[..k]);
-        if flecks.themed && !theme.native {
+        if flecks.themed != Themed::Never && !theme.native {
             for (i, t) in tones[..k].iter_mut().enumerate() {
-                let c = solid(theme.colors.get(i % theme.colors.len().max(1)), t.0);
+                let c = flecks.themed.color(theme, i, t.0);
                 *t = (c, c.scale(0.6));
             }
         }
