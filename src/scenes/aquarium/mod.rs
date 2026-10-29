@@ -41,6 +41,16 @@
 //! Belén crosses the sky and the Reyes Magos sail by. From Nochebuena the
 //! Niño Dios lies in the manger, and at night during the posadas a procession
 //! of small fish carrying candles swims across.
+//!
+//! At the Fiestas Patrias (`patrias` keeps them every day) the escudo is set
+//! on the floor first (the águila on its nopal over the lake, or a small one),
+//! beside the bell of Dolores, a flagpole with its flag rippling, nopales and
+//! magueyes; the castle flies the Mexican flag; strings of banderitas hang
+//! between the kelp; ajolotes of Xochimilco walk the floor, schools of fish
+//! wear the three colors, a fish the flag itself, a fish a sombrero de
+//! charro, a jellyfish is the Dolores bell; the águila real flies over with
+//! its serpent and a launch passes under its flag. Two strings of banderitas
+//! at the Grito, one before.
 
 mod art;
 pub mod assets;
@@ -52,6 +62,7 @@ mod events;
 mod garlands;
 mod library;
 mod navidad;
+mod patrias;
 mod sprite;
 
 use std::cmp::Reverse;
@@ -164,7 +175,7 @@ pub const INFO: SceneInfo = SceneInfo {
         Opt {
             key: "season",
             default: Val::S("auto"),
-            help: "auto (the holidays, see `fiestas`), none, muertos (Día de Muertos every day) or navidad (the Navidad every day)",
+            help: "auto (the holidays, see `fiestas`), none, muertos, navidad or patrias (that holiday every day)",
         },
         Opt {
             key: "castle",

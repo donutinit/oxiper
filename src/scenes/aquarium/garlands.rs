@@ -1,5 +1,5 @@
 //! Strings hung from plant to plant, which the season dresses: the series'
-//! lights at Navidad. Each string sags between a plant and the nearest one on
+//! lights at Navidad, the banderitas of the Fiestas Patrias. Each string sags between a plant and the nearest one on
 //! its right, from a point a little below the top of each; how many plants
 //! hang one follows how far the holiday has come, and at its height there are
 //! two strings between them.
