@@ -9,7 +9,7 @@
 //!
 //! All of it draws from its own RNG, so ordinary days keep their numbers.
 
-use super::art::{Glow, Sprite};
+use super::art::{self, Cord, Glow, Sprite};
 use crate::color::{Color, rgb};
 use crate::fiesta::{Fiesta, Kind};
 use crate::render::{BOLD, Canvas};
@@ -258,14 +258,6 @@ struct Light {
     lit: f32,
 }
 
-/// A cell of the cord the lights hang from.
-#[derive(Clone, Copy)]
-struct Cord {
-    x: i16,
-    y: i16,
-    ch: char,
-}
-
 #[derive(Clone, Copy, Default)]
 struct Walker {
     who: u8,
@@ -424,25 +416,8 @@ impl Navidad {
                 let swag = 26 + 7 * s;
                 let shift = self.rng.i32(0..swag);
                 let y0 = top + 4 * s;
-                let ys: Vec<i32> = (0..w)
-                    .map(|x| {
-                        let u = ((x + shift) % swag) as f32 / swag as f32;
-                        y0 + (depth * 4.0 * u * (1.0 - u)).round() as i32
-                    })
-                    .collect();
-                for x in 0..w {
-                    let (y, next) = (ys[x as usize], ys[(x as usize + 1).min(ys.len() - 1)]);
-                    let ch = match next.cmp(&y) {
-                        std::cmp::Ordering::Greater => '╲',
-                        std::cmp::Ordering::Less => '╱',
-                        std::cmp::Ordering::Equal => '─',
-                    };
-                    self.cords.push(Cord {
-                        x: x as i16,
-                        y: y as i16,
-                        ch,
-                    });
-                }
+                let base = self.cords.len();
+                art::hang(&mut self.cords, w, y0, (depth, swag, shift));
                 let mut k = 0u16;
                 let mut x = pitch / 2 + 1 + s * (pitch / 2).max(1);
                 while x < w - 1 {
@@ -450,7 +425,7 @@ impl Navidad {
                     self.lamps.push(Light {
                         lamp: Lamp::Bulb { string: s as u8, k },
                         x,
-                        y: ys[x as usize] + 1,
+                        y: self.cords[base + x as usize].y as i32 + 1,
                         hue,
                         phase: self.rng.f32(),
                         lit: 1.0,

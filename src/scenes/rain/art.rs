@@ -1,5 +1,6 @@
 //! What rain's holidays share: figures drawn in characters with an ink map,
-//! and the light a glowing thing throws on the drops falling around it.
+//! a cord strung across the screen, and the light a glowing thing throws on
+//! the drops falling around it.
 
 use crate::color::Color;
 use crate::render::Canvas;
@@ -44,6 +45,37 @@ impl Sprite {
                 c.set(cx, top + row as i32, ch, inks[k.min(inks.len() - 1)]);
             }
         }
+    }
+}
+
+/// A cell of a cord strung across the screen.
+#[derive(Clone, Copy)]
+pub(super) struct Cord {
+    pub x: i16,
+    pub y: i16,
+    pub ch: char,
+}
+
+/// Strings a cord across `w` columns at row `y0`, sagging `depth` rows
+/// between ties `swag` columns apart (the first one `shift` columns along),
+/// and pushes a cell for each column.
+pub(super) fn hang(cords: &mut Vec<Cord>, w: i32, y0: i32, (depth, swag, shift): (f32, i32, i32)) {
+    let y = |x: i32| {
+        let u = ((x + shift) % swag) as f32 / swag as f32;
+        y0 + (depth * 4.0 * u * (1.0 - u)).round() as i32
+    };
+    for x in 0..w {
+        let (here, next) = (y(x), y((x + 1).min(w - 1)));
+        let ch = match next.cmp(&here) {
+            std::cmp::Ordering::Greater => '╲',
+            std::cmp::Ordering::Less => '╱',
+            std::cmp::Ordering::Equal => '─',
+        };
+        cords.push(Cord {
+            x: x as i16,
+            y: here as i16,
+            ch,
+        });
     }
 }
 

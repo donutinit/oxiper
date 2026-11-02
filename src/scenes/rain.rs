@@ -21,13 +21,23 @@
 //! and lantern, María on the burro, peregrinos and little ones under
 //! umbrellas, a candle in each hand, the candles still alight in the dark
 //! after the rest has gone (see `navidad`).
+//!
+//! On the Fiestas Patrias it rains on a street of fondas and puestos under
+//! tricolor toldos, banderas flying from their poles, strings of papel
+//! picado hanging soaked across it and dripping onto the wet street, where
+//! scraps of paper stick; the lit windows warm the drops falling past.
+//! Lightning strikes more often and each flash catches charros galloping down
+//! the street with the flag in hand, a new stride at every flicker. More of it
+//! all as the mes patrio climbs to the Grito (see `patrias`).
 
 mod art;
 mod muertos;
 mod navidad;
+mod patrias;
 
 use muertos::Muertos;
 use navidad::Navidad;
+use patrias::Patrias;
 
 use crate::color::{Color, Gradient, rgb};
 use crate::render::{BOLD, Canvas};
@@ -191,9 +201,10 @@ struct Rain {
     puddle_color: Color,
     ripple_color: Color,
 
-    /// Día de Muertos and Navidad, off on ordinary days.
+    /// Día de Muertos, Navidad and the Fiestas Patrias, off on ordinary days.
     muertos: Muertos,
     navidad: Navidad,
+    patrias: Patrias,
 }
 
 impl Rain {
@@ -240,6 +251,7 @@ impl Rain {
             ripple_color: Color::Reset,
             muertos: Muertos::new(ctx.seed),
             navidad: Navidad::new(ctx.seed),
+            patrias: Patrias::new(ctx.seed),
         };
         r.wind = r.wind_base;
         r.wind_target = r.wind_base;
@@ -282,7 +294,7 @@ impl Rain {
         if self.lightning <= 0.0 {
             return f32::INFINITY;
         }
-        let storm = self.muertos.storm() * self.navidad.storm();
+        let storm = self.muertos.storm() * self.navidad.storm() * self.patrias.storm();
         let mean = 60.0 / (self.lightning * storm);
         (-(1.0 - self.rng.f32()).max(1e-6).ln() * mean).max(mean.min(3.0))
     }
@@ -322,13 +334,17 @@ impl Rain {
     }
 
     /// Dresses up for the holiday on today (or undresses), and lets the
-    /// first lightning come soon once Día de Muertos or the Navidad arrives.
+    /// first lightning come soon once Día de Muertos, the Navidad or the
+    /// Fiestas Patrias arrive.
     fn dress(&mut self, ctx: &Ctx) {
         if self.muertos.set(ctx.fiesta, self.w, self.h) && self.lightning > 0.0 {
             self.next_strike = self.next_strike.min(self.muertos.soon());
         }
         if self.navidad.set(ctx.fiesta, self.w, self.h) && self.lightning > 0.0 {
             self.next_strike = self.next_strike.min(self.navidad.soon());
+        }
+        if self.patrias.set(ctx.fiesta, self.w, self.h) && self.lightning > 0.0 {
+            self.next_strike = self.next_strike.min(self.patrias.soon());
         }
     }
 
@@ -344,6 +360,7 @@ impl Rain {
     fn strike(&mut self) {
         self.muertos.strike();
         self.navidad.strike();
+        self.patrias.strike();
         self.flash_t = 0.0;
         let r = &mut self.rng;
         self.flickers[0] = (0.0, 1.0);
@@ -436,6 +453,7 @@ impl Rain {
         let lean = if gi == 0 { 0.0 } else { s };
         let warm = self.muertos.on();
         let lamps = self.navidad.on();
+        let windows = self.patrias.on();
         for d in &self.drops[self.span[li]..self.span[li + 1]] {
             let ch = if gi == 0 && d.alt {
                 l.glyphs[3]
@@ -454,6 +472,8 @@ impl Rain {
                     c.set(x, y, ch, self.muertos.warm(x, y, cols[k as usize]));
                 } else if lamps {
                     c.set(x, y, ch, self.navidad.tint(x, y, cols[k as usize]));
+                } else if windows {
+                    c.set(x, y, ch, self.patrias.tint(x, y, cols[k as usize]));
                 } else {
                     c.set(x, y, ch, cols[k as usize]);
                 }
@@ -485,11 +505,15 @@ impl Rain {
         }
         let muertos = self.muertos.on();
         let navidad = self.navidad.on();
+        let patrias = self.patrias.on();
         if muertos {
             self.muertos.draw_fallen(ctx, c, flash);
         }
         if navidad {
             self.navidad.draw_puddles(c, flash);
+        }
+        if patrias {
+            self.patrias.draw_scraps(c, flash);
         }
         let big = self.layers[0].colors[0];
         let small = self.layers[(self.nlayers / 2).min(self.nlayers - 1)].colors[0];
@@ -543,6 +567,9 @@ impl Rain {
         }
         if navidad {
             self.navidad.draw_farolitos(c, flash);
+        }
+        if patrias {
+            self.patrias.draw_drips(c);
         }
     }
 
@@ -608,6 +635,7 @@ impl Rain {
 
         self.muertos.step(dt, s, speed);
         self.navidad.step(dt);
+        self.patrias.step(dt, s);
 
         self.flash_t = (self.flash_t + dt).min(FLASH_LEN);
         self.next_strike -= dt;
@@ -689,6 +717,8 @@ impl Scene for Rain {
         self.muertos.retheme(ctx, self.flash_color);
         let water = self.ripple_color.lerp(self.puddle_color, 0.4);
         self.navidad.retheme(ctx, self.flash_color, water);
+        self.patrias
+            .retheme(ctx, self.flash_color, self.ripple_color);
     }
 
     fn update(&mut self, _ctx: &Ctx, dt: f32) {
@@ -716,12 +746,16 @@ impl Scene for Rain {
             }
         }
         // Far to near, with the bolt behind the nearest layer, petals at three
-        // depths among the rain and the dancers (or the posada) the bolt lights
-        // up in front; the string of lights hangs behind the rain.
+        // depths among the rain and the dancers (or the posada, or the charros) the
+        // bolt lights up in front; the lights and the street stand behind it.
         let muertos = self.muertos.on();
         let navidad = self.navidad.on();
+        let patrias = self.patrias.on();
         if navidad {
             self.navidad.draw_lights(c, flash);
+        }
+        if patrias {
+            self.patrias.draw_street(c, self.wind, flash);
         }
         if muertos {
             self.muertos.draw_petals(c, 2, flash);
@@ -740,6 +774,9 @@ impl Scene for Rain {
         }
         if navidad {
             self.navidad.draw_procession(ctx, c, flash, self.beat());
+        }
+        if patrias {
+            self.patrias.draw_riders(ctx, c, flash, self.beat());
         }
         self.draw_ground(ctx, c, flash);
         if muertos {
@@ -800,6 +837,9 @@ mod tests {
             Fiesta::of_day(12, 24),
             Fiesta::of_day(12, 12),
             Fiesta::of_day(1, 6),
+            Fiesta::of_day(9, 1),
+            Fiesta::of_day(9, 15),
+            Fiesta::of_day(9, 16),
         ] {
             torture("", fiesta);
             torture(
@@ -845,6 +885,26 @@ mod tests {
             }
         }
         (cells, walking)
+    }
+
+    /// What `frames` frames show of the Fiestas Patrias: cells in the glyphs
+    /// of the street (shop fronts, papel picado, scraps) and frames in which
+    /// riders gallop by, many more cells in half blocks than the street ever
+    /// shows.
+    fn street(ctx: &Ctx, s: &mut dyn Scene, frames: usize) -> (usize, usize) {
+        let mut c = Canvas::new(120, 36, Color::Reset);
+        let (mut cells, mut blocks) = (0, Vec::new());
+        for _ in 0..frames {
+            s.update(ctx, 1.0 / 30.0);
+            c.clear();
+            s.draw(ctx, &mut c);
+            let ours = |cell: &&crate::render::Cell| "█▀▄░▪".contains(cell.ch);
+            let n = c.cells().iter().filter(ours).count();
+            cells += n;
+            blocks.push(n);
+        }
+        let least = blocks.iter().copied().min().unwrap_or(0);
+        (cells, blocks.iter().filter(|&&n| n > least + 150).count())
     }
 
     /// What `frames` frames show of Día de Muertos.
@@ -1021,5 +1081,63 @@ mod tests {
         ctx.fiesta = Fiesta::NONE;
         s.retheme(&ctx);
         assert_eq!(seen(&ctx, s.as_mut(), 600, NAVIDAD), (0, 0));
+    }
+
+    #[test]
+    fn patrias_dresses_the_rain() {
+        let o = opts(30.0);
+        for theme in ["classic", "dracula"] {
+            let th = crate::theme::Theme::builtin(theme).unwrap();
+            for (fiesta, on) in [
+                (Fiesta::of_day(9, 15), true),
+                (Fiesta::of_day(9, 1), true),
+                (Fiesta::of_day(9, 16), true),
+                (Fiesta::NONE, false),
+                (Fiesta::of_day(8, 20), false),
+            ] {
+                let ctx = ctx_for(&th, &o, fiesta);
+                let mut s = scene_on(&ctx);
+                let (cells, riding) = street(&ctx, s.as_mut(), 600);
+                assert_eq!(cells > 0, on, "{theme} {fiesta:?}: {cells} cells");
+                assert_eq!(riding > 0, on, "{theme} {fiesta:?}: {riding} frames");
+            }
+        }
+    }
+
+    #[test]
+    fn patrias_builds_up_toward_the_grito() {
+        let o = crate::scene::Opts::new(INFO.options, "lightning = 0.0".parse().unwrap());
+        let th = crate::theme::Theme::builtin("classic").unwrap();
+        let cells = |fiesta: Fiesta| {
+            let ctx = ctx_for(&th, &o, fiesta);
+            let mut s = scene_on(&ctx);
+            street(&ctx, s.as_mut(), 2).0
+        };
+        let (first, grito) = (cells(Fiesta::of_day(9, 1)), cells(Fiesta::of_day(9, 15)));
+        assert!(first > 100, "{first} cells on the first of September");
+        assert!(grito > first * 3 / 2, "{first} then {grito}");
+    }
+
+    #[test]
+    fn retheme_switches_patrias() {
+        let o = opts(30.0);
+        let th = crate::theme::Theme::builtin("classic").unwrap();
+        let mut ctx = ctx_for(&th, &o, Fiesta::NONE);
+        let mut s = scene_on(&ctx);
+        assert_eq!(street(&ctx, s.as_mut(), 30), (0, 0));
+        ctx.fiesta = Fiesta::of_day(9, 12);
+        s.retheme(&ctx);
+        // The first strike comes soon after the holiday does.
+        let (cells, riding) = street(&ctx, s.as_mut(), 300);
+        assert!(cells > 0 && riding > 0, "{cells} {riding}");
+        s.resize(&ctx, 90, 30);
+        assert!(street(&ctx, s.as_mut(), 5).0 > 0);
+        // Another holiday takes its place, and then none.
+        ctx.fiesta = Fiesta::of_day(11, 2);
+        s.retheme(&ctx);
+        assert_eq!(street(&ctx, s.as_mut(), 600).1, 0);
+        ctx.fiesta = Fiesta::NONE;
+        s.retheme(&ctx);
+        assert_eq!(street(&ctx, s.as_mut(), 600), (0, 0));
     }
 }
