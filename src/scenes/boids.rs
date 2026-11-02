@@ -14,6 +14,20 @@
 //! stripes (braille, like the trails), the flock scattering before her and
 //! marigold petals falling from her hat; cempasúchil petals and, from
 //! October 31, whole blossoms drift down through the sky.
+//!
+//! On Navidad the flock becomes the nacimiento's little angels: a halo over
+//! each head and white, gold and silver wings that beat (braille wings in
+//! `dots` style), bobbing as they fly, with escarcha twinkling down through
+//! the sky. The hawk becomes Luzbel, the pastorela's devil: red, horned, with
+//! a trinche in his hand and a tail ending in a spade streaming behind him.
+//! Now and then San Miguel arcángel drops out of the sky in a shaft of light,
+//! wings spread, the angels gathering round him, and chases Luzbel with his
+//! sword of light until he vanishes in a puff of brimstone; he is back after
+//! a while. The posadas bring more angels and more visits from San Miguel,
+//! all of it up to Nochebuena. It lives in `boids/navidad.rs`.
+
+mod hues;
+mod navidad;
 
 use std::f32::consts::{PI, TAU};
 
@@ -21,6 +35,7 @@ use crate::color::{Color, mix_oklab, rgb};
 use crate::fiesta::Kind;
 use crate::render::{BOLD, Braille, Canvas};
 use crate::scene::{Ctx, Opt, Scene, SceneInfo, Val};
+use navidad::Navidad;
 
 pub const INFO: SceneInfo = SceneInfo {
     name: "boids",
@@ -361,6 +376,49 @@ fn hash01(i: usize) -> f32 {
     (x >> 8) as f32 / (1u32 << 24) as f32
 }
 
+/// A ribbon streaming behind whoever flies for the hawk: its stripes' colors,
+/// where it starts (in dots), which way it streams (a unit vector), the clock
+/// of its ripple, how many segments it has, how long it is (in units) and how
+/// far it fades at its end.
+struct Ribbon<'a> {
+    cols: &'a [Color],
+    anchor: (f32, f32),
+    drape: (f32, f32),
+    t: f32,
+    n: usize,
+    len: f32,
+    fade: f32,
+}
+
+/// Whoever flies for the hawk faces where it flies, turning round only when
+/// really heading the other way, and trails a drape (a unit vector) that lags
+/// its turns.
+fn pilot(facing: &mut f32, drape: &mut (f32, f32), h: &Boid, dt: f32) {
+    let s = (h.vx * h.vx + h.vy * h.vy).sqrt();
+    if h.vx * *facing < -0.3 * s {
+        *facing = -*facing;
+    }
+    if s > 1e-4 {
+        let k = (dt * 2.5).min(1.0);
+        let (dx, dy) = *drape;
+        let (dx, dy) = (dx + (-h.vx / s - dx) * k, dy + (-h.vy / s - dy) * k);
+        let l = (dx * dx + dy * dy).sqrt();
+        if l > 1e-3 {
+            *drape = (dx / l, dy / l);
+        }
+    }
+}
+
+/// The field the flock flies in, for the holidays' own steering: its size in
+/// units, whether it wraps around, and the flock's top speed.
+#[derive(Clone, Copy)]
+struct Field {
+    fw: f32,
+    fh: f32,
+    wrap: bool,
+    ms: f32,
+}
+
 pub struct Boids {
     rng: fastrand::Rng,
     density: f32,
@@ -399,6 +457,10 @@ pub struct Boids {
     hawk_col: Color,
     /// Día de Muertos, when it is on.
     muertos: Option<Box<Muertos>>,
+    /// Navidad, when it is on.
+    navidad: Option<Box<Navidad>>,
+    /// How many boids the holiday keeps next to an ordinary day (1 when none).
+    crowd: f32,
 }
 
 impl Boids {
@@ -448,7 +510,19 @@ impl Boids {
             wheel: [Color::Reset; HEAD_LUT],
             hawk_col: Color::Reset,
             muertos: None,
+            navidad: None,
+            crowd: 1.0,
         }
+    }
+
+    /// Is the flock dressed up in wider bodies than an arrow?
+    fn dressed(&self) -> bool {
+        self.muertos.is_some() || self.navidad.is_some()
+    }
+
+    /// Is the hawk about? On Navidad San Miguel can drive Luzbel away.
+    fn hawk_about(&self) -> bool {
+        self.hawk_on && self.navidad.as_ref().is_none_or(|n| n.luzbel())
     }
 
     fn random_boid(&mut self, flock: u8) -> Boid {
@@ -523,7 +597,7 @@ impl Boids {
         let vis2 = self.vision * self.vision;
         // Personal space: a couple of cells, whatever the vision (wider for
         // two-cell butterflies).
-        let wings = if self.muertos.is_some() { 1.3 } else { 1.0 };
+        let wings = if self.dressed() { 1.3 } else { 1.0 };
         let sep_r = (SEP_RADIUS * wings).min(self.vision);
         let sep2 = sep_r * sep_r;
         let ms = self.max_speed.max(0.01);
@@ -537,7 +611,12 @@ impl Boids {
         let (oy, noy) = Self::offsets(gh, wrap);
         let inv = 1.0 / self.vision;
         let hawk = self.hawk;
-        let hawk_on = self.hawk_on;
+        let hawk_on = self.hawk_about();
+        // On Navidad the angels gather round San Miguel while he is here, and
+        // the hawk is no threat to them while Luzbel flees.
+        let field = Field { fw, fh, wrap, ms };
+        let navidad = self.navidad.as_deref();
+        let hawk_scares = hawk_on && navidad.is_none_or(|n| n.fleeing().is_none());
         // Monarchs flutter, and drift southwest on the way home (not when
         // bouncing, where it would only pile them on a wall).
         let monarchs = self.muertos.as_ref().map(|m| {
@@ -628,7 +707,7 @@ impl Boids {
                 fx += x * self.w_coh;
                 fy += y * self.w_coh;
             }
-            if hawk_on {
+            if hawk_scares {
                 let dx = Self::delta(hawk.x, b.x, fw, wrap);
                 let dy = Self::delta(hawk.y, b.y, fh, wrap);
                 let d2 = dx * dx + dy * dy;
@@ -650,6 +729,11 @@ impl Boids {
                 fy += y * pull;
                 let beat = 1.0 + 0.6 * hash01(i ^ 0x3c3c);
                 fy += ((t * beat + hash01(i)) * TAU).sin() * FLUTTER;
+            }
+            if let Some(n) = navidad {
+                let (x, y) = n.force(i, &b, field);
+                fx += x;
+                fy += y;
             }
             // A little restlessness so the flock never freezes into a lattice.
             fx += (self.rng.f32() - 0.5) * 6.0;
@@ -747,8 +831,16 @@ impl Boids {
         } else {
             self.edge_force(self.hawk.x, self.hawk.y)
         };
+        // Luzbel runs from San Miguel, faster than he ever hunts.
+        let flee = self.navidad.as_ref().and_then(|n| n.fleeing());
         let h = &mut self.hawk;
-        if let Some(t) = self.boids.get(self.hawk_target) {
+        if let Some((mx, my)) = flee {
+            let dx = Self::delta(mx, h.x, fw, wrap);
+            let dy = Self::delta(my, h.y, fh, wrap);
+            let l = (dx * dx + dy * dy).sqrt().max(1e-4);
+            fx += (dx / l * ms * 1.6 - h.vx) * 3.0;
+            fy += (dy / l * ms * 1.6 - h.vy) * 3.0;
+        } else if let Some(t) = self.boids.get(self.hawk_target) {
             let dx = Self::delta(h.x, t.x, fw, wrap);
             let dy = Self::delta(h.y, t.y, fh, wrap);
             let l = (dx * dx + dy * dy).sqrt().max(1e-4);
@@ -758,7 +850,7 @@ impl Boids {
         }
         // Heavier than a boid: it turns wide, which gives the flock a chance.
         let f = (fx * fx + fy * fy).sqrt();
-        let lim = MAX_FORCE * 0.9;
+        let lim = MAX_FORCE * if flee.is_some() { 1.4 } else { 0.9 };
         if f > lim {
             fx *= lim / f;
             fy *= lim / f;
@@ -766,7 +858,7 @@ impl Boids {
         h.vx += fx * dt;
         h.vy += fy * dt;
         let s = (h.vx * h.vx + h.vy * h.vy).sqrt();
-        let target = s.clamp(ms * 0.5, ms * 1.3);
+        let target = s.clamp(ms * 0.5, ms * if flee.is_some() { 1.7 } else { 1.3 });
         if s > 1e-6 {
             h.vx *= target / s;
             h.vy *= target / s;
@@ -851,35 +943,34 @@ impl Boids {
         }
     }
 
-    /// La Catrina's rebozo: two stripes streaming back from her shoulders,
-    /// rippling, swinging round late when she turns.
-    fn draw_rebozo(&mut self, ctx: &Ctx, m: &Muertos) {
-        const N: usize = 14;
-        const LEN: f32 = 22.0;
-        let (ax, ay) = (
-            self.hawk.x.round() * 2.0 + 1.0,
-            ((self.hawk.y * 0.5) as i32 + 1) as f32 * 4.0 + 2.0,
-        );
-        let (dx, dy) = m.drape;
+    /// A ribbon of braille stripes streaming back from whoever flies for the
+    /// hawk, rippling, swinging round late when they turn: La Catrina's
+    /// rebozo. Returns where the middle of it ends (in dots).
+    fn draw_ribbon(&mut self, ctx: &Ctx, r: &Ribbon) -> (f32, f32) {
+        let (ax, ay) = r.anchor;
+        let (dx, dy) = r.drape;
         // Side by side across it, a braille cell apart so each keeps its color.
         let (nx, ny) = if dx >= 0.0 { (-dy, dx) } else { (dy, -dx) };
         let gap = 4.0 * ny.abs() + 2.0 * nx.abs();
+        let n = r.n;
         let at = |k: usize, o: f32| {
-            let s = k as f32 / N as f32;
-            let w = (s * 3.0 * PI - m.t * 5.0).sin() * (0.5 + 2.5 * s) + o;
-            (ax + dx * s * LEN + nx * w, ay + dy * s * LEN + ny * w)
+            let s = k as f32 / n as f32;
+            let w = (s * 3.0 * PI - r.t * 5.0).sin() * (0.5 + 2.5 * s) + o;
+            (ax + dx * s * r.len + nx * w, ay + dy * s * r.len + ny * w)
         };
-        for k in 1..=N {
-            let c = 1.0 - k as f32 / N as f32;
-            for (j, &col) in m.rebozo.iter().enumerate() {
-                let col = ctx.fade(col, 0.8 * (1.0 - c));
+        let spread = (r.cols.len() as f32 - 1.0) * 0.5;
+        for k in 1..=n {
+            let c = 1.0 - k as f32 / n as f32;
+            for (j, &col) in r.cols.iter().enumerate() {
+                let col = ctx.fade(col, r.fade * (1.0 - c));
                 for o in [0.0, 0.9] {
-                    let o = (j as f32 - 0.5) * gap + o;
+                    let o = (j as f32 - spread) * gap + o;
                     let (p, q) = (at(k - 1, o), at(k, o));
                     self.br.line(p.0, p.1, q.0, q.1, col);
                 }
             }
         }
+        at(n, 0.45)
     }
 
     /// The flock as monarchs, La Catrina for the hawk, and the petals.
@@ -887,7 +978,19 @@ impl Boids {
         self.br.clear();
         let n = self.boids.len();
         if self.hawk_on {
-            self.draw_rebozo(ctx, m);
+            let rebozo = Ribbon {
+                cols: &m.rebozo,
+                anchor: (
+                    self.hawk.x.round() * 2.0 + 1.0,
+                    ((self.hawk.y * 0.5) as i32 + 1) as f32 * 4.0 + 2.0,
+                ),
+                drape: m.drape,
+                t: m.t,
+                n: 14,
+                len: 22.0,
+                fade: 0.8,
+            };
+            self.draw_ribbon(ctx, &rebozo);
         }
         if self.trail_len > 0 {
             // Butterflies leave no wake; the souls riding them leave a golden one.
@@ -995,7 +1098,7 @@ impl Scene for Boids {
         self.fw = fw;
         self.fh = fh;
         let cells = w.max(1) as f32 * h.max(1) as f32;
-        let want = ((cells * self.density).round() as usize).clamp(2, MAX_BOIDS);
+        let want = ((cells * self.density * self.crowd).round() as usize).clamp(2, MAX_BOIDS);
         self.flocks = ((want as f32 / 35.0).round() as u8).clamp(1, 4);
         self.boids.truncate(want);
         while self.boids.len() < want {
@@ -1027,6 +1130,9 @@ impl Scene for Boids {
         if let Some(m) = &mut self.muertos {
             m.scatter(fw, fh);
         }
+        if let Some(n) = &mut self.navidad {
+            n.scatter(fw, fh);
+        }
     }
 
     fn retheme(&mut self, ctx: &Ctx) {
@@ -1044,18 +1150,38 @@ impl Scene for Boids {
             *slot = mix_oklab(stops[k], stops[(k + 1) % stops.len()], p.fract());
         }
         self.hawk_col = ctx.pick(4, rgb(NATIVE_HAWK));
+        let level = ctx.fiesta.level.clamp(0.0, 1.0);
         if !ctx.fiesta.is(Kind::Muertos) {
             self.muertos = None;
-            return;
+        } else {
+            if self.muertos.as_ref().is_none_or(|m| m.level != level) {
+                let mut m = Box::new(Muertos::new(ctx));
+                m.scatter(self.fw, self.fh);
+                self.muertos = Some(m);
+            }
+            if let Some(m) = &mut self.muertos {
+                m.retheme(ctx);
+            }
         }
-        let level = ctx.fiesta.level.clamp(0.0, 1.0);
-        if self.muertos.as_ref().is_none_or(|m| m.level != level) {
-            let mut m = Box::new(Muertos::new(ctx));
-            m.scatter(self.fw, self.fh);
-            self.muertos = Some(m);
+        if !ctx.fiesta.is(Kind::Navidad) {
+            self.navidad = None;
+        } else {
+            if self.navidad.as_ref().is_none_or(|n| n.level() != level) {
+                let mut n = Box::new(Navidad::new(ctx));
+                n.scatter(self.fw, self.fh);
+                self.navidad = Some(n);
+            }
+            if let Some(n) = &mut self.navidad {
+                n.retheme(ctx);
+            }
         }
-        if let Some(m) = &mut self.muertos {
-            m.retheme(ctx);
+        // The holiday brings more of its flock, or takes them away again.
+        let crowd = self.navidad.as_ref().map_or(1.0, |n| n.crowd());
+        if crowd != self.crowd {
+            self.crowd = crowd;
+            if !self.boids.is_empty() {
+                self.resize(ctx, self.fw as u16, (self.fh * 0.5) as u16);
+            }
         }
     }
 
@@ -1067,10 +1193,26 @@ impl Scene for Boids {
         };
         let steps = (dt / STEP).ceil().max(1.0) as usize;
         let h = dt / steps as f32;
+        let wrap = !self.bounce;
+        let field = Field {
+            fw: self.fw,
+            fh: self.fh,
+            wrap,
+            ms: self.max_speed.max(0.01),
+        };
         for _ in 0..steps {
             self.step(h);
             if let Some(m) = &mut self.muertos {
                 m.t += h;
+            }
+            if let Some(n) = &mut self.navidad {
+                n.tick(
+                    h,
+                    &mut self.hawk,
+                    &mut self.hawk_retarget,
+                    field,
+                    self.hawk_on,
+                );
             }
             self.trail_clock += h;
             if self.trail_clock >= 1.0 / TRAIL_HZ {
@@ -1081,21 +1223,7 @@ impl Scene for Boids {
         if let Some(m) = &mut self.muertos {
             m.drift(dt, self.fw, self.fh);
             if self.hawk_on {
-                // She turns round only when really heading the other way.
-                let h = &self.hawk;
-                let s = (h.vx * h.vx + h.vy * h.vy).sqrt();
-                if h.vx * m.facing < -0.3 * s {
-                    m.facing = -m.facing;
-                }
-                if s > 1e-4 {
-                    let k = (dt * 2.5).min(1.0);
-                    let (dx, dy) = m.drape;
-                    let (dx, dy) = (dx + (-h.vx / s - dx) * k, dy + (-h.vy / s - dy) * k);
-                    let l = (dx * dx + dy * dy).sqrt();
-                    if l > 1e-3 {
-                        m.drape = (dx / l, dy / l);
-                    }
-                }
+                pilot(&mut m.facing, &mut m.drape, &self.hawk, dt);
                 // Petals slip from her hat as she flies, more on the great days.
                 let every = 0.32 - 0.14 * m.level;
                 m.shed_clock += dt;
@@ -1105,12 +1233,21 @@ impl Scene for Boids {
                 }
             }
         }
+        if let Some(n) = &mut self.navidad {
+            n.drift(dt, field);
+            pilot(&mut n.facing, &mut n.drape, &self.hawk, dt);
+        }
     }
 
     fn draw(&mut self, ctx: &Ctx, c: &mut Canvas) {
         if let Some(m) = self.muertos.take() {
             self.draw_muertos(ctx, c, &m);
             self.muertos = Some(m);
+            return;
+        }
+        if let Some(n) = self.navidad.take() {
+            self.draw_navidad(ctx, c, &n);
+            self.navidad = Some(n);
             return;
         }
         self.br.clear();
@@ -1242,6 +1379,14 @@ mod tests {
 
     #[test]
     fn the_holiday_survives_odd_sizes_and_steps() {
+        // Día de Muertos at its height, and Navidad at its first posada's eve,
+        // at Nochebuena and at the Reyes.
+        let days = [
+            Fiesta::of_day(11, 2),
+            Fiesta::of_day(12, 12),
+            Fiesta::of_day(12, 24),
+            Fiesta::of_day(1, 6),
+        ];
         for theme in ["classic", "dracula"] {
             let th = crate::theme::Theme::builtin(theme).unwrap();
             for o in [
@@ -1252,20 +1397,159 @@ mod tests {
                 "count = 400\nspeed = 20.0",
             ] {
                 let o = opts(o);
-                let ctx = ctx(&th, &o, Fiesta::of_day(11, 2));
-                let mut s = (INFO.make)(&ctx);
-                for &(w, h) in &[(1u16, 1u16), (2, 3), (300, 90), (3, 1), (1, 40), (37, 11)] {
-                    s.resize(&ctx, w, h);
-                    s.retheme(&ctx);
-                    let mut c = Canvas::new(w, h, Color::Reset);
-                    for i in 0..20 {
-                        s.update(&ctx, if i % 10 == 9 { 5.0 } else { 1.0 / 30.0 });
-                        c.clear();
-                        s.draw(&ctx, &mut c);
-                        assert!(c.cells().iter().all(|cell| cell.bg == Color::Reset));
+                for fiesta in days {
+                    let ctx = ctx(&th, &o, fiesta);
+                    let mut s = (INFO.make)(&ctx);
+                    for &(w, h) in &[(1u16, 1u16), (2, 3), (300, 90), (3, 1), (1, 40), (37, 11)] {
+                        s.resize(&ctx, w, h);
+                        s.retheme(&ctx);
+                        let mut c = Canvas::new(w, h, Color::Reset);
+                        for i in 0..20 {
+                            s.update(&ctx, if i % 10 == 9 { 5.0 } else { 1.0 / 30.0 });
+                            c.clear();
+                            s.draw(&ctx, &mut c);
+                            assert!(c.cells().iter().all(|cell| cell.bg == Color::Reset));
+                        }
                     }
                 }
             }
+        }
+    }
+
+    /// A scene for `fiesta` at `w`×`h`, set up the way the app does.
+    fn scene(ctx: &Ctx, w: u16, h: u16) -> Boids {
+        let mut s = Boids::new(ctx);
+        s.resize(ctx, w, h);
+        s.retheme(ctx);
+        s
+    }
+
+    #[test]
+    fn angels_and_luzbel_come_for_navidad() {
+        let th = crate::theme::Theme::classic();
+        let o = opts("");
+        for fiesta in [
+            Fiesta::of_day(12, 24),
+            Fiesta::of_day(12, 12),
+            Fiesta::of_day(1, 6),
+        ] {
+            let ctx = ctx(&th, &o, fiesta);
+            let mut s = scene(&ctx, 120, 36);
+            let c = frame(&mut s, &ctx, 120, 36);
+            assert!(has(&c, &['°']), "{fiesta:?}: no halos");
+            assert!(
+                has(&c, &['\\', '/']) && has(&c, &['o']),
+                "{fiesta:?}: no angels"
+            );
+            assert!(has(&c, &['Ψ', 'ʌ', '◣', '▓']), "{fiesta:?}: no Luzbel");
+            assert!(has(&c, &['✦', '+']), "{fiesta:?}: no escarcha");
+            assert!(!has(&c, &ARROWS) && !has(&c, &HAWK), "{fiesta:?}");
+        }
+        // The dots style gets braille wings with a halo each.
+        let o = opts("style = 'dots'");
+        let nochebuena = ctx(&th, &o, Fiesta::of_day(12, 24));
+        let mut s = scene(&nochebuena, 120, 36);
+        let c = frame(&mut s, &nochebuena, 120, 36);
+        assert!(has(&c, &['Ψ']) && !has(&c, &['\\']));
+        // And an ordinary day has none of it.
+        let plain = ctx(&th, &o, Fiesta::NONE);
+        let mut s = scene(&plain, 120, 36);
+        let c = frame(&mut s, &plain, 120, 36);
+        assert!(!has(&c, &['°', 'Ψ', 'ʌ', '◣', '✦', '+']));
+    }
+
+    #[test]
+    fn san_miguel_drives_luzbel_off_and_he_comes_back() {
+        let th = crate::theme::Theme::classic();
+        let o = opts("");
+        let ctx = ctx(&th, &o, Fiesta::height(Kind::Navidad));
+        let mut s = scene(&ctx, 120, 36);
+        let mut c = Canvas::new(120, 36, Color::Reset);
+        let (mut came, mut gone, mut back) = (false, false, false);
+        let mut seen = false;
+        // Two minutes: he comes in the first seconds at the height.
+        for _ in 0..120 * 30 {
+            s.update(&ctx, 1.0 / 30.0);
+            let n = s.navidad.as_ref().unwrap();
+            let (here, luzbel) = (n.visiting(), n.luzbel());
+            came |= here;
+            gone |= came && !luzbel;
+            back |= gone && luzbel;
+            if here && luzbel && !seen {
+                // While he chases Luzbel: his body, his halo and his sword.
+                c.clear();
+                s.draw(&ctx, &mut c);
+                seen = has(&c, &['◉']) && has(&c, &['Ψ']);
+            }
+            if back {
+                break;
+            }
+        }
+        assert!(came && gone && back, "{came} {gone} {back}");
+        assert!(seen, "never drawn chasing");
+    }
+
+    #[test]
+    fn navidad_brings_more_angels_and_visits_as_the_posadas_climb() {
+        let th = crate::theme::Theme::classic();
+        let o = opts("");
+        let early = ctx(&th, &o, Fiesta::of_day(12, 12));
+        let late = ctx(&th, &o, Fiesta::of_day(12, 24));
+        let (mut a, mut b) = (scene(&early, 100, 30), scene(&late, 100, 30));
+        assert!(a.boids.len() < b.boids.len());
+        // The ordinary flock is in between.
+        let plain = scene(&ctx(&th, &o, Fiesta::NONE), 100, 30);
+        assert!(a.boids.len() < plain.boids.len() && plain.boids.len() < b.boids.len());
+        // San Miguel comes sooner at the height than on the first days.
+        let wait = |s: &mut Boids, c: &Ctx| {
+            for i in 0..90 * 30 {
+                s.update(c, 1.0 / 30.0);
+                if s.navidad.as_ref().unwrap().visiting() {
+                    return i;
+                }
+            }
+            90 * 30
+        };
+        assert!(wait(&mut b, &late) < wait(&mut a, &early));
+    }
+
+    #[test]
+    fn navidad_comes_and_goes_through_retheme() {
+        let th = crate::theme::Theme::classic();
+        let o = opts("style = 'dots'");
+        let plain = ctx(&th, &o, Fiesta::NONE);
+        let fiesta = ctx(&th, &o, Fiesta::of_day(12, 24));
+        let mut s = scene(&plain, 80, 24);
+        let ordinary = s.boids.len();
+        assert!(s.navidad.is_none());
+        s.retheme(&fiesta);
+        assert!(s.navidad.is_some() && s.boids.len() > ordinary);
+        let c = frame(&mut s, &fiesta, 80, 24);
+        assert!(has(&c, &['Ψ']));
+        s.retheme(&plain);
+        assert!(s.navidad.is_none() && s.boids.len() == ordinary);
+        let c = frame(&mut s, &plain, 80, 24);
+        assert!(!has(&c, &['Ψ', '°']));
+        assert!(s.hawk_about());
+    }
+
+    #[test]
+    fn holidays_the_flock_does_not_dress_for_are_ordinary_days() {
+        let th = crate::theme::Theme::classic();
+        let o = opts("");
+        let plain = ctx(&th, &o, Fiesta::NONE);
+        let mut s = scene(&plain, 100, 30);
+        let want = frame(&mut s, &plain, 100, 30);
+        for fiesta in [
+            Fiesta::of_day(2, 2),
+            Fiesta::of_day(3, 20),
+            Fiesta::of_day(5, 3),
+            Fiesta::of_day(11, 20),
+        ] {
+            let ctx = ctx(&th, &o, fiesta);
+            let mut s = scene(&ctx, 100, 30);
+            let c = frame(&mut s, &ctx, 100, 30);
+            assert!(c.cells() == want.cells(), "{fiesta:?}");
         }
     }
 }
