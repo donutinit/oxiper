@@ -128,6 +128,9 @@ impl Player {
         };
         let scene = Player::make(info, &ctx, w, h);
         let mut eggs = Eggs::new(w, h);
+        // Hung before the first frame, so the holiday is there from the start.
+        let mut overlay = Overlay::new(w, h);
+        overlay.update(0.0, fiesta);
         // A forced rate (for testing) plays an egg even in `snap` and `record`.
         if cfg.egg_rate >= eggs::FORCE_RATE {
             eggs.start(&cfg.eggs, fiesta);
@@ -150,7 +153,7 @@ impl Player {
             forced_theme: None,
             eggs,
             fiesta,
-            overlay: Overlay::new(w, h),
+            overlay,
             fiesta_age: 0.0,
         })
     }
@@ -247,6 +250,7 @@ impl Player {
             return;
         }
         self.fiesta = fiesta;
+        self.overlay.update(0.0, fiesta);
         let ctx = Ctx {
             theme: &self.theme,
             opts: &self.opts,
@@ -390,6 +394,7 @@ impl Player {
         self.cfg = cfg;
         // Re-dressed below, with the theme.
         self.fiesta = self.cfg.fiestas.resolve();
+        self.overlay.update(0.0, self.fiesta);
         if !same_list {
             self.order = (0..self.cfg.scenes.len()).collect();
             if self.cfg.shuffle {
