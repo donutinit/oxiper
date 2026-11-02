@@ -23,6 +23,14 @@
 //! more joints are trimmed and the more heno hangs. Under a theme the colors
 //! are the theme's accents closest to those hues. Again only the drawing
 //! changes.
+//!
+//! On the Fiestas Patrias every pipe is verde, blanco or rojo, in that
+//! rotation, with banderitas hanging along its level stretches in the same
+//! three colors, one after another, and an escarapela (a tricolor rosette) at
+//! some of the joints. The mes patrio builds up: from the first days of
+//! September a few pipes carry a banderita every third cell, and by the Grito
+//! every pipe is hung with them, every other cell, the escarapelas multiply
+//! and stars of oro shine at some joints.
 
 use crate::color::{Color, rgb};
 use crate::fiesta::{Fiesta, Kind};
@@ -155,6 +163,13 @@ const DORADO: Color = rgb(0xF2B632);
 const PLATA: Color = rgb(0xC9CCD6);
 const BLANCO: Color = rgb(0xF4F1EA);
 const HENO: Color = rgb(0x9AA58A);
+/// The Fiestas Patrias under `classic`: verde bandera, blanco (shared above),
+/// rojo and oro, for the bell and the embroidery.
+const VERDE: Color = rgb(0x006847);
+const ROJO: Color = rgb(0xCE1126);
+const ORO: Color = rgb(0xD4A017);
+/// Its palette follows the pipes' colors: verde, blanco, rojo and oro.
+const P_ORO: usize = 3;
 /// The foquitos: rojo, verde, azul, amarillo, rosa and naranja.
 const FOQUITOS: [Color; 6] = [
     rgb(0xFF3B3B),
@@ -183,6 +198,7 @@ enum Garb {
     Plain,
     Muertos,
     Navidad,
+    Patrias,
 }
 
 impl Garb {
@@ -191,6 +207,8 @@ impl Garb {
             Garb::Muertos
         } else if fiesta.is(Kind::Navidad) {
             Garb::Navidad
+        } else if fiesta.is(Kind::Patrias) {
+            Garb::Patrias
         } else {
             Garb::Plain
         }
@@ -207,6 +225,8 @@ struct Piece {
     way: u8,
     /// How far along its pipe this piece was laid (the garland's flags).
     seq: u16,
+    /// Which turn of the rotation of colors its pipe was on.
+    rot: u16,
     born: u32,
 }
 
@@ -215,6 +235,7 @@ const EMPTY: Piece = Piece {
     color: 0,
     way: 0,
     seq: 0,
+    rot: 0,
     born: 0,
 };
 
@@ -227,6 +248,9 @@ struct Pipe {
     color: u8,
     /// Pieces laid so far (wrapping).
     seq: u16,
+    /// Counts the pipes at first and one more at every wrap around an edge:
+    /// the Fiestas Patrias go round verde, blanco and rojo by it.
+    rot: u16,
 }
 
 struct Pipes {
@@ -418,6 +442,7 @@ impl Pipes {
                 set,
                 color,
                 seq: 0,
+                rot: 0,
             }
         } else {
             Pipe {
@@ -427,6 +452,7 @@ impl Pipes {
                 set,
                 color,
                 seq: 0,
+                rot: 0,
             }
         }
     }
@@ -454,6 +480,7 @@ impl Pipes {
                 }
                 p.x = p.x.rem_euclid(w);
                 p.y = p.y.rem_euclid(h);
+                p.rot = p.rot.wrapping_add(1);
             }
             let next = if self.rng.u32(0..self.straight) == 0 {
                 (p.dir + if self.rng.bool() { 1 } else { 3 }) % 4
@@ -467,6 +494,7 @@ impl Pipes {
                 color: p.color,
                 way: p.dir * 4 + next,
                 seq: p.seq,
+                rot: p.rot,
                 born: self.tick,
             };
             p.dir = next;
@@ -574,6 +602,39 @@ impl Pipes {
         (p.ch, p.color as usize % lines)
     }
 
+    /// Fiestas Patrias: the piece at cell `i` as part of a pipe in the colors
+    /// of the flag. Level stretches hang banderitas, each the next color of
+    /// the three, and some joints are an escarapela or, at the Grito, a star
+    /// of oro. Returns the character and its palette index (the pipes' verde,
+    /// blanco and rojo, then the same three and oro).
+    fn dress_patrias(&self, i: usize, p: &Piece) -> (char, usize) {
+        let (from, to) = (p.way / 4, p.way % 4);
+        let level = self.fiesta.level.clamp(0.0, 1.0);
+        let lines = self.lines;
+        let ascii = p.ch.is_ascii();
+        if from != to {
+            // Hashes rather than the RNG, so ordinary days draw the same numbers.
+            let h = mix(i as u32 ^ p.born.rotate_left(13) ^ self.salt);
+            if h % 1024 < (1024.0 * (0.2 + 0.5 * level)) as u32 {
+                if level >= 0.9 && (h >> 10) % 100 < 25 {
+                    return (if ascii { '*' } else { '★' }, lines + P_ORO);
+                }
+                let color = (h >> 17) as usize % 3;
+                return (if ascii { '@' } else { '❂' }, lines + color);
+            }
+        } else if from % 2 == 1 {
+            // Going sideways: some pipes hang banderitas, more as the month
+            // goes, every third cell and then every other.
+            let gap = if level < 0.4 { 3 } else { 2 };
+            let id = mix(p.color as u32 ^ (p.rot as u32) << 8 ^ self.salt ^ 0x0915_1810);
+            if id % 100 < (40.0 + 60.0 * level) as u32 && p.seq.is_multiple_of(gap) {
+                let color = p.rot as usize + 1 + (p.seq / gap) as usize;
+                return (if ascii { 'v' } else { '▼' }, lines + color % 3);
+            }
+        }
+        (p.ch, p.rot as usize % lines)
+    }
+
     /// A foquito on the cord, lit, glowing or off as the pipe's pattern goes:
     /// a chase with a tail running forward, a chase running back, odds and
     /// evens, or at random.
@@ -677,6 +738,19 @@ fn near(ctx: &Ctx, hue: f32, tol: f32, avoid: &[Color], nth: usize) -> Color {
         .map_or_else(|| ctx.pick(nth, Color::Reset), |(_, c)| c)
 }
 
+/// The Fiestas Patrias' colors: verde, blanco, rojo and oro. Under `classic`
+/// the flag's own, else the theme's accents nearest each hue (and its text
+/// color for the blanco).
+fn patrias_colors(ctx: &Ctx) -> [Color; 4] {
+    let t = ctx.theme;
+    if t.native {
+        return [VERDE, BLANCO, ROJO, ORO];
+    }
+    let verde = near(ctx, 130.0, 55.0, &[], 2);
+    let rojo = near(ctx, 355.0, 35.0, &[verde], 1);
+    [verde, t.fg, rojo, near(ctx, 45.0, 25.0, &[verde, rojo], 3)]
+}
+
 /// Navidad's colors: the cord, then the foquitos in three tiers and the rest
 /// (see `N_ROJO`). Under `classic` the holiday's own, else the theme's
 /// accents nearest each hue.
@@ -729,8 +803,9 @@ impl Scene for Pipes {
         // Keep roughly half a screen visible when fading.
         self.life = (area as f32 * 0.5 / n as f32).max(8.0);
         self.pipes.clear();
-        for _ in 0..n {
-            let p = self.spawn();
+        for i in 0..n {
+            let mut p = self.spawn();
+            p.rot = i as u16;
             self.pipes.push(p);
         }
         self.drawn = 0;
@@ -772,6 +847,15 @@ impl Scene for Pipes {
                 }
                 self.lines = self.palette.len();
                 self.palette.extend(colors);
+            }
+            Garb::Patrias => {
+                let flag = patrias_colors(ctx);
+                if self.colored {
+                    self.palette.clear();
+                    self.palette.extend(&flag[..3]);
+                }
+                self.lines = self.palette.len();
+                self.palette.extend(flag);
             }
         }
         self.rgb = self.palette.iter().all(|c| c.is_rgb());
@@ -827,6 +911,7 @@ impl Scene for Pipes {
                 Garb::Plain => (p.ch, p.color as usize % n),
                 Garb::Muertos => self.dress(i, p, n, bloom),
                 Garb::Navidad => self.dress_navidad(i, p),
+                Garb::Patrias => self.dress_patrias(i, p),
             };
             if !self.fade {
                 c.set_attr(x, y, ch, self.palette[ci], base_attr);
@@ -861,7 +946,7 @@ mod tests {
 
     /// An ordinary day, Día de Muertos at two levels, and the other holidays
     /// the pipes dress for.
-    fn days() -> [Fiesta; 5] {
+    fn days() -> [Fiesta; 7] {
         [
             Fiesta::NONE,
             Fiesta {
@@ -876,6 +961,8 @@ mod tests {
             },
             Fiesta::height(Kind::Navidad),
             Fiesta::of_day(12, 16),
+            Fiesta::height(Kind::Patrias),
+            Fiesta::of_day(9, 2),
         ]
     }
 
@@ -1120,11 +1207,15 @@ mod tests {
             }
             p.grid
                 .iter()
-                .map(|x| (x.ch, x.color, x.way, x.seq, x.born))
+                .map(|x| (x.ch, x.color, x.way, x.seq, x.rot, x.born))
                 .collect::<Vec<_>>()
         };
         let plain = grown(Fiesta::NONE);
-        for fiesta in [Fiesta::height(Kind::Navidad), Fiesta::of_day(11, 2)] {
+        for fiesta in [
+            Fiesta::height(Kind::Navidad),
+            Fiesta::height(Kind::Patrias),
+            Fiesta::of_day(11, 2),
+        ] {
             assert!(plain == grown(fiesta), "{fiesta:?}");
         }
     }
@@ -1162,6 +1253,119 @@ mod tests {
                 .iter()
                 .all(|x| !x.fg.is_rgb())
         );
+    }
+
+    /// Banderitas, escarapelas and stars of oro on screen at the Fiestas
+    /// Patrias.
+    fn hung(c: &Canvas) -> (usize, usize, usize) {
+        (count(c, "▼"), count(c, "❂"), count(c, "★"))
+    }
+
+    #[test]
+    fn dresses_for_the_fiestas_patrias() {
+        let o = crate::scene::Opts::new(INFO.options, toml::Table::new());
+        for theme in ["classic", "dracula"] {
+            let th = crate::theme::Theme::builtin(theme).unwrap();
+            for (month, day) in [(9, 15), (9, 16), (9, 5), (6, 15)] {
+                let (_, c) = grown(&o, &th, Fiesta::of_day(month, day), 3);
+                let (flags, rosettes, stars) = hung(&c);
+                match (month, day) {
+                    (6, _) => assert_eq!((flags, rosettes, stars), (0, 0, 0), "{theme}"),
+                    (9, 15) => assert!(flags > 40 && rosettes > 3 && stars > 0, "{theme}"),
+                    _ => assert!(flags > 10 && rosettes > 1, "{theme} {month}-{day}"),
+                }
+            }
+        }
+        // Under `classic` the banderitas and the pipes are verde, blanco and
+        // rojo, and the stars oro.
+        let th = crate::theme::Theme::classic();
+        let (_, c) = grown(&o, &th, Fiesta::height(Kind::Patrias), 3);
+        for color in [VERDE, BLANCO, ROJO, ORO] {
+            assert!(c.cells().iter().any(|x| x.fg == color), "{color:?}");
+        }
+        for banderita in c.cells().iter().filter(|x| x.ch == '▼') {
+            assert!([VERDE, BLANCO, ROJO].contains(&banderita.fg));
+        }
+    }
+
+    #[test]
+    fn the_pipes_go_round_verde_blanco_and_rojo() {
+        let o = crate::scene::Opts::new(INFO.options, toml::Table::new());
+        let th = crate::theme::Theme::classic();
+        let ctx = Ctx {
+            theme: &th,
+            opts: &o,
+            bg: Color::Reset,
+            seed: 5,
+            fiesta: Fiesta::of_day(9, 1),
+        };
+        let mut p = Pipes::new(&ctx);
+        p.resize(&ctx, 100, 30);
+        p.retheme(&ctx);
+        for _ in 0..80 {
+            p.step();
+        }
+        let mut c = Canvas::new(100, 30, Color::Reset);
+        p.draw(&ctx, &mut c);
+        let mut seen = [0; 3];
+        for (piece, cell) in p.grid.iter().zip(c.cells()) {
+            // A plain stretch of pipe is the color of its turn of the rotation.
+            if piece.ch != '\0' && cell.ch == piece.ch {
+                let flag = [VERDE, BLANCO, ROJO][piece.rot as usize % 3];
+                assert_eq!(cell.fg, flag);
+                seen[piece.rot as usize % 3] += 1;
+            }
+        }
+        assert!(seen.iter().all(|&n| n > 10), "{seen:?}");
+    }
+
+    #[test]
+    fn the_mes_patrio_builds_up() {
+        let o = crate::scene::Opts::new(INFO.options, toml::Table::new());
+        let th = crate::theme::Theme::classic();
+        let (_, first) = grown(&o, &th, Fiesta::of_day(9, 1), 4);
+        let (_, grito) = grown(&o, &th, Fiesta::of_day(9, 15), 4);
+        let (a, b) = (hung(&first), hung(&grito));
+        assert!(a.0 < b.0 && a.1 < b.1 && a.2 == 0 && b.2 > 0, "{a:?} {b:?}");
+    }
+
+    #[test]
+    fn the_patrias_come_and_go_through_retheme() {
+        let o = crate::scene::Opts::new(INFO.options, toml::Table::new());
+        for theme in ["classic", "nord"] {
+            let th = crate::theme::Theme::builtin(theme).unwrap();
+            let mut ctx = Ctx {
+                theme: &th,
+                opts: &o,
+                bg: Color::Reset,
+                seed: 3,
+                fiesta: Fiesta::NONE,
+            };
+            let mut s = (INFO.make)(&ctx);
+            s.resize(&ctx, 100, 30);
+            s.retheme(&ctx);
+            run(s.as_mut(), &ctx, 3);
+            assert_eq!(hung(&frame(s.as_mut(), &ctx)), (0, 0, 0));
+            ctx.fiesta = Fiesta::height(Kind::Patrias);
+            s.retheme(&ctx);
+            let (flags, rosettes, _) = hung(&frame(s.as_mut(), &ctx));
+            assert!(flags > 20 && rosettes > 2, "{theme}");
+            // From one holiday to another, and back to an ordinary day.
+            ctx.fiesta = Fiesta::height(Kind::Navidad);
+            s.retheme(&ctx);
+            assert_eq!(count(&frame(s.as_mut(), &ctx), "▼❂★"), 0);
+            ctx.fiesta = Fiesta::NONE;
+            s.retheme(&ctx);
+            assert_eq!(hung(&frame(s.as_mut(), &ctx)), (0, 0, 0));
+            if theme == "classic" {
+                assert!(
+                    frame(s.as_mut(), &ctx)
+                        .cells()
+                        .iter()
+                        .all(|x| !x.fg.is_rgb())
+                );
+            }
+        }
     }
 
     #[test]
