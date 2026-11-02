@@ -292,13 +292,13 @@ impl Waveform {
         }
     }
 
-    /// Fills `m.front` with the highest crest among the layers in front of
+    /// Fills `front` with the highest crest among the layers in front of
     /// `li`.
-    fn crests_in_front(&self, m: &mut Navidad, li: usize) {
+    pub(super) fn crests_in_front(&self, front: &mut [f32], li: usize) {
         let pw = self.pw;
-        m.front.fill(f32::INFINITY);
+        front.fill(f32::INFINITY);
         for lj in li + 1..self.layers.len() {
-            for (f, &y) in m.front.iter_mut().zip(&self.ys[lj * pw..(lj + 1) * pw]) {
+            for (f, &y) in front.iter_mut().zip(&self.ys[lj * pw..(lj + 1) * pw]) {
                 *f = f.min(y);
             }
         }
@@ -315,7 +315,7 @@ impl Waveform {
         }
         for li in 0..n {
             if self.style == Style::Filled {
-                self.crests_in_front(&mut m, li);
+                self.crests_in_front(&mut m.front, li);
             }
             match self.style {
                 Style::Lines => {

@@ -1,9 +1,14 @@
 //! Holiday colors under a theme: each classic color becomes the theme's
-//! accent closest to it in hue (a Christmas bulb is red under any theme),
-//! and grays and whites the theme's foreground.
+//! accent closest to it in hue (a Christmas bulb is red under any theme, the
+//! flag's stripe green), and grays and whites the theme's foreground.
 
-use crate::color::Color;
+use crate::color::{Color, rgb};
 use crate::theme::Theme;
+
+/// The flag: verde bandera, blanco and rojo.
+pub(super) const VERDE: Color = rgb(0x006847);
+pub(super) const BLANCO: Color = rgb(0xf4f1ea);
+pub(super) const ROJO: Color = rgb(0xce1126);
 
 /// The hue of a color in degrees, and its saturation (0 for a gray).
 fn hue(c: Color) -> Option<(f32, f32)> {
@@ -64,4 +69,18 @@ pub(super) fn like(theme: &Theme, native: Color) -> Color {
         Some(_) => solid(Some(&theme.fg), native),
         None => native,
     }
+}
+
+/// Verde, blanco and rojo of the Mexican flag as a theme paints them: the
+/// accents closest to green and red, the foreground for white (under
+/// `classic`, the flag's own colors).
+pub(super) fn tricolor(theme: &Theme) -> [Color; 3] {
+    if theme.native {
+        return [VERDE, BLANCO, ROJO];
+    }
+    [
+        solid(nearest_hue(theme, 130.0).as_ref(), VERDE),
+        solid(Some(&theme.fg), BLANCO),
+        solid(nearest_hue(theme, 0.0).as_ref(), ROJO),
+    ]
 }

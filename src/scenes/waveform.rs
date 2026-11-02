@@ -32,10 +32,26 @@
 //! the cord. Under other themes the cord is the wave's own color and the bulbs,
 //! esferas and papel de china take the theme's accents closest to their hue.
 //! All of it lives in `waveform/navidad.rs`.
+//!
+//! During the Fiestas Patrias the waves are the flag, three stripes of cloth:
+//! the back waves verde, the middle ones blanco, the front ones rojo, each a
+//! ribbon that ripples in the wind, its folds of light rolling along it. The
+//! águila, the eagle on its nopal with the serpent in its beak, rides the
+//! middle wave, rising, falling and tilting with the swell, and banderitas on
+//! gold poles bob on the others, their pennants (verde, blanco, rojo in turn)
+//! streaming in the wind. The mes patrio brings more of it: banderitas
+//! closer together, a stronger wind and wider cloth, and one águila at first,
+//! three at the Grito (on a wide enough screen). On the oscilloscope both
+//! strands are ribbons; the filled and dotted styles are drawn as ever in
+//! the flag's colors, with the banderitas and the águila on top. Under other
+//! themes the stripes are the theme's accents closest to green and red and
+//! its foreground, and the águila takes the closest to her own colors. All of
+//! it lives in `waveform/patrias.rs`.
 
 mod hues;
 mod muertos;
 mod navidad;
+mod patrias;
 
 use std::f32::consts::{PI, TAU};
 
@@ -45,6 +61,7 @@ use crate::render::{Braille, Canvas};
 use crate::scene::{Ctx, Opt, Scene, SceneInfo, Val};
 use muertos::Muertos;
 use navidad::Navidad;
+use patrias::Patrias;
 
 pub const INFO: SceneInfo = SceneInfo {
     name: "waveform",
@@ -178,6 +195,8 @@ struct Waveform {
     muertos: Option<Muertos>,
     /// Navidad, while it lasts.
     navidad: Option<Navidad>,
+    /// Fiestas Patrias, while they last.
+    patrias: Option<Patrias>,
 }
 
 impl Waveform {
@@ -255,6 +274,7 @@ impl Waveform {
             shades: Vec::new(),
             muertos: None,
             navidad: None,
+            patrias: None,
         }
     }
 
@@ -463,6 +483,9 @@ impl Scene for Waveform {
         if let Some(m) = self.navidad.as_mut() {
             m.resized(self.pw);
         }
+        if let Some(m) = self.patrias.as_mut() {
+            m.resized(self.pw);
+        }
     }
 
     fn retheme(&mut self, ctx: &Ctx) {
@@ -477,6 +500,7 @@ impl Scene for Waveform {
         };
         let muertos = ctx.fiesta.is(Kind::Muertos);
         let navidad = ctx.fiesta.is(Kind::Navidad);
+        let patrias = ctx.fiesta.is(Kind::Patrias);
         self.shades.clear();
         for (li, l) in self.layers.iter().enumerate() {
             // Front layers take the bright end of the ramp, back layers the
@@ -487,6 +511,8 @@ impl Scene for Waveform {
                 muertos::picado(ctx, n - 1 - li)
             } else if navidad {
                 navidad::cord(ctx, n - 1 - li, ordinary)
+            } else if patrias {
+                patrias::color(ctx, li, n)
             } else {
                 ordinary
             };
@@ -513,6 +539,11 @@ impl Scene for Waveform {
         } else {
             self.navidad = None;
         }
+        if patrias {
+            Patrias::dress(&mut self.patrias, ctx, &self.layers, self.pw);
+        } else {
+            self.patrias = None;
+        }
     }
 
     fn update(&mut self, _ctx: &Ctx, dt: f32) {
@@ -525,6 +556,7 @@ impl Scene for Waveform {
         self.t = (self.t + dt * self.speed) % 36_000.0;
         self.step_muertos(dt);
         self.step_navidad(dt);
+        self.step_patrias(dt);
     }
 
     fn draw(&mut self, _ctx: &Ctx, c: &mut Canvas) {
@@ -544,6 +576,8 @@ impl Scene for Waveform {
             self.draw_muertos();
         } else if self.navidad.is_some() {
             self.draw_navidad();
+        } else if self.patrias.is_some() {
+            self.draw_patrias();
         } else {
             match self.style {
                 Style::Lines => self.draw_lines(),
@@ -576,13 +610,16 @@ mod tests {
             "amplitude = nan\nfrequency = inf\nspeed = -1.0\nlayers = -3",
         ];
         // Ordinary days, then Día de Muertos at its first day and at its
-        // height, and Navidad at the first posada's eve and at Nochebuena.
+        // height, Navidad at the first posada's eve and at Nochebuena, and the
+        // Fiestas Patrias at the start of the mes patrio and at the Grito.
         let days = [
             Fiesta::NONE,
             Fiesta::of_day(10, 28),
             Fiesta::of_day(11, 2),
             Fiesta::of_day(12, 12),
             Fiesta::of_day(12, 24),
+            Fiesta::of_day(9, 1),
+            Fiesta::of_day(9, 15),
         ];
         for (v, fiesta) in variants
             .iter()
