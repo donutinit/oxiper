@@ -21,7 +21,7 @@ plus sixteen more scenes. One small binary. Nearly no CPU. Your terminal's trans
 [Screensaver](#screensaver-mode) ·
 [Customize](#make-it-yours) ·
 [Aquarium](#the-aquarium) ·
-[Día de Muertos](#día-de-muertos) ·
+[Fiestas](#fiestas) ·
 [Transparency](#transparency) ·
 [Performance](#performance) ·
 [Scene options](#scene-options)
@@ -41,10 +41,11 @@ plus sixteen more scenes. One small binary. Nearly no CPU. Your terminal's trans
   the original twelve frames.
 - **One binary, twenty-one scenes.** Mix them into a playlist and give each one its own theme, pace and
   time on screen. And now and then, when you least expect it, a train, a duck or Nyan Cat goes by.
-- **Fiestas.** On Mexican holidays every scene dresses up. On Día de Muertos the dog becomes a
-  xoloitzcuintle walking a path of marigolds to an ofrenda, the bonsai a tree of life, the DVD logo
-  a sugar skull, the aurora moves to Lake Pátzcuaro, and papel picado hangs over everything. See
-  [Día de Muertos](#día-de-muertos).
+- **Fiestas.** On eleven Mexican holidays the scenes dress up. On Día de Muertos the dog becomes a
+  xoloitzcuintle walking a path of marigolds to an ofrenda and papel picado hangs over everything;
+  in the Navidad the bonsai grows a nacimiento at its foot and foquitos blink across the top; on the
+  night of the Grito the fireworks light up the Zócalo; and Carnaval, the Guelaguetza, the
+  equinox at Chichén Itzá and more bring visitors of their own. See [Fiestas](#fiestas).
 - **Transparency first.** oxiper never paints a background it doesn't have to, so blurred or
   translucent terminals stay see-through. It even asks your terminal what its background looks like,
   so fading trails fade *into it*.
@@ -284,30 +285,58 @@ egg_rate = 1.2        # per hour of playing time; 0 = never
 
 Can't wait? Press <kbd>E</kbd>.
 
-During [Día de Muertos](#día-de-muertos) five more join them, and come far more often: La
-Catrina, a swarm of monarchs, an alebrije, skeleton mariachis and a *calaverita literaria*.
+On the [holidays](#fiestas) visitors of the season join them and come far more often: La
+Catrina and the monarchs on Día de Muertos, a posada and a piñata in the Navidad, the Grito in
+September, chinelos at Carnaval, and more.
 
 The aurora sends its own: Nyan Cat or sl's train crosses its sky about three times an hour
 (`aurora.visitors`), whatever these settings say.
 
-## Día de Muertos
+## Fiestas
+
+On Mexican holidays every scene dresses up, papel picado or lights hang over everything, and
+visitors of the season come far more often than the everyday eggs. Each holiday builds up the
+way it does in the street: the posadas climb to Nochebuena, September climbs to the Grito.
+
+| Holiday | Days | Over every scene | Visitors |
+|---|---|---|---|
+| [Navidad](#navidad) | December 12 (the Virgen de Guadalupe) to January 6 (the Reyes) | foquitos, heno and esferas; a piñata during the posadas | posada, piñata, Reyes, pastorela, and a prank on December 28 |
+| [Candelaria](#the-rest-of-the-year) | February 2 | | the tamalero |
+| [Carnaval](#the-rest-of-the-year) | Thursday to Martes de Carnaval | confetti, serpentinas, banderines | chinelos, a comparsa |
+| [Equinoccio](#the-rest-of-the-year) | March 19 to 22 | | Kukulcán |
+| [Quema de Judas](#the-rest-of-the-year) | Viernes Santo and Sábado de Gloria | | a Judas |
+| [Día del Niño](#the-rest-of-the-year) | April 30 | globos | toys, a lotería |
+| [Día de la Santa Cruz](#the-rest-of-the-year) | May 3 | | the builders' cross |
+| [Guelaguetza](#the-rest-of-the-year) | the two Lunes del Cerro in July, from the Saturday before | papel picado in Oaxacan colors | the Flor de Piña, a calenda |
+| [Fiestas Patrias](#fiestas-patrias) | September 1 to 16 | papel picado in verde, blanco y rojo | the Grito, the jarabe tapatío, the águila |
+| [Día de Muertos](#día-de-muertos) | October 28 to November 3 | papel picado, cempasúchil petals | La Catrina, monarchs, an alebrije, mariachis, a calaverita |
+| [Día de la Revolución](#the-rest-of-the-year) | November 20 | tricolor banderines | Adelitas, a revolutionary train |
+
+Carnaval and the quema de Judas follow Easter and the Guelaguetza the Lunes del Cerro, worked
+out for every year. oxiper follows your local date; try any of them any day, or turn them off:
+
+```sh
+oxiper -o fiestas=navidad               # a holiday at its height
+oxiper -o fiestas=navidad@12-28         # or one of its days
+oxiper -o fiestas=carnaval@2027-02-09   # a movable one, in a given year
+```
+
+```toml
+fiestas = "auto"   # "none", or navidad, candelaria, carnaval, equinoccio, judas, nino,
+                   # santa-cruz, guelaguetza, patrias, muertos, revolucion (@MM-DD for one day)
+```
+
+Under other themes a holiday takes the theme's colors, keeping only flames, food and a few
+things like the marigolds their own. A scene with no costume for a holiday, and every scene on
+any other day, is exactly as it always was.
+
+### Día de Muertos
 
 From October 28 to November 3 every scene dresses up for Día de Muertos, and the holiday builds
 up the way an ofrenda does: the first petals on the 28th, the little ones (the angelitos) on the
 31st and November 1, everyone and everything on November 2, and on the 3rd the souls go back.
 
 <p align="center"><img src="assets/muertos.gif" alt="Día de Muertos in dog, tiger, aurora, fireworks, dvd and fire" width="640"></p>
-
-oxiper follows your local date; try it any day, or turn it off:
-
-```sh
-oxiper -o fiestas=muertos          # the holiday at its height
-oxiper -o fiestas=muertos@10-28    # or one of its days
-```
-
-```toml
-fiestas = "auto"   # "none", "muertos", or "muertos@MM-DD"
-```
 
 Over every scene, papel picado hangs across the top (two strings from November 1) and
 cempasúchil petals drift down. Seasonal visitors cross far more often than the everyday eggs:
@@ -357,8 +386,170 @@ And each scene has its own:
   gateway through the nine levels, face recognition that turns the living away ("TODAVÍA NO TE
   TOCA"), and technobabble in Spanish.
 
-Under other themes the holiday takes the theme's colors, keeping only candle flames and
-marigolds their own. On any other day every scene is exactly as it always was.
+`oxiper -o fiestas=muertos` shows it at its height any day, `muertos@10-28` one of its days.
+
+### Navidad
+
+From the Virgen de Guadalupe on December 12 to the Reyes on January 6, the Guadalupe–Reyes: it
+climbs through the nine posadas to Nochebuena, plays pranks on the Santos Inocentes (December 28),
+counts down to Año Nuevo and waits for the Reyes Magos from January 2.
+
+<p align="center"><img src="assets/navidad.gif" alt="Navidad in fireworks, nyancat, aurora, dvd, fire and dog" width="640"></p>
+
+A string of foquitos hangs across the top of every scene, blinking in chases and waves, with heno
+and gold-capped esferas, more of both each posada; during the posadas a piñata of siete picos
+swings from the middle, and on Año Nuevo confetti and serpentinas fall. The visitors: a
+**posada** of peregrinos (José, María on the burro, children with candles and luces de bengala,
+"En el nombre del cielo, os pido posada"), a blindfolded kid at a **piñata** ("¡Dale, dale, dale,
+no pierdas el tino!") until it bursts into colación and fruit, the **Reyes** on horse, camel and
+elephant (January 2 to 6), a **pastorela** where San Miguel drives Luzbel off, and on December 28
+only an **inocente**: a frightening system failure that turns out to be "¡INOCENTE PALOMITA, QUE
+TE DEJASTE ENGAÑAR!".
+
+- **bonsai** is trimmed the Mexican way: esferas, a series of foquitos along the branches, heno,
+  a star on the crown, a pot of nochebuenas, and at its foot a nacimiento that fills up posada by
+  posada; the Niño Dios arrives on Nochebuena, and in January the Reyes come a little closer each
+  day until they reach the pesebre on the 6th.
+- **aquarium** sets a nacimiento on the sea floor beside a tree of esferas and an olla of ponche,
+  strings the kelp with foquitos, sends esferas up like bubbles and a piñata bobbing on the waves;
+  at night during the posadas a procession of small fish carries candles across.
+- **neo** rains verde pino and rojo nochebuena with golden heads, hides POSADAS, NOCHEBUENA,
+  AGUINALDO, ROSCA DE REYES and the Reyes' names in the rain, and paints piñatas, stars and
+  nochebuenas out of its own glyphs. On the Inocentes the rain now and then falls upward and spells
+  ¡INOCENTE PALOMITA!.
+- **nyancat** flies a buñuelo with miel de piloncillo (a rosca de reyes on January 2 to 6) on six
+  strands of blinking foquitos, past piñata stars that burst into colación: "¡Llevas N segundos de
+  posada!". On the Inocentes the whole picture flies backwards.
+- **dog** wears a suéter navideño down a street of farolitos, wreaths, nacimientos in the windows
+  and blinking foquitos; after dark during the posadas the peregrinos walk it with their candles.
+- **shark** swims among jellyfish glowing like foquitos and rams a sinking piñata into colación,
+  tejocotes, cañas and mandarinas; a portal de Belén under heno stands on the sand.
+- **tiger** hangs foquitos and heno from tree to tree, flowers wild nochebuenas in the grass and
+  bows at a nacimiento in the ruins; the saucer is the Estrella de Belén, and from January 2 the
+  Reyes cross the hills behind.
+- **ocean** becomes Xochimilco: trajineras with a woman's name on their arch drift by hung with
+  foquitos and piñatas, buoys carry the Estrella de Belén, the lights shine again in the water at
+  night, the big animals wear a gorro and Año Nuevo sends fireworks over the water.
+- **fire** is a posada's fogata: a big olla de barro of ponche on three stones, tejocotes, guayabas
+  and cañas bobbing in it, steam rising, farolitos and nochebuenas around.
+- **fireworks** turns the city into a plaza with a lit kiosco, pines and foquitos; shells burst
+  into estrellas de siete picos, nochebuenas and bells, and on Año Nuevo it counts down from 10 and
+  writes FELIZ AÑO NUEVO in sparks.
+- **aurora** moves to the hills of the nacimiento: Belén lit at night, the Estrella with its long
+  tail, shepherds by a fogata, and the Reyes crossing the dunes a little closer each day of January
+  (`look = "belen"` any day).
+- **constellation** gathers its stars into the Estrella de Belén, a swaying piñata, a nochebuena,
+  a swinging bell, a Rey Mago whose camel walks, and the pesebre.
+- **waveform** strings its waves with foquitos that blink in chases along them, esferas and now
+  and then a piñata riding the crests.
+- **pipes** become strings of series lights, each pipe with its own chase, esferas and
+  nochebuenas at the joints and heno on the hanging stretches.
+- **rain** hangs foquitos along the eaves, the drops catching their colors and the puddles
+  reflecting them; every flash of lightning catches a posada walking by under umbrellas.
+- **dvd** bounces a piñata de siete picos that sheds colación and bursts at a corner ("¡DALE,
+  DALE, DALE!"); on the Inocentes it misses the corner by one cell, on Año Nuevo it says so, and
+  from January 2 it is a rosca with the muñeco hiding inside.
+- **boids** become the nacimiento's angels, with Luzbel hunting them in place of the hawk until
+  San Miguel drops out of the sky with his sword of light and drives him off.
+- **orrery** turns the sun into the Estrella de Belén, its rays pulsing from eight points to
+  sixteen, the planets into glass esferas and the belt into escarcha; on the Inocentes the planets
+  now and then turn round and orbit backwards, "¡Inocente palomita!".
+- **particles** runs a river of rojo, verde and dorado carrying nochebuenas that shed their red
+  bracts, glinting escarcha and colación; on Año Nuevo bursts go off in the stream.
+- **metaballs** melts into glass esferas in rojo, verde, dorado and plata, glossy with a hard
+  highlight, the bigger ones hanging from gold caps, escarcha glinting on them now and then.
+- **hollywood** tracks the Reyes Magos on radar with an ETA to January 6, keeps a database of
+  cartas a los Reyes, measures the piñata's blows and the ponche's heat, and scrolls villancicos
+  through its logs; on the Inocentes the screen goes SISTEMA COMPROMETIDO until it owns up.
+
+### Fiestas Patrias
+
+September is the mes patrio: flags go up all month, the Grito is the night of the 15th and the
+parade the 16th.
+
+<p align="center"><img src="assets/patrias.gif" alt="Fiestas Patrias in fireworks, tiger, nyancat, waveform, dvd and fire" width="640"></p>
+
+Papel picado in verde, blanco y rojo hangs over every scene, with cut-out águilas, campanas,
+estrellas and sombreros, banderitas between the flags and tricolor confetti drifting down; at the
+Grito a second string hangs behind the first. The visitors: the **grito** from a palace balcony
+with the Dolores bell swinging and the plaza answering each "¡VIVA MÉXICO!", a charro and a china
+poblana dancing the **jarabe** tapatío around a sombrero, and the **águila** sweeping in with the
+serpent in her beak to land on a nopal.
+
+- **bonsai** dresses in the flag (verde leaves, white blossoms, red flowers and tunas) in a
+  tricolor pot with banderitas, and at its foot the emblem grows through the month: a nopal on a
+  rock in the lake, the eagle from the 11th, the serpent at the Grito.
+- **aquarium** sets the eagle on its nopal on the floor beside the Dolores bell, flies the flag
+  from the castle, strings banderitas from kelp to kelp and lets ajolotes walk the sand among
+  tricolor fish.
+- **neo** rains in verde, blanco y rojo, hides VIVA MÉXICO, INDEPENDENCIA, DOLORES and the heroes'
+  names, and paints the eagle on the nopal or the Campana de Dolores out of its glyphs.
+- **nyancat** is a chile en nogada in a tiny sombrero de charro, its rainbow the flag: "¡Llevas N
+  segundos gritando VIVA MÉXICO!".
+- **dog** wears a sombrero de charro and a sarape past a tianguis of banderas and spinning
+  rehiletes under papel picado.
+- **shark** wears the flag as face paint, glows tricolor plankton, sinks flagpoles in the sand and
+  now and then meets a vaquita marina.
+- **tiger** becomes a jaguar under papel picado and roars "¡VIVA MÉXICO!" at the eagle on the
+  ruins; the saucer is the Campana de Dolores, ringing.
+- **ocean** puts the trajineras in verde, blanco y rojo with flags and papel picado, swims the fish
+  band by band like the flag, and fires tricolor fireworks over the water toward the Grito.
+- **fire** is a fogón on the night of the Grito: pozole bubbling, elotes on the comal, luces de
+  bengala sputtering and banderitas around.
+- **fireworks** is the Zócalo: the Palacio Nacional in verde, blanco y rojo, the bell on its
+  balcony, a castillo spinning tier by tier, eagle-shaped shells and VIVA MÉXICO in sparks.
+- **aurora** moves to the valley of México: Popocatépetl smoking and Iztaccíhuatl asleep under
+  curtains in verde, blanco y rojo (`look = "volcanes"` any day).
+- **constellation** draws the eagle on its nopal, the Campana de Dolores, the flag and a sombrero
+  de charro.
+- **waveform** is the flag waving: three ribbons in verde, blanco y rojo, the eagle riding the
+  middle one.
+- **pipes** run verde, blanco and rojo with banderitas along the level stretches.
+- **rain** falls on a street of fondas under soaked papel picado; lightning catches charros
+  galloping by with the flag.
+- **dvd** bounces a sombrero de charro whose tricolor band turns with every bounce: "¡VIVA
+  MÉXICO!".
+- **boids** become palomas in verde, blanco y rojo, hunted by the águila real.
+- **orrery** turns the sun into the Piedra del Sol, carved in stone and gold, and the planets
+  verde, blanco y rojo, planting banderitas; at the Grito the bell's sound rings out across the sky.
+- **particles** flows in three rippling bands like the flag, carrying tricolor confetti and
+  banderitas, with bursts in the stream toward the Grito.
+- **metaballs** is a chile en nogada lava, verde poblano and nogada white, granada seeds swirling
+  through it and now and then dripping from a rim.
+- **hollywood** runs GRITO.EXE: a countdown to 23:00 of September 15, the bell's control panel, a
+  vivómetro, the parade route and the heroes of 1810.
+
+### The rest of the year
+
+- **Candelaria** (February 2): whoever found the muñeco in the rosca pays the tamales. A tamalero
+  pedals by calling "¡Ricos tamales oaxaqueños!"; **fire** steams a tamalera with jarros de
+  atole, **nyancat** flies a tamal ("¡Llevas N segundos pagando los tamales!") and **dvd**
+  bounces one ("¡TE TOCAN LOS TAMALES!").
+- **Carnaval** (Thursday to Martes de Carnaval): banderines, confetti and serpentinas over every
+  scene, chinelos of Morelos hopping by and a comparsa of feathers and sequins. **fireworks**
+  bursts confetti, serpentinas and masks, **particles** swirls confetti, gold lentejuelas, plumas and
+  curling serpentinas, and **dvd** bounces a feathered
+  mask.
+- **Equinoccio** (March 19 to 22): El Castillo rises and the serpent of light comes down its
+  stairway. **tiger** watches Kukulcán form on the ruins, **aurora** goes to Teotihuacán at dawn
+  (`look = "teotihuacan"`), **constellation** draws the feathered serpent and the pyramid, and
+  **orrery** shows the Earth with day and night split pole to pole while Kukulcán coils around
+  the sun.
+- **Quema de Judas** (Viernes Santo and Sábado de Gloria): a cartonería Judas is lit, spins and
+  bursts. **fire** and **fireworks** hang Judases that wait on Friday and go up in rockets on
+  Saturday.
+- **Día del Niño** (April 30): globos rise over every scene and pop; trompos, baleros, yoyos and
+  canicas go by, and a lotería is called. **dog** plays with a pelota, a papalote and trompos,
+  **boids** become papalotes and **dvd** a spinning trompo.
+- **Día de la Santa Cruz** (May 3): builders raise a cross of paper flowers over a half-built
+  house. **fireworks** sends cohetes up from the building sites and **pipes** turn into
+  scaffolding topped with crosses.
+- **Guelaguetza** (the Lunes del Cerro): papel picado in Oaxacan colors over every scene, the Flor
+  de Piña and a calenda going by. **fireworks** runs toritos and marmotas under a burning
+  castillo, and **dvd** bounces the Danza de la Pluma's penacho ("¡VIVA OAXACA!").
+- **Día de la Revolución** (November 20): tricolor banderines over every scene, Adelitas marching
+  and a revolutionary train. **hollywood** opens the Archivo de la Revolución, telegrams in Morse
+  and the Plan de San Luis, and **dvd** bounces a sombrero with cananas ("¡TIERRA Y LIBERTAD!").
 
 ## The aquarium
 
@@ -392,6 +583,14 @@ own drawing style: seven biomes with **281 fish**, 93 other creatures, 85 plants
   that the souls walk down at night, veladoras float on rafts of marigolds, and calavera fish,
   alebrijes, a catrina jellyfish, the xolo and La Catrina rowing a trajinera join in, more each day
   (`season = "muertos"` brings them any day). See [Día de Muertos](#día-de-muertos).
+- **Navidad.** A nacimiento stands on the sea floor beside a tree hung with blinking esferas, an
+  olla of ponche and farolitos; the kelp is strung with foquitos, esferas rise like bubbles, a
+  piñata bobs on the waves and the Reyes sail by. Red and green fish swim with nochebuenas for
+  tails, the Niño Dios lies in the manger from Nochebuena, and at night during the posadas a
+  procession of small fish carries candles across (`season = "navidad"`).
+- **Fiestas Patrias.** The eagle on its nopal and the Dolores bell stand on the floor, the castle
+  flies the flag, banderitas hang from kelp to kelp, ajolotes walk the sand among tricolor fish,
+  and a jellyfish is the bell (`season = "patrias"`).
 - **Never the same twice.** Each creature takes its colors from its species' palette, so no two
   clownfish match. The sea starts in a random biome and moves on every five minutes. The floor
   changes at once, and the creatures already swimming finish their crossing.
@@ -540,7 +739,7 @@ Aliases: `asciiquarium`, `fish`
 | `current` | `1.0` | Strength of the current that sways plants and carries bubbles; 0 is still water |
 | `weather` | `true` | Storms now and then: wind, rain and lightning over the water |
 | `events` | `1.0` | How often something special happens (feeding time, a bait ball, a rare sighting...); 0 never |
-| `season` | `"auto"` | auto (the holidays, see `fiestas`), none, or muertos (Día de Muertos every day) |
+| `season` | `"auto"` | auto (the holidays, see `fiestas`), none, muertos, navidad or patrias (that holiday every day) |
 | `castle` | `true` | Show the castle (in classic and in the tank) |
 | `random_objects` | `true` | Send ships, whales, sharks, divers, submarines, birds... one at a time |
 | `bubbles` | `true` | Fish blow bubbles |
@@ -718,7 +917,7 @@ cypress and a village. Now and then Nyan Cat or sl's train goes by.
 |---|---|---|
 | `speed` | `1.0` | How fast the lights ripple and drift (0.1-4) |
 | `curtains` | `4` | Curtains of light in the sky at once (1-8) |
-| `look` | `"cycle"` | cycle, or one look to stay on: tanim, emerald, crimson, ultraviolet, ice, synthwave, ember, prism, starry, patzcuaro (Día de Muertos) |
+| `look` | `"cycle"` | cycle, or one look to stay on: tanim, emerald, crimson, ultraviolet, ice, synthwave, ember, prism, starry, patzcuaro (Día de Muertos), belen (Navidad), volcanes (Fiestas Patrias), teotihuacan (Equinoccio) |
 | `stay` | `90.0` | Seconds each look lasts while cycling (10-3600) |
 | `landscape` | `true` | Mountains, a pine forest and the lake that mirrors the sky |
 | `stars` | `true` | Twinkling stars and the odd shooting star |
