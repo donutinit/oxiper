@@ -1,5 +1,5 @@
-//! The holidays that put trajineras on the sea: Navidad and, after it, the
-//! Fiestas Patrias.
+//! The holidays that put trajineras on the sea: Navidad and the Fiestas
+//! Patrias.
 //!
 //! Boats of Xochimilco drift across the surface in a line, all at the pace
 //! of the same slow current, each painted its own way with a woman's name on
@@ -12,16 +12,17 @@
 //! Everything here is drawn from its own generator, so the sea of an
 //! ordinary day is untouched, and how much there is follows the holiday's
 //! level. This file holds what both holidays share; what is special to each
-//! is in `navidad.rs`.
+//! is in `navidad.rs` and `patrias.rs`.
 
 use std::f32::consts::TAU;
 
-use super::art::{self, Species};
+use super::art::{self, Role, Species};
 use super::cohetes::Cohetes;
-use super::navidad;
 use super::sea::{Sea, hash};
+use super::tank::mul;
 use super::trajinera::{self, Boat, Buoy, Lights, REACH, Shape};
 use super::{Dice, Rng};
+use super::{navidad, patrias};
 use crate::color::{self, Color};
 use crate::fiesta::{Fiesta, Kind};
 use crate::scene::Ctx;
@@ -49,6 +50,12 @@ pub struct Paint {
     pub verde: Color,
     pub blanco: Color,
     pub plata: Color,
+    /// The holiday it is for, the flag's colors in order (verde, blanco,
+    /// rojo), the águila's café and the nopal's green.
+    pub kind: Kind,
+    pub bandera: [Color; 3],
+    pub cafe: Color,
+    pub nopal: Color,
 }
 
 // Navidad: rojo nochebuena, verde pino, dorado, plata and blanco; the
@@ -78,6 +85,14 @@ const PAPEL: [Color; 6] = [
 const CANELA: Color = art::rgb(139, 74, 30);
 const CANA: Color = art::rgb(201, 178, 107);
 const CORD: Color = art::rgb(24, 84, 44);
+
+// Fiestas Patrias: verde bandera, blanco and rojo, the águila's café, the
+// nopal's green and oro.
+const VERDE_B: Color = art::rgb(0, 104, 71);
+const ROJO_B: Color = art::rgb(206, 17, 38);
+const CAFE: Color = art::rgb(122, 74, 30);
+const NOPAL: Color = art::rgb(79, 138, 42);
+const ORO: Color = art::rgb(212, 160, 23);
 
 fn hsv(c: Color) -> Option<(f32, f32, f32)> {
     let (r, g, b) = match c {
@@ -116,7 +131,22 @@ fn by_hue(colors: &[Color], hue: f32) -> Option<Color> {
 }
 
 impl Paint {
+    /// The paint of the holiday on `ctx`.
     pub fn new(ctx: &Ctx) -> Paint {
+        let mut p = Paint::basic(ctx);
+        if ctx.fiesta.is(Kind::Patrias) {
+            // The flag's own greens and reds, boats and lights in them.
+            if ctx.theme.native {
+                (p.verde, p.rojo, p.gold) = (VERDE_B, ROJO_B, ORO);
+            }
+            p.bandera = [p.verde, p.blanco, p.rojo];
+            p.boats = [p.verde, p.blanco, p.rojo, p.gold, p.verde, p.rojo];
+            p.bulbs = [p.verde, p.blanco, p.rojo, p.verde, p.blanco, p.rojo];
+        }
+        p
+    }
+
+    fn basic(ctx: &Ctx) -> Paint {
         let native = Paint {
             boats: PAPEL,
             bulbs: FOQUITOS,
@@ -129,6 +159,10 @@ impl Paint {
             verde: PINO,
             blanco: BLANCO,
             plata: PLATA,
+            kind: ctx.fiesta.kind,
+            bandera: [VERDE_B, BLANCO, ROJO_B],
+            cafe: CAFE,
+            nopal: NOPAL,
         };
         if ctx.theme.native {
             return native;
@@ -156,13 +190,26 @@ impl Paint {
             verde: near(140.0, 1, PINO),
             blanco: light,
             plata: light.lerp(dark, 0.25),
+            kind: ctx.fiesta.kind,
+            bandera: [near(140.0, 1, VERDE_B), light, near(355.0, 0, ROJO_B)],
+            cafe: near(30.0, 2, CAFE),
+            nopal: near(110.0, 1, NOPAL),
         }
     }
 
     /// The colors of a fish of the holiday: `B` body, `D` fins, `L` belly,
-    /// `S` spots and `F` tail. One coat has a red body and green fins, the
-    /// other the other way round.
-    pub fn coat(&self, variant: usize) -> [Color; 5] {
+    /// `S` spots and `F` tail. On Navidad one coat has a red body and green
+    /// fins, the other the other way round; on the Patrias a fish wears the
+    /// flag, verde, blanco and rojo from its tail to its nose.
+    pub fn coat(&self, school: bool, variant: usize) -> [Color; 5] {
+        if self.kind == Kind::Patrias {
+            let (fin, tail) = if school {
+                (mul(self.verde, 0.65), mul(self.verde, 0.8))
+            } else {
+                (self.gold, self.gold)
+            };
+            return [self.verde, fin, self.blanco, self.rojo, tail];
+        }
         let (body, fin) = if variant.is_multiple_of(2) {
             (self.rojo, self.verde)
         } else {
@@ -228,7 +275,7 @@ pub struct Gala {
 
 impl Gala {
     pub fn new(fiesta: Fiesta, seed: u64) -> Gala {
-        let on = fiesta.is(Kind::Navidad);
+        let on = fiesta.is(Kind::Navidad) || fiesta.is(Kind::Patrias);
         Gala {
             on,
             kind: if on { fiesta.kind } else { Kind::None },
@@ -249,7 +296,7 @@ impl Gala {
             plants: Vec::new(),
             sinkers: Vec::new(),
             most: 0,
-            fireworks: on && fiesta.ano_nuevo(),
+            fireworks: on && (fiesta.ano_nuevo() || fiesta.is(Kind::Patrias)),
             works: Cohetes::default(),
         }
     }
@@ -264,6 +311,12 @@ impl Gala {
     #[cfg(test)]
     pub fn floor_counts(&self) -> (usize, usize) {
         (self.plants.len(), self.sinkers.len())
+    }
+
+    /// How many rockets have gone up.
+    #[cfg(test)]
+    pub fn works_sent(&self) -> u32 {
+        self.works.launched
     }
 
     /// The names written on the arches.
@@ -285,13 +338,19 @@ impl Sea {
         let rng = &mut g.rng;
         let current = rng.sign() * rng.rangef(0.045, 0.07);
         if let Some(sh) = g.shape {
-            let names = navidad::NAMES;
+            let names: &[&str] = if g.kind == Kind::Patrias {
+                &patrias::NAMES
+            } else {
+                &navidad::NAMES
+            };
             let narrowest = names.iter().map(|n| sh.width(n)).min().unwrap_or(1);
             let most = (w / (narrowest + 6)).max(1);
-            let n = (((w as f32 / 70.0) * (0.6 + 0.7 * lvl)).round() as i32).clamp(1, most);
+            // Fireworks need sky to be seen in, so fewer boats on those nights.
+            let thin = if g.fireworks { 0.75 } else { 1.0 };
+            let n = (((w as f32 / 70.0) * (0.6 + 0.7 * lvl) * thin).round() as i32).clamp(1, most);
             // Each boat's name: any that fits, none twice.
             let room = w / n - 6;
-            let mut taken = [false; navidad::NAMES.len()];
+            let mut taken = vec![false; names.len()];
             let mut chosen = Vec::with_capacity(n as usize);
             for _ in 0..n {
                 let fits: Vec<usize> = (0..names.len())
@@ -312,14 +371,25 @@ impl Sea {
             // Past the edge a boat is off the screen whole before it goes round.
             g.span = (w + widest + 2 * REACH + 2).max(n * (widest + 6)) as f32;
             // The piñatas come with the posadas.
-            let pinatas = ((lvl - 0.3) / 0.7).clamp(0.0, 1.0);
+            let pinatas = if g.kind == Kind::Navidad {
+                ((lvl - 0.3) / 0.7).clamp(0.0, 1.0)
+            } else {
+                -1.0
+            };
+            // The flag's three colors paint the boats of the Patrias, the six
+            // of papel de china those of Navidad.
+            let (shades, near, far) = if g.kind == Kind::Patrias {
+                (3, 1, 2)
+            } else {
+                (6, 2, 4)
+            };
             let dir = current.signum();
             for (k, name) in chosen.into_iter().enumerate() {
-                let panel = rng.usize(..6);
+                let panel = rng.usize(..shades);
                 let (hull, trim) = if rng.bool() {
-                    ((panel + 2) % 6, (panel + 4) % 6)
+                    ((panel + near) % shades, (panel + far) % shades)
                 } else {
-                    ((panel + 4) % 6, (panel + 2) % 6)
+                    ((panel + far) % shades, (panel + near) % shades)
                 };
                 let slot = (k as f32 + rng.rangef(0.0, 0.3)) / n as f32;
                 g.boats.push(Boat {
@@ -569,17 +639,23 @@ impl Sea {
     pub fn draw_gala_floor(&mut self, t: f32) {
         for i in 0..self.gala.plants.len() {
             let (x, y) = self.gala.plants[i];
-            self.plant_navidad(x, y);
+            match self.gala.kind {
+                Kind::Patrias => self.plant_patrias(x, y),
+                _ => self.plant_navidad(x, y),
+            }
         }
         for i in 0..self.gala.sinkers.len() {
             let e = &self.gala.sinkers[i];
             if e.rest {
                 let (x, y, hue) = (e.x.round() as i32, e.y.round() as i32, e.hue);
                 let shine = ((t * 0.07 + e.phase).sin() > 0.9) && e.life > 20;
-                self.sinker_navidad(x, y, hue, shine);
+                self.sinker(x, y, hue, shine);
             }
         }
-        self.dress_castle_navidad(t);
+        match self.gala.kind {
+            Kind::Patrias => self.dress_castle_patrias(t),
+            _ => self.dress_castle_navidad(t),
+        }
     }
 
     /// The boats and the buoys, and anything falling from them.
@@ -610,14 +686,27 @@ impl Sea {
             let e = &self.gala.sinkers[i];
             if !e.rest {
                 let (x, y, hue) = (e.x.round() as i32, e.y.round() as i32, e.hue);
-                self.sinker_navidad(x, y, hue, false);
+                self.sinker(x, y, hue, false);
             }
+        }
+    }
+
+    /// What falls from the boats: esferas or pieces of papel picado.
+    fn sinker(&mut self, x: i32, y: i32, hue: u8, shine: bool) {
+        match self.gala.kind {
+            Kind::Patrias => self.sinker_patrias(x, y, hue, shine),
+            _ => self.sinker_navidad(x, y, hue, shine),
         }
     }
 
     /// The paint of a fish of the holiday, when `sp` is one.
     pub fn gala_coat(&self, sp: &Species, k: usize) -> Option<[Color; 5]> {
-        (self.gala.on && navidad::is_fish(sp)).then(|| self.pal.paint.coat(k))
+        let mine = match self.gala.kind {
+            Kind::Navidad => navidad::is_fish(sp),
+            Kind::Patrias => patrias::is_fish(sp),
+            _ => false,
+        };
+        (self.gala.on && mine).then(|| self.pal.paint.coat(sp.role == Role::School, k))
     }
 
     /// One of the holiday's fish, when the roll comes up for them: more of
@@ -632,6 +721,13 @@ impl Sea {
         } else {
             0.15 + 0.25 * lvl
         };
-        self.gala.rng.chance(p).then(|| navidad::fish(school))
+        let kind = self.gala.kind;
+        self.gala.rng.chance(p).then(|| {
+            if kind == Kind::Patrias {
+                patrias::fish(school)
+            } else {
+                navidad::fish(school)
+            }
+        })
     }
 }

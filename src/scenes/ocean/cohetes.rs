@@ -63,14 +63,20 @@ pub struct Cohetes {
     wait: f32,
     volley_in: f32,
     volley: u8,
+    /// Rockets sent up so far.
+    #[cfg(test)]
+    pub launched: u32,
 }
 
 /// The four colors of a holiday's fireworks, the second always white, and
 /// which three make up a split burst.
 fn hues(kind: Kind, p: &Paint) -> ([Color; 4], [u8; 3]) {
-    // Año Nuevo: dorado and plata, rojo and verde.
-    let _ = kind;
-    ([p.gold, p.plata, p.rojo, p.verde], [2, 1, 3])
+    match kind {
+        // The Patrias: verde, blanco y rojo, with a little oro.
+        Kind::Patrias => ([p.verde, p.blanco, p.rojo, p.gold], [0, 1, 2]),
+        // Año Nuevo: dorado and plata, rojo and verde.
+        _ => ([p.gold, p.plata, p.rojo, p.verde], [2, 1, 3]),
+    }
 }
 
 impl Cohetes {
@@ -126,6 +132,10 @@ impl Sea {
             _ => Style::Peony,
         };
         let y = surf - 1.0;
+        #[cfg(test)]
+        {
+            g.works.launched += 1;
+        }
         g.works.rockets.push(Rocket {
             x,
             y,

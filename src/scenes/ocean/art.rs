@@ -7,6 +7,7 @@
 //! barracudas, the puffer blown up, orcas, dolphins and mantas.
 
 use crate::color::Color;
+use crate::fiesta::Kind;
 
 pub type Sprite = &'static [&'static str];
 
@@ -985,14 +986,19 @@ const ORCA_PAINT: Sprite = &[
     ".......................................",
 ];
 
-/// Navidad: a gorro navideño laid over a shark, an orca or a dolphin, the
-/// size of its frames: `R` for rojo nochebuena and `W` for the white of the
-/// trim and the pompom.
-pub fn hat(sp: &Species) -> Option<Sprite> {
-    match sp.role {
-        Role::Shark => Some(SHARK_HAT),
-        Role::Orca => Some(ORCA_HAT),
-        Role::Dolphin => Some(DOLPHIN_HAT),
+/// What a shark, an orca or a dolphin wears for the holiday, laid over it
+/// and the size of its frames: on Navidad a gorro navideño (`R` for rojo
+/// nochebuena and `W` for the white of the trim and the pompom), on the
+/// Fiestas Patrias a banda across its flank in the colors of the flag (`G`
+/// verde, `W` blanco and `R` rojo).
+pub fn dress(sp: &Species, kind: Kind) -> Option<Sprite> {
+    match (kind, sp.role) {
+        (Kind::Navidad, Role::Shark) => Some(SHARK_HAT),
+        (Kind::Navidad, Role::Orca) => Some(ORCA_HAT),
+        (Kind::Navidad, Role::Dolphin) => Some(DOLPHIN_HAT),
+        (Kind::Patrias, Role::Shark) => Some(SHARK_BANDA),
+        (Kind::Patrias, Role::Orca) => Some(ORCA_BANDA),
+        (Kind::Patrias, Role::Dolphin) => Some(DOLPHIN_BANDA),
         _ => None,
     }
 }
@@ -1117,3 +1123,122 @@ pub const NOCHEBUENA: Species = Species {
     burst: 0.8,
     beat: 1.0,
 };
+
+// Fiestas Patrias: fish in verde, blanco y rojo, in bands from the tail to
+// the nose like the flag, and the banda tricolor a shark, an orca or a
+// dolphin wears across its flank.
+
+/// A little one, for schooling.
+pub const BANDERITA: Species = Species {
+    name: "banderita",
+    frames: &[
+        &[
+            "....DD....",
+            "F.BBLLSS..",
+            "FFBBLLSSkS",
+            "F.BBLLSS..",
+            "....D.....",
+        ],
+        &[
+            "....DD....",
+            ".FBBLLSS..",
+            ".FBBLLSSkS",
+            ".FBBLLSS..",
+            "....D.....",
+        ],
+    ],
+    palettes: &[[
+        rgb(0, 104, 71),
+        rgb(0, 68, 46),
+        rgb(244, 241, 234),
+        rgb(206, 17, 38),
+        rgb(0, 84, 57),
+    ]],
+    role: Role::School,
+    cruise: (0.2, 0.32),
+    burst: 0.85,
+    beat: 1.0,
+};
+
+/// A big one for crossing alone, with fins and a tail of oro.
+pub const BANDERA: Species = Species {
+    name: "bandera",
+    frames: &[
+        &[
+            "......DDD......",
+            ".....DDDDD.....",
+            "F...BBLLLSSS...",
+            "FF.BBBLLLSSSS..",
+            "FFFBBBLLLSSSSk.",
+            "FF.BBBLLLSSSS..",
+            "F...BBLLLSSS...",
+            ".....DDDDD.....",
+            "......DDD......",
+        ],
+        &[
+            "......DDD......",
+            ".....DDDDD.....",
+            ".F..BBLLLSSS...",
+            "FF.BBBLLLSSSS..",
+            ".FFBBBLLLSSSSk.",
+            "FF.BBBLLLSSSS..",
+            ".F..BBLLLSSS...",
+            ".....DDDDD.....",
+            "......DDD......",
+        ],
+    ],
+    palettes: &[[
+        rgb(0, 104, 71),
+        rgb(212, 160, 23),
+        rgb(244, 241, 234),
+        rgb(206, 17, 38),
+        rgb(212, 160, 23),
+    ]],
+    role: Role::Reef,
+    cruise: (0.08, 0.4),
+    burst: 0.8,
+    beat: 1.0,
+};
+
+const SHARK_BANDA: Sprite = &[
+    "..................................",
+    "..................................",
+    "..................................",
+    "..................................",
+    "...............GWR................",
+    "................GWR...............",
+    ".................GWR..............",
+    "..................GWR.............",
+    "...................GWR............",
+    "..................................",
+    "..................................",
+];
+
+const ORCA_BANDA: Sprite = &[
+    ".......................................",
+    ".......................................",
+    ".......................................",
+    ".......................................",
+    ".......................................",
+    ".....................GWR...............",
+    "......................GWR..............",
+    ".......................GWR.............",
+    "........................GWR............",
+    ".........................GWR...........",
+    "..........................GWR..........",
+    "...........................GWR.........",
+    ".......................................",
+    ".......................................",
+];
+
+const DOLPHIN_BANDA: Sprite = &[
+    "..........................",
+    "..........................",
+    "..........................",
+    "...........GWR............",
+    "............GWR...........",
+    ".............GWR..........",
+    "..............GWR.........",
+    "...............GWR........",
+    "..........................",
+];

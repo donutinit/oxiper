@@ -1250,7 +1250,7 @@ impl Sea {
             Role::Orca,
         ];
         let fest = self.fest.on;
-        let gala = self.gala.on;
+        let (gala, gkind) = (self.gala.on, self.gala.kind);
         let p = self.pal.paint;
         for role in ORDER {
             for i in 0..self.swim.len() {
@@ -1271,7 +1271,7 @@ impl Sea {
                 };
                 let at = (s.x, s.y + bob);
                 let face = art::face_paint(s.sp).filter(|_| fest && s.puffed == 0);
-                let hat = art::hat(s.sp).filter(|_| gala && s.puffed == 0);
+                let hat = art::dress(s.sp, gkind).filter(|_| gala && s.puffed == 0);
                 let (dir, slope, act) = (s.dir, s.slope, s.act);
                 let c = s.colors;
                 let paint = move |ch: u8| match ch {
@@ -1288,6 +1288,7 @@ impl Sea {
                     b'm' => muertos::CEMPASUCHIL[0],
                     b'R' => p.rojo,
                     b'W' => p.blanco,
+                    b'G' => p.verde,
                     _ => EYE,
                 };
                 match act {

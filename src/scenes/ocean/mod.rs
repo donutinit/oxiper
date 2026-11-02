@@ -70,6 +70,19 @@
 //!   Año Nuevo fireworks burst over the water and in it. There is more of
 //!   it all as the posadas come to Nochebuena; an ordinary day's sea is
 //!   left as it was, down to its random numbers.
+//! - `patrias.rs`, on the same footing: the Fiestas Patrias, the mes patrio
+//!   on the water of Xochimilco. The trajineras (Josefa, Leona, Victoria)
+//!   are painted in verde, blanco y rojo and fly the flag from a pole at
+//!   either end, string papel picado between the poles and the arch and
+//!   wear tricolor lights; buoys carry a flag on their mast; the castle
+//!   flies one from its tower and strings papel picado between its towers;
+//!   nopales with their red tunas grow on the sand and pieces of papel
+//!   picado dropped from the boats sink among them; fish in verde, blanco y
+//!   rojo, band by band like the flag, join the schools and cross on their
+//!   own; sharks, orcas and dolphins wear a banda tricolor. By night
+//!   tricolor fireworks burst over the water and in it, more of them, and
+//!   volleys, as the month climbs to the Grito. An ordinary day's sea is
+//!   left as it was.
 //!
 //! tanim runs its tank at 20 ticks a second and moves things by pixels per
 //! tick; the sea steps at that rate on an accumulator scaled by `speed`, so
@@ -82,6 +95,7 @@ mod gala;
 mod life;
 mod muertos;
 mod navidad;
+mod patrias;
 mod sea;
 mod tank;
 mod trajinera;
@@ -485,7 +499,7 @@ mod tests {
         }
     }
 
-    const ALL: [&Species; 17] = [
+    const ALL: [&Species; 19] = [
         &art::TETRA,
         &art::CLOWN,
         &art::ANGEL,
@@ -503,6 +517,8 @@ mod tests {
         &art::ALEBRIJE,
         &art::NOCHEBUENITA,
         &art::NOCHEBUENA,
+        &art::BANDERITA,
+        &art::BANDERA,
     ];
 
     /// Every drawing is a rectangle, all of an animal's frames are the same
@@ -536,11 +552,28 @@ mod tests {
                     assert!(b".hoptym".contains(&ch), "{}: {}", sp.name, ch as char);
                 }
             }
-            // So does the gorro navideño.
-            if let Some(hat) = art::hat(sp) {
-                assert_eq!(art::size(hat), size, "{}", sp.name);
-                for ch in hat.iter().flat_map(|r| r.bytes()) {
-                    assert!(b".RW".contains(&ch), "{}: {}", sp.name, ch as char);
+            // So do the holidays' hats and bandas, a banda lying on the
+            // animal's body in every frame.
+            for kind in [Kind::Navidad, Kind::Patrias] {
+                if let Some(dress) = art::dress(sp, kind) {
+                    assert_eq!(art::size(dress), size, "{}", sp.name);
+                    for ch in dress.iter().flat_map(|r| r.bytes()) {
+                        assert!(b".RWG".contains(&ch), "{}: {}", sp.name, ch as char);
+                    }
+                    if kind == Kind::Patrias {
+                        for f in sp.frames {
+                            for (y, row) in dress.iter().enumerate() {
+                                for (x, ch) in row.bytes().enumerate() {
+                                    let body = f[y].as_bytes()[x];
+                                    assert!(
+                                        ch == b'.' || body != b'.',
+                                        "{}: banda off its body at {x},{y}",
+                                        sp.name
+                                    );
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -766,6 +799,15 @@ mod tests {
             .count()
     }
 
+    /// How many of the Fiestas Patrias' fish are swimming.
+    fn banderas(s: &OceanScene) -> usize {
+        s.sea
+            .swim
+            .iter()
+            .filter(|f| f.alive && patrias::is_fish(f.sp))
+            .count()
+    }
+
     /// The sea as pixels, to compare two seas.
     fn pixels(s: &OceanScene) -> Vec<Color> {
         let scr = &s.sea.scr;
@@ -862,13 +904,13 @@ mod tests {
         for c in b'A'..=b'Z' {
             assert_ne!(trajinera::glyph(c), [0; 5], "{}", c as char);
         }
-        for name in navidad::NAMES {
+        for name in navidad::NAMES.iter().chain(&patrias::NAMES) {
             assert!(name.bytes().all(|c| c.is_ascii_uppercase()), "{name}");
         }
         for surf in 0..30 {
             if let Some(sh) = trajinera::Shape::of(surf, 200) {
                 assert!(sh.rows() < surf, "{surf}: {sh:?}");
-                for name in navidad::NAMES {
+                for name in navidad::NAMES.iter().chain(&patrias::NAMES) {
                     assert!(sh.width(name) > 2 * sh.gap);
                 }
             }
@@ -922,9 +964,8 @@ mod tests {
         assert!(seas.windows(2).all(|p| p[0] == p[1]));
     }
 
-    /// Navidad survives odd sizes, huge steps and another theme.
-    #[test]
-    fn navidad_survives() {
+    /// The days of a holiday survive odd sizes, huge steps and another theme.
+    fn survives(days: &[Fiesta]) {
         let themes = [Theme::classic(), Theme::builtin("dracula").unwrap()];
         for case in [
             "",
@@ -933,12 +974,7 @@ mod tests {
         ] {
             let opts = opts(case);
             for theme in &themes {
-                for f in [
-                    Fiesta::of_day(12, 12),
-                    Fiesta::of_day(12, 16),
-                    Fiesta::of_day(12, 24),
-                    Fiesta::of_day(1, 6),
-                ] {
+                for &f in days {
                     let c = holiday(theme, &opts, f);
                     let mut s = (INFO.make)(&c);
                     for &(w, h) in &[
@@ -969,6 +1005,142 @@ mod tests {
                 }
             }
         }
+    }
+
+    #[test]
+    fn navidad_survives() {
+        survives(&[
+            Fiesta::of_day(12, 12),
+            Fiesta::of_day(12, 16),
+            Fiesta::of_day(12, 24),
+            Fiesta::of_day(12, 31),
+            Fiesta::of_day(1, 6),
+        ]);
+    }
+
+    #[test]
+    fn the_patrias_survive() {
+        survives(&[
+            Fiesta::of_day(9, 1),
+            Fiesta::of_day(9, 8),
+            Fiesta::of_day(9, 15),
+            Fiesta::of_day(9, 16),
+        ]);
+    }
+
+    /// The Fiestas Patrias dress the sea from the first of September to the
+    /// Grito: trajineras in the flag's colors with their flags, buoys with
+    /// flags, nopales, papel picado sinking, fish in verde, blanco y rojo,
+    /// tricolor fireworks at night, more of it all on the 15th.
+    #[test]
+    fn the_patrias_dress_the_sea() {
+        let theme = Theme::classic();
+        let opts = opts("visits = 0");
+        let mut counts = Vec::new();
+        for f in [Fiesta::of_day(9, 1), Fiesta::of_day(9, 15), Fiesta::NONE] {
+            let c = holiday(&theme, &opts, f);
+            let mut s = OceanScene::new(&c);
+            s.resize(&c, 200, 60);
+            s.retheme(&c);
+            assert_eq!(s.sea.gala.on, f.on());
+            assert_eq!(s.sea.gala.fireworks, f.on());
+            let (mut fish, mut papeles, mut sparks) = (banderas(&s), 0, 0);
+            let mut darkest = 0.0f32;
+            run(&c, &mut s, 20 * 240, |s| {
+                fish = fish.max(banderas(s));
+                papeles = papeles.max(s.sea.gala.floor_counts().1);
+                sparks = sparks.max(s.sea.gala.works.counts().1);
+                darkest = darkest.max(s.sea.gala.dusk);
+            });
+            let (boats, buoys) = s.sea.gala.counts();
+            let (plants, _) = s.sea.gala.floor_counts();
+            if f.on() {
+                assert!(boats > 0 && buoys > 0 && plants > 0, "{f:?}");
+                assert!(fish > 0 && papeles > 0, "{f:?}: {fish} fish, {papeles}");
+                assert!(sparks > 20 && darkest > 0.99, "{f:?}: {sparks} {darkest}");
+                for name in s.sea.gala.names() {
+                    assert!(patrias::NAMES.contains(&name));
+                }
+                // No piñatas and no nochebuenas: only the flag's colors paint
+                // the boats, and the flags fly in the sky by day.
+                assert!(s.sea.gala.boats.iter().all(|b| !b.pinata));
+                assert_eq!(nochebuenas(&s), 0);
+                let mut cv = Canvas::new(200, 60, Color::Reset);
+                s.sea.gala.dusk = 0.0;
+                s.dirty = true;
+                s.draw(&c, &mut cv);
+                let [verde, blanco, rojo] = s.sea.pal.paint.bandera;
+                assert!(
+                    [verde, blanco, rojo].iter().all(|&c| sky_has(&s, c)),
+                    "{f:?}: the flag is missing from the sky"
+                );
+            } else {
+                assert!(boats + buoys + plants + papeles == 0);
+                assert!(
+                    fish == 0 && sparks == 0 && darkest == 0.0,
+                    "{fish} {sparks}"
+                );
+            }
+            counts.push((boats, s.sea.gala.works_sent()));
+        }
+        // More boats and many more fireworks at the Grito.
+        assert!(counts[1].0 > counts[0].0, "{counts:?}");
+        assert!(counts[1].1 > counts[0].1 * 2, "{counts:?}");
+    }
+
+    /// The flags and the papel picado come with the month: one flag on the
+    /// first of September, two and the papel picado before the Grito.
+    #[test]
+    fn the_month_hangs_more_flags() {
+        let lights = |d| trajinera::Lights::of(Fiesta::of_day(9, d).level);
+        let (early, late) = (lights(1), lights(15));
+        assert!(early.flags == 1 && early.papel == 0, "{early:?}");
+        assert!(late.flags == 2 && late.papel == 2, "{late:?}");
+    }
+
+    /// The Fiestas Patrias come and go with `retheme`, as at midnight.
+    #[test]
+    fn retheme_switches_the_patrias() {
+        let theme = Theme::classic();
+        let opts = opts("");
+        let off = ctx(&theme, &opts);
+        let on = holiday(&theme, &opts, Fiesta::of_day(9, 10));
+        let mut s = OceanScene::new(&off);
+        s.resize(&off, 160, 50);
+        s.retheme(&off);
+        assert!(!s.sea.gala.on);
+        s.retheme(&on);
+        assert!(s.sea.gala.on && s.sea.gala.kind == Kind::Patrias);
+        assert!(s.sea.gala.counts().0 > 0 && s.sea.gala.fireworks);
+        run(&on, &mut s, 200, |_| {});
+        // From the Patrias straight into Navidad, whose boats carry piñatas.
+        let navidad = holiday(&theme, &opts, Fiesta::of_day(12, 24));
+        s.retheme(&navidad);
+        assert!(s.sea.gala.kind == Kind::Navidad && !s.sea.gala.fireworks);
+        assert!(s.sea.gala.boats.iter().all(|b| b.pinata));
+        s.retheme(&off);
+        assert!(!s.sea.gala.on && s.sea.gala.counts() == (0, 0));
+        run(&off, &mut s, 20 * 60, |s| {
+            assert_eq!(banderas(s) + nochebuenas(s), 0);
+            assert_eq!(s.sea.gala.dusk, 0.0);
+        });
+    }
+
+    /// Under another theme the Patrias take its colors.
+    #[test]
+    fn the_patrias_under_a_theme_use_its_colors() {
+        let classic = Theme::classic();
+        let theme = Theme::builtin("dracula").unwrap();
+        let opts = opts("");
+        let f = Fiesta::of_day(9, 15);
+        let (a, b) = (holiday(&classic, &opts, f), holiday(&theme, &opts, f));
+        let (mut ca, mut cb) = (OceanScene::new(&a), OceanScene::new(&b));
+        let (pa, pb) = (ca.sea.pal.paint, cb.sea.pal.paint);
+        ca.retheme(&a);
+        cb.retheme(&b);
+        assert_eq!(pb.blanco, theme.fg);
+        assert_ne!(pa.bandera, pb.bandera);
+        assert!(pb.boats.iter().all(|c| !pa.boats.contains(c)));
     }
 
     /// Año Nuevo sends fireworks up at night, in the sky and in the water;

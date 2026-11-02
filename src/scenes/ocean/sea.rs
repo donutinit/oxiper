@@ -51,7 +51,8 @@ pub struct Sea {
     pub manta_in: f32,
     /// Día de Muertos, when it is on.
     pub fest: Fest,
-    /// Navidad, when it is on: the trajineras and the night.
+    /// Navidad or the Fiestas Patrias, when one is on: the trajineras and
+    /// the night.
     pub gala: Gala,
 }
 

@@ -6,13 +6,14 @@
 //! name across it: Lupita, Esperanza, Josefa. Here each is drawn side-on
 //! in pixels, its arch in the middle, a pole at either end with a string of
 //! decorations hung between the poles and the arch, and in a sea tall
-//! enough the name in a 3x5 font. How a boat looks is one function that
+//! enough the name in a 3x5 font. Navidad hangs foquitos and a piñata; the
+//! Fiestas Patrias flags and papel picado. How a boat looks is one function that
 //! plots pixels through a closure, so the very same drawing paints the boat
 //! and, turned upside down, its reflection and the glow of its lights.
 
 use super::gala::Paint;
-use super::navidad;
 use super::tank::mul;
+use super::{navidad, patrias};
 use crate::color::Color;
 use crate::fiesta::Kind;
 
@@ -171,12 +172,16 @@ pub fn blink(pattern: u8, i: i32, t: f32) -> f32 {
     if dark { 0.3 } else { 1.0 }
 }
 
-/// What a boat's lights are like for the day: how far apart the bulbs are
-/// along the arch and whether its sides are outlined with them too.
-#[derive(Clone, Copy)]
+/// How dressed a boat is for the day, by the holiday's level: how far apart
+/// the bulbs are along the arch, whether its sides are outlined with them
+/// too, and for the Patrias how many of its poles fly a flag and how many of
+/// its strings carry papel picado.
+#[derive(Clone, Copy, Debug)]
 pub struct Lights {
     pub every: i32,
     pub outline: bool,
+    pub flags: i32,
+    pub papel: i32,
 }
 
 impl Lights {
@@ -190,6 +195,8 @@ impl Lights {
                 4
             },
             outline: level > 0.55,
+            flags: 1 + (level >= 0.4) as i32,
+            papel: (level >= 0.3) as i32 + (level >= 0.6) as i32,
         }
     }
 }
@@ -237,13 +244,31 @@ pub fn plot(
     } else {
         0
     };
-    for (xa, xb) in [(1, x0 + 1), (x0 + aw - 2, w - 2)] {
+    for (k, (xa, xb)) in [(1, x0 + 1), (x0 + aw - 2, w - 2)].into_iter().enumerate() {
+        // The bow's string is dressed first.
+        let bow = (k == 1) == bow_right;
+        let papel = lights.papel >= 2 || (lights.papel == 1 && bow);
         let len = (xb - xa).max(1) as f32;
         for x in xa..=xb {
             let s = (x - xa) as f32 / len;
             let u = top - (sag as f32 * 4.0 * s * (1.0 - s)).round() as i32;
             if (x - xa) % 3 == 1 && sh.gap >= 5 {
-                bulb_at(put, x, u, x + xa);
+                if p.kind == Kind::Patrias {
+                    put(x, u, p.cord, 0.0);
+                    // A piece of papel picado hangs below, two pixels wide with
+                    // a cut-out.
+                    let c = p.bandera[((x + xa) / 3).rem_euclid(3) as usize];
+                    for r in 1..=if sh.panel >= 7 { 3 } else { 2 } {
+                        if papel {
+                            put(x, u - r, c, 0.0);
+                            if r != 2 {
+                                put(x + 1, u - r, c, 0.0);
+                            }
+                        }
+                    }
+                } else {
+                    bulb_at(put, x, u, x + xa);
+                }
             } else {
                 put(x, u, p.cord, 0.0);
             }
@@ -256,7 +281,7 @@ pub fn plot(
     }
     // At the bow an arm reaches out over the water, a piñata hanging from
     // its end and swinging a little.
-    if b.pinata && sh.pinata > 0 {
+    if p.kind == Kind::Navidad && b.pinata && sh.pinata > 0 {
         let (out, pole) = if bow_right { (1, w - 2) } else { (-1, 1) };
         let reach = 1 + sh.pinata / 2;
         for i in 1..=reach {
@@ -283,6 +308,23 @@ pub fn plot(
                     d => p.boats[((d - b'0') as usize + b.phase as usize) % 6],
                 };
                 put(cx + sway + c as i32 - half, top - 2 - r as i32, color, 0.0);
+            }
+        }
+    }
+
+    // A flag flies from each pole out over the water, rippling.
+    if p.kind == Kind::Patrias {
+        let size = match sh.panel {
+            7.. => (6, 4),
+            4..=6 => (4, 3),
+            _ => (3, 2),
+        };
+        for (pole, out, shift) in [(1, -1, 0.0), (w - 2, 1, 1.7)] {
+            // The bow's flag first.
+            if lights.flags >= 2 || (out > 0) == bow_right {
+                patrias::flag(p, size, out, (t, b.phase + shift), &mut |dx, r, c, g| {
+                    put(pole + dx, top - size.1 + 1 + r, c, g)
+                });
             }
         }
     }
@@ -407,7 +449,11 @@ pub fn plot_buoy(
     t: f32,
     put: &mut dyn FnMut(i32, i32, Color, f32),
 ) {
-    let bands = [p.rojo, p.blanco, p.verde];
+    let bands = if kind == Kind::Patrias {
+        p.bandera
+    } else {
+        [p.rojo, p.blanco, p.verde]
+    };
     for dx in -3..=3 {
         put(dx, 0, mul(bands[0], 0.75), 0.0);
         put(dx, 1, bands[0], 0.0);
@@ -422,7 +468,9 @@ pub fn plot_buoy(
         put(0, u, p.wood, 0.0);
     }
     let foot = 4 + mast;
-    if kind == Kind::Navidad {
-        navidad::star(p, size, t, &mut |dx, u, c, g| put(dx, foot + u, c, g));
+    match kind {
+        Kind::Navidad => navidad::star(p, size, t, &mut |dx, u, c, g| put(dx, foot + u, c, g)),
+        Kind::Patrias => patrias::topper(p, size, t, &mut |dx, u, c, g| put(dx, foot + u, c, g)),
+        _ => {}
     }
 }
