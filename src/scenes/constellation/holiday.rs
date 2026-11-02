@@ -16,7 +16,7 @@ use crate::fiesta::{Fiesta, Kind};
 use crate::render::{BOLD, Braille, Canvas};
 use crate::scene::Ctx;
 
-use super::{DISSOLVE, LINK_FLOOR, Star, muertos, navidad, patrias};
+use super::{DISSOLVE, LINK_FLOOR, Star, equinoccio, muertos, navidad, patrias};
 
 /// Most stars a figure takes.
 pub(super) const MAX_NODES: usize = 40;
@@ -55,7 +55,8 @@ pub(super) enum Anim {
         amp: f32,
     },
     /// A wave runs along `x` (a flag, a serpent), rising from nothing at
-    /// `from` to `amp` design units over `span`.
+    /// `from` to `amp` design units over `span` (a negative `span` raises it
+    /// toward smaller `x`: the serpent's tail rippling, its head steady).
     Wave {
         from: f32,
         span: f32,
@@ -134,7 +135,12 @@ pub(super) struct Dress {
 }
 
 /// Every holiday the sky dresses for.
-const DRESSES: [&Dress; 3] = [&muertos::DRESS, &navidad::DRESS, &patrias::DRESS];
+const DRESSES: [&Dress; 4] = [
+    &muertos::DRESS,
+    &navidad::DRESS,
+    &patrias::DRESS,
+    &equinoccio::DRESS,
+];
 
 /// One figure in the sky.
 #[derive(Clone, Copy)]

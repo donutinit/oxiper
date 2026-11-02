@@ -30,10 +30,17 @@
 //! into the mes patrio, the campana ten days in and most on the Grito (see
 //! `patrias`).
 //!
+//! The Equinoccio draws Kukulcán, the feathered serpent rippling with its
+//! crest of plumes, El Castillo of Chichén Itzá under the sun, the serpiente
+//! de luz (seven triangles of light running down the balustrade to the stone
+//! serpent's head, most on the 20th and 21st) and the sun with its rays, in
+//! cielo, sol, jade and piedra (see `equinoccio`).
+//!
 //! The machinery the holidays share (the figures, the gathering stars, the
 //! spark, the colors under any theme) lives in `holiday`; each holiday only
 //! brings its figures, colors and pace.
 
+mod equinoccio;
 mod holiday;
 mod muertos;
 mod navidad;
@@ -711,7 +718,8 @@ mod tests {
     }
 
     /// Days to try each holiday on: its start, middle and height.
-    const DAYS: [(u32, u32); 7] = [
+    const DAYS: [(u32, u32); 8] = [
+        (3, 20),
         (10, 28),
         (11, 2),
         (12, 12),
@@ -748,7 +756,7 @@ mod tests {
     fn every_figure_comes() {
         let theme = Theme::classic();
         let opts = Opts::new(INFO.options, toml::Table::new());
-        for (day, figures) in [((11, 2), 5), ((12, 24), 6), ((9, 15), 4)] {
+        for (day, figures) in [((11, 2), 5), ((12, 24), 6), ((9, 15), 4), ((3, 20), 4)] {
             let ctx = ctx(&theme, &opts, Fiesta::of_day(day.0, day.1));
             let mut s = Constellation::new(&ctx);
             s.resize(&ctx, 120, 36);
@@ -797,7 +805,7 @@ mod tests {
     fn retheme_switches_the_holiday() {
         let theme = Theme::classic();
         let opts = Opts::new(INFO.options, toml::Table::new());
-        for day in [(11, 1), (12, 20), (1, 3), (9, 10)] {
+        for day in [(11, 1), (12, 20), (1, 3), (9, 10), (3, 21)] {
             let plain = ctx(&theme, &opts, Fiesta::NONE);
             let fiesta = ctx(&theme, &opts, Fiesta::of_day(day.0, day.1));
             let mut s = Constellation::new(&plain);
@@ -863,7 +871,7 @@ mod tests {
         ];
         for v in variants {
             for theme in [Theme::classic(), Theme::builtin("dracula").unwrap()] {
-                for day in [(11, 2), (12, 24), (1, 4), (9, 15)] {
+                for day in [(11, 2), (12, 24), (1, 4), (9, 15), (3, 20)] {
                     let opts = Opts::new(INFO.options, v.parse().unwrap());
                     let ctx = ctx(&theme, &opts, Fiesta::of_day(day.0, day.1));
                     let mut s = Constellation::new(&ctx);
