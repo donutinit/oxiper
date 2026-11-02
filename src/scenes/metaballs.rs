@@ -45,11 +45,26 @@
 //! pinch off and fall, more of them as the holiday comes. One candle is a
 //! calavera de azúcar with an icing face (two from October 31, three on
 //! November 2). The backdrop, when painted, is the night of the vigil.
+//!
+//! At Christmas the blobs are esferas, glass ornaments in rojo nochebuena,
+//! verde pino, dorado and plata (and a blanco now and then), glossy with a
+//! small hard highlight, a broad sheen and a darker rim, merging and parting
+//! like a lava lamp. The bigger ones hang from a gold cap with its loop of
+//! wire, and every so often a glint of escarcha twinkles on one. The posadas
+//! bring more of it: from the 18th gold and silver take a second color of
+//! every four, on Nochebuena a third, more esferas wear caps and more glints
+//! twinkle (the glints are hashes of the clock, never the scene's random
+//! numbers). Under other themes the esferas are the accents closest to red,
+//! green and gold and a step between the theme's background and foreground
+//! for silver. The backdrop, when painted, is the night of Nochebuena.
+
+use std::f32::consts::{PI, TAU};
 
 use crate::color::Color;
 use crate::fiesta::{Fiesta, Kind};
 use crate::render::{Canvas, Pixels};
 use crate::scene::{Ctx, Opt, Scene, SceneInfo, Val};
+use crate::theme::Theme;
 
 pub const INFO: SceneInfo = SceneInfo {
     name: "metaballs",
@@ -327,6 +342,105 @@ fn flame_px(ch: u8) -> Option<Color> {
         _ => return None,
     })
 }
+/// Navidad: rojo nochebuena, verde pino, dorado, plata and blanco, the
+/// colors of the esferas.
+const ROJO: Rgb = [200., 16., 46.];
+const VERDE: Rgb = [31., 111., 58.];
+const DORADO: Rgb = [242., 182., 50.];
+const PLATA: Rgb = [201., 204., 214.];
+const BLANCO: Rgb = [244., 241., 234.];
+/// Five sets of esferas that take the place of tanim's: red and green
+/// with a single gold or silver one (the fourth slot).
+const ESFERAS: [[Rgb; 4]; 5] = [
+    [ROJO, VERDE, ROJO, DORADO],
+    [VERDE, ROJO, VERDE, PLATA],
+    [ROJO, VERDE, VERDE, PLATA],
+    [VERDE, ROJO, ROJO, DORADO],
+    [ROJO, BLANCO, VERDE, DORADO],
+];
+/// The same sets as the posadas climb: gold and silver take over the third
+/// slot from the 18th and the second on Nochebuena (`GALA_AT` is the level
+/// each slot turns metal at), so the esferas glitter more every night.
+const GALA: [[Rgb; 4]; 5] = [
+    [ROJO, PLATA, DORADO, DORADO],
+    [VERDE, DORADO, PLATA, PLATA],
+    [ROJO, DORADO, PLATA, PLATA],
+    [VERDE, PLATA, DORADO, DORADO],
+    [ROJO, DORADO, PLATA, DORADO],
+];
+const GALA_AT: [f32; 4] = [2.0, 0.95, 0.5, 0.0];
+/// The night of Nochebuena behind the esferas (`background = true`).
+const NOCHEBUENA_TOP: Rgb = [6., 12., 30.];
+const NOCHEBUENA_BOT: Rgb = [14., 30., 38.];
+
+/// The caps of the esferas in three sizes (by the ball's radius): a loop of
+/// wire above a short gold cylinder. `h` is the sheen of the metal, `g` the
+/// metal, `d` its shadow and `o` the wire.
+const CAPS: [&[&str]; 3] = [
+    &[".o.", "o.o", "hgd", "dgd"],
+    &[".ooo.", "o...o", "o...o", "hgggd", "hgggd"],
+    &[
+        "..ooo..", ".o...o.", ".o...o.", ".hgggd.", "hhgggdd", "hgggggd", "hggggdd",
+    ],
+];
+
+/// A cap pixel's (shade, share of white): the metal, its sheen and shadow,
+/// the wire.
+fn gold_px(ch: u8) -> Option<(f32, f32)> {
+    Some(match ch {
+        b'h' => (1.0, 0.5),
+        b'g' => (1.0, 0.0),
+        b'd' => (0.6, 0.0),
+        b'o' => (0.8, 0.0),
+        _ => return None,
+    })
+}
+
+/// Hue (degrees) and saturation of a color.
+fn hue_sat(c: Rgb) -> (f32, f32) {
+    let (hi, lo) = (c[0].max(c[1]).max(c[2]), c[0].min(c[1]).min(c[2]));
+    let d = hi - lo;
+    if d <= 0.0 {
+        return (0.0, 0.0);
+    }
+    let h = if hi == c[0] {
+        (c[1] - c[2]) / d
+    } else if hi == c[1] {
+        2.0 + (c[2] - c[0]) / d
+    } else {
+        4.0 + (c[0] - c[1]) / d
+    };
+    ((h * 60.0).rem_euclid(360.0), d / hi)
+}
+
+/// A holiday color as a theme paints it: itself under `classic`; under the
+/// others the theme's accent closest in hue (a Christmas ball is red, a
+/// gold one yellow), and for whites and grays a step along the theme's own
+/// background-to-foreground ramp.
+fn like(theme: &Theme, c: Rgb) -> Rgb {
+    if theme.native {
+        return c;
+    }
+    let (hue, sat) = hue_sat(c);
+    if sat > 0.2 {
+        let off = |a: &Rgb| {
+            let (ah, asat) = hue_sat(*a);
+            match asat > 0.2 {
+                true => (ah - hue).abs().min(360.0 - (ah - hue).abs()),
+                false => f32::MAX,
+            }
+        };
+        let best = theme
+            .colors
+            .iter()
+            .map(|&a| rgb_of(a))
+            .min_by(|a, b| off(a).total_cmp(&off(b)));
+        return best.filter(|a| off(a) < f32::MAX).unwrap_or(c);
+    }
+    let k = (0.3 * c[0] + 0.59 * c[1] + 0.11 * c[2]) / 255.0;
+    mix(rgb_of(theme.bg), rgb_of(theme.fg), k)
+}
+
 /// tanim's frame rate: its per-frame rates become per-second ones through this.
 const FPS: f32 = 30.0;
 /// Seconds a color set lasts and how long the colors take to blend into the next.
@@ -492,6 +606,152 @@ fn color(c: Rgb) -> Color {
     Color::Rgb(q(c[0]), q(c[1]), q(c[2]))
 }
 
+/// How the blobs are lit.
+#[derive(Clone, Copy)]
+struct Look {
+    /// Direction to the lamp (x, y, towards the viewer).
+    light: (f32, f32, f32),
+    /// Ambient and diffuse light.
+    amb: f32,
+    dif: f32,
+    /// Weights of the highlight's three widths (s^24, s^12 and s^48) and
+    /// its color.
+    ka: f32,
+    kb: f32,
+    kc: f32,
+    sp: Rgb,
+    /// How steeply the domes curve at their rims.
+    curve: f32,
+    /// How much the rims darken (glass).
+    rim: f32,
+}
+
+/// tanim's gel: lit from the upper left, with a white highlight.
+const GEL: Look = Look {
+    light: (-0.45, -0.55, 0.70),
+    amb: 0.25,
+    dif: 0.85,
+    ka: 0.85,
+    kb: 0.0,
+    kc: 0.0,
+    sp: [255.0; 3],
+    curve: 0.13,
+    rim: 0.0,
+};
+/// Candle wax: lit from above, softer, with a sheen the color of the flames.
+const VELADORA: Look = Look {
+    light: (-0.25, -0.75, 0.62),
+    amb: 0.45,
+    dif: 0.62,
+    ka: 0.45,
+    kb: 0.25,
+    kc: 0.0,
+    sp: [255.0, 226.0, 170.0],
+    curve: 0.08,
+    rim: 0.0,
+};
+/// Glass esferas: a small hard highlight and a broad sheen, a darker rim.
+const VIDRIO: Look = Look {
+    light: (-0.45, -0.55, 0.70),
+    amb: 0.36,
+    dif: 0.8,
+    ka: 0.3,
+    kb: 0.1,
+    kc: 1.0,
+    sp: [255.0, 252.0, 246.0],
+    curve: 0.13,
+    rim: 1.4,
+};
+/// A `Look` and the vectors it lights with, for one frame.
+#[derive(Clone, Copy)]
+struct Lamp {
+    look: Look,
+    /// Unit vectors to the lamp and halfway between it and the viewer.
+    l: (f32, f32, f32),
+    h: (f32, f32, f32),
+    steep: f32,
+}
+
+/// Lights both pixels of each sample of a row, in branch-free loops that
+/// vectorize: parity 0 is the sample itself, parity 1 the average with the
+/// next one, each parity with its own runs of `hw` (interior color, base
+/// color and field, see `Metaballs::shade`). `GLASS` adds the dark rim and the
+/// hot spot (gel and wax run the plain loop: any more constants and the
+/// compiler runs out of registers and stops vectorizing it).
+fn light<const GLASS: bool>(lamp: &Lamp, src: &[f32], lit: &mut [[&mut [f32]; 7]; 2], hw: usize) {
+    let Lamp {
+        look,
+        l: (lx, ly, lz),
+        h: (hx, hy, hz),
+        steep,
+    } = *lamp;
+    let Look {
+        amb,
+        dif,
+        ka,
+        kb,
+        kc,
+        sp,
+        rim,
+        ..
+    } = look;
+    let (rf, rest) = src.split_at(hw);
+    let (rgx, rest) = rest.split_at(hw);
+    let (rgy, rest) = rest.split_at(hw);
+    let (rc0, rest) = rest.split_at(hw);
+    let (rc1, rc2) = rest.split_at(hw);
+    let n = hw - 1;
+    for (par, [ro0, ro1, ro2, rb0, rb1, rb2, rff]) in lit.iter_mut().enumerate() {
+        let t = 0.5 * par as f32;
+        let l = |r| pair(r, par, n);
+        let ((f0, f1), (x0, x1), (y0, y1)) = (l(rf), l(rgx), l(rgy));
+        let ((c00, c01), (c10, c11), (c20, c21)) = (l(rc0), l(rc1), l(rc2));
+        for i in 0..n {
+            let f = f0[i] + (f1[i] - f0[i]) * t;
+            let gx = x0[i] + (x1[i] - x0[i]) * t;
+            let gy = y0[i] + (y1[i] - y0[i]) * t;
+            let inv = 1.0 / f.max(1e-6);
+            let k2 = -inv * inv * steep;
+            let (nx, ny) = (gx * k2, gy * k2);
+            let rn = 1.0 / (nx * nx + ny * ny + 1.0).sqrt();
+            let (nx, ny, nz) = (nx * rn, ny * rn, rn);
+            let diff = (nx * lx + ny * ly + nz * lz).max(0.0);
+            let s = (nx * hx + ny * hy + nz * hz).max(0.0);
+            // s^12 and s^24 without powi.
+            let s4 = s * s * s * s;
+            let s12 = s4 * s4 * s4;
+            let s24 = s12 * s12;
+            let (lit, k) = if GLASS {
+                // Glass darkens at its rim and has a hot spot (s^48).
+                let edge = 1.0 - rim * (1.0 - nz) * (1.0 - nz);
+                (
+                    (amb + dif * diff) * edge,
+                    (s24 * ka + s12 * kb + s24 * s24 * kc).min(1.0),
+                )
+            } else {
+                (amb + dif * diff, s12 * s12 * ka + s12 * kb)
+            };
+            let b0 = (c00[i] + (c01[i] - c00[i]) * t) * inv;
+            let b1 = (c10[i] + (c11[i] - c10[i]) * t) * inv;
+            let b2 = (c20[i] + (c21[i] - c20[i]) * t) * inv;
+            rb0[i] = b0;
+            rb1[i] = b1;
+            rb2[i] = b2;
+            ro0[i] = b0 * lit + (sp[0] - b0 * lit) * k;
+            ro1[i] = b1 * lit + (sp[1] - b1 * lit) * k;
+            ro2[i] = b2 * lit + (sp[2] - b2 * lit) * k;
+            rff[i] = f;
+        }
+    }
+}
+
+/// Blends the pixel at (x, y) toward `to` by `k`, if anything is painted there.
+fn glint(px: &mut Pixels, x: i32, y: i32, to: Rgb, k: f32) {
+    if let Color::Rgb(..) = px.get(x, y) {
+        px.set(x, y, color(mix(rgb_of(px.get(x, y)), to, k)));
+    }
+}
+
 struct Metaballs {
     speed: f32,
     size: f32,
@@ -536,6 +796,13 @@ struct Metaballs {
     flicker: f32,
     /// The calaveras' wax: hueso, or the theme's foreground.
     bone: Rgb,
+    /// Salt for the hashes that place the holidays' glints (the
+    /// scene's own random numbers stay untouched).
+    salt: u32,
+    /// The holiday's accent: the gold of the esferas' caps.
+    trim: Rgb,
+    /// Where the esferas' caps stand this frame.
+    caps: Vec<(i32, i32)>,
 }
 
 impl Metaballs {
@@ -597,13 +864,27 @@ impl Metaballs {
             flames: Vec::with_capacity(n),
             flicker: 0.0,
             bone: HUESO,
+            salt: (ctx.seed ^ ctx.seed >> 32) as u32 ^ 0x3c6e_f372,
+            trim: DORADO,
+            caps: Vec::with_capacity(n),
         }
     }
 
-    /// Slot colors of color set `s`: tanim's own (or, on Día de Muertos,
-    /// colored wax), or the theme's accents rotated by one per set so the
-    /// blobs still change hands over time.
+    /// Slot colors of color set `s`: tanim's own (on Día de Muertos colored
+    /// wax, at Christmas esferas), or the theme's accents rotated by one per
+    /// set so the blobs still change hands over time (the esferas stay red,
+    /// green, gold and silver under every theme: the closest accents).
     fn slots(ctx: &Ctx, s: usize) -> [Rgb; 4] {
+        if ctx.fiesta.is(Kind::Navidad) {
+            let mut out = ESFERAS[s];
+            for (i, c) in out.iter_mut().enumerate() {
+                if ctx.fiesta.level >= GALA_AT[i] {
+                    *c = GALA[s][i];
+                }
+                *c = like(ctx.theme, *c);
+            }
+            return out;
+        }
         let sets = if ctx.fiesta.is(Kind::Muertos) {
             &WAX
         } else {
@@ -701,6 +982,122 @@ impl Metaballs {
                 }
             }
             self.drips.retain(|d| d.r > 0.05);
+        }
+    }
+
+    /// How the blobs are lit today.
+    fn look(&self) -> Look {
+        match self.fiesta.kind {
+            Kind::Muertos => VELADORA,
+            Kind::Navidad => VIDRIO,
+            _ => GEL,
+        }
+    }
+
+    /// The holidays' dice: a hash of two numbers (and the scene's seed) in
+    /// [0, 1), so the glints never draw from the scene's own
+    /// random numbers.
+    fn dice(&self, a: u32, b: u32) -> f32 {
+        let mut h = a.wrapping_mul(0x9e37_79b9) ^ b.wrapping_mul(0x85eb_ca6b) ^ self.salt;
+        h ^= h >> 15;
+        h = h.wrapping_mul(0x2c1b_3c6d);
+        h ^= h >> 12;
+        h = h.wrapping_mul(0x297a_2d39);
+        h ^= h >> 15;
+        (h >> 8) as f32 / 16_777_216.0
+    }
+
+    /// The ball that a fraction `u` of the way through the balls' total area
+    /// falls on, so that bigger balls get more of what is scattered.
+    fn ball_at(&self, u: f32) -> usize {
+        let mut left = u * self.live.iter().map(|b| b.r2).sum::<f32>();
+        for (i, b) in self.live.iter().enumerate() {
+            left -= b.r2;
+            if left < 0.0 {
+                return i;
+            }
+        }
+        self.live.len() - 1
+    }
+
+    /// Dresses the glass: a gold cap with its loop on the bigger esferas
+    /// (more of them as the posadas climb) and, now and then, a glint of
+    /// escarcha on one.
+    fn esferas(&mut self) {
+        let ph = self.ph as i32;
+        let level = self.fiesta.level;
+        let gold = self.trim;
+        let cap_min = 0.145 - 0.03 * level;
+        self.caps.clear();
+        for i in 0..self.balls.len() {
+            let b = self.live[i];
+            let r = b.r2.sqrt();
+            if self.balls[i].r < cap_min || r < 5.0 {
+                continue;
+            }
+            // Climb from the ball's center to the top of the glass around it.
+            let x = b.x.floor();
+            let mut y = b.y.floor();
+            let mut steps = 0;
+            while steps < ph && field(&self.live, &self.drops, x + 0.5, y - 0.5) >= 1.0 {
+                y -= 1.0;
+                steps += 1;
+            }
+            let (x, y) = (x as i32, y as i32);
+            // Fused esferas share a cap.
+            if self
+                .caps
+                .iter()
+                .any(|&(cx, cy)| (cx - x).abs() < 6 && (cy - y).abs() < 6)
+            {
+                continue;
+            }
+            self.caps.push((x, y));
+            let cap = CAPS[(r >= 6.5) as usize + (r >= 11.0) as usize];
+            let (left, top) = (x - cap[0].len() as i32 / 2, y + 2 - cap.len() as i32);
+            for (j, row) in cap.iter().enumerate() {
+                for (k, ch) in row.bytes().enumerate() {
+                    if let Some((shade, white)) = gold_px(ch) {
+                        let c = mix(gold, [255.0; 3], white);
+                        let c = [c[0] * shade, c[1] * shade, c[2] * shade];
+                        self.px.set(left + k as i32, top + j as i32, color(c));
+                    }
+                }
+            }
+        }
+
+        // Escarcha: each glint lives a third of a second out of every few,
+        // somewhere else on some esfera each time.
+        let sparkle = mix(gold, [255.0, 250.0, 235.0], 0.55);
+        for j in 0..2 + (level * 6.0) as u32 {
+            let period = 1.4 + 1.8 * self.dice(j, 1);
+            let u = (self.flicker + self.dice(j, 2) * period) / period;
+            let age = u.fract() / 0.3;
+            if age >= 1.0 {
+                continue;
+            }
+            let a = (age * PI).sin();
+            let id = j * 4096 + u as u32 % 4096;
+            let b = self.live[self.ball_at(self.dice(id, 3))];
+            let r = b.r2.sqrt();
+            let (sin, cos) = (TAU * self.dice(id, 4)).sin_cos();
+            let d = (0.15 + 0.6 * self.dice(id, 5)) * r;
+            let (x, y) = (
+                (b.x + d * cos).round() as i32,
+                (b.y + d * sin).round() as i32,
+            );
+            let to = match self.dice(id, 6) < 0.3 {
+                true => sparkle,
+                false => [255.0, 252.0, 244.0],
+            };
+            glint(&mut self.px, x, y, to, 0.45 + 0.55 * a);
+            let arm = 1 + (r >= 11.0 && a > 0.6) as i32;
+            for d in 1..=arm {
+                let k = a * (0.8 - 0.3 * d as f32);
+                for (dx, dy) in [(d, 0), (-d, 0), (0, d), (0, -d)] {
+                    glint(&mut self.px, x + dx, y + dy, to, k);
+                }
+            }
         }
     }
 
@@ -846,19 +1243,24 @@ impl Scene for Metaballs {
 
     fn retheme(&mut self, ctx: &Ctx) {
         self.fiesta = ctx.fiesta;
-        self.band = match self.fiesta.is(Kind::Muertos) {
-            true => (0.6, 0.3),
-            false => (0.5, 0.38),
+        // Candles leave room for their flames, esferas for their caps.
+        self.band = match self.fiesta.kind {
+            Kind::Muertos => (0.6, 0.3),
+            Kind::Navidad => (0.56, 0.33),
+            _ => (0.5, 0.38),
         };
         if !self.fiesta.is(Kind::Muertos) {
             self.drips.clear();
         }
         self.cur = Self::slots(ctx, self.set);
         self.nxt = Self::slots(ctx, self.next);
-        if ctx.theme.native && self.fiesta.is(Kind::Muertos) {
-            (self.bg_top, self.bg_bot) = (NOCHE_TOP, NOCHE_BOT);
-        } else if ctx.theme.native {
-            (self.bg_top, self.bg_bot) = (BG_TOP, BG_BOT);
+        self.trim = like(ctx.theme, DORADO);
+        if ctx.theme.native {
+            (self.bg_top, self.bg_bot) = match self.fiesta.kind {
+                Kind::Muertos => (NOCHE_TOP, NOCHE_BOT),
+                Kind::Navidad => (NOCHEBUENA_TOP, NOCHEBUENA_BOT),
+                _ => (BG_TOP, BG_BOT),
+            };
         } else {
             let b = rgb_of(ctx.theme.bg);
             (self.bg_top, self.bg_bot) = (b, b);
@@ -937,25 +1339,24 @@ impl Scene for Metaballs {
 
         // Gel is lit from the upper left, towards the viewer, with a white
         // highlight; candle wax from above, softer and warmer, with a sheen
-        // the color of the flames.
-        let wax = self.fiesta.is(Kind::Muertos);
-        let (lx, ly, lz) = match wax {
-            false => (-0.45f32, -0.55f32, 0.70f32),
-            true => (-0.25f32, -0.75f32, 0.62f32),
-        };
-        let (amb, dif, ka, kb, sp) = match wax {
-            false => (0.25, 0.85, 0.85, 0.0, [255.0f32; 3]),
-            true => (0.45, 0.62, 0.45, 0.25, [255.0, 226.0, 170.0]),
-        };
+        // the color of the flames; glass with a small hard highlight and a
+        // dark rim.
+        let look = self.look();
+        let (lx, ly, lz) = look.light;
         let norm = (lx * lx + ly * ly + lz * lz).sqrt();
         let (lx, ly, lz) = (lx / norm, ly / norm, lz / norm);
         // Halfway vector between the light and the viewer, for highlights.
         let (hx, hy, hz) = (lx, ly, lz + 1.0);
         let hn = (hx * hx + hy * hy + hz * hz).sqrt();
         let (hx, hy, hz) = (hx / hn, hy / hn, hz / hn);
-        // How steeply the domes curve at their rims (wax is softer than gel).
-        let curve = if wax { 0.08 } else { 0.13 };
-        let steep = side * curve * self.size;
+        let lamp = Lamp {
+            look,
+            l: (lx, ly, lz),
+            h: (hx, hy, hz),
+            // How steeply the domes curve at their rims (wax is softer than gel).
+            steep: side * look.curve * self.size,
+        };
+        let glass = look.rim != 0.0 || look.kc != 0.0;
 
         // The glow fades into the terminal's background when it is known; with
         // a transparent terminal of unknown color a fade could only darken, so
@@ -985,11 +1386,6 @@ impl Scene for Metaballs {
             accumulate(&self.live, fy, hw, &mut self.acc[..st]);
             accumulate_near(&self.drops, fy, hw, &mut self.acc[..st]);
             let src = &self.acc[..st];
-            let (rf, rest) = src.split_at(hw);
-            let (rgx, rest) = rest.split_at(hw);
-            let (rgy, rest) = rest.split_at(hw);
-            let (rc0, rest) = rest.split_at(hw);
-            let (rc1, rc2) = rest.split_at(hw);
             // Light both pixels of each sample, in branch-free loops that
             // vectorize: parity 0 is the sample itself, parity 1 the average
             // with the next one. Each parity gets its own runs of `hw`.
@@ -999,39 +1395,9 @@ impl Scene for Metaballs {
                 [next(), next(), next(), next(), next(), next(), next()],
                 [next(), next(), next(), next(), next(), next(), next()],
             ];
-            let n = hw - 1;
-            for (par, [ro0, ro1, ro2, rb0, rb1, rb2, rff]) in lit.iter_mut().enumerate() {
-                let t = 0.5 * par as f32;
-                let l = |r| pair(r, par, n);
-                let ((f0, f1), (x0, x1), (y0, y1)) = (l(rf), l(rgx), l(rgy));
-                let ((c00, c01), (c10, c11), (c20, c21)) = (l(rc0), l(rc1), l(rc2));
-                for i in 0..n {
-                    let f = f0[i] + (f1[i] - f0[i]) * t;
-                    let gx = x0[i] + (x1[i] - x0[i]) * t;
-                    let gy = y0[i] + (y1[i] - y0[i]) * t;
-                    let inv = 1.0 / f.max(1e-6);
-                    let k2 = -inv * inv * steep;
-                    let (nx, ny) = (gx * k2, gy * k2);
-                    let rn = 1.0 / (nx * nx + ny * ny + 1.0).sqrt();
-                    let (nx, ny, nz) = (nx * rn, ny * rn, rn);
-                    let diff = (nx * lx + ny * ly + nz * lz).max(0.0);
-                    let s = (nx * hx + ny * hy + nz * hz).max(0.0);
-                    // s^24 without powi.
-                    let s4 = s * s * s * s;
-                    let s12 = s4 * s4 * s4;
-                    let lit = amb + dif * diff;
-                    let k = s12 * s12 * ka + s12 * kb;
-                    let b0 = (c00[i] + (c01[i] - c00[i]) * t) * inv;
-                    let b1 = (c10[i] + (c11[i] - c10[i]) * t) * inv;
-                    let b2 = (c20[i] + (c21[i] - c20[i]) * t) * inv;
-                    rb0[i] = b0;
-                    rb1[i] = b1;
-                    rb2[i] = b2;
-                    ro0[i] = b0 * lit + (sp[0] - b0 * lit) * k;
-                    ro1[i] = b1 * lit + (sp[1] - b1 * lit) * k;
-                    ro2[i] = b2 * lit + (sp[2] - b2 * lit) * k;
-                    rff[i] = f;
-                }
+            match glass {
+                true => light::<true>(&lamp, src, &mut lit, hw),
+                false => light::<false>(&lamp, src, &mut lit, hw),
             }
             for x in 0..w {
                 let [ro0, ro1, ro2, rb0, rb1, rb2, rff] = &lit[x & 1];
@@ -1066,8 +1432,10 @@ impl Scene for Metaballs {
                 }
             }
         }
-        if wax {
-            self.candlelight(ctx);
+        match self.fiesta.kind {
+            Kind::Muertos => self.candlelight(ctx),
+            Kind::Navidad => self.esferas(),
+            _ => {}
         }
         self.px.blit(c);
     }
@@ -1090,7 +1458,7 @@ mod tests {
     }
 
     /// Odd options and sizes survive long runs and huge steps, in every color
-    /// mode, on ordinary days and on Día de Muertos.
+    /// mode, on ordinary days, on Día de Muertos and at Christmas.
     #[test]
     fn variants_survive() {
         let variants = [
@@ -1102,7 +1470,14 @@ mod tests {
         for v in variants {
             for theme in [Theme::classic(), Theme::builtin("dracula").unwrap()] {
                 for (bg, fiesta) in [Color::Reset, theme.bg].into_iter().flat_map(|bg| {
-                    [Fiesta::NONE, Fiesta::of_day(10, 28), Fiesta::of_day(11, 2)].map(|f| (bg, f))
+                    [
+                        Fiesta::NONE,
+                        Fiesta::of_day(10, 28),
+                        Fiesta::of_day(11, 2),
+                        Fiesta::of_day(12, 12),
+                        Fiesta::of_day(12, 24),
+                    ]
+                    .map(|f| (bg, f))
                 }) {
                     let opts = Opts::new(INFO.options, v.parse().unwrap());
                     let ctx = Ctx {
@@ -1264,6 +1639,178 @@ mod tests {
         let opts = Opts::new(INFO.options, toml::Table::new());
         let ctx = Ctx {
             fiesta: Fiesta::of_day(11, 2),
+            ..ctx_with(&theme, &opts, Color::Rgb(13, 17, 23))
+        };
+        let (_, a) = frame(&ctx, 20);
+        let (_, b) = frame(&ctx, 20);
+        assert!(a.cells() == b.cells());
+    }
+
+    /// The holidays this scene does not dress for stay an ordinary day, frame
+    /// for frame.
+    #[test]
+    fn other_holidays_stay_ordinary() {
+        let theme = Theme::classic();
+        let opts = Opts::new(INFO.options, toml::Table::new());
+        let (_, none) = frame(&ctx_with(&theme, &opts, Color::Reset), 6);
+        for day in [(2, 2), (3, 20), (4, 30), (5, 3), (9, 15), (11, 20)] {
+            let ctx = Ctx {
+                fiesta: Fiesta::of_day(day.0, day.1),
+                ..ctx_with(&theme, &opts, Color::Reset)
+            };
+            assert!(ctx.fiesta.on(), "{day:?}");
+            let (_, c) = frame(&ctx, 6);
+            assert!(c.cells() == none.cells(), "{day:?} is not an ordinary day");
+        }
+    }
+
+    /// At Christmas the balls are esferas: glass in rojo, verde, dorado and
+    /// plata, the bigger ones with a gold cap, no flames; from the first
+    /// day to Nochebuena, under `classic` and another theme.
+    #[test]
+    fn navidad_hangs_the_esferas() {
+        for theme in [Theme::classic(), Theme::builtin("dracula").unwrap()] {
+            let opts = Opts::new(INFO.options, "blobs = 16".parse().unwrap());
+            for day in [(12, 12), (12, 24), (1, 6)] {
+                let ctx = Ctx {
+                    fiesta: Fiesta::of_day(day.0, day.1),
+                    ..ctx_with(&theme, &opts, Color::Reset)
+                };
+                let (s, c) = frame(&ctx, 6);
+                assert!(!s.caps.is_empty(), "no caps on {day:?}");
+                for &(x, y) in &s.caps {
+                    // The middle of a cap's bottom row is its metal.
+                    assert_eq!(s.px.get(x, y + 1), color(s.trim), "{day:?}");
+                }
+                assert_eq!(flames(&c), 0);
+                assert!(s.drips.is_empty() && s.flames.is_empty());
+                if theme.native {
+                    let esferas = ESFERAS.iter().chain(&GALA).flatten();
+                    assert!(s.live.iter().all(|b| esferas.clone().any(|&c| c == b.col)));
+                }
+            }
+        }
+    }
+
+    /// The posadas bring gold and silver: one slot of four at the start,
+    /// two from the 18th, three on Nochebuena, in every set; the caps too.
+    #[test]
+    fn posadas_bring_more_metal() {
+        let theme = Theme::classic();
+        let opts = Opts::new(INFO.options, "blobs = 16".parse().unwrap());
+        let ctx_of = |day: u32| Ctx {
+            fiesta: Fiesta::of_day(12, day),
+            ..ctx_with(&theme, &opts, Color::Reset)
+        };
+        for set in 0..ESFERAS.len() {
+            let metals = |day| {
+                let slots = Metaballs::slots(&ctx_of(day), set);
+                slots.iter().filter(|&&c| c == DORADO || c == PLATA).count()
+            };
+            assert_eq!((metals(12), metals(18), metals(24)), (1, 2, 3), "set {set}");
+        }
+        let caps = |day| frame(&ctx_of(day), 6).0.caps.len();
+        assert!(caps(24) > caps(12), "{} {}", caps(24), caps(12));
+    }
+
+    /// Esferas keep their holiday colors under a theme: its accents closest to
+    /// red, green and gold, and a step between its background and foreground
+    /// for silver and white. Under `classic`, their own.
+    #[test]
+    fn esferas_take_the_theme_colors() {
+        let classic = Theme::classic();
+        let dracula = Theme::builtin("dracula").unwrap();
+        for c in [ROJO, VERDE, DORADO, PLATA, BLANCO] {
+            assert_eq!(like(&classic, c), c);
+        }
+        let accents: Vec<Rgb> = dracula.colors.iter().map(|&c| rgb_of(c)).collect();
+        for c in [ROJO, VERDE, DORADO] {
+            assert!(accents.contains(&like(&dracula, c)));
+        }
+        let (r, g) = (like(&dracula, ROJO), like(&dracula, VERDE));
+        assert!(r[0] > r[1] && g[1] > g[0], "{r:?} {g:?}");
+        // Grays and whites lie between the theme's background and foreground.
+        let (bg, fg) = (rgb_of(dracula.bg), rgb_of(dracula.fg));
+        let k = like(&dracula, PLATA);
+        for i in 0..3 {
+            assert!(k[i] >= bg[i].min(fg[i]) - 1.0 && k[i] <= bg[i].max(fg[i]) + 1.0);
+        }
+    }
+
+    /// Escarcha twinkles now and then: with the balls held still only a few
+    /// cells change from moment to moment, and some do.
+    #[test]
+    fn escarcha_glints() {
+        let theme = Theme::classic();
+        let opts = Opts::new(INFO.options, toml::Table::new());
+        let ctx = Ctx {
+            fiesta: Fiesta::of_day(12, 24),
+            ..ctx_with(&theme, &opts, Color::Reset)
+        };
+        let (mut s, mut c) = frame(&ctx, 6);
+        let first = c.cells().to_vec();
+        let (mut changed, mut most) = (0, 0);
+        for _ in 0..40 {
+            s.tick(&ctx, 0.0, 0.25);
+            c.clear();
+            s.draw(&ctx, &mut c);
+            let n = c.cells().iter().zip(&first).filter(|(a, b)| a != b).count();
+            changed += (n > 0) as usize;
+            most = most.max(n);
+        }
+        assert!(
+            changed > 0 && most < 80,
+            "{changed} frames, up to {most} cells"
+        );
+    }
+
+    /// The holiday comes and goes through `retheme`, and goes without a trace:
+    /// a scene that had Christmas and has not looks like one that never did.
+    #[test]
+    fn navidad_comes_and_goes() {
+        let theme = Theme::classic();
+        let opts = Opts::new(INFO.options, toml::Table::new());
+        let none = ctx_with(&theme, &opts, Color::Reset);
+        let navidad = Ctx {
+            fiesta: Fiesta::of_day(12, 24),
+            ..ctx_with(&theme, &opts, Color::Reset)
+        };
+        let mut a = Metaballs::new(&none);
+        let mut b = Metaballs::new(&none);
+        for s in [&mut a, &mut b] {
+            s.resize(&none, 100, 30);
+            s.retheme(&none);
+        }
+        let mut ca = Canvas::new(100, 30, Color::Reset);
+        let mut cb = Canvas::new(100, 30, Color::Reset);
+        let step = |s: &mut Metaballs, ctx: &Ctx, c: &mut Canvas| {
+            for _ in 0..30 {
+                s.tick(ctx, 0.1, 0.1);
+            }
+            c.clear();
+            s.draw(ctx, c);
+        };
+        step(&mut b, &none, &mut cb);
+        b.retheme(&navidad);
+        step(&mut b, &navidad, &mut cb);
+        assert!(!b.caps.is_empty());
+        assert_eq!(b.cur, Metaballs::slots(&navidad, b.set));
+        b.retheme(&none);
+        assert_eq!(b.cur, Metaballs::slots(&none, b.set));
+        step(&mut b, &none, &mut cb);
+        for _ in 0..3 {
+            step(&mut a, &none, &mut ca);
+        }
+        assert!(ca.cells() == cb.cells());
+    }
+
+    /// The same seed gives the same esferas and glints.
+    #[test]
+    fn navidad_is_deterministic() {
+        let theme = Theme::classic();
+        let opts = Opts::new(INFO.options, toml::Table::new());
+        let ctx = Ctx {
+            fiesta: Fiesta::of_day(12, 16),
             ..ctx_with(&theme, &opts, Color::Rgb(13, 17, 23))
         };
         let (_, a) = frame(&ctx, 20);
