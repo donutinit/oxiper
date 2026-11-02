@@ -19,7 +19,11 @@
 //! dorado and carries nochebuena flowers that shed their red bracts,
 //! strands of escarcha that glint silver and gold, and colación candies; on
 //! Año Nuevo bursts go off in the stream. Shells burst in the colors of the
-//! foquitos, some into bracts, tinsel or candy.
+//! foquitos, some into bracts, tinsel or candy. During the Fiestas Patrias
+//! (`patrias.rs`) the river runs in three bands like the flag, verde, blanco
+//! y rojo, their edges rippling, and carries tricolor confetti and
+//! banderitas; toward the Grito bursts go off in the stream, and shells
+//! burst in the flag's colors, now and then all three at once.
 
 use std::f32::consts::TAU;
 
@@ -31,6 +35,7 @@ use crate::scene::{Ctx, Opt, Scene, SceneInfo, Val};
 mod art;
 mod muertos;
 mod navidad;
+mod patrias;
 #[cfg(test)]
 mod rig;
 
@@ -117,6 +122,14 @@ trait Costume {
     fn retheme(&mut self, ctx: &Ctx, slot: usize);
     /// A firework shell has burst at (x, y) with stars flying `radius` dots.
     fn burst(&mut self, x: f32, y: f32, radius: f32);
+    /// Is the river in bands (`patrias::band`) instead of colored by direction?
+    fn bands(&self) -> bool {
+        false
+    }
+    /// Does the shell about to burst do so in three colors?
+    fn tricolor(&mut self) -> bool {
+        false
+    }
     /// Does it carry anything in the flow in this mode? (If not, the field
     /// is not kept up to date for it.)
     fn flows(&self) -> bool {
@@ -150,6 +163,11 @@ impl Palette {
                 shells: &navidad::SHELLS,
                 wakes: &navidad::WAKES,
             },
+            Kind::Patrias => Palette {
+                ramp: &patrias::RAMP,
+                shells: &patrias::SHELLS,
+                wakes: &patrias::WAKES,
+            },
             _ => return None,
         })
     }
@@ -160,6 +178,7 @@ impl Palette {
 fn costume(kind: Kind, seed: u64) -> Option<Box<dyn Costume>> {
     match kind {
         Kind::Navidad => Some(Box::new(navidad::Navidad::new(seed))),
+        Kind::Patrias => Some(Box::new(patrias::Patrias::new(seed))),
         _ => None,
     }
 }
@@ -611,6 +630,8 @@ impl Particles {
         let span = self.max_age as f32;
         // The direction that maps to the top of the ramp turns slowly.
         let (rc, rs) = ((self.t * 0.05).cos(), (self.t * 0.05).sin());
+        // On the Fiestas Patrias the river is colored by where it runs.
+        let bands = !self.by_speed && self.costume.as_ref().is_some_and(|c| c.bands());
         for i in 0..self.motes.len() {
             let mut m = self.motes[i];
             m.age += dt;
@@ -623,6 +644,8 @@ impl Particles {
             let sp = (vx * vx + vy * vy).sqrt();
             let tcol = if self.by_speed {
                 (sp / 3.2).min(1.0)
+            } else if bands {
+                patrias::band(m.x, m.y, (pw, ph), self.t)
             } else if sp > 1e-6 {
                 0.5 + 0.5 * (vx * rc + vy * rs) / sp
             } else {
@@ -667,6 +690,7 @@ impl Particles {
         let radius = ph.min(pw * 0.6) * (0.2 + self.rng.f32() * 0.12);
         let g = ph * 0.55 * self.gravity;
         let white = self.shells as u8;
+        let tricolor = self.costume.as_mut().is_some_and(|c| c.tricolor());
         for k in 0..n {
             let a = self.rng.f32() * TAU;
             let (drag, life, grav, mut speed, col) = match r.kind {
@@ -685,6 +709,8 @@ impl Particles {
                 // Peony and crackle.
                 _ => (1.8, 1.0 + self.rng.f32() * 0.7, 0.3, 1.0, r.col),
             };
+            // Verde, blanco y rojo, a third each.
+            let col = if tricolor { (k % 3) as u8 } else { col };
             if r.kind != 1 {
                 // A sphere of stars seen from the side: denser toward the rim.
                 let u = self.rng.f32() * 2.0 - 1.0;
@@ -936,7 +962,7 @@ impl Scene for Particles {
             }
             Mode::Fireworks => {
                 let n = if ctx.theme.native {
-                    SHELLS.len()
+                    pal.as_ref().map_or(SHELLS.len(), |p| p.shells.len())
                 } else {
                     ctx.theme.colors.len().clamp(1, 12)
                 };

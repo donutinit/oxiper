@@ -523,6 +523,12 @@ impl Stars {
         self.list.capacity() > 0
     }
 
+    /// How many sparks are flying.
+    #[cfg(test)]
+    pub fn sparks(&self) -> usize {
+        self.list.len()
+    }
+
     pub fn update(
         &mut self,
         dt: f32,

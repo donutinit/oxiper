@@ -1,6 +1,6 @@
 //! What the costumes' tests share.
 
-use super::{INFO, Particles};
+use super::{Dots, Field, INFO, Particles, Simplex};
 use crate::color::Color;
 use crate::fiesta::Fiesta;
 use crate::render::Canvas;
@@ -32,6 +32,24 @@ pub fn scene(ctx: &Ctx, w: u16, h: u16) -> (Particles, Canvas) {
     s.resize(ctx, w, h);
     s.retheme(ctx);
     (s, Canvas::new(w, h, Color::Reset))
+}
+
+/// A flow and a trail buffer for `w`×`h` cells, to drive a costume with.
+pub fn flow(w: usize, h: usize) -> (Field, Dots) {
+    let noise = Simplex::new(&mut fastrand::Rng::with_seed(3));
+    let mut field = Field::new();
+    field.resize(w * 2, h * 4, 8.0);
+    field.update(&noise, 0.01, 0.0, true);
+    let mut dots = Dots {
+        pw: 0,
+        ph: 0,
+        cw: 0,
+        stamp: Vec::new(),
+        col: Vec::new(),
+        cell: Vec::new(),
+    };
+    dots.resize(w, h);
+    (field, dots)
 }
 
 /// Runs a scene for `frames` and draws it.
