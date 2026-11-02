@@ -16,6 +16,7 @@
 
 use std::f32::consts::TAU;
 
+use super::art::{Blossom, Cut, Life, atan2, clear_cell, draw_flower, fract, sprite, turns};
 use super::{Dots, Field, Mode};
 use crate::color::{Color, rgb};
 use crate::fiesta::{Fiesta, Kind};
@@ -175,21 +176,6 @@ struct Petal {
 }
 
 #[derive(Clone, Copy)]
-struct Blossom {
-    x: f32,
-    y: f32,
-    /// Radius when open, in dots.
-    size: f32,
-    /// Negative while waiting to bloom.
-    age: f32,
-    life: f32,
-    rot: f32,
-    kind: u8,
-    /// Has let go of its petals.
-    scattered: bool,
-}
-
-#[derive(Clone, Copy)]
 struct Monarch {
     x: f32,
     y: f32,
@@ -202,14 +188,6 @@ struct Monarch {
     glide: f32,
     large: bool,
     tone: u8,
-}
-
-/// A blossom cut into braille cells (column, row, dots lit, tone), kept
-/// until it has moved, opened or turned enough to look different.
-#[derive(Default)]
-struct Cut {
-    key: Option<(i32, i32, u32, i32)>,
-    cells: Vec<(i32, i32, u8, u8)>,
 }
 
 pub(super) struct Muertos {
@@ -357,10 +335,7 @@ impl Muertos {
         }
         // Room for the cells of the biggest blossom, so cutting never allocates.
         self.cuts.clear();
-        self.cuts.resize_with(self.blossoms.len(), || Cut {
-            key: None,
-            cells: Vec::with_capacity(224),
-        });
+        self.cuts.resize_with(self.blossoms.len(), Cut::roomy);
     }
 
     /// Caches the holiday's colors. Under other themes the trails and shells
@@ -401,19 +376,7 @@ impl Muertos {
     }
 
     fn new_blossom(&mut self) -> Blossom {
-        let big = (self.ph * 0.075).clamp(3.0, 14.0);
-        let size = big * (0.75 + self.rng.f32() * 0.45);
-        let m = size + 2.0;
-        Blossom {
-            x: m + self.rng.f32() * (self.pw - 2.0 * m).max(0.0),
-            y: m + self.rng.f32() * (self.ph - 2.0 * m).max(0.0),
-            size,
-            age: 0.0,
-            life: 12.0 + self.rng.f32() * 10.0,
-            rot: self.rng.f32() * TAU,
-            kind: (self.rng.f32() < 0.2) as u8,
-            scattered: false,
-        }
+        Blossom::new(&mut self.rng, self.pw, self.ph, 0.2)
     }
 
     /// A petal somewhere on the screen, fading in.
@@ -502,24 +465,14 @@ impl Muertos {
     fn update_blossoms(&mut self, dt: f32, field: &Field, v: f32) {
         for i in 0..self.blossoms.len() {
             let mut b = self.blossoms[i];
-            b.age += dt;
-            if b.age >= b.life {
+            let life = b.grow(dt, field, v, (self.pw, self.ph));
+            if matches!(life, Life::Over) {
                 let mut nb = self.new_blossom();
                 nb.age = -0.5 - self.rng.f32() * 2.0;
                 self.blossoms[i] = nb;
                 continue;
             }
-            b.rot += dt * 0.25;
-            if b.age > 0.0 {
-                // Drift with the current, much slower than the petals.
-                let (fx, fy) = field.sample(b.x, b.y);
-                let m = b.size + 1.0;
-                b.x = (b.x + fx * v * 0.12 * dt).clamp(m, (self.pw - m).max(m));
-                b.y = (b.y + fy * v * 0.12 * dt).clamp(m, (self.ph - m).max(m));
-            }
-            // Near its end it lets go of its petals all at once.
-            if !b.scattered && b.age > b.life - 1.6 {
-                b.scattered = true;
+            if matches!(life, Life::Scatter) {
                 let n = (b.size * 2.2) as usize;
                 for k in 0..n {
                     if self.petals.len() >= self.petals.capacity() {
@@ -669,7 +622,13 @@ impl Muertos {
             return;
         }
         for (b, cut) in self.blossoms.iter().zip(&mut self.cuts) {
-            draw_blossom(b, cut, &self.bloom_cols[b.kind as usize], br);
+            draw_flower(
+                b,
+                cut,
+                &self.bloom_cols[b.kind as usize],
+                br,
+                (cut_blossom, 25.0),
+            );
         }
         for p in &self.petals {
             let f = (turns(p.spin) * 4.0) as usize % 4;
@@ -711,42 +670,7 @@ impl Muertos {
 }
 
 /// A ruffled pompom: scalloped rim, rings of petals, gold at the heart.
-fn draw_blossom(b: &Blossom, cut: &mut Cut, cols: &[Color; 3], br: &mut Braille) {
-    if b.age <= 0.0 {
-        return;
-    }
-    let open = (b.age / 1.8).min(1.0);
-    let close = ((b.life - b.age) / 1.6).clamp(0.0, 1.0);
-    let r = b.size * (1.0 - (1.0 - open).powi(3)) * close.sqrt();
-    if r < 0.8 {
-        return;
-    }
-    let (cx, cy) = (b.x.round() as i32, b.y.round() as i32);
-    // It turns slowly: cutting it again every few frames looks the same.
-    let turn = (b.rot * 25.0) as i32;
-    let key = (cx, cy, r.to_bits(), turn);
-    if cut.key != Some(key) {
-        cut.key = Some(key);
-        cut_blossom(cut, r, (cx, cy), turn as f32 / 25.0, (br.pw(), br.ph()));
-    }
-    for &(gx, gy, mask, tone) in &cut.cells {
-        clear_cell(br, gx * 2, gy * 4);
-        let c = cols[tone as usize];
-        for k in 0..8 {
-            if mask & (1 << k) != 0 {
-                br.set(gx * 2 + (k & 1), gy * 4 + (k >> 1), c);
-            }
-        }
-    }
-}
-
-/// Cuts a blossom of radius `r` dots centered on `(cx, cy)` into cells of a
-/// screen `(pw, ph)` dots big.
 fn cut_blossom(cut: &mut Cut, r: f32, (cx, cy): (i32, i32), rot: f32, (pw, ph): (i32, i32)) {
-    cut.cells.clear();
-    let reach = r.ceil() as i32 + 1;
-    let (x0, x1) = ((cx - reach).max(0), (cx + reach).min(pw - 1));
-    let (y0, y1) = ((cy - reach).max(0), (cy + reach).min(ph - 1));
     // A rosette: rings of rounded petals around a golden heart, each
     // ring turning the other way and set between the petals of the last.
     let rings = if r >= 7.0 { 3 } else { 2 };
@@ -775,110 +699,7 @@ fn cut_blossom(cut: &mut Cut, r: f32, (cx, cy): (i32, i32), rot: f32, (pw, ph): 
         }
         Some(off < 0.86 || u < k as f32 + 0.3)
     };
-    let far = (r + 2.2) * (r + 2.2);
-    for gy in (y0 >> 2)..=(y1 >> 2) {
-        for gx in (x0 >> 1)..=(x1 >> 1) {
-            // Cells in the corners of the box are nowhere near the rim.
-            let (fx, fy) = ((gx * 2 - cx) as f32 + 0.5, (gy * 4 - cy) as f32 + 1.5);
-            if fx * fx + fy * fy > far {
-                continue;
-            }
-            let (mut covered, mut mask) = (false, 0u8);
-            for k in 0..8 {
-                if let Some(on) = lit(gx * 2 + (k & 1), gy * 4 + (k >> 1)) {
-                    covered = true;
-                    mask |= (on as u8) << k;
-                }
-            }
-            if !covered {
-                continue;
-            }
-            // Colored by where the cell's middle is, so cells stay whole.
-            let (mx, my) = (gx * 2 + 1 - cx, gy * 4 + 2 - cy);
-            let d = ((mx * mx + my * my) as f32).sqrt() / r;
-            let tone = if d < 0.4 {
-                0
-            } else if d < 0.78 {
-                1
-            } else {
-                2
-            };
-            cut.cells.push((gx, gy, mask, tone));
-        }
-    }
-}
-
-/// The fractional part, always in 0..1.
-fn fract(x: f32) -> f32 {
-    x - x.floor()
-}
-
-/// How far around the circle an angle is, in turns (0..1).
-fn turns(a: f32) -> f32 {
-    fract(a / TAU)
-}
-
-/// The angle of (x, y) in radians, to within 0.0003: all the
-/// blossoms need to cut their petals, for a fraction of `f32::atan2`.
-fn atan2(y: f32, x: f32) -> f32 {
-    let (ax, ay) = (x.abs(), y.abs());
-    let (lo, hi) = if ax < ay { (ax, ay) } else { (ay, ax) };
-    if hi == 0.0 {
-        return 0.0;
-    }
-    let a = lo / hi;
-    let s = a * a;
-    let mut r = (((-0.046_496_474 * s + 0.159_314_22) * s - 0.327_622_77) * s) * a + a;
-    if ay > ax {
-        r = TAU / 4.0 - r;
-    }
-    if x < 0.0 {
-        r = TAU / 2.0 - r;
-    }
-    if y < 0.0 { -r } else { r }
-}
-
-/// Empties the braille cell holding dot (x, y), so what is drawn there next
-/// stands in front of the trails.
-fn clear_cell(br: &mut Braille, x: i32, y: i32) {
-    let (x0, y0) = (x & !1, y & !3);
-    if x0 < 0 || y0 < 0 || x0 >= br.pw() || y0 >= br.ph() {
-        return;
-    }
-    for k in 0..8 {
-        br.unset(x0 + (k & 1), y0 + (k >> 1));
-    }
-}
-
-/// Draws a sprite centered on (x, y) in front of whatever is there.
-fn sprite(br: &mut Braille, rows: &[&str], x: f32, y: f32, c: Color) {
-    let w = rows.first().map_or(0, |r| r.len()) as i32;
-    let (x0, y0) = (
-        (x - w as f32 / 2.0).round() as i32,
-        (y - rows.len() as f32 / 2.0).round() as i32,
-    );
-    // Each cell it touches is emptied once (the biggest takes 9×4 of them).
-    let mut done = 0u64;
-    for (j, row) in rows.iter().enumerate() {
-        for (i, ch) in row.bytes().enumerate() {
-            if ch != b'#' {
-                continue;
-            }
-            let (px, py) = (x0 + i as i32, y0 + j as i32);
-            let bit = ((py >> 2) - (y0 >> 2)) * 10 + (px >> 1) - (x0 >> 1);
-            if done & (1 << bit) == 0 {
-                done |= 1 << bit;
-                clear_cell(br, px, py);
-            }
-        }
-    }
-    for (j, row) in rows.iter().enumerate() {
-        for (i, ch) in row.bytes().enumerate() {
-            if ch == b'#' {
-                br.set(x0 + i as i32, y0 + j as i32, c);
-            }
-        }
-    }
+    cut.fill(r, (cx, cy), (pw, ph), ((0.4, 0.78), 0.0), lit);
 }
 
 #[cfg(test)]
@@ -1002,16 +823,6 @@ mod tests {
             run(&mut b, &plain, &mut cb, 90);
             assert!(ca.cells() == cb.cells(), "{mode}: the holiday left a trace");
         }
-    }
-
-    #[test]
-    fn the_cheap_arctangent_is_close_enough() {
-        for i in 0..720 {
-            let a = i as f32 / 720.0 * TAU - TAU / 2.0;
-            let (y, x) = (a.sin() * 7.5, a.cos() * 7.5);
-            assert!((atan2(y, x) - y.atan2(x)).abs() < 3e-4, "{a}");
-        }
-        assert_eq!(atan2(0.0, 0.0), 0.0);
     }
 
     /// Cutting a blossom never outgrows the room set aside for it, at any size.

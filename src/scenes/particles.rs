@@ -13,15 +13,26 @@
 //! tumbling along with golden wakes, and monarch butterflies migrating
 //! across. Fireworks shells burst in papel picado colors, some into petals,
 //! and the fountain springs from marigolds.
+//!
+//! The other holidays wear a costume of their own (`Costume`), each in its
+//! module. During the Navidad (`navidad.rs`) the river runs rojo, verde and
+//! dorado and carries nochebuena flowers that shed their red bracts,
+//! strands of escarcha that glint silver and gold, and colación candies; on
+//! Año Nuevo bursts go off in the stream. Shells burst in the colors of the
+//! foquitos, some into bracts, tinsel or candy.
 
 use std::f32::consts::TAU;
 
 use crate::color::{Color, rgb};
-use crate::fiesta::Kind;
+use crate::fiesta::{Fiesta, Kind};
 use crate::render::{Braille, Canvas};
 use crate::scene::{Ctx, Opt, Scene, SceneInfo, Val};
 
+mod art;
 mod muertos;
+mod navidad;
+#[cfg(test)]
+mod rig;
 
 pub const INFO: SceneInfo = SceneInfo {
     name: "particles",
@@ -93,6 +104,65 @@ const SHELLS: [Color; 8] = [
     rgb(0xc86bff),
     rgb(0xff4fa3),
 ];
+
+/// What a holiday's costume does for the scene, besides the colors of
+/// `Palette`. Each hook is called while its holiday is on, and the costume
+/// draws every random number it needs from its own RNG, so an ordinary day's
+/// particles are never disturbed.
+trait Costume {
+    /// Dresses the screen for the holiday: called on every resize and
+    /// whenever the holiday (or its level) changes.
+    fn dress(&mut self, fiesta: Fiesta, mode: Mode, w: usize, h: usize, jets: usize);
+    /// Caches its colors; `slot` is the first of its wakes in the trail palette.
+    fn retheme(&mut self, ctx: &Ctx, slot: usize);
+    /// A firework shell has burst at (x, y) with stars flying `radius` dots.
+    fn burst(&mut self, x: f32, y: f32, radius: f32);
+    /// Does it carry anything in the flow in this mode? (If not, the field
+    /// is not kept up to date for it.)
+    fn flows(&self) -> bool {
+        true
+    }
+    /// Moves what it carries along with the flow, whose speed is `v`.
+    fn update(&mut self, dt: f32, field: &Field, dots: &mut Dots, now: u32, span: u32, v: f32);
+    /// Draws what it carries in front of the trails.
+    fn draw(&mut self, ctx: &Ctx, br: &mut Braille);
+}
+
+/// What a holiday colors in the scene: the ramp of the flow and the fountain,
+/// the shells, and the wakes of what it carries, appended to the trail
+/// palette after the scene's own colors.
+struct Palette {
+    ramp: &'static [Color],
+    shells: &'static [Color],
+    wakes: &'static [Color],
+}
+
+impl Palette {
+    fn of(kind: Kind) -> Option<Palette> {
+        Some(match kind {
+            Kind::Muertos => Palette {
+                ramp: &muertos::RAMP,
+                shells: &muertos::SHELLS,
+                wakes: &muertos::WAKES,
+            },
+            Kind::Navidad => Palette {
+                ramp: &navidad::RAMP,
+                shells: &navidad::SHELLS,
+                wakes: &navidad::WAKES,
+            },
+            _ => return None,
+        })
+    }
+}
+
+/// The costume for a holiday, if the scene has one (Día de Muertos has its
+/// own, `muertos::Muertos`).
+fn costume(kind: Kind, seed: u64) -> Option<Box<dyn Costume>> {
+    match kind {
+        Kind::Navidad => Some(Box::new(navidad::Navidad::new(seed))),
+        _ => None,
+    }
+}
 
 /// Fade steps per palette entry.
 const FADE: usize = 16;
@@ -439,6 +509,9 @@ struct Particles {
     shells: usize,
     /// Día de Muertos: petals, blossoms and monarchs.
     muertos: muertos::Muertos,
+    /// The other holidays', and the day it was dressed for.
+    costume: Option<Box<dyn Costume>>,
+    worn: Fiesta,
 }
 
 impl Particles {
@@ -487,6 +560,19 @@ impl Particles {
             lut: Vec::new(),
             shells: SHELLS.len(),
             muertos: muertos::Muertos::new(ctx.seed),
+            costume: None,
+            worn: Fiesta::NONE,
+        }
+    }
+
+    /// Puts on today's costume (or takes it off) and dresses the screen in it.
+    fn wear(&mut self, ctx: &Ctx) {
+        if ctx.fiesta.kind != self.worn.kind {
+            self.costume = costume(ctx.fiesta.kind, ctx.seed);
+        }
+        self.worn = ctx.fiesta;
+        if let Some(c) = &mut self.costume {
+            c.dress(ctx.fiesta, self.mode, self.w, self.h, self.jets);
         }
     }
 
@@ -619,6 +705,9 @@ impl Particles {
             });
         }
         self.muertos.burst(r.x, r.y, radius);
+        if let Some(c) = &mut self.costume {
+            c.burst(r.x, r.y, radius);
+        }
     }
 
     fn update_fireworks(&mut self, dt: f32) {
@@ -816,6 +905,7 @@ impl Scene for Particles {
             }
         }
         self.muertos.dress(ctx.fiesta, self.mode, w, h, self.jets);
+        self.wear(ctx);
     }
 
     fn retheme(&mut self, ctx: &Ctx) {
@@ -830,11 +920,11 @@ impl Scene for Particles {
             let k = l as f32 / (FADE - 1) as f32;
             ctx.fade(c, k.powf(1.3) * reach)
         };
-        let fiesta = ctx.fiesta.is(Kind::Muertos);
+        let pal = Palette::of(ctx.fiesta.kind);
         self.lut.clear();
         match self.mode {
             Mode::Flow | Mode::Fountain => {
-                let g = ctx.ramp(if fiesta { &muertos::RAMP } else { &FLOW_PAL });
+                let g = ctx.ramp(pal.as_ref().map_or(&FLOW_PAL[..], |p| p.ramp));
                 // Theme ramps start near the background; keep particles visible.
                 let lo = if ctx.theme.native { 0.0 } else { 0.3 };
                 for i in 0..GRAD {
@@ -861,8 +951,10 @@ impl Scene for Particles {
                     let c = match i {
                         _ if i == n => hot,
                         _ if i == n + 1 => gold,
-                        _ if fiesta => ctx.pick(i, muertos::SHELLS[i % muertos::SHELLS.len()]),
-                        _ => ctx.pick(i, SHELLS[i % SHELLS.len()]),
+                        _ => match &pal {
+                            Some(p) => ctx.pick(i, p.shells[i % p.shells.len()]),
+                            None => ctx.pick(i, SHELLS[i % SHELLS.len()]),
+                        },
                     };
                     for l in 0..FADE {
                         // The freshest dot of each star glows hot.
@@ -872,15 +964,23 @@ impl Scene for Particles {
                 }
             }
         }
-        if fiesta {
-            // The petals' wakes come after the scene's own colors.
+        if ctx.fiesta != self.worn {
+            self.wear(ctx);
+        }
+        if let Some(p) = pal {
+            // The wakes of what the holiday carries come after the scene's
+            // own colors.
             let slot = self.lut.len() / FADE;
-            for c in muertos::WAKES {
+            for &c in p.wakes {
                 for l in 0..FADE {
                     self.lut.push(fade(c, l));
                 }
             }
-            self.muertos.retheme(ctx, slot);
+            if ctx.fiesta.is(Kind::Muertos) {
+                self.muertos.retheme(ctx, slot);
+            } else if let Some(c) = &mut self.costume {
+                c.retheme(ctx, slot);
+            }
         }
         if ctx.fiesta != self.muertos.fiesta() {
             self.muertos
@@ -910,6 +1010,15 @@ impl Scene for Particles {
             let v = 13.0 * self.speed;
             self.muertos
                 .update(dt, &self.field, &mut self.dots, self.now, self.max_age, v);
+        }
+        if let Some(c) = &mut self.costume {
+            if self.mode != Mode::Flow && c.flows() {
+                // What it carries rides the flow.
+                let z = self.t * 0.045 * self.speed.sqrt();
+                self.field.update(&self.noise, self.freq, z, false);
+            }
+            let v = 13.0 * self.speed;
+            c.update(dt, &self.field, &mut self.dots, self.now, self.max_age, v);
         }
     }
 
@@ -965,6 +1074,9 @@ impl Scene for Particles {
             }
         }
         self.muertos.draw(ctx, &mut self.braille);
+        if let Some(cs) = &mut self.costume {
+            cs.draw(ctx, &mut self.braille);
+        }
         self.braille.blit(c);
     }
 }
