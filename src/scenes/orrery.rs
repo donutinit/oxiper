@@ -41,7 +41,20 @@
 //! rays join the long ones; and from the 15th, the night of the Grito, rings of
 //! the bell's sound go out from the stone across the sky and "¡VIVA MÉXICO!" is
 //! shouted every so often. All of it lives in `orrery/patrias.rs`.
+//!
+//! At the Equinoccio the Earth is shown big, a globe in pixels with its axis
+//! tilted 23.4 degrees, reaching out of both poles, the land slowly turning, and
+//! the line between day and night running from pole to pole along it, so that
+//! day and night are split equally, the half facing the sun lit. And around
+//! the sun coils Kukulcán, the feathered serpent of Chichén Itzá: jade scales, a
+//! mane of plumes in cielo and sol, a head of limestone with its tongue
+//! flicking, and along its body the triangles of light that run down the
+//! stairway of El Castillo at the equinox, four of them on the first days and
+//! seven on the 20th and 21st; it is longer, too, the nearer the height. The
+//! coil turns round the sun, passing behind it and in front of it. All of it
+//! lives in `orrery/equinoccio.rs`.
 
+mod equinoccio;
 mod navidad;
 mod patrias;
 
@@ -51,6 +64,7 @@ use crate::color::{Color, Gradient, mix_oklab, rgb};
 use crate::fiesta::Fiesta;
 use crate::render::{BOLD, Braille, Canvas};
 use crate::scene::{Ctx, Opt, Scene, SceneInfo, Val};
+use equinoccio::Equinoccio;
 use navidad::Navidad;
 use patrias::Patrias;
 
@@ -336,6 +350,7 @@ pub struct Orrery {
     dm: Muertos,
     nv: Navidad,
     pt: Patrias,
+    eq: Equinoccio,
     /// The largest semi-major axis that fits, from the layout.
     big: f32,
 }
@@ -405,6 +420,7 @@ impl Orrery {
             dm: Muertos::new(ctx),
             nv: Navidad::new(),
             pt: Patrias::new(),
+            eq: Equinoccio::new(),
             big: 1.0,
         }
     }
@@ -433,12 +449,16 @@ impl Orrery {
             // The Piedra del Sol takes the same sizes.
             self.pt.face = self.face_sun(big, w, h);
         } else {
-            self.sun_r = if self.nv.on {
-                // The Estrella de Belén: a bigger sun, to give its rays room.
-                (big * 0.075 * navidad::GROW).clamp(0.9, 4.5 * navidad::GROW)
+            // The Estrella de Belén has a bigger sun, to give its rays room, and
+            // Kukulcán to coil around.
+            let grow = if self.nv.on {
+                navidad::GROW
+            } else if self.eq.on {
+                equinoccio::GROW
             } else {
-                (big * 0.075).clamp(0.9, 4.5)
+                1.0
             };
+            self.sun_r = (big * 0.075 * grow).clamp(0.9, 4.5 * grow);
             self.cx = w * 0.5;
             self.cy = h * 0.5;
         }
@@ -578,6 +598,9 @@ impl Orrery {
         }
         if self.pt.on {
             self.pt.lay(&self.br, self.cx, self.cy, self.sun_r, inner);
+        }
+        if self.eq.on {
+            self.eq.lay(self.cx, self.cy, self.sun_r, big);
         }
 
         // Dotted orbit paths: a dot every few dots of arc, evenly spaced on screen.
@@ -732,6 +755,8 @@ impl Orrery {
             if worn[s.kind] {
                 self.pt.draw_banderita(c, x, y, si);
             }
+        } else if self.eq.on && s.kind == 2 {
+            self.eq.draw_earth(c, x, y, (self.cx, self.cy));
         } else {
             self.draw_planet(c, s, x, y, self.planet_col[s.kind]);
         }
@@ -810,6 +835,7 @@ impl Scene for Orrery {
         self.dm.set(ctx.fiesta);
         self.nv.set(ctx.fiesta);
         self.pt.set(ctx.fiesta);
+        self.eq.set(ctx.fiesta);
         self.size = (w.max(1) as f32, h.max(1) as f32 * 2.0);
         self.layout(self.size.0, self.size.1);
     }
@@ -860,16 +886,18 @@ impl Scene for Orrery {
             };
         }
         // The holiday came or went: the sun changes size, so lay out again.
-        let was = (self.dm.on, self.nv.key(), self.pt.on);
+        let was = (self.dm.on, self.nv.key(), self.pt.on, self.eq.on);
         self.dm.set(ctx.fiesta);
         self.nv.set(ctx.fiesta);
         self.pt.set(ctx.fiesta);
-        if (self.dm.on, self.nv.key(), self.pt.on) != was {
+        self.eq.set(ctx.fiesta);
+        if (self.dm.on, self.nv.key(), self.pt.on, self.eq.on) != was {
             self.layout(self.size.0, self.size.1);
         }
         self.dm.retheme(ctx);
         self.nv.retheme(ctx);
         self.pt.retheme(ctx);
+        self.eq.retheme(ctx);
         if self.nv.on {
             self.sun = self.nv.star.clone();
         }
@@ -899,6 +927,9 @@ impl Scene for Orrery {
         }
         if self.pt.on {
             self.pt.step(flow);
+        }
+        if self.eq.on {
+            self.eq.step(flow);
         }
         let dt = if self.nv.on {
             self.nv.step(flow);
@@ -1103,11 +1134,12 @@ impl Scene for Orrery {
             if self.show_moons {
                 let b = &self.bodies[s.kind];
                 for (m, mn) in kd.moons.iter().enumerate().take(MAX_MOONS) {
-                    let pad = if worn[s.kind] {
-                        self.nv.pad(s.kind)
-                    } else {
-                        0.0
-                    };
+                    let pad = self.eq.pad(s.kind)
+                        + if worn[s.kind] {
+                            self.nv.pad(s.kind)
+                        } else {
+                            0.0
+                        };
                     let rr =
                         mn.r * self.moon_unit + if kd.ring { self.ring_r * 0.6 } else { 0.0 } + pad;
                     let (sa, ca) = b.moon_phase[m].sin_cos();
@@ -1125,6 +1157,11 @@ impl Scene for Orrery {
         }
 
         self.br.blit(c);
+        if self.eq.on {
+            // Kukulcán is coiled round the sun: the far side of the coil first.
+            self.eq.render();
+            self.eq.blit_back(c);
+        }
 
         // Far side first, then the sun, then the near side.
         for (si, s) in self.slots.iter().enumerate() {
@@ -1142,6 +1179,9 @@ impl Scene for Orrery {
             self.nv.draw_core(c, self.cx, self.cy);
         } else {
             self.draw_sun(c);
+        }
+        if self.eq.on {
+            self.eq.blit_front(c);
         }
         for (si, s) in self.slots.iter().enumerate() {
             let (x, y, _) = pos[si];
@@ -2428,6 +2468,226 @@ mod tests {
     #[test]
     fn patrias_survives() {
         survives(&[(9, 1), (9, 15), (9, 16)]);
+    }
+
+    /// The pixels the holiday's half blocks stand for: (x, y in units, color).
+    fn pixels(c: &Canvas) -> Vec<(i32, i32, Color)> {
+        let mut out = Vec::new();
+        for row in 0..c.h() as i32 {
+            for col in 0..c.w() as i32 {
+                let k = c.get(col, row).unwrap();
+                let (top, bottom) = match k.ch {
+                    '▀' => (k.fg, k.bg),
+                    '▄' => (Color::Reset, k.fg),
+                    '█' => (k.fg, k.fg),
+                    _ => continue,
+                };
+                for (j, p) in [top, bottom].into_iter().enumerate() {
+                    if p != Color::Reset {
+                        out.push((col, 2 * row + j as i32, p));
+                    }
+                }
+            }
+        }
+        out
+    }
+
+    fn lum(c: Color) -> f32 {
+        match c {
+            Color::Rgb(r, g, b) => (r as f32 + g as f32 + b as f32) / 3.0,
+            _ => 0.0,
+        }
+    }
+
+    #[test]
+    fn equinoccio_dresses_the_earth_and_the_sun() {
+        let theme = Theme::classic();
+        let opts = Opts::new(INFO.options, toml::Table::new());
+        let mut lengths = [0; 2];
+        for (i, day) in [(3, 19), (3, 21)].into_iter().enumerate() {
+            let ctx = ctx(&theme, &opts, Fiesta::of_day(day.0, day.1));
+            let mut s = Orrery::new(&ctx);
+            s.resize(&ctx, 120, 36);
+            s.retheme(&ctx);
+            let mut c = Canvas::new(120, 36, Color::Reset);
+            run_orrery(&mut s, &ctx, &mut c, 90);
+            let seen = pixels(&c);
+            // The Earth: ocean, land and the line between day and night in gold.
+            assert!(seen.iter().any(|p| p.2 == rgb(equinoccio::SOL)), "{day:?}");
+            let blue = |c: Color| matches!(c, Color::Rgb(r, _, b) if b > 150 && r < 130);
+            let green = |c: Color| matches!(c, Color::Rgb(r, g, b) if g > 100 && r < 80 && b < 120);
+            assert!(seen.iter().any(|p| blue(p.2)), "{day:?}");
+            assert!(seen.iter().any(|p| green(p.2)), "{day:?}");
+            // Kukulcán: jade scales, a limestone head.
+            assert!(
+                seen.iter().any(|p| p.2 == rgb(equinoccio::CALIZA)),
+                "{day:?}"
+            );
+            lengths[i] = s.eq.pixels();
+        }
+        // The serpent is longer at the height of the holiday.
+        assert!(lengths[0] > 30 && lengths[0] < lengths[1], "{lengths:?}");
+    }
+
+    /// Runs an `Orrery` for `frames` frames of 1/30 s, drawing the last.
+    fn run_orrery(s: &mut Orrery, ctx: &Ctx, c: &mut Canvas, frames: usize) {
+        for _ in 0..frames {
+            s.tick(ctx, 1.0 / 30.0, 1.0 / 30.0);
+            c.clear();
+            s.draw(ctx, c);
+        }
+    }
+
+    /// Day and night are split equally by a line running from pole to pole
+    /// along the tilted axis: the same number of pixels each side, and the
+    /// side facing the sun lit.
+    #[test]
+    fn day_and_night_are_split_equally() {
+        let theme = Theme::classic();
+        let opts = Opts::new(INFO.options, toml::Table::new());
+        let ctx = ctx(&theme, &opts, Fiesta::of_day(3, 20));
+        let mut eq = Equinoccio::new();
+        eq.set(ctx.fiesta);
+        eq.retheme(&ctx);
+        eq.lay(100.0, 36.0, 4.0, 90.0);
+        let rad = eq.globe;
+        // The sun far to the right, then far to the left.
+        for sun_x in [100.0, 10.0] {
+            let mut c = Canvas::new(120, 40, Color::Reset);
+            let (x, y) = (60.0, 40.0);
+            eq.draw_earth(&mut c, x, y, (sun_x, y));
+            let (sin_t, cos_t) = (23.4f32.to_radians().sin(), 23.4f32.to_radians().cos());
+            let (mut a, mut b) = ((0.0, 0), (0.0, 0));
+            for (px, py, col) in pixels(&c) {
+                let (dx, dy) = (px as f32 + 0.5 - x, py as f32 + 0.5 - y);
+                // Across the axis, and along it.
+                let (u, s) = (dx * cos_t + dy * sin_t, dx * sin_t - dy * cos_t);
+                if dx.hypot(dy) >= rad - 0.5 || u.abs() < 0.6 || s.abs() > rad {
+                    continue;
+                }
+                let side = if u > 0.0 { &mut a } else { &mut b };
+                side.0 += lum(col);
+                side.1 += 1;
+            }
+            // Equal halves (to a pixel or two a row), the lit one the sunny side.
+            let (na, nb) = (a.1 as f32, b.1 as f32);
+            assert!(na > 20.0 && (na - nb).abs() < 0.08 * (na + nb), "{na} {nb}");
+            let (la, lb) = (a.0 / na, b.0 / nb);
+            assert!((la > lb) == (sun_x > x), "{la} {lb} {sun_x}");
+            assert!(la.max(lb) > 1.7 * la.min(lb), "{la} {lb}");
+        }
+    }
+
+    /// The Earth's axis reaches out past both poles, leaning 23.4 degrees.
+    #[test]
+    fn the_axis_is_tilted() {
+        let theme = Theme::classic();
+        let opts = Opts::new(INFO.options, toml::Table::new());
+        let ctx = ctx(&theme, &opts, Fiesta::of_day(3, 20));
+        let mut eq = Equinoccio::new();
+        eq.set(ctx.fiesta);
+        eq.retheme(&ctx);
+        eq.lay(100.0, 36.0, 4.0, 90.0);
+        let mut c = Canvas::new(120, 40, Color::Reset);
+        let (x, y) = (60.0, 40.0);
+        eq.draw_earth(&mut c, x, y, (100.0, y));
+        // Pixels outside the globe on the line: the north tip up and to the right.
+        let outside: Vec<(f32, f32)> = pixels(&c)
+            .into_iter()
+            .map(|(px, py, _)| (px as f32 + 0.5 - x, py as f32 + 0.5 - y))
+            .filter(|&(dx, dy)| dx.hypot(dy) > eq.globe + 0.5)
+            .collect();
+        assert!(outside.iter().any(|&(dx, dy)| dy < 0.0 && dx > 0.0));
+        assert!(outside.iter().any(|&(dx, dy)| dy > 0.0 && dx < 0.0));
+        assert!(outside.iter().all(|&(dx, dy)| {
+            // On the axis: the angle from the vertical is 23.4 degrees.
+            (dx.atan2(-dy).to_degrees() - 23.4).abs() < 12.0
+                || (dx.atan2(-dy).to_degrees().abs() - 156.6).abs() < 12.0
+        }));
+    }
+
+    /// Kukulcán goes behind the sun and in front of it as it coils round.
+    #[test]
+    fn the_serpent_coils_round_the_sun() {
+        let theme = Theme::classic();
+        let opts = Opts::new(INFO.options, toml::Table::new());
+        let ctx = ctx(&theme, &opts, Fiesta::of_day(3, 20));
+        let mut s = Orrery::new(&ctx);
+        s.resize(&ctx, 160, 48);
+        s.retheme(&ctx);
+        let mut c = Canvas::new(160, 48, Color::Reset);
+        run_orrery(&mut s, &ctx, &mut c, 3);
+        let (back, front) = s.eq.counts();
+        assert!(back > 20 && front > 20, "{back} {front}");
+        // It crawls: a few seconds later it is not where it was.
+        let before = c.to_text();
+        run_orrery(&mut s, &ctx, &mut c, 60);
+        assert_ne!(before, c.to_text());
+        // A sun too small to coil round is left alone, whatever the size.
+        let mut s = Orrery::new(&ctx);
+        s.resize(&ctx, 20, 6);
+        s.retheme(&ctx);
+        let mut c = Canvas::new(20, 6, Color::Reset);
+        run_orrery(&mut s, &ctx, &mut c, 3);
+    }
+
+    #[test]
+    fn ordinary_days_have_no_equinoccio() {
+        let theme = Theme::classic();
+        let opts = Opts::new(INFO.options, toml::Table::new());
+        let ctx = ctx(&theme, &opts, Fiesta::NONE);
+        let mut s = (INFO.make)(&ctx);
+        s.resize(&ctx, 120, 36);
+        s.retheme(&ctx);
+        let mut c = Canvas::new(120, 36, Color::Reset);
+        run(&mut s, &ctx, &mut c, 40, 1.0 / 30.0);
+        let holiday = [equinoccio::CALIZA, equinoccio::JADE, equinoccio::SOL].map(rgb);
+        assert!(!has(&c, |k| holiday.contains(&k.fg) || holiday.contains(&k.bg)));
+    }
+
+    /// The Equinoccio comes and goes through `retheme`, and the scene is as it was.
+    #[test]
+    fn equinoccio_comes_and_goes() {
+        let theme = Theme::classic();
+        let opts = Opts::new(INFO.options, toml::Table::new());
+        let plain = ctx(&theme, &opts, Fiesta::NONE);
+        let fiesta = ctx(&theme, &opts, Fiesta::of_day(3, 20));
+        let mut a = (INFO.make)(&plain);
+        let mut b = (INFO.make)(&plain);
+        for s in [&mut a, &mut b] {
+            s.resize(&plain, 100, 30);
+            s.retheme(&plain);
+        }
+        let mut ca = Canvas::new(100, 30, Color::Reset);
+        let mut cb = Canvas::new(100, 30, Color::Reset);
+        run(&mut a, &plain, &mut ca, 20, 1.0 / 30.0);
+        run(&mut b, &plain, &mut cb, 20, 1.0 / 30.0);
+        b.retheme(&fiesta);
+        run(&mut b, &fiesta, &mut cb, 3, 0.0);
+        assert!(
+            has(&cb, |k| k.fg == rgb(equinoccio::CALIZA))
+                || has(&cb, |k| k.bg == rgb(equinoccio::CALIZA))
+        );
+        assert_ne!(ca.to_text(), cb.to_text());
+        b.retheme(&plain);
+        run(&mut a, &plain, &mut ca, 20, 1.0 / 30.0);
+        run(&mut b, &plain, &mut cb, 20, 1.0 / 30.0);
+        assert!(ca.cells() == cb.cells());
+
+        // And a holiday that has lasted a while is gone without a trace.
+        b.retheme(&fiesta);
+        run(&mut b, &fiesta, &mut cb, 90, 1.0 / 30.0);
+        b.retheme(&plain);
+        run(&mut b, &plain, &mut cb, 1, 1.0 / 30.0);
+        assert!(!has(&cb, |k| k.fg == rgb(equinoccio::CALIZA)
+            || k.bg == rgb(equinoccio::CALIZA)));
+        assert!(!has(&cb, |k| k.fg == rgb(equinoccio::JADE)
+            || k.bg == rgb(equinoccio::JADE)));
+    }
+
+    #[test]
+    fn equinoccio_survives() {
+        survives(&[(3, 19), (3, 20), (3, 22)]);
     }
 
     #[test]
