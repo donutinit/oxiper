@@ -57,6 +57,19 @@
 //! numbers). Under other themes the esferas are the accents closest to red,
 //! green and gold and a step between the theme's background and foreground
 //! for silver. The backdrop, when painted, is the night of Nochebuena.
+//!
+//! In the mes patrio the lava is a chile en nogada: blobs of verde poblano
+//! and creamy nogada white, lit softly like the sauce, with granada seeds
+//! scattered over and through them: small bright red arils with a glint, some
+//! lying on the surface, some seen through the nogada, all drifting round
+//! their blob as the sauce swirls. Now and then a seed swells from a chile's
+//! rim, hangs, pinches off and falls, a drop like the candles' wax, smaller
+//! and red. The month brings more of it: a few seeds on September 1, a
+//! scatter by the middle of the month and many, with more of them falling, at
+//! the Grito. Under other themes the chiles are the accents closest to green
+//! and the theme's foreground for the nogada, and the seeds the accent closest
+//! to red. The backdrop, when painted, is the night of the Grito, green going
+//! to the wine of the sauce.
 
 use std::f32::consts::{PI, TAU};
 
@@ -173,7 +186,7 @@ const NOCHE_TOP: Rgb = [18., 14., 40.];
 const NOCHE_BOT: Rgb = [40., 16., 34.];
 /// The warm light a flame throws on the wax around it.
 const FLAME_GLOW: Rgb = [255., 170., 60.];
-/// At most this many drops of wax run at once.
+/// At most this many drops of wax (or seeds) run at once.
 const MAX_DRIPS: usize = 8;
 
 /// Candle flames in four sizes, three flickers each (one char per pixel):
@@ -396,6 +409,45 @@ fn gold_px(ch: u8) -> Option<(f32, f32)> {
     })
 }
 
+/// Fiestas Patrias: a chile en nogada, verde poblano and chile, the green of
+/// the bandera and the nopal, the nogada white and its cream.
+const POBLANO: Rgb = [30., 122., 56.];
+const CHILE: Rgb = [74., 160., 66.];
+const BANDERA: Rgb = [0., 112., 76.];
+const NOPAL: Rgb = [92., 150., 40.];
+const NOGADA: Rgb = [244., 241., 234.];
+const CREMA: Rgb = [236., 224., 194.];
+/// The granada seeds scattered over the nogada: the flag's rojo.
+const GRANADA: Rgb = [206., 17., 38.];
+/// Five sets of green chile and creamy nogada that take the place of
+/// tanim's.
+const NOGADAS: [[Rgb; 4]; 5] = [
+    [POBLANO, NOGADA, BANDERA, CREMA],
+    [NOGADA, CHILE, CREMA, POBLANO],
+    [BANDERA, NOGADA, NOPAL, CREMA],
+    [CHILE, CREMA, NOGADA, POBLANO],
+    [NOGADA, POBLANO, CHILE, CREMA],
+];
+/// The night of the Grito behind the chiles (`background = true`): green
+/// going to the wine of the sauce.
+const GRITO_TOP: Rgb = [4., 22., 20.];
+const GRITO_BOT: Rgb = [30., 10., 20.];
+/// Granada seeds in three sizes, lying on the nogada and seen through it. `h`
+/// is the glint, `r` the flesh and `d` its shadow; `z` a seed under the
+/// nogada, blended with what is over it.
+const SEEDS: [[&[&str]; 3]; 2] = [
+    [
+        &["hr", "rd"],
+        &[".hr", "rrr", "rdd"],
+        &[".hhr", "hrrr", "rrrd", ".rdd"],
+    ],
+    [
+        &["zz", "zz"],
+        &[".zz", "zzz", "zzz"],
+        &[".zz.", "zzzz", "zzzz", ".zz."],
+    ],
+];
+
 /// Hue (degrees) and saturation of a color.
 fn hue_sat(c: Rgb) -> (f32, f32) {
     let (hi, lo) = (c[0].max(c[1]).max(c[2]), c[0].min(c[1]).min(c[2]));
@@ -415,7 +467,7 @@ fn hue_sat(c: Rgb) -> (f32, f32) {
 
 /// A holiday color as a theme paints it: itself under `classic`; under the
 /// others the theme's accent closest in hue (a Christmas ball is red, a
-/// gold one yellow), and for whites and grays a step along the theme's own
+/// chile green), and for whites and grays a step along the theme's own
 /// background-to-foreground ramp.
 fn like(theme: &Theme, c: Rgb) -> Rgb {
     if theme.native {
@@ -473,6 +525,8 @@ struct Drip {
     v: f32,
     /// Radius as a fraction of its candle's.
     r: f32,
+    /// A granada seed (red), not a drop of wax (its candle's color).
+    seed: bool,
 }
 
 /// A flame on top of a candle this frame: the pixel its wick stands on,
@@ -662,6 +716,19 @@ const VIDRIO: Look = Look {
     curve: 0.13,
     rim: 1.4,
 };
+/// A chile en nogada: glossy poblano skin and creamy sauce, lit softly.
+const NOGADA_LOOK: Look = Look {
+    light: (-0.35, -0.65, 0.66),
+    amb: 0.42,
+    dif: 0.8,
+    ka: 0.42,
+    kb: 0.06,
+    kc: 0.0,
+    sp: [255.0, 252.0, 240.0],
+    curve: 0.1,
+    rim: 0.7,
+};
+
 /// A `Look` and the vectors it lights with, for one frame.
 #[derive(Clone, Copy)]
 struct Lamp {
@@ -796,10 +863,11 @@ struct Metaballs {
     flicker: f32,
     /// The calaveras' wax: hueso, or the theme's foreground.
     bone: Rgb,
-    /// Salt for the hashes that place the holidays' glints (the
+    /// Salt for the hashes that place the holidays' glints and seeds (the
     /// scene's own random numbers stay untouched).
     salt: u32,
-    /// The holiday's accent: the gold of the esferas' caps.
+    /// The holiday's accent: the gold of the esferas' caps, the granada of
+    /// the seeds.
     trim: Rgb,
     /// Where the esferas' caps stand this frame.
     caps: Vec<(i32, i32)>,
@@ -871,9 +939,10 @@ impl Metaballs {
     }
 
     /// Slot colors of color set `s`: tanim's own (on Día de Muertos colored
-    /// wax, at Christmas esferas), or the theme's accents rotated by one per
-    /// set so the blobs still change hands over time (the esferas stay red,
-    /// green, gold and silver under every theme: the closest accents).
+    /// wax, at Christmas esferas, in the mes patrio chile and nogada), or the
+    /// theme's accents rotated by one per set so the blobs still change hands
+    /// over time (the holidays' colors stay red, green, gold and white under
+    /// every theme: the closest accents).
     fn slots(ctx: &Ctx, s: usize) -> [Rgb; 4] {
         if ctx.fiesta.is(Kind::Navidad) {
             let mut out = ESFERAS[s];
@@ -884,6 +953,9 @@ impl Metaballs {
                 *c = like(ctx.theme, *c);
             }
             return out;
+        }
+        if ctx.fiesta.is(Kind::Patrias) {
+            return NOGADAS[s].map(|c| like(ctx.theme, c));
         }
         let sets = if ctx.fiesta.is(Kind::Muertos) {
             &WAX
@@ -934,18 +1006,31 @@ impl Metaballs {
     }
 
     /// The candles melt: drops of wax run down their sides, hang, pinch off
-    /// and fall (`ds` seconds of motion).
+    /// and fall (`ds` seconds of motion). In the mes patrio the chiles let go
+    /// of granada seeds the same way, smaller and red.
     fn melt(&mut self, ds: f32) {
         let phf = self.ph as f32;
         let level = self.fiesta.level;
-        let candles = self.candles();
-        let cap = ((2.0 + 6.0 * level) as usize).min(MAX_DRIPS);
+        let seeds = self.fiesta.is(Kind::Patrias);
+        let drippers = match seeds {
+            true => self.balls.len(),
+            false => self.candles(),
+        };
+        let cap = match seeds {
+            true => (1.0 + 5.0 * level) as usize,
+            false => (2.0 + 6.0 * level) as usize,
+        }
+        .min(MAX_DRIPS);
+        let rate = match seeds {
+            true => 0.03 + 0.07 * level,
+            false => 0.04 + 0.12 * level,
+        };
         let mut left = ds;
         while left > 0.0 {
             let h = left.min(1.0 / FPS);
             left -= h;
-            for ball in 0..candles {
-                if self.drips.len() < cap && self.wax_rng.f32() < (0.04 + 0.12 * level) * h {
+            for ball in 0..drippers {
+                if self.drips.len() < cap && self.wax_rng.f32() < rate * h {
                     self.drips.push(Drip {
                         ball,
                         ox: (self.wax_rng.f32() - 0.5) * 0.9,
@@ -954,7 +1039,8 @@ impl Metaballs {
                         x: 0.0,
                         y: 0.0,
                         v: 0.1,
-                        r: 0.26 + self.wax_rng.f32() * 0.1,
+                        r: (0.26 + self.wax_rng.f32() * 0.1) * if seeds { 0.5 } else { 1.0 },
+                        seed: seeds,
                     });
                 }
             }
@@ -990,12 +1076,13 @@ impl Metaballs {
         match self.fiesta.kind {
             Kind::Muertos => VELADORA,
             Kind::Navidad => VIDRIO,
+            Kind::Patrias => NOGADA_LOOK,
             _ => GEL,
         }
     }
 
     /// The holidays' dice: a hash of two numbers (and the scene's seed) in
-    /// [0, 1), so the glints never draw from the scene's own
+    /// [0, 1), so the glints and the seeds never draw from the scene's own
     /// random numbers.
     fn dice(&self, a: u32, b: u32) -> f32 {
         let mut h = a.wrapping_mul(0x9e37_79b9) ^ b.wrapping_mul(0x85eb_ca6b) ^ self.salt;
@@ -1096,6 +1183,59 @@ impl Metaballs {
                 let k = a * (0.8 - 0.3 * d as f32);
                 for (dx, dy) in [(d, 0), (-d, 0), (0, d), (0, -d)] {
                     glint(&mut self.px, x + dx, y + dy, to, k);
+                }
+            }
+        }
+    }
+
+    /// Scatters granada seeds over the chiles: some lie on the nogada, glossy,
+    /// and some are seen through it, and they drift round their blob as the
+    /// sauce swirls. More of them toward the Grito.
+    fn seeds(&mut self) {
+        let lum = |c: Rgb| 0.3 * c[0] + 0.59 * c[1] + 0.11 * c[2];
+        let cov = 0.03 + 0.07 * self.fiesta.level;
+        let seed = self.trim;
+        for i in 0..self.live.len() {
+            let b = self.live[i];
+            let r = b.r2.sqrt();
+            if r < 3.5 {
+                continue;
+            }
+            let size = (r >= 9.0) as usize + (r >= 17.0) as usize;
+            let area = ((size + 2) * (size + 2)) as f32;
+            let n = ((cov * PI * b.r2 / area + 0.5) as u32).min(24);
+            let base = lum(b.col).max(1.0);
+            for j in 0..n {
+                let id = i as u32 * 32 + j;
+                let spin = (self.dice(id, 1) - 0.5) * 0.025;
+                let (sin, cos) = (TAU * self.dice(id, 0) + self.t * spin).sin_cos();
+                let d = 0.82 * self.dice(id, 2).sqrt() * r;
+                let sprite = SEEDS[(self.dice(id, 3) < 0.4) as usize][size];
+                let (left, top) = (
+                    (b.x + d * cos).round() as i32 - sprite[0].len() as i32 / 2,
+                    (b.y + d * sin).round() as i32 - sprite.len() as i32 / 2,
+                );
+                for (jj, row) in sprite.iter().enumerate() {
+                    for (k, ch) in row.bytes().enumerate() {
+                        let (x, y) = (left + k as i32, top + jj as i32);
+                        let Color::Rgb(..) = self.px.get(x, y) else {
+                            continue;
+                        };
+                        let under = rgb_of(self.px.get(x, y));
+                        let shade = (lum(under) / base).clamp(0.6, 1.1);
+                        let c = match ch {
+                            b'h' => mix(seed, [255.0; 3], 0.5),
+                            b'r' => [seed[0] * shade, seed[1] * shade, seed[2] * shade],
+                            b'd' => [
+                                seed[0] * 0.6 * shade,
+                                seed[1] * 0.6 * shade,
+                                seed[2] * 0.6 * shade,
+                            ],
+                            b'z' => mix(under, seed, 0.55),
+                            _ => continue,
+                        };
+                        self.px.set(x, y, color(c));
+                    }
                 }
             }
         }
@@ -1242,6 +1382,10 @@ impl Scene for Metaballs {
     }
 
     fn retheme(&mut self, ctx: &Ctx) {
+        // Drops of wax and seeds go with their holiday.
+        if self.fiesta.kind != ctx.fiesta.kind {
+            self.drips.clear();
+        }
         self.fiesta = ctx.fiesta;
         // Candles leave room for their flames, esferas for their caps.
         self.band = match self.fiesta.kind {
@@ -1249,16 +1393,17 @@ impl Scene for Metaballs {
             Kind::Navidad => (0.56, 0.33),
             _ => (0.5, 0.38),
         };
-        if !self.fiesta.is(Kind::Muertos) {
-            self.drips.clear();
-        }
         self.cur = Self::slots(ctx, self.set);
         self.nxt = Self::slots(ctx, self.next);
-        self.trim = like(ctx.theme, DORADO);
+        self.trim = match self.fiesta.kind {
+            Kind::Patrias => like(ctx.theme, GRANADA),
+            _ => like(ctx.theme, DORADO),
+        };
         if ctx.theme.native {
             (self.bg_top, self.bg_bot) = match self.fiesta.kind {
                 Kind::Muertos => (NOCHE_TOP, NOCHE_BOT),
                 Kind::Navidad => (NOCHEBUENA_TOP, NOCHEBUENA_BOT),
+                Kind::Patrias => (GRITO_TOP, GRITO_BOT),
                 _ => (BG_TOP, BG_BOT),
             };
         } else {
@@ -1274,7 +1419,7 @@ impl Scene for Metaballs {
     fn update(&mut self, _ctx: &Ctx, dt: f32) {
         if dt.is_finite() {
             self.t += dt.clamp(0.0, 5.0) * FPS * self.speed;
-            if self.fiesta.is(Kind::Muertos) {
+            if self.fiesta.is(Kind::Muertos) || self.fiesta.is(Kind::Patrias) {
                 self.melt(dt.clamp(0.0, 5.0) * self.speed);
             }
         }
@@ -1333,14 +1478,17 @@ impl Scene for Metaballs {
                 x,
                 y,
                 r2: (d.r * swell.clamp(0.0, 1.0) * r).powi(2),
-                col: p.col,
+                col: match d.seed {
+                    true => self.trim,
+                    false => p.col,
+                },
             });
         }
 
         // Gel is lit from the upper left, towards the viewer, with a white
         // highlight; candle wax from above, softer and warmer, with a sheen
         // the color of the flames; glass with a small hard highlight and a
-        // dark rim.
+        // dark rim, the nogada softly.
         let look = self.look();
         let (lx, ly, lz) = look.light;
         let norm = (lx * lx + ly * ly + lz * lz).sqrt();
@@ -1435,6 +1583,7 @@ impl Scene for Metaballs {
         match self.fiesta.kind {
             Kind::Muertos => self.candlelight(ctx),
             Kind::Navidad => self.esferas(),
+            Kind::Patrias => self.seeds(),
             _ => {}
         }
         self.px.blit(c);
@@ -1458,7 +1607,8 @@ mod tests {
     }
 
     /// Odd options and sizes survive long runs and huge steps, in every color
-    /// mode, on ordinary days, on Día de Muertos and at Christmas.
+    /// mode, on ordinary days, on Día de Muertos, at Christmas and in the mes
+    /// patrio.
     #[test]
     fn variants_survive() {
         let variants = [
@@ -1476,6 +1626,8 @@ mod tests {
                         Fiesta::of_day(11, 2),
                         Fiesta::of_day(12, 12),
                         Fiesta::of_day(12, 24),
+                        Fiesta::of_day(9, 1),
+                        Fiesta::of_day(9, 15),
                     ]
                     .map(|f| (bg, f))
                 }) {
@@ -1653,7 +1805,7 @@ mod tests {
         let theme = Theme::classic();
         let opts = Opts::new(INFO.options, toml::Table::new());
         let (_, none) = frame(&ctx_with(&theme, &opts, Color::Reset), 6);
-        for day in [(2, 2), (3, 20), (4, 30), (5, 3), (9, 15), (11, 20)] {
+        for day in [(2, 2), (3, 20), (4, 30), (5, 3), (11, 20)] {
             let ctx = Ctx {
                 fiesta: Fiesta::of_day(day.0, day.1),
                 ..ctx_with(&theme, &opts, Color::Reset)
@@ -1765,14 +1917,14 @@ mod tests {
     }
 
     /// The holiday comes and goes through `retheme`, and goes without a trace:
-    /// a scene that had Christmas and has not looks like one that never did.
-    #[test]
-    fn navidad_comes_and_goes() {
+    /// a scene that had it and has not looks like one that never did.
+    /// `dressed` tells whether the scene shows the holiday.
+    fn comes_and_goes(fiesta: Fiesta, dressed: fn(&Metaballs) -> bool) {
         let theme = Theme::classic();
         let opts = Opts::new(INFO.options, toml::Table::new());
         let none = ctx_with(&theme, &opts, Color::Reset);
-        let navidad = Ctx {
-            fiesta: Fiesta::of_day(12, 24),
+        let holiday = Ctx {
+            fiesta,
             ..ctx_with(&theme, &opts, Color::Reset)
         };
         let mut a = Metaballs::new(&none);
@@ -1791,17 +1943,111 @@ mod tests {
             s.draw(ctx, c);
         };
         step(&mut b, &none, &mut cb);
-        b.retheme(&navidad);
-        step(&mut b, &navidad, &mut cb);
-        assert!(!b.caps.is_empty());
-        assert_eq!(b.cur, Metaballs::slots(&navidad, b.set));
+        b.retheme(&holiday);
+        step(&mut b, &holiday, &mut cb);
+        assert!(dressed(&b));
+        assert_eq!(b.cur, Metaballs::slots(&holiday, b.set));
         b.retheme(&none);
+        assert!(b.drips.is_empty());
         assert_eq!(b.cur, Metaballs::slots(&none, b.set));
         step(&mut b, &none, &mut cb);
         for _ in 0..3 {
             step(&mut a, &none, &mut ca);
         }
         assert!(ca.cells() == cb.cells());
+    }
+
+    #[test]
+    fn navidad_comes_and_goes() {
+        comes_and_goes(Fiesta::of_day(12, 24), |s| !s.caps.is_empty());
+    }
+
+    #[test]
+    fn patrias_comes_and_goes() {
+        comes_and_goes(Fiesta::of_day(9, 15), |s| {
+            count_px(s, color(mix(s.trim, [255.0; 3], 0.5))) > 0
+        });
+    }
+
+    /// How many pixels of the last frame are `col`.
+    fn count_px(s: &Metaballs, col: Color) -> usize {
+        (0..s.px.ph())
+            .flat_map(|y| (0..s.px.pw()).map(move |x| (x, y)))
+            .filter(|&(x, y)| s.px.get(x, y) == col)
+            .count()
+    }
+
+    /// In the mes patrio the balls are chiles en nogada, green and white, with
+    /// granada seeds scattered over them (glints in the seeds' own shade),
+    /// more of them as the month goes; no esferas, no flames, no caps.
+    #[test]
+    fn patrias_scatters_granada_seeds() {
+        for theme in [Theme::classic(), Theme::builtin("dracula").unwrap()] {
+            let opts = Opts::new(INFO.options, "blobs = 16".parse().unwrap());
+            let mut seeds = Vec::new();
+            for day in [(9, 1), (9, 15)] {
+                let ctx = Ctx {
+                    fiesta: Fiesta::of_day(day.0, day.1),
+                    ..ctx_with(&theme, &opts, Color::Reset)
+                };
+                let (s, c) = frame(&ctx, 6);
+                seeds.push(count_px(&s, color(mix(s.trim, [255.0; 3], 0.5))));
+                assert_eq!(flames(&c), 0);
+                assert!(s.caps.is_empty() && s.flames.is_empty() && s.candles() == 0);
+                if theme.native {
+                    assert_eq!(s.trim, GRANADA);
+                    let chiles = NOGADAS.iter().flatten();
+                    assert!(s.live.iter().all(|b| chiles.clone().any(|&c| c == b.col)));
+                } else {
+                    let r = s.trim;
+                    assert!(r[0] > r[1] && r[0] > r[2], "{r:?}");
+                }
+            }
+            assert!(seeds[0] > 0 && seeds[1] > seeds[0], "{seeds:?}");
+        }
+    }
+
+    /// Seeds swell from the chiles, hang, pinch off and fall in red, never
+    /// more than `MAX_DRIPS` of them at once.
+    #[test]
+    fn seeds_fall() {
+        let theme = Theme::classic();
+        let opts = Opts::new(INFO.options, "blobs = 16".parse().unwrap());
+        let ctx = Ctx {
+            fiesta: Fiesta::of_day(9, 15),
+            ..ctx_with(&theme, &opts, Color::Reset)
+        };
+        let mut s = Metaballs::new(&ctx);
+        s.resize(&ctx, 120, 36);
+        s.retheme(&ctx);
+        let mut c = Canvas::new(120, 36, Color::Reset);
+        let (mut most, mut fell) = (0, false);
+        for i in 0..1200 {
+            s.tick(&ctx, 0.05, 0.05);
+            most = most.max(s.drips.len());
+            fell |= s.drips.iter().any(|d| !d.hanging);
+            assert!(s.drips.iter().all(|d| d.seed));
+            if i % 100 == 0 {
+                c.clear();
+                s.draw(&ctx, &mut c);
+                assert!(s.drops.iter().all(|d| d.col == s.trim));
+            }
+        }
+        assert!(most > 0 && most <= MAX_DRIPS && fell, "{most} seeds");
+    }
+
+    /// The same seed gives the same chiles, seeds and drops.
+    #[test]
+    fn patrias_is_deterministic() {
+        let theme = Theme::classic();
+        let opts = Opts::new(INFO.options, toml::Table::new());
+        let ctx = Ctx {
+            fiesta: Fiesta::of_day(9, 10),
+            ..ctx_with(&theme, &opts, Color::Rgb(13, 17, 23))
+        };
+        let (_, a) = frame(&ctx, 20);
+        let (_, b) = frame(&ctx, 20);
+        assert!(a.cells() == b.cells());
     }
 
     /// The same seed gives the same esferas and glints.
