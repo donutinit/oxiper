@@ -611,16 +611,20 @@ impl Stars {
 
 /// The dots of a small shape, kept in a fixed array so drawing never
 /// allocates.
-pub(super) struct Pts {
+pub(super) struct Strokes<const N: usize> {
     n: usize,
-    a: [(i32, i32); 40],
+    a: [(i32, i32); N],
 }
 
-impl Pts {
-    pub fn new() -> Pts {
-        Pts {
+/// A small shape, and a long line (a streamer).
+pub(super) type Pts = Strokes<40>;
+pub(super) type Wire = Strokes<192>;
+
+impl<const N: usize> Strokes<N> {
+    pub fn new() -> Self {
+        Strokes {
             n: 0,
-            a: [(0, 0); 40],
+            a: [(0, 0); N],
         }
     }
 
@@ -628,6 +632,15 @@ impl Pts {
         if self.n < self.a.len() {
             self.a[self.n] = (x, y);
             self.n += 1;
+        }
+    }
+
+    /// The dots of a line from (x0, y0) to (x1, y1).
+    pub fn line(&mut self, (x0, y0): (f32, f32), (x1, y1): (f32, f32)) {
+        let n = (x1 - x0).abs().max((y1 - y0).abs()).ceil().max(1.0) as i32;
+        for i in 0..=n {
+            let t = i as f32 / n as f32;
+            self.add(rnd(x0 + (x1 - x0) * t), rnd(y0 + (y1 - y0) * t));
         }
     }
 
@@ -664,24 +677,17 @@ impl Pts {
         }
     }
 
-    /// Draws the dots in color `c`, in front of the trails if `front`: each
-    /// cell they touch is emptied once.
+    /// Draws the dots in color `c`, in front of the trails if `front`: the
+    /// cells they touch are emptied first (a cell the last few dots were in
+    /// is not emptied again, which is all of them for a line or a shape).
     pub fn draw(&self, br: &mut Braille, c: Color, front: bool) {
         let pts = &self.a[..self.n];
         if front {
-            let (bx, by) = pts
-                .iter()
-                .fold((i32::MAX, i32::MAX), |m, p| (m.0.min(p.0), m.1.min(p.1)));
-            let mut done = 0u64;
-            for &(px, py) in pts {
-                let (cx, cy) = ((px >> 1) - (bx >> 1), (py >> 2) - (by >> 2));
-                if !(0..8).contains(&cx) || !(0..8).contains(&cy) {
-                    clear_cell(br, px, py);
-                    continue;
-                }
-                let bit = 1u64 << (cy * 8 + cx);
-                if done & bit == 0 {
-                    done |= bit;
+            let mut recent = [(i32::MIN, 0); 4];
+            for (k, &(px, py)) in pts.iter().enumerate() {
+                let cell = (px >> 1, py >> 2);
+                if !recent.contains(&cell) {
+                    recent[k & 3] = cell;
                     clear_cell(br, px, py);
                 }
             }

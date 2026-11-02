@@ -23,7 +23,10 @@
 //! (`patrias.rs`) the river runs in three bands like the flag, verde, blanco
 //! y rojo, their edges rippling, and carries tricolor confetti and
 //! banderitas; toward the Grito bursts go off in the stream, and shells
-//! burst in the flag's colors, now and then all three at once.
+//! burst in the flag's colors, now and then all three at once. During the
+//! Carnaval (`carnaval.rs`) the river runs in every bright color and swirls
+//! with confetti, lentejuelas that flash gold and serpentinas, long streamers
+//! of curling paper that twist and uncurl; shells burst into showers of them.
 
 use std::f32::consts::TAU;
 
@@ -33,6 +36,7 @@ use crate::render::{Braille, Canvas};
 use crate::scene::{Ctx, Opt, Scene, SceneInfo, Val};
 
 mod art;
+mod carnaval;
 mod muertos;
 mod navidad;
 mod patrias;
@@ -168,6 +172,11 @@ impl Palette {
                 shells: &patrias::SHELLS,
                 wakes: &patrias::WAKES,
             },
+            Kind::Carnaval => Palette {
+                ramp: &carnaval::RAMP,
+                shells: &carnaval::SHELLS,
+                wakes: &carnaval::WAKES,
+            },
             _ => return None,
         })
     }
@@ -179,6 +188,7 @@ fn costume(kind: Kind, seed: u64) -> Option<Box<dyn Costume>> {
     match kind {
         Kind::Navidad => Some(Box::new(navidad::Navidad::new(seed))),
         Kind::Patrias => Some(Box::new(patrias::Patrias::new(seed))),
+        Kind::Carnaval => Some(Box::new(carnaval::Carnaval::new(seed))),
         _ => None,
     }
 }
