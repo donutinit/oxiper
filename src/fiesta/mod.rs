@@ -190,40 +190,35 @@ impl Fiesta {
     }
 
     /// The day it is, (month, day); (0, 0) when no holiday is on.
-    #[allow(dead_code)] // for the scenes as they dress up
     pub fn date(self) -> (u8, u8) {
         (self.month, self.day)
     }
 
     /// The posadas, December 16 to 24.
-    #[allow(dead_code)] // for the scenes as they dress up
     pub fn posadas(self) -> bool {
         self.is(Kind::Navidad) && self.month == 12 && (16..=24).contains(&self.day)
     }
 
     /// Día de los Santos Inocentes, December 28: the day for pranks, each
     /// one owned up to with "¡Inocente palomita, que te dejaste engañar!".
-    #[allow(dead_code)] // for the scenes as they dress up
     pub fn inocentes(self) -> bool {
         self.is(Kind::Navidad) && self.date() == (12, 28)
     }
 
     /// Año Nuevo: December 31 and January 1.
-    #[allow(dead_code)] // for the scenes as they dress up
     pub fn ano_nuevo(self) -> bool {
         self.is(Kind::Navidad) && matches!(self.date(), (12, 31) | (1, 1))
     }
 
     /// Reyes: the Reyes Magos on their way, January 2 to 5, and arrived on
     /// the 6th, the day of the rosca.
-    #[allow(dead_code)] // for the scenes as they dress up
     pub fn reyes(self) -> bool {
         self.is(Kind::Navidad) && self.month == 1 && (2..=6).contains(&self.day)
     }
 
     /// The holiday at its height, as on its biggest day (for a movable
-    /// holiday, its day in 2027).
-    #[allow(dead_code)] // for the scenes as they dress up
+    /// holiday, its day in 2027). For tests.
+    #[cfg(test)]
     pub fn height(kind: Kind) -> Fiesta {
         Fiesta::height_in(kind, 2027)
     }
