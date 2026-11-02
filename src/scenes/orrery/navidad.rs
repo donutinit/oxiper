@@ -542,6 +542,10 @@ impl Navidad {
         let len = (text.chars().count() as i32 - 1) * gap + 1;
         let (w, h) = (c.w() as i32, c.h() as i32);
         let (x0, y) = ((w - len) / 2, h - 2);
+        // The letters have the row to themselves.
+        for x in x0..x0 + len {
+            c.set(x, y, ' ', Color::Reset);
+        }
         // Every letter takes a color in turn, and they bounce a little.
         let flash = (self.t * 2.0).floor() as usize;
         for (i, ch) in text.chars().enumerate() {
