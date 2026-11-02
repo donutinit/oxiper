@@ -17,6 +17,20 @@
 //! by; on November 2 every planet does, the belt is half petals and three
 //! comets are out. The holiday has random numbers of its own, so ordinary
 //! days are exactly as before.
+//!
+//! At Navidad the sun becomes the Estrella de Belén, a many-pointed gold star
+//! whose rays pulse, more of them as the posadas climb. The planets are
+//! esferas, glass Christmas ornaments in rojo, verde, dorado and plata, each
+//! with a gold cap and (the big ones) a hook, lit from the upper left, with a
+//! glint now and then. The belt is escarcha, glinting tinsel, and Saturn's
+//! ring a band of it. As the posadas go by more planets are hung and more of
+//! the belt turns to tinsel, and by Nochebuena the star has sixteen points. On
+//! December 28, the Santos Inocentes, every so often the planets slow down,
+//! turn round and go backwards for a while, shouting "¡INOCENTE!", until they
+//! turn back and own up to it with "¡Inocente palomita!". All of it lives in
+//! `orrery/navidad.rs`.
+
+mod navidad;
 
 use std::f32::consts::TAU;
 
@@ -24,6 +38,7 @@ use crate::color::{Color, Gradient, mix_oklab, rgb};
 use crate::fiesta::Fiesta;
 use crate::render::{BOLD, Braille, Canvas};
 use crate::scene::{Ctx, Opt, Scene, SceneInfo, Val};
+use navidad::Navidad;
 
 pub const INFO: SceneInfo = SceneInfo {
     name: "orrery",
@@ -305,6 +320,7 @@ pub struct Orrery {
     /// The screen in units, for laying out again when the holiday comes or goes.
     size: (f32, f32),
     dm: Muertos,
+    nv: Navidad,
 }
 
 impl Orrery {
@@ -370,6 +386,7 @@ impl Orrery {
             sun: Gradient::new(&[]),
             size: (1.0, 2.0),
             dm: Muertos::new(ctx),
+            nv: Navidad::new(),
         }
     }
 
@@ -397,7 +414,12 @@ impl Orrery {
             self.cx = (w * 0.5).floor() + 0.5;
             self.cy = (h * 0.25).floor() * 2.0 + 1.0;
         } else {
-            self.sun_r = (big * 0.075).clamp(0.9, 4.5);
+            self.sun_r = if self.nv.on {
+                // The Estrella de Belén: a bigger sun, to give its rays room.
+                (big * 0.075 * navidad::GROW).clamp(0.9, 4.5 * navidad::GROW)
+            } else {
+                (big * 0.075).clamp(0.9, 4.5)
+            };
             self.cx = w * 0.5;
             self.cy = h * 0.5;
         }
@@ -531,6 +553,11 @@ impl Orrery {
             }
         }
 
+        if self.nv.on {
+            self.nv
+                .lay(&self.br, self.cx, self.cy, self.sun_r, inner, big);
+        }
+
         // Dotted orbit paths: a dot every few dots of arc, evenly spaced on screen.
         self.orbit_dots.clear();
         for (si, s) in self.slots.iter().enumerate() {
@@ -624,34 +651,7 @@ impl Orrery {
             }
             return;
         }
-        let x0 = (cx - r - 1.0).floor() as i32;
-        let x1 = (cx + r + 1.0).ceil() as i32;
-        let y0 = ((cy - r) * 0.5 - 1.0).floor() as i32;
-        let y1 = ((cy + r) * 0.5 + 1.0).ceil() as i32;
-        let rr = r + 0.05;
-        // Quadrant blocks: 2×2 solid sub-pixels per cell for a rounder disc.
-        const QUAD: [char; 16] = [
-            ' ', '▘', '▝', '▀', '▖', '▌', '▞', '▛', '▗', '▚', '▐', '▜', '▄', '▙', '▟', '█',
-        ];
-        const SUB: [(f32, f32); 4] = [(0.25, 0.5), (0.75, 0.5), (0.25, 1.5), (0.75, 1.5)];
-        for j in y0..=y1 {
-            for i in x0..=x1 {
-                let mut bits = 0;
-                let mut near = f32::MAX;
-                for (q, &(ox, oy)) in SUB.iter().enumerate() {
-                    let d = (i as f32 + ox - cx).hypot((2 * j) as f32 + oy - cy);
-                    if d < rr {
-                        bits |= 1 << q;
-                        near = near.min(d);
-                    }
-                }
-                if bits == 0 {
-                    continue;
-                }
-                let d = near / r;
-                c.set(i, j, QUAD[bits], self.sun.at(1.0 - 0.45 * d * d));
-            }
-        }
+        quad_disc(c, cx, cy, r, |d| self.sun.at(1.0 - 0.45 * d * d));
     }
 
     fn draw_planet(&self, c: &mut Canvas, s: &Slot, x: f32, y: f32) {
@@ -669,16 +669,33 @@ impl Orrery {
     /// Which planets wear a marigold garland: more of them as the holiday
     /// builds up, the most iconic first.
     fn garlands(&self) -> [bool; 9] {
-        let mut on = [false; 9];
-        if !self.dm.on {
-            return on;
+        if self.dm.on {
+            self.wearing(self.dm.level)
+        } else {
+            [false; 9]
         }
-        let n = (self.slots.len() as f32 * self.dm.level).ceil() as usize;
+    }
+
+    /// Which planets are dressed up when the holiday has come `level` of the
+    /// way: the most iconic first, one at least.
+    fn wearing(&self, level: f32) -> [bool; 9] {
+        let mut on = [false; 9];
+        let n = (self.slots.len() as f32 * level).ceil() as usize;
         let here = |k: usize| self.slots.iter().any(|s| s.kind == k);
         for &k in PRIORITY.iter().filter(|&&k| here(k)).take(n.max(1)) {
             on[k] = true;
         }
         on
+    }
+
+    /// Draws a planet: an esfera when it is dressed for Navidad, a dot or
+    /// a ball of its own otherwise.
+    fn draw_body(&self, c: &mut Canvas, s: &Slot, x: f32, y: f32, worn: &[bool; 9]) {
+        if self.nv.on && worn[s.kind] {
+            self.nv.draw_esfera(c, s.kind, x, y);
+        } else {
+            self.draw_planet(c, s, x, y);
+        }
     }
 
     /// Moves the comets along and lets them shed petals.
@@ -752,6 +769,7 @@ impl Scene for Orrery {
     fn resize(&mut self, ctx: &Ctx, w: u16, h: u16) {
         self.br.resize(w, h);
         self.dm.set(ctx.fiesta);
+        self.nv.set(ctx.fiesta);
         self.size = (w.max(1) as f32, h.max(1) as f32 * 2.0);
         self.layout(self.size.0, self.size.1);
     }
@@ -802,18 +820,26 @@ impl Scene for Orrery {
             };
         }
         // The holiday came or went: the sun changes size, so lay out again.
-        let was = self.dm.on;
+        let was = (self.dm.on, self.nv.key());
         self.dm.set(ctx.fiesta);
-        if self.dm.on != was {
+        self.nv.set(ctx.fiesta);
+        if (self.dm.on, self.nv.key()) != was {
             self.layout(self.size.0, self.size.1);
         }
         self.dm.retheme(ctx);
+        self.nv.retheme(ctx);
+        if self.nv.on {
+            self.sun = self.nv.star.clone();
+        }
     }
 
     /// The wink is a pause between winks, so it keeps the wall clock.
     fn tick(&mut self, ctx: &Ctx, dt: f32, real: f32) {
         if self.dm.on && real.is_finite() {
             self.dm.wall = (self.dm.wall + real.clamp(0.0, 30.0)).rem_euclid(WINK_EVERY);
+        }
+        if self.nv.on && real.is_finite() {
+            self.nv.tick(real);
         }
         self.update(ctx, dt);
     }
@@ -829,6 +855,13 @@ impl Scene for Orrery {
         if self.dm.on {
             self.update_muertos(flow, dt);
         }
+        let dt = if self.nv.on {
+            self.nv.step(flow);
+            // On the Santos Inocentes the planets sometimes go backwards.
+            dt * self.nv.dir()
+        } else {
+            dt
+        };
         self.t = (self.t + dt).rem_euclid(1000.0 * TAU);
         for s in &self.slots {
             let b = &mut self.bodies[s.kind];
@@ -880,6 +913,14 @@ impl Scene for Orrery {
                     .dm
                     .belt_petal(i, rk.shade)
                     .unwrap_or(self.belt_col[rk.shade as usize]);
+                // At Navidad it is tinsel, glinting.
+                if self.nv.on {
+                    let base = self.nv.belt(i).unwrap_or(base);
+                    let at = (x * 2.0, y * 2.0);
+                    self.nv
+                        .draw_rock(&mut self.br, ctx, i, base, rk.bright, at, (s, co), t);
+                    continue;
+                }
                 let col = ctx.fade(base, 1.0 - rk.bright);
                 self.br.setf(x * 2.0, y * 2.0, col);
             }
@@ -890,7 +931,15 @@ impl Scene for Orrery {
         if self.dm.on {
             self.dm.draw_rays(&mut self.br, r);
         }
-        let n_sparks = if self.dm.on { 0 } else { self.n_sparks };
+        if self.nv.on {
+            self.nv.draw_glow(&mut self.br);
+            self.nv.draw_star(&mut self.br);
+        }
+        let n_sparks = if self.dm.on || self.nv.on {
+            0
+        } else {
+            self.n_sparks
+        };
         for (i, sp) in self.sparks[..n_sparks].iter().enumerate() {
             let v = 0.5 + 0.5 * sp.phase.sin();
             let reach = r * 0.5 + 1.2;
@@ -924,7 +973,8 @@ impl Scene for Orrery {
                 let e = pos[si].2;
                 // A trail of roughly constant length, longer for big orbits.
                 let len = (s.a * 0.45).clamp(3.0, 12.0);
-                let span = (len / s.a).min(1.2);
+                // (Backwards when the planets are.)
+                let span = (len / s.a).min(1.2) * self.nv.dir();
                 let steps = (len * 2.5) as usize + 2;
                 let col = self.planet_col[s.kind];
                 for k in 1..=steps {
@@ -942,6 +992,11 @@ impl Scene for Orrery {
 
         // Saturn's ring and the moons; on Día de Muertos, garlands of marigolds.
         let garlands = self.garlands();
+        let worn = if self.nv.on {
+            self.wearing(self.nv.level)
+        } else {
+            [false; 9]
+        };
         for (si, s) in self.slots.iter().enumerate() {
             let kd = &KINDS[s.kind];
             // Rings and moons circle the glyph's cell center, so they move with it.
@@ -951,7 +1006,13 @@ impl Scene for Orrery {
                 self.dm
                     .draw_garland(&mut self.br, px, py, self.ring_r, kd.ring, t, si);
             } else if kd.ring {
-                let rx = self.ring_r;
+                // (A big esfera needs a wider ring to go round it.)
+                let rx = self.ring_r
+                    + if worn[s.kind] {
+                        self.nv.pad(s.kind)
+                    } else {
+                        0.0
+                    };
                 let ry = rx * (0.12 + 0.25 * t);
                 let tip: f32 = -0.2;
                 let (st, ct) = tip.sin_cos();
@@ -962,13 +1023,25 @@ impl Scene for Orrery {
                     let (ex, ey) = (ca * rx, sa * ry);
                     let x = px + ex * ct - ey * st;
                     let y = py + ex * st + ey * ct;
-                    self.br.setf(x * 2.0, y * 2.0, self.ring_col);
+                    // At Navidad the ring is a band of tinsel.
+                    let col = if self.nv.on {
+                        self.nv.ring(k)
+                    } else {
+                        self.ring_col
+                    };
+                    self.br.setf(x * 2.0, y * 2.0, col);
                 }
             }
             if self.show_moons {
                 let b = &self.bodies[s.kind];
                 for (m, mn) in kd.moons.iter().enumerate().take(MAX_MOONS) {
-                    let rr = mn.r * self.moon_unit + if kd.ring { self.ring_r * 0.6 } else { 0.0 };
+                    let pad = if worn[s.kind] {
+                        self.nv.pad(s.kind)
+                    } else {
+                        0.0
+                    };
+                    let rr =
+                        mn.r * self.moon_unit + if kd.ring { self.ring_r * 0.6 } else { 0.0 } + pad;
                     let (sa, ca) = b.moon_phase[m].sin_cos();
                     let x = ((px + ca * rr) * 2.0).floor() as i32;
                     let y = ((py - sa * rr * t) * 2.0).floor() as i32;
@@ -989,23 +1062,63 @@ impl Scene for Orrery {
         for (si, s) in self.slots.iter().enumerate() {
             let (x, y, _) = pos[si];
             if y < self.cy {
-                self.draw_planet(c, s, x, y);
+                self.draw_body(c, s, x, y, &worn);
             }
         }
         if self.dm.on {
             self.dm.draw_heads(c, self.cy, true);
             self.dm.draw_face(c, self.cx, self.cy);
+        } else if self.nv.on && self.sun_r >= SPRITE_R {
+            self.nv.draw_core(c, self.cx, self.cy);
         } else {
             self.draw_sun(c);
         }
         for (si, s) in self.slots.iter().enumerate() {
             let (x, y, _) = pos[si];
             if y >= self.cy {
-                self.draw_planet(c, s, x, y);
+                self.draw_body(c, s, x, y, &worn);
             }
         }
         if self.dm.on {
             self.dm.draw_heads(c, self.cy, false);
+        }
+        if self.nv.on {
+            self.nv.draw_shout(c);
+        }
+    }
+}
+
+/// Quadrant blocks: which of a cell's four sub-pixels (upper left, upper
+/// right, lower left, lower right) are filled, as bits 0 to 3.
+const QUAD: [char; 16] = [
+    ' ', '▘', '▝', '▀', '▖', '▌', '▞', '▛', '▗', '▚', '▐', '▜', '▄', '▙', '▟', '█',
+];
+
+/// A solid disc of radius `r` units centered on (`cx`, `cy`), in quadrant
+/// blocks (2×2 solid sub-pixels per cell for a rounder disc). `color` takes how
+/// far a cell is from the center, in radii.
+fn quad_disc(c: &mut Canvas, cx: f32, cy: f32, r: f32, color: impl Fn(f32) -> Color) {
+    let x0 = (cx - r - 1.0).floor() as i32;
+    let x1 = (cx + r + 1.0).ceil() as i32;
+    let y0 = ((cy - r) * 0.5 - 1.0).floor() as i32;
+    let y1 = ((cy + r) * 0.5 + 1.0).ceil() as i32;
+    let rr = r + 0.05;
+    const SUB: [(f32, f32); 4] = [(0.25, 0.5), (0.75, 0.5), (0.25, 1.5), (0.75, 1.5)];
+    for j in y0..=y1 {
+        for i in x0..=x1 {
+            let mut bits = 0;
+            let mut near = f32::MAX;
+            for (q, &(ox, oy)) in SUB.iter().enumerate() {
+                let d = (i as f32 + ox - cx).hypot((2 * j) as f32 + oy - cy);
+                if d < rr {
+                    bits |= 1 << q;
+                    near = near.min(d);
+                }
+            }
+            if bits == 0 {
+                continue;
+            }
+            c.set(i, j, QUAD[bits], color(near / r));
         }
     }
 }
@@ -1513,9 +1626,6 @@ impl Muertos {
         let face = &FACES[f];
         let (sw, sh) = (face.rows[0].len() / 2, face.rows.len() / 2);
         let (x0, y0) = (col - sw as i32 / 2, row - sh as i32 / 2);
-        const QUAD: [char; 16] = [
-            ' ', '▘', '▝', '▀', '▖', '▌', '▞', '▛', '▗', '▚', '▐', '▜', '▄', '▙', '▟', '█',
-        ];
         for j in 0..sh {
             let (top, bottom) = (face.rows[2 * j].as_bytes(), face.rows[2 * j + 1].as_bytes());
             for i in 0..sw {
@@ -1822,6 +1932,12 @@ mod tests {
     /// several days of the holiday, under classic and another theme.
     #[test]
     fn holiday_survives() {
+        survives(&[(10, 28), (10, 31), (11, 2), (11, 3)]);
+    }
+
+    /// Runs the scene on each of the given days through every option, size and
+    /// theme, with now and then a step of five seconds.
+    fn survives(days: &[(u32, u32)]) {
         let variants = [
             "",
             "planets = 1\nbelt = false\nmoons = false",
@@ -1841,7 +1957,7 @@ mod tests {
         ];
         for v in variants {
             for theme in [Theme::classic(), Theme::builtin("dracula").unwrap()] {
-                for (m, d) in [(10, 28), (10, 31), (11, 2), (11, 3)] {
+                for &(m, d) in days {
                     let opts = Opts::new(INFO.options, v.parse().unwrap());
                     let ctx = ctx(&theme, &opts, Fiesta::of_day(m, d));
                     let mut s = (INFO.make)(&ctx);
@@ -1852,7 +1968,8 @@ mod tests {
                         }
                         let mut c = Canvas::new(w, h, Color::Reset);
                         for f in 0..40 {
-                            s.update(&ctx, if f % 13 == 12 { 5.0 } else { 1.0 / 30.0 });
+                            let dt = if f % 13 == 12 { 5.0 } else { 1.0 / 30.0 };
+                            s.tick(&ctx, dt, dt);
                             c.clear();
                             s.draw(&ctx, &mut c);
                         }
@@ -1860,6 +1977,192 @@ mod tests {
                 }
             }
         }
+    }
+
+    /// How many esferas are hung: their hooks and caps.
+    fn esferas(c: &Canvas) -> usize {
+        c.cells()
+            .iter()
+            .filter(|k| matches!(k.ch, '∩' | '╤'))
+            .count()
+    }
+
+    #[test]
+    fn navidad_dresses_the_sun_and_planets() {
+        let theme = Theme::classic();
+        let opts = Opts::new(INFO.options, toml::Table::new());
+        let mut seen = [0; 2];
+        for (i, day) in [(12, 12), (12, 24)].into_iter().enumerate() {
+            let ctx = ctx(&theme, &opts, Fiesta::of_day(day.0, day.1));
+            let mut s = (INFO.make)(&ctx);
+            s.resize(&ctx, 120, 36);
+            s.retheme(&ctx);
+            let mut c = Canvas::new(120, 36, Color::Reset);
+            run(&mut s, &ctx, &mut c, 40, 1.0 / 30.0);
+            // The Estrella de Belén: a white-hot core and rays of braille dots.
+            let core = c.get(60, 18).unwrap();
+            assert!(
+                core.ch == '█' && matches!(core.fg, Color::Rgb(r, g, _) if r > 0xf0 && g > 0xe0)
+            );
+            assert!(has(&c, |k| (0x2801..=0x28ff).contains(&(k.ch as u32))));
+            // Esferas: red, green, gold and silver glass.
+            seen[i] = esferas(&c);
+            assert!(has(&c, |k| k.fg == rgb(navidad::ROJO)), "{day:?}");
+        }
+        // More of the planets are hung as the posadas go by: every one by Nochebuena.
+        assert!(
+            seen[0] >= 2 && seen[0] < seen[1] && seen[1] >= 8,
+            "{seen:?}"
+        );
+    }
+
+    /// The star has more points as the posadas climb, and the belt more tinsel.
+    #[test]
+    fn navidad_builds_up() {
+        let theme = Theme::classic();
+        let opts = Opts::new(INFO.options, toml::Table::new());
+        let (mut points, mut shares) = ([0; 3], [0.0; 3]);
+        for (i, day) in [(12, 12), (1, 3), (12, 24)].into_iter().enumerate() {
+            let ctx = ctx(&theme, &opts, Fiesta::of_day(day.0, day.1));
+            let mut nv = Navidad::new();
+            nv.set(ctx.fiesta);
+            nv.retheme(&ctx);
+            points[i] = nv.points;
+            let tinsel = (0..3000).filter(|&i| nv.belt(i).is_some()).count();
+            shares[i] = tinsel as f32 / 3000.0;
+        }
+        assert_eq!(points, [8, 12, 16]);
+        assert!(shares[0] > 0.2 && shares[0] < shares[1] && shares[1] < shares[2]);
+        assert!(shares[2] > 0.8, "{shares:?}");
+    }
+
+    /// The belt is mostly plata and dorado tinsel, with a strand of rojo or verde
+    /// now and then.
+    #[test]
+    fn the_belt_is_tinsel() {
+        let theme = Theme::classic();
+        let opts = Opts::new(INFO.options, toml::Table::new());
+        let ctx = ctx(&theme, &opts, Fiesta::of_day(12, 24));
+        let mut nv = Navidad::new();
+        nv.set(ctx.fiesta);
+        nv.retheme(&ctx);
+        let colors: Vec<Color> = (0..3000).filter_map(|i| nv.belt(i)).collect();
+        let count = |c: u32| colors.iter().filter(|&&k| k == rgb(c)).count();
+        assert!(count(navidad::PLATA) > count(navidad::BLANCO));
+        assert!(count(navidad::DORADO) > count(navidad::BLANCO));
+        assert!(count(navidad::ROJO) > 0 && count(navidad::VERDE) > 0);
+        assert!(count(navidad::ROJO) * 8 < colors.len());
+    }
+
+    /// On the Santos Inocentes the planets turn round every so often and go
+    /// backwards, shouting, then turn back; on every other day of the Navidad
+    /// they go on as ever.
+    #[test]
+    fn inocentes_go_backwards() {
+        let theme = Theme::classic();
+        let opts = Opts::new(INFO.options, toml::Table::new());
+        for day in [(12, 28), (12, 24)] {
+            let ctx = ctx(&theme, &opts, Fiesta::of_day(day.0, day.1));
+            let mut s = Orrery::new(&ctx);
+            s.resize(&ctx, 120, 36);
+            s.retheme(&ctx);
+            let mut c = Canvas::new(120, 36, Color::Reset);
+            let (mut back, mut forth, mut shouted, mut owned) = (0, 0, 0, 0);
+            let mut last = s.bodies[2].m;
+            for _ in 0..30 * 90 {
+                s.tick(&ctx, 1.0 / 30.0, 1.0 / 30.0);
+                c.clear();
+                s.draw(&ctx, &mut c);
+                // How far the Earth went this frame, as a signed angle.
+                let m = s.bodies[2].m;
+                let step = (m - last + std::f32::consts::PI).rem_euclid(TAU) - std::f32::consts::PI;
+                last = m;
+                if s.nv.dir() < -0.99 {
+                    assert!(step < 0.0, "{day:?}");
+                    back += 1;
+                } else if s.nv.dir() > 0.99 {
+                    assert!(step > 0.0, "{day:?}");
+                    forth += 1;
+                }
+                match s.nv.shout() {
+                    Some("¡INOCENTE!") => {
+                        shouted += 1;
+                        assert!(has(&c, |k| k.ch == '¡'));
+                    }
+                    Some(_) => owned += 1,
+                    None => assert!(!has(&c, |k| k.ch == '¡')),
+                }
+            }
+            if day == (12, 28) {
+                // 14 s in every 40, minus the turns; the shout on top of it.
+                assert!((20 * 30..=40 * 30).contains(&back), "{back}");
+                assert!(forth > 60 * 30, "{forth}");
+                assert!(shouted > 15 * 30 && owned > 3 * 30, "{shouted} {owned}");
+            } else {
+                assert!(back == 0 && shouted == 0 && owned == 0, "{day:?}");
+            }
+        }
+    }
+
+    #[test]
+    fn ordinary_days_have_no_christmas() {
+        let theme = Theme::classic();
+        let opts = Opts::new(INFO.options, toml::Table::new());
+        let ctx = ctx(&theme, &opts, Fiesta::NONE);
+        let mut s = (INFO.make)(&ctx);
+        s.resize(&ctx, 120, 36);
+        s.retheme(&ctx);
+        let mut c = Canvas::new(120, 36, Color::Reset);
+        run(&mut s, &ctx, &mut c, 40, 1.0 / 30.0);
+        assert!(!has(&c, |k| matches!(k.ch, '∩' | '╤' | '◖' | '◗' | '¡')));
+        let holiday = [
+            navidad::ROJO,
+            navidad::VERDE,
+            navidad::PLATA,
+            navidad::BRILLO,
+        ]
+        .map(rgb);
+        assert!(!has(&c, |k| holiday.contains(&k.fg)));
+    }
+
+    /// Navidad comes and goes through `retheme`, and the scene is as it was.
+    #[test]
+    fn navidad_comes_and_goes() {
+        let theme = Theme::classic();
+        let opts = Opts::new(INFO.options, toml::Table::new());
+        let plain = ctx(&theme, &opts, Fiesta::NONE);
+        let fiesta = ctx(&theme, &opts, Fiesta::of_day(12, 24));
+        let mut a = (INFO.make)(&plain);
+        let mut b = (INFO.make)(&plain);
+        for s in [&mut a, &mut b] {
+            s.resize(&plain, 100, 30);
+            s.retheme(&plain);
+        }
+        let mut ca = Canvas::new(100, 30, Color::Reset);
+        let mut cb = Canvas::new(100, 30, Color::Reset);
+        run(&mut a, &plain, &mut ca, 20, 1.0 / 30.0);
+        run(&mut b, &plain, &mut cb, 20, 1.0 / 30.0);
+        b.retheme(&fiesta);
+        run(&mut b, &fiesta, &mut cb, 3, 0.0);
+        assert!(esferas(&cb) > 0);
+        assert_ne!(ca.to_text(), cb.to_text());
+        b.retheme(&plain);
+        run(&mut a, &plain, &mut ca, 20, 1.0 / 30.0);
+        run(&mut b, &plain, &mut cb, 20, 1.0 / 30.0);
+        assert!(ca.cells() == cb.cells());
+
+        // And a holiday that has lasted a while is gone without a trace.
+        b.retheme(&fiesta);
+        run(&mut b, &fiesta, &mut cb, 90, 1.0 / 30.0);
+        b.retheme(&plain);
+        run(&mut b, &plain, &mut cb, 1, 1.0 / 30.0);
+        assert_eq!(esferas(&cb), 0);
+        assert!(!has(&cb, |k| k.fg == rgb(navidad::ROJO)));
+    }
+
+    #[test]
+    fn navidad_survives() {
+        survives(&[(12, 12), (12, 24), (12, 28), (1, 6)]);
     }
 
     #[test]
