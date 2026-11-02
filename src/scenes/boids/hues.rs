@@ -1,8 +1,8 @@
 //! Holiday colors under a theme: each classic color becomes the theme's
-//! accent closest to it in hue (a devil is red under any theme), and grays
-//! and whites the theme's foreground.
+//! accent closest to it in hue (a devil is red under any theme, the flag's
+//! stripe green), and grays and whites the theme's foreground.
 
-use crate::color::Color;
+use crate::color::{Color, rgb};
 use crate::theme::Theme;
 
 /// The hue of a color in degrees, and its saturation (0 for a gray).
@@ -64,4 +64,19 @@ pub(super) fn like(theme: &Theme, native: Color) -> Color {
         Some(_) => solid(Some(&theme.fg), native),
         None => native,
     }
+}
+
+/// Verde, blanco and rojo of the Mexican flag as a theme paints them: the
+/// accents closest to green and red, the foreground for white (under
+/// `classic`, the flag's own colors).
+pub(super) fn tricolor(theme: &Theme) -> [Color; 3] {
+    let flag = [rgb(0x006847), rgb(0xf4f1ea), rgb(0xce1126)];
+    if theme.native {
+        return flag;
+    }
+    [
+        solid(nearest_hue(theme, 130.0).as_ref(), flag[0]),
+        solid(Some(&theme.fg), flag[1]),
+        solid(nearest_hue(theme, 0.0).as_ref(), flag[2]),
+    ]
 }

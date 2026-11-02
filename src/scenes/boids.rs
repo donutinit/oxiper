@@ -25,9 +25,21 @@
 //! sword of light until he vanishes in a puff of brimstone; he is back after
 //! a while. The posadas bring more angels and more visits from San Miguel,
 //! all of it up to Nochebuena. It lives in `boids/navidad.rs`.
+//!
+//! During the Fiestas Patrias the flock becomes palomas in verde, blanco y
+//! rojo, each bird one of the three (`v` with wings that beat and glide, a
+//! ribbon of its color streaming behind each), a wave running through the
+//! flock like the wind through a flag. The hawk becomes the águila real, big
+//! golden-brown wings that beat in bouts and soar (braille, the primaries
+//! splayed like fingers), the serpent writhing in her beak, the flag
+//! streaming behind her and plumas drifting down from her wings. The mes
+//! patrio brings more of the flag: white doves at first, tricolor flocks by
+//! the Grito, a stronger wave, a longer banner and more plumas. It lives in
+//! `boids/patrias.rs`.
 
 mod hues;
 mod navidad;
+mod patrias;
 
 use std::f32::consts::{PI, TAU};
 
@@ -36,6 +48,7 @@ use crate::fiesta::Kind;
 use crate::render::{BOLD, Braille, Canvas};
 use crate::scene::{Ctx, Opt, Scene, SceneInfo, Val};
 use navidad::Navidad;
+use patrias::Patrias;
 
 pub const INFO: SceneInfo = SceneInfo {
     name: "boids",
@@ -142,6 +155,17 @@ const WING_DOTS: [[&str; 3]; 3] = [
     ["##.##", ".###.", ".#.#."],
     [".#.#.", ".###.", "..#.."],
     ["..#..", "..#..", "..#.."],
+];
+/// The wings of a bird seen from the front (the angels', the palomas'), left
+/// and right of its head: raised, level, lowered.
+const FRONT_WINGS: [[char; 2]; 3] = [['\\', '/'], ['-', '-'], ['/', '\\']];
+/// How bright each of those wing frames is.
+const FRONT_LIGHT: [f32; 3] = [1.0, 0.9, 0.78];
+/// The same in braille dots for `style = "dots"`, 5×3 around the head.
+const FRONT_DOTS: [[&str; 3]; 3] = [
+    ["#...#", ".#.#.", "..#.."],
+    [".....", "##.##", "..#.."],
+    [".....", "..#..", "##.##"],
 ];
 /// La Catrina in place of the hawk: the flowers on her hat, the hat, her
 /// sugar-skull face and its jaw. The second string colors each cell:
@@ -459,6 +483,8 @@ pub struct Boids {
     muertos: Option<Box<Muertos>>,
     /// Navidad, when it is on.
     navidad: Option<Box<Navidad>>,
+    /// Fiestas Patrias, when they are on.
+    patrias: Option<Box<Patrias>>,
     /// How many boids the holiday keeps next to an ordinary day (1 when none).
     crowd: f32,
 }
@@ -511,13 +537,14 @@ impl Boids {
             hawk_col: Color::Reset,
             muertos: None,
             navidad: None,
+            patrias: None,
             crowd: 1.0,
         }
     }
 
     /// Is the flock dressed up in wider bodies than an arrow?
     fn dressed(&self) -> bool {
-        self.muertos.is_some() || self.navidad.is_some()
+        self.muertos.is_some() || self.navidad.is_some() || self.patrias.is_some()
     }
 
     /// Is the hawk about? On Navidad San Miguel can drive Luzbel away.
@@ -616,6 +643,7 @@ impl Boids {
         // the hawk is no threat to them while Luzbel flees.
         let field = Field { fw, fh, wrap, ms };
         let navidad = self.navidad.as_deref();
+        let patrias = self.patrias.as_deref();
         let hawk_scares = hawk_on && navidad.is_none_or(|n| n.fleeing().is_none());
         // Monarchs flutter, and drift southwest on the way home (not when
         // bouncing, where it would only pile them on a wall).
@@ -732,6 +760,11 @@ impl Boids {
             }
             if let Some(n) = navidad {
                 let (x, y) = n.force(i, &b, field);
+                fx += x;
+                fy += y;
+            }
+            if let Some(p) = patrias {
+                let (x, y) = p.force(i, &b);
                 fx += x;
                 fy += y;
             }
@@ -1175,6 +1208,16 @@ impl Scene for Boids {
                 n.retheme(ctx);
             }
         }
+        if !ctx.fiesta.is(Kind::Patrias) {
+            self.patrias = None;
+        } else {
+            if self.patrias.as_ref().is_none_or(|p| p.level() != level) {
+                self.patrias = Some(Box::new(Patrias::new(ctx)));
+            }
+            if let Some(p) = &mut self.patrias {
+                p.retheme(ctx);
+            }
+        }
         // The holiday brings more of its flock, or takes them away again.
         let crowd = self.navidad.as_ref().map_or(1.0, |n| n.crowd());
         if crowd != self.crowd {
@@ -1214,6 +1257,9 @@ impl Scene for Boids {
                     self.hawk_on,
                 );
             }
+            if let Some(p) = &mut self.patrias {
+                p.t += h;
+            }
             self.trail_clock += h;
             if self.trail_clock >= 1.0 / TRAIL_HZ {
                 self.trail_clock %= 1.0 / TRAIL_HZ;
@@ -1237,6 +1283,10 @@ impl Scene for Boids {
             n.drift(dt, field);
             pilot(&mut n.facing, &mut n.drape, &self.hawk, dt);
         }
+        if let Some(p) = &mut self.patrias {
+            pilot(&mut p.facing, &mut p.drape, &self.hawk, dt);
+            p.drift(dt, &self.hawk, self.hawk_on);
+        }
     }
 
     fn draw(&mut self, ctx: &Ctx, c: &mut Canvas) {
@@ -1248,6 +1298,11 @@ impl Scene for Boids {
         if let Some(n) = self.navidad.take() {
             self.draw_navidad(ctx, c, &n);
             self.navidad = Some(n);
+            return;
+        }
+        if let Some(p) = self.patrias.take() {
+            self.draw_patrias(ctx, c, &p);
+            self.patrias = Some(p);
             return;
         }
         self.br.clear();
@@ -1379,13 +1434,16 @@ mod tests {
 
     #[test]
     fn the_holiday_survives_odd_sizes_and_steps() {
-        // Día de Muertos at its height, and Navidad at its first posada's eve,
-        // at Nochebuena and at the Reyes.
+        // Día de Muertos at its height, Navidad at its first posada's eve, at
+        // Nochebuena and at the Reyes, and the Fiestas Patrias at the start of
+        // the mes patrio and at the Grito.
         let days = [
             Fiesta::of_day(11, 2),
             Fiesta::of_day(12, 12),
             Fiesta::of_day(12, 24),
             Fiesta::of_day(1, 6),
+            Fiesta::of_day(9, 1),
+            Fiesta::of_day(9, 15),
         ];
         for theme in ["classic", "dracula"] {
             let th = crate::theme::Theme::builtin(theme).unwrap();
@@ -1551,5 +1609,86 @@ mod tests {
             let c = frame(&mut s, &ctx, 100, 30);
             assert!(c.cells() == want.cells(), "{fiesta:?}");
         }
+    }
+
+    /// How many palomas (the `v` of their bodies) show red, green and white.
+    fn tints(c: &Canvas) -> (usize, usize, usize) {
+        let mut n = (0, 0, 0);
+        for cell in c.cells().iter().filter(|cell| cell.ch == 'v') {
+            if let Color::Rgb(r, g, b) = cell.fg {
+                n.0 += usize::from(r > g.saturating_mul(2) && r > b.saturating_mul(2));
+                n.1 += usize::from(g > r.saturating_mul(2));
+                n.2 += usize::from(r > 150 && g > 150 && b > 150);
+            }
+        }
+        n
+    }
+
+    #[test]
+    fn palomas_and_the_aguila_come_for_the_fiestas_patrias() {
+        let th = crate::theme::Theme::classic();
+        let o = opts("");
+        for fiesta in [Fiesta::of_day(9, 15), Fiesta::of_day(9, 1)] {
+            let ctx = ctx(&th, &o, fiesta);
+            let mut s = scene(&ctx, 120, 36);
+            let c = frame(&mut s, &ctx, 120, 36);
+            assert!(has(&c, &['v']), "{fiesta:?}: no palomas");
+            assert!(has(&c, &['◉', '▸', '◂']), "{fiesta:?}: no águila");
+            // Her wings and her banner are braille.
+            let dots = |cell: &crate::render::Cell| ('\u{2800}'..='\u{28ff}').contains(&cell.ch);
+            assert!(c.cells().iter().any(dots), "{fiesta:?}: no wings");
+            assert!(!has(&c, &ARROWS) && !has(&c, &HAWK), "{fiesta:?}");
+        }
+        // At the Grito the flock is all three colors of the flag.
+        let grito = ctx(&th, &o, Fiesta::of_day(9, 15));
+        let mut s = scene(&grito, 200, 60);
+        let (red, green, white) = tints(&frame(&mut s, &grito, 200, 60));
+        assert!(
+            red > 10 && green > 10 && white > 10,
+            "{red} {green} {white}"
+        );
+        // The dots style is palomas in braille.
+        let o = opts("style = 'dots'");
+        let grito = ctx(&th, &o, Fiesta::of_day(9, 15));
+        let mut s = scene(&grito, 120, 36);
+        let c = frame(&mut s, &grito, 120, 36);
+        assert!(has(&c, &['◉']) && !has(&c, &['v']));
+    }
+
+    #[test]
+    fn the_flag_comes_to_the_flock_through_the_mes_patrio() {
+        let th = crate::theme::Theme::classic();
+        let o = opts("");
+        let tricolor = |day: u32| {
+            let ctx = ctx(&th, &o, Fiesta::of_day(9, day));
+            let mut s = scene(&ctx, 200, 60);
+            let (r, g, w) = tints(&frame(&mut s, &ctx, 200, 60));
+            (r + g, w)
+        };
+        // White doves at first, a third of each color by the Grito.
+        let (early, early_white) = tricolor(1);
+        let (late, late_white) = tricolor(15);
+        assert!(early < late, "{early} {late}");
+        assert!(early_white > late_white, "{early_white} {late_white}");
+    }
+
+    #[test]
+    fn the_fiestas_patrias_come_and_go_through_retheme() {
+        let th = crate::theme::Theme::classic();
+        let o = opts("");
+        let plain = ctx(&th, &o, Fiesta::NONE);
+        let fiesta = ctx(&th, &o, Fiesta::of_day(9, 15));
+        let mut s = scene(&plain, 80, 24);
+        let ordinary = s.boids.len();
+        assert!(s.patrias.is_none());
+        s.retheme(&fiesta);
+        assert!(s.patrias.is_some() && s.boids.len() == ordinary);
+        let c = frame(&mut s, &fiesta, 80, 24);
+        assert!(has(&c, &['v', '◉']));
+        s.retheme(&plain);
+        assert!(s.patrias.is_none());
+        let c = frame(&mut s, &plain, 80, 24);
+        assert!(!has(&c, &['v', '◉']));
+        assert!(has(&c, &ARROWS) && has(&c, &HAWK));
     }
 }

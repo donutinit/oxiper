@@ -9,7 +9,10 @@
 use std::f32::consts::TAU;
 
 use super::hues::like;
-use super::{Boid, Boids, FLUTTER, Field, HEAD_LUT, Ribbon, Style, hash01};
+use super::{
+    Boid, Boids, FLUTTER, FRONT_DOTS, FRONT_LIGHT, FRONT_WINGS, Field, HEAD_LUT, Ribbon, Style,
+    hash01,
+};
 use crate::color::{Color, mix_oklab, rgb};
 use crate::render::{BOLD, Canvas};
 use crate::scene::Ctx;
@@ -23,18 +26,6 @@ const AMARILLO: u32 = 0xffd23b;
 /// The angels' wings, one color per flock: white, gold, silver and a warm
 /// candlelit white.
 const WING_COLORS: [u32; 4] = [NIEVE, DORADO, PLATA, 0xfff1c9];
-/// An angel's wings seen from the front, left and right of its head: raised,
-/// level, lowered.
-const WINGS: [[char; 2]; 3] = [['\\', '/'], ['-', '-'], ['/', '\\']];
-/// How bright each wing frame is.
-const WING_LIGHT: [f32; 3] = [1.0, 0.9, 0.78];
-/// The same in braille dots for `style = "dots"`, 5×3 around the head (the
-/// halo is the dot above).
-const WING_DOTS: [[&str; 3]; 3] = [
-    ["#...#", ".#.#.", "..#.."],
-    [".....", "##.##", "..#.."],
-    [".....", "..#..", "##.##"],
-];
 /// Luzbel in place of the hawk: horns, his angry face, his cape and his
 /// hooves. The second string colors each cell: `h` horns (gilded), `r` red,
 /// `R` bright red, `s` shadow, `y` eyes, `d` nose.
@@ -316,7 +307,7 @@ impl Navidad {
         }
     }
 
-    /// Wing frame of angel `i` (an index into `WINGS`): a steady beat, one
+    /// Wing frame of angel `i` (an index into `FRONT_WINGS`): a steady beat, one
     /// rhythm for each.
     fn wing_frame(&self, i: usize) -> usize {
         let h = hash01(i);
@@ -546,12 +537,12 @@ impl Boids {
             for i in 0..count {
                 let b = self.boids[i];
                 let w = n.wing_frame(i);
-                let col = self.wing_col(n, i).scale(WING_LIGHT[w]);
+                let col = self.wing_col(n, i).scale(FRONT_LIGHT[w]);
                 let (x, y) = (
                     (b.x * 2.0).floor() as i32 - 2,
                     (b.y * 2.0).floor() as i32 - 1,
                 );
-                for (r, row) in WING_DOTS[w].iter().enumerate() {
+                for (r, row) in FRONT_DOTS[w].iter().enumerate() {
                     for (k, d) in row.bytes().enumerate() {
                         if d == b'#' {
                             self.br.set(x + k as i32, y + r as i32, col);
@@ -594,14 +585,14 @@ impl Boids {
             for i in 0..count {
                 let b = &self.boids[i];
                 let w = n.wing_frame(i);
-                let col = self.wing_col(n, i).scale(WING_LIGHT[w]);
+                let col = self.wing_col(n, i).scale(FRONT_LIGHT[w]);
                 let (x, y) = (b.x.round() as i32, (b.y * 0.5) as i32);
                 // The halo glows a little, each at its own pace.
                 let glow = 0.7 + 0.3 * (n.t * 2.0 + i as f32 * 1.3).sin();
                 c.set(x, y - 1, '°', n.halo.scale(glow));
-                c.set(x - 1, y, WINGS[w][0], col);
+                c.set(x - 1, y, FRONT_WINGS[w][0], col);
                 c.set_attr(x, y, 'o', n.body, BOLD);
-                c.set(x + 1, y, WINGS[w][1], col);
+                c.set(x + 1, y, FRONT_WINGS[w][1], col);
             }
         }
         if luzbel {
