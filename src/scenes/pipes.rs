@@ -13,6 +13,16 @@
 //! The higher the holiday, the more joints blossom, the more strings of
 //! flowers hang, and terciopelo and nube join the marigolds. It is all in how
 //! the pieces are drawn: the pipes grow exactly as on any other day.
+//!
+//! At Navidad the pipes are strings of series lights: foquitos of every color
+//! (rojo, verde, azul, amarillo, rosa, naranja) every few cells along a verde
+//! pino cord, blinking in chase patterns that run along each pipe, in turns,
+//! in odds and evens or at random. An esfera or a flor de nochebuena (budding
+//! and opening) hangs at some of the joints and some hanging stretches are
+//! heno. The further the posadas have climbed, the more pipes are strung, the
+//! more joints are trimmed and the more heno hangs. Under a theme the colors
+//! are the theme's accents closest to those hues. Again only the drawing
+//! changes.
 
 use crate::color::{Color, rgb};
 use crate::fiesta::{Fiesta, Kind};
@@ -137,6 +147,56 @@ const BUD: usize = 5;
 /// Pieces of one color along a garland, like one paper flag after another.
 const FLAG: usize = 2;
 
+/// Navidad under `classic`: verde pino for the cord, rojo nochebuena, dorado,
+/// plata and blanco for the esferas and flowers, and heno.
+const PINO: Color = rgb(0x1F6F3A);
+const NOCHEBUENA: Color = rgb(0xC8102E);
+const DORADO: Color = rgb(0xF2B632);
+const PLATA: Color = rgb(0xC9CCD6);
+const BLANCO: Color = rgb(0xF4F1EA);
+const HENO: Color = rgb(0x9AA58A);
+/// The foquitos: rojo, verde, azul, amarillo, rosa and naranja.
+const FOQUITOS: [Color; 6] = [
+    rgb(0xFF3B3B),
+    rgb(0x3BD16F),
+    rgb(0x3B7BFF),
+    rgb(0xFFD23B),
+    rgb(0xFF5FB4),
+    rgb(0xFF8C1A),
+];
+/// Navidad's palette follows the cord: every foquito in three tiers (off,
+/// glowing, lit), then the colors below.
+const TIERS: usize = 3;
+const N_ROJO: usize = FOQUITOS.len() * TIERS;
+const N_DORADO: usize = N_ROJO + 1;
+const N_PLATA: usize = N_ROJO + 2;
+const N_BLANCO: usize = N_ROJO + 3;
+const N_HENO: usize = N_ROJO + 4;
+/// Cells between one foquito and the next along a string of lights.
+const GAP: u16 = 3;
+/// Steps of the chase patterns per second.
+const BEATS: f32 = 4.0;
+
+/// How today's holiday dresses the pipes.
+#[derive(Clone, Copy, PartialEq)]
+enum Garb {
+    Plain,
+    Muertos,
+    Navidad,
+}
+
+impl Garb {
+    fn of(fiesta: Fiesta) -> Garb {
+        if fiesta.is(Kind::Muertos) {
+            Garb::Muertos
+        } else if fiesta.is(Kind::Navidad) {
+            Garb::Navidad
+        } else {
+            Garb::Plain
+        }
+    }
+}
+
 #[derive(Clone, Copy)]
 struct Piece {
     /// `'\0'` marks an empty cell.
@@ -201,12 +261,17 @@ struct Pipes {
     faded: Vec<Color>,
     rgb: bool,
 
-    /// The holiday, cached in `retheme`. On Día de Muertos the palette holds
-    /// `lines` garland colors followed by `BLOOMS`.
+    /// The holiday, cached in `retheme`. On a holiday the palette holds
+    /// `lines` colors for the pipes themselves, followed by the holiday's own.
     fiesta: Fiesta,
+    garb: Garb,
     lines: usize,
-    /// Mixed into the hash that decides which joints blossom.
+    /// Mixed into the hashes that decide which joints are trimmed.
     salt: u32,
+    /// Navidad's lights blink on the beat: steps taken, and the share of the
+    /// next one.
+    beat: u32,
+    beat_acc: f32,
 }
 
 /// Parses `style`: names, pipes.sh numbers, comma lists, `all`, or `c` + 16 chars.
@@ -330,8 +395,11 @@ impl Pipes {
             faded: Vec::new(),
             rgb: false,
             fiesta: Fiesta::NONE,
+            garb: Garb::Plain,
             lines: 1,
             salt: (ctx.seed ^ (ctx.seed >> 32)) as u32 ^ 0x0211_1102,
+            beat: 0,
+            beat_acc: 0.0,
         }
     }
 
@@ -461,6 +529,101 @@ impl Pipes {
         };
         (ch, lines + k)
     }
+
+    /// Navidad: the piece at cell `i` as part of a string of lights. A foquito
+    /// every few cells blinks along the cord (most of the pipes are strung,
+    /// all of them at Nochebuena), some hanging stretches are heno and some
+    /// joints are trimmed with an esfera or a nochebuena. Returns the
+    /// character and its palette index (the cord, then Navidad's colors).
+    fn dress_navidad(&self, i: usize, p: &Piece) -> (char, usize) {
+        let (from, to) = (p.way / 4, p.way % 4);
+        let level = self.fiesta.level.clamp(0.0, 1.0);
+        let lines = self.lines;
+        let ascii = p.ch.is_ascii();
+        if from != to {
+            // Hashes rather than the RNG, so ordinary days draw the same numbers.
+            let h = mix(i as u32 ^ p.born.rotate_left(13) ^ self.salt);
+            if h % 1024 < (1024.0 * (0.15 + 0.5 * level)) as u32 {
+                if (h >> 10) % 100 < 50 {
+                    let tint = [N_ROJO, N_DORADO, N_ROJO, N_PLATA, N_DORADO, N_BLANCO];
+                    return (
+                        if ascii { '@' } else { '◉' },
+                        lines + tint[(h >> 17) as usize % tint.len()],
+                    );
+                }
+                return self.nochebuena(p, (h >> 17).is_multiple_of(5));
+            }
+        } else {
+            let id = mix(p.color as u32 ^ self.salt ^ 0x1224_2512);
+            if id % 100 < (35.0 + 65.0 * level) as u32 && p.seq.is_multiple_of(GAP) {
+                return self.foquito(p, id);
+            }
+            // Some hanging stretches, a few cells at a time, are heno.
+            if from % 2 == 0
+                && mix(id.wrapping_add((p.seq / 4) as u32)) % 100 < (8.0 + 32.0 * level) as u32
+            {
+                let k = (id >> 4) as usize + p.seq as usize;
+                let ch = if ascii {
+                    ['}', '{', ')']
+                } else {
+                    ['ʃ', 'ʅ', 'ƒ']
+                }[k % 3];
+                return (ch, lines + N_HENO);
+            }
+        }
+        (p.ch, p.color as usize % lines)
+    }
+
+    /// A foquito on the cord, lit, glowing or off as the pipe's pattern goes:
+    /// a chase with a tail running forward, a chase running back, odds and
+    /// evens, or at random.
+    fn foquito(&self, p: &Piece, id: u32) -> (char, usize) {
+        let n = (p.seq / GAP) as u32;
+        let beat = self.beat;
+        let tier = match (id >> 8) % 4 {
+            0 => match n.wrapping_sub(beat) % 4 {
+                0 => 2,
+                3 => 1,
+                _ => 0,
+            },
+            1 => match n.wrapping_add(beat) % 3 {
+                0 => 2,
+                1 => 1,
+                _ => 0,
+            },
+            2 if n.wrapping_add(beat / 2).is_multiple_of(2) => 2,
+            2 => 0,
+            _ => match mix(n.wrapping_mul(0x9E37_79B1) ^ (beat / 2) ^ id) % 4 {
+                0 | 1 => 2,
+                2 => 1,
+                _ => 0,
+            },
+        };
+        let ch = match (p.ch.is_ascii(), tier) {
+            (false, 0) => '•',
+            (false, _) => '●',
+            (true, 0) => '.',
+            (true, 1) => 'o',
+            (true, _) => 'O',
+        };
+        let color = ((id >> 12) + n) as usize % FOQUITOS.len();
+        (ch, self.lines + color * TIERS + tier)
+    }
+
+    /// A flor de nochebuena tied at a joint, budding and opening in the first
+    /// steps after its pipe laid it.
+    fn nochebuena(&self, p: &Piece, white: bool) -> (char, usize) {
+        let ascii = p.ch.is_ascii();
+        let lines = self.lines;
+        match self.tick.wrapping_sub(p.born) {
+            0..=2 => (if ascii { '.' } else { '•' }, p.color as usize % lines),
+            3..=7 => (if ascii { '*' } else { '❀' }, lines + N_ROJO),
+            _ => (
+                if ascii { '%' } else { '❋' },
+                lines + if white { N_BLANCO } else { N_ROJO },
+            ),
+        }
+    }
 }
 
 /// A small integer hash.
@@ -469,6 +632,81 @@ fn mix(mut h: u32) -> u32 {
     h ^= h >> 15;
     h = h.wrapping_mul(0x85EB_CA77);
     h ^ (h >> 13)
+}
+
+/// The hue of a color in degrees, with its saturation and brightness.
+fn hsv(c: Color) -> Option<(f32, f32, f32)> {
+    let (r, g, b) = match c {
+        Color::Rgb(r, g, b) => (r, g, b),
+        Color::Ansi(n) => crate::color::ansi_rgb(n),
+        Color::Reset => return None,
+    };
+    let (r, g, b) = (r as f32 / 255.0, g as f32 / 255.0, b as f32 / 255.0);
+    let max = r.max(g).max(b);
+    let d = max - r.min(g).min(b);
+    let h = if d <= 0.0 {
+        0.0
+    } else if max == r {
+        60.0 * ((g - b) / d).rem_euclid(6.0)
+    } else if max == g {
+        60.0 * ((b - r) / d + 2.0)
+    } else {
+        60.0 * ((r - g) / d + 4.0)
+    };
+    Some((h, if max > 0.0 { d / max } else { 0.0 }, max))
+}
+
+/// The accent of the theme whose hue is closest to `hue`, within `tol`
+/// degrees and not one of `avoid`; the theme's accent number `nth` if none is.
+fn near(ctx: &Ctx, hue: f32, tol: f32, avoid: &[Color], nth: usize) -> Color {
+    let gap = |a: f32| {
+        let d = (a - hue).abs() % 360.0;
+        d.min(360.0 - d)
+    };
+    ctx.theme
+        .colors
+        .iter()
+        .copied()
+        .filter(|c| !avoid.contains(c))
+        .filter_map(|c| {
+            let (h, s, v) = hsv(c)?;
+            (s >= 0.25 && v >= 0.3).then_some((gap(h), c))
+        })
+        .filter(|&(d, _)| d <= tol)
+        .min_by(|a, b| a.0.total_cmp(&b.0))
+        .map_or_else(|| ctx.pick(nth, Color::Reset), |(_, c)| c)
+}
+
+/// Navidad's colors: the cord, then the foquitos in three tiers and the rest
+/// (see `N_ROJO`). Under `classic` the holiday's own, else the theme's
+/// accents nearest each hue.
+fn navidad_colors(ctx: &Ctx) -> (Color, Vec<Color>) {
+    let t = ctx.theme;
+    let (pino, rojo, dorado, plata, blanco, heno, bulbs) = if t.native {
+        (PINO, NOCHEBUENA, DORADO, PLATA, BLANCO, HENO, FOQUITOS)
+    } else {
+        let rojo = near(ctx, 355.0, 35.0, &[], 1);
+        let verde = near(ctx, 130.0, 55.0, &[rojo], 2);
+        let amarillo = near(ctx, 50.0, 22.0, &[rojo, verde], 3);
+        let azul = near(ctx, 220.0, 45.0, &[rojo, verde, amarillo], 4);
+        let rosa = near(ctx, 325.0, 35.0, &[rojo, verde, amarillo, azul], 5);
+        let naranja = near(ctx, 28.0, 15.0, &[rojo, verde, amarillo, azul, rosa], 6);
+        (
+            verde,
+            rojo,
+            amarillo,
+            ctx.fade(t.fg, 0.2),
+            t.fg,
+            verde.lerp(t.fg, 0.55),
+            [rojo, verde, azul, amarillo, rosa, naranja],
+        )
+    };
+    let mut colors = Vec::with_capacity(N_HENO + 1);
+    for c in bulbs {
+        colors.extend([c.scale(0.3), c.scale(0.65), c]);
+    }
+    colors.extend([rojo, dorado, plata, blanco, heno]);
+    (pino, colors)
 }
 
 impl Scene for Pipes {
@@ -515,13 +753,26 @@ impl Scene for Pipes {
                 .extend((0..n).map(|i| ctx.pick(i, Color::Reset)));
         }
         self.fiesta = ctx.fiesta;
-        if self.fiesta.is(Kind::Muertos) {
-            if self.colored && ctx.theme.native {
-                self.palette.clear();
-                self.palette.extend(PICADO);
+        self.garb = Garb::of(ctx.fiesta);
+        match self.garb {
+            Garb::Plain => {}
+            Garb::Muertos => {
+                if self.colored && ctx.theme.native {
+                    self.palette.clear();
+                    self.palette.extend(PICADO);
+                }
+                self.lines = self.palette.len();
+                self.palette.extend(BLOOMS);
             }
-            self.lines = self.palette.len();
-            self.palette.extend(BLOOMS);
+            Garb::Navidad => {
+                let (cord, colors) = navidad_colors(ctx);
+                if self.colored {
+                    self.palette.clear();
+                    self.palette.push(cord);
+                }
+                self.lines = self.palette.len();
+                self.palette.extend(colors);
+            }
         }
         self.rgb = self.palette.iter().all(|c| c.is_rgb());
         self.faded.clear();
@@ -537,6 +788,12 @@ impl Scene for Pipes {
     }
 
     fn update(&mut self, _ctx: &Ctx, dt: f32) {
+        if self.garb == Garb::Navidad {
+            self.beat_acc += dt.clamp(0.0, 1.0) * BEATS;
+            let steps = self.beat_acc.floor();
+            self.beat_acc -= steps;
+            self.beat = self.beat.wrapping_add(steps as u32);
+        }
         if self.pipes.is_empty() {
             return;
         }
@@ -552,8 +809,8 @@ impl Scene for Pipes {
 
     fn draw(&mut self, _ctx: &Ctx, c: &mut Canvas) {
         let w = self.w;
-        let fiesta = self.fiesta.is(Kind::Muertos);
-        let n = if fiesta {
+        let garb = self.garb;
+        let n = if garb != Garb::Plain {
             self.lines.max(1)
         } else {
             self.palette.len()
@@ -566,10 +823,10 @@ impl Scene for Pipes {
                 continue;
             }
             let (x, y) = (i as i32 % w, i as i32 / w);
-            let (ch, ci) = if fiesta {
-                self.dress(i, p, n, bloom)
-            } else {
-                (p.ch, p.color as usize % n)
+            let (ch, ci) = match garb {
+                Garb::Plain => (p.ch, p.color as usize % n),
+                Garb::Muertos => self.dress(i, p, n, bloom),
+                Garb::Navidad => self.dress_navidad(i, p),
             };
             if !self.fade {
                 c.set_attr(x, y, ch, self.palette[ci], base_attr);
@@ -602,19 +859,25 @@ impl Scene for Pipes {
 mod tests {
     use super::*;
 
-    const DAYS: [Fiesta; 3] = [
-        Fiesta::NONE,
-        Fiesta {
-            kind: crate::fiesta::Kind::Muertos,
-            level: 1.0,
-            ..Fiesta::NONE
-        },
-        Fiesta {
-            kind: crate::fiesta::Kind::Muertos,
-            level: 0.25,
-            ..Fiesta::NONE
-        },
-    ];
+    /// An ordinary day, Día de Muertos at two levels, and the other holidays
+    /// the pipes dress for.
+    fn days() -> [Fiesta; 5] {
+        [
+            Fiesta::NONE,
+            Fiesta {
+                kind: Kind::Muertos,
+                level: 1.0,
+                ..Fiesta::NONE
+            },
+            Fiesta {
+                kind: Kind::Muertos,
+                level: 0.25,
+                ..Fiesta::NONE
+            },
+            Fiesta::height(Kind::Navidad),
+            Fiesta::of_day(12, 16),
+        ]
+    }
 
     /// Runs the scene with `opts` through odd sizes, huge steps, themes and
     /// holidays.
@@ -623,7 +886,7 @@ mod tests {
         let o = crate::scene::Opts::new(INFO.options, table);
         for (theme, bg) in [("classic", Color::Reset), ("nord", Color::Rgb(20, 20, 30))] {
             let th = crate::theme::Theme::builtin(theme).unwrap();
-            for fiesta in DAYS {
+            for fiesta in days() {
                 let ctx = Ctx {
                     theme: &th,
                     opts: &o,
@@ -668,7 +931,7 @@ mod tests {
         let o = crate::scene::Opts::new(INFO.options, toml::Table::new());
         for theme in ["classic", "dracula"] {
             let th = crate::theme::Theme::builtin(theme).unwrap();
-            for (month, day) in [(11, 2), (10, 28), (1, 1)] {
+            for (month, day) in [(11, 2), (10, 28), (6, 15)] {
                 let ctx = Ctx {
                     theme: &th,
                     opts: &o,
@@ -720,6 +983,185 @@ mod tests {
         let mut c = Canvas::new(100, 30, Color::Reset);
         s.draw(&ctx, &mut c);
         assert!(c.cells().iter().all(|x| !x.fg.is_rgb()));
+    }
+
+    fn frame(s: &mut dyn Scene, ctx: &Ctx) -> Canvas {
+        let mut c = Canvas::new(100, 30, Color::Reset);
+        c.clear();
+        s.draw(ctx, &mut c);
+        c
+    }
+
+    fn count(c: &Canvas, set: &str) -> usize {
+        c.cells().iter().filter(|x| set.contains(x.ch)).count()
+    }
+
+    /// A scene on `fiesta`, grown for `secs` seconds at 100x30.
+    fn grown(
+        opts: &crate::scene::Opts,
+        th: &crate::theme::Theme,
+        fiesta: Fiesta,
+        secs: u32,
+    ) -> (Box<dyn Scene>, Canvas) {
+        let ctx = Ctx {
+            theme: th,
+            opts,
+            bg: Color::Reset,
+            seed: 7,
+            fiesta,
+        };
+        let mut s = (INFO.make)(&ctx);
+        s.resize(&ctx, 100, 30);
+        s.retheme(&ctx);
+        run(s.as_mut(), &ctx, secs);
+        let c = frame(s.as_mut(), &ctx);
+        (s, c)
+    }
+
+    /// Foquitos, trimmings and heno on screen at Navidad.
+    fn strung(c: &Canvas) -> (usize, usize, usize) {
+        (count(c, "●•"), count(c, "◉❋❀"), count(c, "ʃʅƒ"))
+    }
+
+    #[test]
+    fn dresses_for_navidad() {
+        let o = crate::scene::Opts::new(INFO.options, toml::Table::new());
+        for theme in ["classic", "dracula"] {
+            let th = crate::theme::Theme::builtin(theme).unwrap();
+            for (month, day) in [(12, 24), (12, 16), (1, 6), (6, 15)] {
+                let (_, c) = grown(&o, &th, Fiesta::of_day(month, day), 3);
+                let (bulbs, trims, heno) = strung(&c);
+                if month == 6 {
+                    assert_eq!((bulbs, trims, heno), (0, 0, 0), "{theme}");
+                } else {
+                    assert!(bulbs > 40 && trims > 3 && heno > 3, "{theme} {month}-{day}");
+                }
+            }
+        }
+        // Under `classic` the cord is verde pino and the foquitos shine in
+        // their own colors.
+        let th = crate::theme::Theme::classic();
+        let (_, c) = grown(&o, &th, Fiesta::height(Kind::Navidad), 3);
+        assert!(c.cells().iter().any(|x| x.fg == PINO));
+        for foquito in FOQUITOS {
+            assert!(c.cells().iter().any(|x| x.fg == foquito), "{foquito:?}");
+        }
+    }
+
+    #[test]
+    fn the_posadas_string_more_lights() {
+        let o = crate::scene::Opts::new(INFO.options, toml::Table::new());
+        let th = crate::theme::Theme::classic();
+        let (_, first) = grown(&o, &th, Fiesta::of_day(12, 12), 4);
+        let (_, last) = grown(&o, &th, Fiesta::of_day(12, 24), 4);
+        let (a, b) = (strung(&first), strung(&last));
+        assert!(a.0 < b.0 && a.1 < b.1 && a.2 < b.2, "{a:?} {b:?}");
+    }
+
+    #[test]
+    fn the_foquitos_blink_along_the_pipes() {
+        let o = crate::scene::Opts::new(INFO.options, toml::Table::new());
+        let th = crate::theme::Theme::classic();
+        let fiesta = Fiesta::height(Kind::Navidad);
+        let (mut s, before) = grown(&o, &th, fiesta, 3);
+        let ctx = Ctx {
+            theme: &th,
+            opts: &o,
+            bg: Color::Reset,
+            seed: 7,
+            fiesta,
+        };
+        run(s.as_mut(), &ctx, 1);
+        let after = frame(s.as_mut(), &ctx);
+        // The same bulbs, in the same places, now lit or off.
+        let blinking = before
+            .cells()
+            .iter()
+            .zip(after.cells())
+            .filter(|(a, b)| "●•".contains(a.ch) && "●•".contains(b.ch) && a != b)
+            .count();
+        assert!(blinking > 20, "{blinking}");
+    }
+
+    /// A holiday the pipes have no costume for, and an ordinary day, draw
+    /// the same.
+    #[test]
+    fn an_ordinary_day_is_untouched() {
+        let o = crate::scene::Opts::new(INFO.options, toml::Table::new());
+        for theme in ["classic", "nord"] {
+            let th = crate::theme::Theme::builtin(theme).unwrap();
+            let (_, plain) = grown(&o, &th, Fiesta::NONE, 5);
+            for other in [Kind::Candelaria, Kind::Carnaval, Kind::Nino] {
+                let (_, c) = grown(&o, &th, Fiesta::height(other), 5);
+                assert!(plain.cells() == c.cells(), "{theme} {other:?}");
+            }
+        }
+    }
+
+    /// The pipes grow from the same random numbers on every day: only how
+    /// they are drawn changes.
+    #[test]
+    fn the_pipes_grow_the_same_on_every_day() {
+        let o = crate::scene::Opts::new(INFO.options, toml::Table::new());
+        let th = crate::theme::Theme::classic();
+        let grown = |fiesta| {
+            let ctx = Ctx {
+                theme: &th,
+                opts: &o,
+                bg: Color::Reset,
+                seed: 5,
+                fiesta,
+            };
+            let mut p = Pipes::new(&ctx);
+            p.resize(&ctx, 80, 24);
+            p.retheme(&ctx);
+            for _ in 0..200 {
+                p.step();
+            }
+            p.grid
+                .iter()
+                .map(|x| (x.ch, x.color, x.way, x.seq, x.born))
+                .collect::<Vec<_>>()
+        };
+        let plain = grown(Fiesta::NONE);
+        for fiesta in [Fiesta::height(Kind::Navidad), Fiesta::of_day(11, 2)] {
+            assert!(plain == grown(fiesta), "{fiesta:?}");
+        }
+    }
+
+    #[test]
+    fn navidad_comes_and_goes_through_retheme() {
+        let o = crate::scene::Opts::new(INFO.options, toml::Table::new());
+        let th = crate::theme::Theme::classic();
+        let mut ctx = Ctx {
+            theme: &th,
+            opts: &o,
+            bg: Color::Reset,
+            seed: 3,
+            fiesta: Fiesta::NONE,
+        };
+        let mut s = (INFO.make)(&ctx);
+        s.resize(&ctx, 100, 30);
+        s.retheme(&ctx);
+        run(s.as_mut(), &ctx, 3);
+        assert_eq!(strung(&frame(s.as_mut(), &ctx)), (0, 0, 0));
+        ctx.fiesta = Fiesta::height(Kind::Navidad);
+        s.retheme(&ctx);
+        let (bulbs, trims, heno) = strung(&frame(s.as_mut(), &ctx));
+        assert!(bulbs > 40 && trims > 3 && heno > 3);
+        // From a holiday to another, and back to an ordinary day.
+        ctx.fiesta = Fiesta::of_day(11, 2);
+        s.retheme(&ctx);
+        assert_eq!(count(&frame(s.as_mut(), &ctx), "ʃʅƒ◉❋"), 0);
+        ctx.fiesta = Fiesta::NONE;
+        s.retheme(&ctx);
+        assert_eq!(strung(&frame(s.as_mut(), &ctx)), (0, 0, 0));
+        assert!(
+            frame(s.as_mut(), &ctx)
+                .cells()
+                .iter()
+                .all(|x| !x.fg.is_rgb())
+        );
     }
 
     #[test]
