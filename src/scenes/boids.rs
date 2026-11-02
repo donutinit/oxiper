@@ -36,9 +36,19 @@
 //! patrio brings more of the flag: white doves at first, tricolor flocks by
 //! the Grito, a stronger wave, a longer banner and more plumas. It lives in
 //! `boids/patrias.rs`.
+//!
+//! On Día del Niño the flock becomes papalotes of every toy color, each in
+//! two colors that show as it turns over (single-cell ones too, braille
+//! diamonds in `dots` style), dancing on the wind: gusts that turn with the
+//! height and the hour blow them about while wisps of wind drift across the
+//! sky. Each trails a long tail of paper rags that follows the way it flew,
+//! fluttering, with bows tied along it. The hawk becomes a big papalote,
+//! four colors in a frame of madera and the longest tail of all, the flock
+//! scattering from it. It lives in `boids/nino.rs`.
 
 mod hues;
 mod navidad;
+mod nino;
 mod patrias;
 
 use std::f32::consts::{PI, TAU};
@@ -48,6 +58,7 @@ use crate::fiesta::Kind;
 use crate::render::{BOLD, Braille, Canvas};
 use crate::scene::{Ctx, Opt, Scene, SceneInfo, Val};
 use navidad::Navidad;
+use nino::Nino;
 use patrias::Patrias;
 
 pub const INFO: SceneInfo = SceneInfo {
@@ -485,6 +496,8 @@ pub struct Boids {
     navidad: Option<Box<Navidad>>,
     /// Fiestas Patrias, when they are on.
     patrias: Option<Box<Patrias>>,
+    /// Día del Niño, when it is on.
+    nino: Option<Box<Nino>>,
     /// How many boids the holiday keeps next to an ordinary day (1 when none).
     crowd: f32,
 }
@@ -538,13 +551,17 @@ impl Boids {
             muertos: None,
             navidad: None,
             patrias: None,
+            nino: None,
             crowd: 1.0,
         }
     }
 
     /// Is the flock dressed up in wider bodies than an arrow?
     fn dressed(&self) -> bool {
-        self.muertos.is_some() || self.navidad.is_some() || self.patrias.is_some()
+        self.muertos.is_some()
+            || self.navidad.is_some()
+            || self.patrias.is_some()
+            || self.nino.is_some()
     }
 
     /// Is the hawk about? On Navidad San Miguel can drive Luzbel away.
@@ -644,6 +661,7 @@ impl Boids {
         let field = Field { fw, fh, wrap, ms };
         let navidad = self.navidad.as_deref();
         let patrias = self.patrias.as_deref();
+        let nino = self.nino.as_deref();
         let hawk_scares = hawk_on && navidad.is_none_or(|n| n.fleeing().is_none());
         // Monarchs flutter, and drift southwest on the way home (not when
         // bouncing, where it would only pile them on a wall).
@@ -765,6 +783,11 @@ impl Boids {
             }
             if let Some(p) = patrias {
                 let (x, y) = p.force(i, &b);
+                fx += x;
+                fy += y;
+            }
+            if let Some(k) = nino {
+                let (x, y) = k.force(i, b.x, b.y);
                 fx += x;
                 fy += y;
             }
@@ -1166,6 +1189,9 @@ impl Scene for Boids {
         if let Some(n) = &mut self.navidad {
             n.scatter(fw, fh);
         }
+        if let Some(k) = &mut self.nino {
+            k.scatter(fw, fh);
+        }
     }
 
     fn retheme(&mut self, ctx: &Ctx) {
@@ -1218,6 +1244,18 @@ impl Scene for Boids {
                 p.retheme(ctx);
             }
         }
+        if !ctx.fiesta.is(Kind::Nino) {
+            self.nino = None;
+        } else {
+            if self.nino.is_none() {
+                let mut k = Box::new(Nino::new());
+                k.scatter(self.fw, self.fh);
+                self.nino = Some(k);
+            }
+            if let Some(k) = &mut self.nino {
+                k.retheme(ctx);
+            }
+        }
         // The holiday brings more of its flock, or takes them away again.
         let crowd = self.navidad.as_ref().map_or(1.0, |n| n.crowd());
         if crowd != self.crowd {
@@ -1260,6 +1298,9 @@ impl Scene for Boids {
             if let Some(p) = &mut self.patrias {
                 p.t += h;
             }
+            if let Some(k) = &mut self.nino {
+                k.t += h;
+            }
             self.trail_clock += h;
             if self.trail_clock >= 1.0 / TRAIL_HZ {
                 self.trail_clock %= 1.0 / TRAIL_HZ;
@@ -1287,6 +1328,9 @@ impl Scene for Boids {
             pilot(&mut p.facing, &mut p.drape, &self.hawk, dt);
             p.drift(dt, &self.hawk, self.hawk_on);
         }
+        if let Some(k) = &mut self.nino {
+            k.drift(dt, self.fw, self.fh);
+        }
     }
 
     fn draw(&mut self, ctx: &Ctx, c: &mut Canvas) {
@@ -1303,6 +1347,11 @@ impl Scene for Boids {
         if let Some(p) = self.patrias.take() {
             self.draw_patrias(ctx, c, &p);
             self.patrias = Some(p);
+            return;
+        }
+        if let Some(k) = self.nino.take() {
+            self.draw_nino(ctx, c, &k);
+            self.nino = Some(k);
             return;
         }
         self.br.clear();
@@ -1435,8 +1484,8 @@ mod tests {
     #[test]
     fn the_holiday_survives_odd_sizes_and_steps() {
         // Día de Muertos at its height, Navidad at its first posada's eve, at
-        // Nochebuena and at the Reyes, and the Fiestas Patrias at the start of
-        // the mes patrio and at the Grito.
+        // Nochebuena and at the Reyes, the Fiestas Patrias at the start of the
+        // mes patrio and at the Grito, and Día del Niño.
         let days = [
             Fiesta::of_day(11, 2),
             Fiesta::of_day(12, 12),
@@ -1444,6 +1493,7 @@ mod tests {
             Fiesta::of_day(1, 6),
             Fiesta::of_day(9, 1),
             Fiesta::of_day(9, 15),
+            Fiesta::of_day(4, 30),
         ];
         for theme in ["classic", "dracula"] {
             let th = crate::theme::Theme::builtin(theme).unwrap();
@@ -1689,6 +1739,81 @@ mod tests {
         assert!(s.patrias.is_none());
         let c = frame(&mut s, &plain, 80, 24);
         assert!(!has(&c, &['v', '◉']));
+        assert!(has(&c, &ARROWS) && has(&c, &HAWK));
+    }
+
+    #[test]
+    fn papalotes_and_a_big_one_come_for_el_dia_del_nino() {
+        let th = crate::theme::Theme::classic();
+        let o = opts("");
+        let fiesta = ctx(&th, &o, Fiesta::height(Kind::Nino));
+        let mut s = scene(&fiesta, 120, 36);
+        let ordinary = scene(&ctx(&th, &o, Fiesta::NONE), 120, 36);
+        assert!(s.boids.len() == ordinary.boids.len());
+        let c = frame(&mut s, &fiesta, 120, 36);
+        assert!(has(&c, &['◢', '◣', '◥', '◤']), "no papalotes");
+        assert!(has(&c, &['❖']), "no bows on the tails");
+        assert!(has(&c, &['█']), "no big papalote");
+        let braille = |cell: &crate::render::Cell| ('\u{2800}'..='\u{28ff}').contains(&cell.ch);
+        assert!(c.cells().iter().any(braille), "no tails or wind");
+        assert!(!has(&c, &ARROWS) && !has(&c, &HAWK));
+        // Every toy color shows in the flock.
+        let colors: Vec<Color> = nino::TOYS.iter().map(|&h| rgb(h)).collect();
+        for want in colors {
+            assert!(c.cells().iter().any(|cell| cell.fg == want), "{want:?}");
+        }
+        // In dots the papalotes are braille diamonds, the big one still blocks.
+        let o = opts("style = 'dots'");
+        let fiesta = ctx(&th, &o, Fiesta::height(Kind::Nino));
+        let mut s = scene(&fiesta, 120, 36);
+        let c = frame(&mut s, &fiesta, 120, 36);
+        assert!(has(&c, &['█']) && !has(&c, &['◢', '◣']));
+        // An ordinary day has none of it.
+        let plain = ctx(&th, &o, Fiesta::NONE);
+        let mut s = scene(&plain, 120, 36);
+        let c = frame(&mut s, &plain, 120, 36);
+        assert!(!has(&c, &['◢', '◣', '◥', '◤', '◆', '❖', '█']));
+    }
+
+    #[test]
+    fn the_papalotes_dance_on_the_wind() {
+        let th = crate::theme::Theme::classic();
+        let o = opts("");
+        let fiesta = ctx(&th, &o, Fiesta::height(Kind::Nino));
+        let mut s = scene(&fiesta, 100, 30);
+        let mut turned = std::collections::HashSet::new();
+        for _ in 0..40 {
+            for _ in 0..30 {
+                s.update(&fiesta, 1.0 / 30.0);
+            }
+            let k = s.nino.as_ref().unwrap();
+            let (wx, wy) = k.wind(50.0, 30.0);
+            assert!(wx.is_finite() && wy.is_finite() && wx.abs() + wy.abs() < 25.0);
+            // The wind turns over the seconds: note which way it blows.
+            turned.insert((wy.atan2(wx) * 4.0).round() as i32);
+        }
+        assert!(turned.len() > 2, "{turned:?}");
+        // The flock flies with it: the tails follow the way the boids went.
+        let c = frame(&mut s, &fiesta, 100, 30);
+        assert!(has(&c, &['❖']));
+    }
+
+    #[test]
+    fn el_dia_del_nino_comes_and_goes_through_retheme() {
+        let th = crate::theme::Theme::classic();
+        let o = opts("");
+        let plain = ctx(&th, &o, Fiesta::NONE);
+        let fiesta = ctx(&th, &o, Fiesta::height(Kind::Nino));
+        let mut s = scene(&plain, 80, 24);
+        assert!(s.nino.is_none());
+        s.retheme(&fiesta);
+        assert!(s.nino.is_some());
+        let c = frame(&mut s, &fiesta, 80, 24);
+        assert!(has(&c, &['◢', '◣', '◥', '◤']));
+        s.retheme(&plain);
+        assert!(s.nino.is_none());
+        let c = frame(&mut s, &plain, 80, 24);
+        assert!(!has(&c, &['◢', '◣', '◥', '◤', '❖', '█']));
         assert!(has(&c, &ARROWS) && has(&c, &HAWK));
     }
 }
