@@ -31,6 +31,13 @@
 //! September a few pipes carry a banderita every third cell, and by the Grito
 //! every pipe is hung with them, every other cell, the escarapelas multiply
 //! and stars of oro shine at some joints.
+//!
+//! On the Día de la Santa Cruz the pipes are a building site's scaffolding
+//! and varilla: rods of gray steel (in three shades) with a collar clamped
+//! round them every few cells and tabique-red joints, like the bricks of the
+//! obra. Some finished runs that rose are topped with a wooden cross, decked
+//! in the paper flowers (rosa, amarillo, morado and verde limón) the
+//! albañiles hang on it for the day, which trail from its foot down the rod.
 
 use crate::color::{Color, rgb};
 use crate::fiesta::{Fiesta, Kind};
@@ -170,6 +177,19 @@ const ROJO: Color = rgb(0xCE1126);
 const ORO: Color = rgb(0xD4A017);
 /// Its palette follows the pipes' colors: verde, blanco, rojo and oro.
 const P_ORO: usize = 3;
+/// The Día de la Santa Cruz under `classic`: varilla, gray steel in three
+/// shades, and the zinc of the collars, tabique for the joints, madera for the
+/// cross and the paper flowers: rosa, amarillo, morado and verde limón.
+const VARILLA: [Color; 3] = [rgb(0x7A7F86), rgb(0x9AA0A8), rgb(0x666B72)];
+const ZINC: Color = rgb(0xC3C8CF);
+const TABIQUE: Color = rgb(0xB5532F);
+const MADERA: Color = rgb(0xC9914F);
+const PAPEL: [Color; 4] = [rgb(0xE4007C), rgb(0xFFD200), rgb(0x8A3CC8), rgb(0x8CC828)];
+/// Its palette follows the rods: tabique, zinc, madera and the flowers.
+const C_TABIQUE: usize = 0;
+const C_ZINC: usize = 1;
+const C_MADERA: usize = 2;
+const C_PAPEL: usize = 3;
 /// The foquitos: rojo, verde, azul, amarillo, rosa and naranja.
 const FOQUITOS: [Color; 6] = [
     rgb(0xFF3B3B),
@@ -199,6 +219,7 @@ enum Garb {
     Muertos,
     Navidad,
     Patrias,
+    Cruz,
 }
 
 impl Garb {
@@ -209,6 +230,8 @@ impl Garb {
             Garb::Navidad
         } else if fiesta.is(Kind::Patrias) {
             Garb::Patrias
+        } else if fiesta.is(Kind::SantaCruz) {
+            Garb::Cruz
         } else {
             Garb::Plain
         }
@@ -635,6 +658,69 @@ impl Pipes {
         (p.ch, p.rot as usize % lines)
     }
 
+    /// Día de la Santa Cruz: the piece at cell `i` as part of the scaffolding.
+    /// Rods are steel with a collar clamped on every few cells, the joints
+    /// are tabique, and a finished run that rose may be topped with a cross
+    /// whose paper flowers hang down the rod. Returns the character and its
+    /// palette index (the rods' steel, then tabique, zinc, madera and the
+    /// flowers).
+    fn dress_cruz(&self, i: usize, p: &Piece) -> (char, usize) {
+        let (from, to) = (p.way / 4, p.way % 4);
+        let lines = self.lines;
+        if from != to {
+            if self.cross_at(i) {
+                return (if p.ch.is_ascii() { 't' } else { '✝' }, lines + C_MADERA);
+            }
+            return (p.ch, lines + C_TABIQUE);
+        }
+        if from == 0 {
+            // The two cells below a cross are its flowers, one color each.
+            for k in 1..=2 {
+                let Some(j) = i.checked_sub(k * self.w as usize) else {
+                    break;
+                };
+                if self.cross_at(j) {
+                    let h = mix(j as u32 ^ self.grid[j].born ^ self.salt);
+                    let color = (h >> 8) as usize + k;
+                    let ch = if p.ch.is_ascii() {
+                        ['*', '@'][k - 1]
+                    } else {
+                        ['✿', '❀', '❁', '✾'][(h >> 4) as usize % 4]
+                    };
+                    return (ch, lines + C_PAPEL + color % PAPEL.len());
+                }
+            }
+        }
+        if p.seq % 5 == 3 {
+            return (collar(p.ch), lines + C_ZINC);
+        }
+        (p.ch, p.color as usize % lines)
+    }
+
+    /// Is the piece at `j` the top of a run that rose, finished (it turned
+    /// there) and decked with a cross? The rod must still stand below it.
+    fn cross_at(&self, j: usize) -> bool {
+        let p = &self.grid[j];
+        // It came going up and turned.
+        if p.ch == '\0' || p.way / 4 != 0 || p.way.is_multiple_of(4) {
+            return false;
+        }
+        let rod = |k: usize| {
+            self.grid.get(j + k * self.w as usize).is_some_and(|q| {
+                q.ch != '\0'
+                    && q.way == 0
+                    && q.color == p.color
+                    && q.rot == p.rot
+                    && q.seq == p.seq.wrapping_sub(k as u16)
+            })
+        };
+        let level = self.fiesta.level.clamp(0.0, 1.0);
+        rod(1)
+            && rod(2)
+            && mix(j as u32 ^ p.born.rotate_left(13) ^ self.salt) % 100
+                < (15.0 + 25.0 * level) as u32
+    }
+
     /// A foquito on the cord, lit, glowing or off as the pipe's pattern goes:
     /// a chase with a tail running forward, a chase running back, odds and
     /// evens, or at random.
@@ -684,6 +770,17 @@ impl Pipes {
                 lines + if white { N_BLANCO } else { N_ROJO },
             ),
         }
+    }
+}
+
+/// The collar clamped round a rod: a cross in the rod's own weight.
+fn collar(ch: char) -> char {
+    match ch {
+        '┃' | '━' => '╋',
+        '║' | '═' => '╬',
+        '│' | '─' => '┼',
+        c if c.is_ascii() => '+',
+        c => c,
     }
 }
 
@@ -749,6 +846,49 @@ fn patrias_colors(ctx: &Ctx) -> [Color; 4] {
     let verde = near(ctx, 130.0, 55.0, &[], 2);
     let rojo = near(ctx, 355.0, 35.0, &[verde], 1);
     [verde, t.fg, rojo, near(ctx, 45.0, 25.0, &[verde, rojo], 3)]
+}
+
+/// The Día de la Santa Cruz' colors: three shades of steel for the rods, then
+/// tabique, zinc, madera and the flowers (see `C_TABIQUE`). Under `classic`
+/// their own, else the theme's text color faded for the steel and its accents
+/// nearest each hue.
+fn cruz_colors(ctx: &Ctx) -> ([Color; 3], [Color; 7]) {
+    let t = ctx.theme;
+    if t.native {
+        let [rosa, amarillo, morado, verde] = PAPEL;
+        return (
+            VARILLA,
+            [TABIQUE, ZINC, MADERA, rosa, amarillo, morado, verde],
+        );
+    }
+    let tabique = near(ctx, 15.0, 30.0, &[], 1);
+    let madera = near(ctx, 32.0, 28.0, &[tabique], 5);
+    let rosa = near(ctx, 325.0, 35.0, &[tabique, madera], 0);
+    let amarillo = near(ctx, 50.0, 25.0, &[tabique, madera, rosa], 4);
+    let morado = near(ctx, 280.0, 40.0, &[tabique, madera, rosa, amarillo], 2);
+    let verde = near(
+        ctx,
+        100.0,
+        40.0,
+        &[tabique, madera, rosa, amarillo, morado],
+        3,
+    );
+    (
+        [
+            ctx.fade(t.fg, 0.4),
+            ctx.fade(t.fg, 0.25),
+            ctx.fade(t.fg, 0.55),
+        ],
+        [
+            tabique,
+            ctx.fade(t.fg, 0.1),
+            madera,
+            rosa,
+            amarillo,
+            morado,
+            verde,
+        ],
+    )
 }
 
 /// Navidad's colors: the cord, then the foquitos in three tiers and the rest
@@ -848,6 +988,15 @@ impl Scene for Pipes {
                 self.lines = self.palette.len();
                 self.palette.extend(colors);
             }
+            Garb::Cruz => {
+                let (steel, colors) = cruz_colors(ctx);
+                if self.colored {
+                    self.palette.clear();
+                    self.palette.extend(steel);
+                }
+                self.lines = self.palette.len();
+                self.palette.extend(colors);
+            }
             Garb::Patrias => {
                 let flag = patrias_colors(ctx);
                 if self.colored {
@@ -912,6 +1061,7 @@ impl Scene for Pipes {
                 Garb::Muertos => self.dress(i, p, n, bloom),
                 Garb::Navidad => self.dress_navidad(i, p),
                 Garb::Patrias => self.dress_patrias(i, p),
+                Garb::Cruz => self.dress_cruz(i, p),
             };
             if !self.fade {
                 c.set_attr(x, y, ch, self.palette[ci], base_attr);
@@ -946,7 +1096,7 @@ mod tests {
 
     /// An ordinary day, Día de Muertos at two levels, and the other holidays
     /// the pipes dress for.
-    fn days() -> [Fiesta; 7] {
+    fn days() -> [Fiesta; 8] {
         [
             Fiesta::NONE,
             Fiesta {
@@ -963,6 +1113,7 @@ mod tests {
             Fiesta::of_day(12, 16),
             Fiesta::height(Kind::Patrias),
             Fiesta::of_day(9, 2),
+            Fiesta::height(Kind::SantaCruz),
         ]
     }
 
@@ -1214,6 +1365,7 @@ mod tests {
         for fiesta in [
             Fiesta::height(Kind::Navidad),
             Fiesta::height(Kind::Patrias),
+            Fiesta::height(Kind::SantaCruz),
             Fiesta::of_day(11, 2),
         ] {
             assert!(plain == grown(fiesta), "{fiesta:?}");
@@ -1357,6 +1509,97 @@ mod tests {
             ctx.fiesta = Fiesta::NONE;
             s.retheme(&ctx);
             assert_eq!(hung(&frame(s.as_mut(), &ctx)), (0, 0, 0));
+            if theme == "classic" {
+                assert!(
+                    frame(s.as_mut(), &ctx)
+                        .cells()
+                        .iter()
+                        .all(|x| !x.fg.is_rgb())
+                );
+            }
+        }
+    }
+
+    /// Collars, crosses and paper flowers on screen on the Día de la Santa
+    /// Cruz.
+    fn scaffolded(c: &Canvas) -> (usize, usize, usize) {
+        (count(c, "╋"), count(c, "✝"), count(c, "✿❀❁✾"))
+    }
+
+    #[test]
+    fn dresses_for_the_santa_cruz() {
+        let o = crate::scene::Opts::new(INFO.options, toml::Table::new());
+        for theme in ["classic", "dracula"] {
+            let th = crate::theme::Theme::builtin(theme).unwrap();
+            for (month, day) in [(5, 3), (6, 15)] {
+                let (_, c) = grown(&o, &th, Fiesta::of_day(month, day), 8);
+                let (collars, crosses, flowers) = scaffolded(&c);
+                if month == 6 {
+                    assert_eq!((collars, crosses, flowers), (0, 0, 0), "{theme}");
+                } else {
+                    assert!(collars > 20 && crosses > 0, "{theme}");
+                    // Two paper flowers hang from the foot of every cross.
+                    assert!(flowers >= crosses, "{theme}");
+                }
+            }
+        }
+        // Under `classic` the rods are steel, the joints tabique and the
+        // cross madera, with flowers in the colors of the paper.
+        let th = crate::theme::Theme::classic();
+        let (_, c) = grown(&o, &th, Fiesta::height(Kind::SantaCruz), 8);
+        for color in [VARILLA[0], ZINC, TABIQUE, MADERA] {
+            assert!(c.cells().iter().any(|x| x.fg == color), "{color:?}");
+        }
+        assert!(PAPEL.iter().any(|&p| c.cells().iter().any(|x| x.fg == p)));
+    }
+
+    /// A cross stands on a rod, with a flower under it and another below.
+    #[test]
+    fn the_flowers_hang_from_the_cross() {
+        let o = crate::scene::Opts::new(INFO.options, toml::Table::new());
+        let th = crate::theme::Theme::classic();
+        let (_, c) = grown(&o, &th, Fiesta::height(Kind::SantaCruz), 8);
+        let at = |x: usize, y: usize| c.cells()[y * 100 + x].ch;
+        let mut crosses = 0;
+        for y in 0..28 {
+            for x in 0..100 {
+                if at(x, y) == '✝' {
+                    crosses += 1;
+                    assert!("✿❀❁✾".contains(at(x, y + 1)) && "✿❀❁✾".contains(at(x, y + 2)));
+                }
+            }
+        }
+        assert!(crosses > 0);
+    }
+
+    #[test]
+    fn the_santa_cruz_comes_and_goes_through_retheme() {
+        let o = crate::scene::Opts::new(INFO.options, toml::Table::new());
+        for theme in ["classic", "nord"] {
+            let th = crate::theme::Theme::builtin(theme).unwrap();
+            let mut ctx = Ctx {
+                theme: &th,
+                opts: &o,
+                bg: Color::Reset,
+                seed: 3,
+                fiesta: Fiesta::NONE,
+            };
+            let mut s = (INFO.make)(&ctx);
+            s.resize(&ctx, 100, 30);
+            s.retheme(&ctx);
+            run(s.as_mut(), &ctx, 8);
+            assert_eq!(scaffolded(&frame(s.as_mut(), &ctx)), (0, 0, 0));
+            ctx.fiesta = Fiesta::height(Kind::SantaCruz);
+            s.retheme(&ctx);
+            let (collars, crosses, _) = scaffolded(&frame(s.as_mut(), &ctx));
+            assert!(collars > 20 && crosses > 0, "{theme}");
+            // From one holiday to another, and back to an ordinary day.
+            ctx.fiesta = Fiesta::height(Kind::Patrias);
+            s.retheme(&ctx);
+            assert_eq!(count(&frame(s.as_mut(), &ctx), "╋✝✿❀❁✾"), 0);
+            ctx.fiesta = Fiesta::NONE;
+            s.retheme(&ctx);
+            assert_eq!(scaffolded(&frame(s.as_mut(), &ctx)), (0, 0, 0));
             if theme == "classic" {
                 assert!(
                     frame(s.as_mut(), &ctx)
