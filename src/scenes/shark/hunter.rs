@@ -239,6 +239,8 @@ impl Sea {
         let night = self.daylight < 0.25;
         // On Navidad a sinking piñata is hard to ignore.
         if self.shark.mood != Mood::Ram && self.notices_pinata() {
+            // Jaws shut: it butts the piñata, whatever it was biting at.
+            self.shark.gape_to = 0.0;
             self.set_mood(Mood::Ram);
         }
         let steps = self.shark.steps;
