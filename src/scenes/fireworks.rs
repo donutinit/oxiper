@@ -3104,7 +3104,8 @@ impl Fireworks {
         let n = (w / 45).clamp(1, 4);
         let (sw, fh) = (13 * k, 4 * k);
         let mut main: Option<(usize, usize)> = None;
-        if w >= sw + 4 {
+        // Room for three floors under the ground line, or no sites.
+        if w >= sw + 4 && gy >= 3 * fh {
             for i in 0..n {
                 let slot = w / n;
                 let sx = ((slot * i + slot / 2).saturating_sub(sw / 2)
