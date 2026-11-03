@@ -392,12 +392,9 @@ impl Egg for Calenda {
         let ground = c.h() as i32 * 2;
         let reach = (20.0 * self.k) as i32;
         // The ones behind first, so the ones in front are over them.
-        let order: Vec<usize> = if self.left {
-            (0..self.parade.len()).rev().collect()
-        } else {
-            (0..self.parade.len()).collect()
-        };
-        for i in order {
+        let n = self.parade.len();
+        for j in 0..n {
+            let i = if self.left { n - 1 - j } else { j };
             let f = &self.parade[i];
             let x = self.x(i);
             if x + (f.room * self.k) as i32 + reach < 0 || x - reach > self.w {

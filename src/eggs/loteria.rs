@@ -404,9 +404,10 @@ impl Loteria {
         }
         if v < 7 {
             // The header: the number, in dark red on cream.
-            let digits = card.number.to_string();
-            for (j, ch) in digits.chars().enumerate() {
-                if glyph_on(ch, u - 2 - 4 * j as i32, v - 1) {
+            let n = card.number;
+            let digits = [n / 10, n % 10];
+            for (j, &d) in digits[usize::from(n < 10)..].iter().enumerate() {
+                if glyph_on(char::from(b'0' + d), u - 2 - 4 * j as i32, v - 1) {
                     return pal.of(b'r');
                 }
             }
