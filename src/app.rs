@@ -237,7 +237,13 @@ impl Player {
         if self.cfg.egg_rate >= eggs::FORCE_RATE {
             self.eggs.start(&self.cfg.eggs, self.fiesta);
         }
-        self.fiesta_age += dt as f64;
+    }
+
+    /// Looks at the date now and then, after `dt` real seconds, so a
+    /// holiday starts at midnight even while a still scene sleeps (the
+    /// interactive loop only: `snap`, `record` and `bench` stay reproducible).
+    pub fn watch_calendar(&mut self, dt: f64) {
+        self.fiesta_age += dt;
         if self.fiesta_age >= FIESTA_CHECK {
             self.fiesta_age = 0.0;
             self.set_fiesta(self.cfg.fiestas.resolve());
@@ -540,6 +546,7 @@ pub fn run(cfg: Config, ro: RunOpts) -> Result<(), String> {
         if running {
             player.update(dt);
             player.roll_egg(real_dt, !hud.help);
+            player.watch_calendar(real_dt);
             player.elapsed += dt as f64;
             dirty = true;
             if player.duration() > 0.0
@@ -700,4 +707,79 @@ pub fn run(cfg: Config, ro: RunOpts) -> Result<(), String> {
     }
     drop(term);
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::fiesta::Kind;
+
+    /// The first day, the height and the last day of every holiday in a
+    /// year, and the Navidad's own days.
+    fn fiesta_days() -> Vec<Fiesta> {
+        let mut days: Vec<Fiesta> = Vec::new();
+        let mut add = |f: Fiesta| {
+            if f.on() && !days.contains(&f) {
+                days.push(f);
+            }
+        };
+        for kind in Kind::ALL {
+            add(Fiesta::height(kind));
+            let mut seen: Vec<Fiesta> = Vec::new();
+            for month in 1..=12 {
+                let last = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31][month as usize - 1];
+                for day in 1..=last {
+                    let f = Fiesta::of_date(2027, month, day);
+                    if f.is(kind) {
+                        seen.push(f);
+                    }
+                }
+            }
+            if let (Some(&first), Some(&last)) = (seen.first(), seen.last()) {
+                add(first);
+                add(last);
+            }
+        }
+        for (month, day) in [(12, 16), (12, 24), (12, 28), (12, 31), (1, 1), (1, 6)] {
+            add(Fiesta::of_date(2027, month, day));
+        }
+        days
+    }
+
+    /// Every scene survives every holiday's days at odd sizes, with the
+    /// holiday changing under it (at midnight, on a config reload) and
+    /// ending, and the overlay drawn on top.
+    #[test]
+    fn scenes_survive_every_fiesta() {
+        let days = fiesta_days();
+        assert!(days.len() > Kind::ALL.len());
+        // One thread per scene: this is the slowest test.
+        std::thread::scope(|s| {
+            for info in scenes::ALL {
+                let days = &days;
+                s.spawn(move || {
+                    let ov = [
+                        Override::new("scene", toml::Value::String(info.name.into())),
+                        Override::new("seed", toml::Value::Integer(7)),
+                        Override::new("fiestas", toml::Value::String("none".into())),
+                    ];
+                    let cfg = Config::load(None, &ov, false).unwrap();
+                    let mut p = Player::new(cfg, TermColors::default(), 80, 24).unwrap();
+                    for &fiesta in days.iter().chain([&Fiesta::NONE]) {
+                        p.set_fiesta(fiesta);
+                        for &(w, h) in &[(80u16, 24u16), (1, 1), (2, 3), (7, 2), (13, 5), (300, 90)]
+                        {
+                            p.resize(w, h);
+                            let mut c = Canvas::new(w, h, Color::Reset);
+                            for i in 0..32 {
+                                p.update(if i < 30 { 1.0 / 30.0 } else { 5.0 });
+                                c.clear();
+                                p.draw(&mut c);
+                            }
+                        }
+                    }
+                });
+            }
+        });
+    }
 }
