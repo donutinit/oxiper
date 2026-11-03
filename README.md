@@ -307,7 +307,7 @@ way it does in the street: the posadas climb to Nochebuena, September climbs to 
 | [Quema de Judas](#the-rest-of-the-year) | Viernes Santo and Sábado de Gloria | | a Judas |
 | [Día del Niño](#the-rest-of-the-year) | April 30 | globos | toys, a lotería |
 | [Día de la Santa Cruz](#the-rest-of-the-year) | May 3 | | the builders' cross |
-| [Guelaguetza](#the-rest-of-the-year) | the two Lunes del Cerro in July, from the Saturday before | papel picado in Oaxacan colors | the Flor de Piña, a calenda |
+| [Guelaguetza](#the-rest-of-the-year) | the two Lunes del Cerro (late July), from the Saturday before | papel picado in Oaxacan colors | the Flor de Piña, a calenda |
 | [Fiestas Patrias](#fiestas-patrias) | September 1 to 16 | papel picado in verde, blanco y rojo | the Grito, the jarabe tapatío, the águila |
 | [Día de Muertos](#día-de-muertos) | October 28 to November 3 | papel picado, cempasúchil petals | La Catrina, monarchs, an alebrije, mariachis, a calaverita |
 | [Día de la Revolución](#the-rest-of-the-year) | November 20 | tricolor banderines | Adelitas, a revolutionary train |
