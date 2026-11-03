@@ -164,12 +164,21 @@ impl Fogon {
 
     /// Follows the holiday; returns whether it changed.
     pub fn set(&mut self, fiesta: Fiesta) -> bool {
-        let level = if fiesta.level.is_finite() {
+        // Only the holidays it has a fogón for: on any other the fire is
+        // as on an ordinary day, whatever day of it this is.
+        let kind = match fiesta.kind {
+            Kind::Navidad | Kind::Judas | Kind::Candelaria | Kind::Patrias if fiesta.on() => {
+                fiesta.kind
+            }
+            _ => Kind::None,
+        };
+        let level = if kind == Kind::None {
+            0.0
+        } else if fiesta.level.is_finite() {
             fiesta.level.clamp(0.0, 1.0)
         } else {
             1.0
         };
-        let kind = if fiesta.on() { fiesta.kind } else { Kind::None };
         if kind == self.kind && level == self.level {
             return false;
         }
