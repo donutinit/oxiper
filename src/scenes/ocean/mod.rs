@@ -376,18 +376,29 @@ impl OceanScene {
             water: o.b("water"),
         };
         let mut rng = ctx.rng();
-        let sea = Sea::new(80, 24, &mut rng, Pal::new(ctx), set, ctx.fiesta, ctx.seed);
+        let fiesta = dressed(ctx.fiesta);
+        let sea = Sea::new(80, 24, &mut rng, Pal::new(ctx), set, fiesta, ctx.seed);
         OceanScene {
             sea,
             rng,
             set,
-            fiesta: ctx.fiesta,
+            fiesta,
             seed: ctx.seed,
             size: (80, 24),
             speed: num(o.f("speed"), 1.0, 0.0, 20.0) as f64,
             acc: 0.0,
             dirty: true,
         }
+    }
+}
+
+/// The holiday as the sea sees it: one it has no costume for is an
+/// ordinary day, so its days come and go without a new sea.
+fn dressed(f: Fiesta) -> Fiesta {
+    if f.is(Kind::Navidad) || f.is(Kind::Patrias) || f.is(Kind::Muertos) {
+        f
+    } else {
+        Fiesta::NONE
     }
 }
 
@@ -409,9 +420,9 @@ impl Scene for OceanScene {
 
     fn retheme(&mut self, ctx: &Ctx) {
         let pal = Pal::new(ctx);
-        if ctx.fiesta != self.fiesta {
+        if dressed(ctx.fiesta) != self.fiesta {
             // A new day of the holiday, or its end: a sea dressed for it.
-            self.fiesta = ctx.fiesta;
+            self.fiesta = dressed(ctx.fiesta);
             self.sea = self.fresh(pal);
         } else {
             self.sea.pal = pal;
@@ -691,6 +702,39 @@ mod tests {
         Ctx {
             fiesta,
             ..ctx(theme, opts)
+        }
+    }
+
+    /// A holiday the sea has no costume for leaves it as on an ordinary
+    /// day, from one of its days to the next.
+    #[test]
+    fn other_holidays_leave_the_sea_alone() {
+        let theme = Theme::classic();
+        let opts = opts("");
+        let plain = ctx(&theme, &opts);
+        let mut a = OceanScene::new(&plain);
+        let mut b = OceanScene::new(&plain);
+        for s in [&mut a, &mut b] {
+            s.resize(&plain, 80, 24);
+            s.retheme(&plain);
+            run(&plain, s, 300, |_| {});
+        }
+        for day in [5, 6] {
+            let c = holiday(&theme, &opts, Fiesta::of_date(2027, 2, day));
+            assert!(c.fiesta.is(Kind::Carnaval));
+            a.retheme(&plain);
+            b.retheme(&c);
+            run(&plain, &mut a, 120, |_| {});
+            run(&c, &mut b, 120, |_| {});
+        }
+        let mut ca = Canvas::new(80, 24, Color::Reset);
+        let mut cb = Canvas::new(80, 24, Color::Reset);
+        a.draw(&plain, &mut ca);
+        b.draw(&plain, &mut cb);
+        for y in 0..24 {
+            for x in 0..80 {
+                assert_eq!(ca.get(x, y), cb.get(x, y), "({x}, {y})");
+            }
         }
     }
 
