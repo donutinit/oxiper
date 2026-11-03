@@ -1594,6 +1594,10 @@ impl Widget for Ticker {
         };
         for q in self.quotes.iter_mut() {
             q.price *= 1.0 + (self.rng.f32() - 0.5) * 0.03 + if q.bull { lift } else { 0.0 };
+            if lift > 0.0 && q.price > q.open * 8.0 {
+                // The bubble bursts before the numbers run out.
+                q.price = q.open;
+            }
             q.hist.push_back(q.price);
             if q.hist.len() > 12 {
                 q.hist.pop_front();

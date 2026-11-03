@@ -37,13 +37,24 @@ pub(super) fn pixel_line(s: &mut Sprite, x0: f32, y0: f32, x1: f32, y1: f32, col
 
 /// "1,204": thousands with commas, the Mexican way.
 pub(super) fn thousands(n: u32, out: &mut String) {
-    let digits = n.to_string();
+    // The digits, right to left, on the stack: this runs every frame.
+    let mut buf = [0u8; 10];
+    let (mut i, mut m) = (buf.len(), n);
+    loop {
+        i -= 1;
+        buf[i] = b'0' + (m % 10) as u8;
+        m /= 10;
+        if m == 0 {
+            break;
+        }
+    }
+    let digits = &buf[i..];
     let first = digits.len() % 3;
-    for (i, ch) in digits.chars().enumerate() {
-        if i > 0 && (i + 3 - first).is_multiple_of(3) {
+    for (j, &d) in digits.iter().enumerate() {
+        if j > 0 && (j + 3 - first).is_multiple_of(3) {
             out.push(',');
         }
-        out.push(ch);
+        out.push(char::from(d));
     }
 }
 
@@ -1577,5 +1588,21 @@ mod tests {
             "{text}"
         );
         assert!(text.contains("tejocotes"), "{text}");
+    }
+
+    #[test]
+    fn thousands_the_mexican_way() {
+        for (n, want) in [
+            (0, "0"),
+            (7, "7"),
+            (999, "999"),
+            (1204, "1,204"),
+            (1_234_567, "1,234,567"),
+            (u32::MAX, "4,294,967,295"),
+        ] {
+            let mut s = String::new();
+            thousands(n, &mut s);
+            assert_eq!(s, want);
+        }
     }
 }
