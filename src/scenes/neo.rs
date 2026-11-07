@@ -52,6 +52,15 @@
 //! paints a mulita de hoja with its huacal of flowers and fruit, out of its
 //! own glyphs.
 //!
+//! On the Virgen de Guadalupe, December 12, the rain falls in the verde
+//! azulado of her mantle, with droplets in the rosa of the rosas de Castilla
+//! and a few in the gold of its stars, every head a golden glint. The words
+//! are GUADALUPE, TEPEYAC, LAS MAÑANITAS, ROSAS DE CASTILLA, PEREGRINOS and
+//! more, Juan Diego and the Tepeyac lighting up like names, and a word for the
+//! day. Now and then the rain paints a rosa de Castilla on its stem or the
+//! starry pattern of her mantle, out of its own glyphs; her image is never
+//! drawn. On December 13 the Navidad's rain is back, as it was.
+//!
 //! Under other themes the rain takes the accents nearest in hue to those
 //! colors. It all draws from its own RNG on top of the screen neo keeps, so
 //! the rain falls exactly as it does on any other day.
@@ -1411,9 +1420,40 @@ const CORPUS_NAMES: &[&str] = &[
     "VOLADORES DE PAPANTLA",
 ];
 
+/// Words the rain carries on the Virgen de Guadalupe.
+const GUADALUPE_WORDS: &[&str] = &[
+    "GUADALUPE",
+    "TEPEYAC",
+    "LAS MAÑANITAS",
+    "ROSAS DE CASTILLA",
+    "PEREGRINOS",
+    "VIRGEN DE GUADALUPE",
+    "LA GUADALUPANA",
+    "12 DE DICIEMBRE",
+    "ROSAS EN LA TILMA",
+    "LA BASÍLICA",
+    "VELADORAS",
+    "MATACHINES",
+    "CAMINO AL TEPEYAC",
+    "ATOLE Y BUÑUELOS",
+    "ESTANDARTES",
+    "FLORES DEL CERRO",
+];
+
+/// The names the Virgen's day lights up like names.
+const GUADALUPE_NAMES: &[&str] = &[
+    "JUAN DIEGO",
+    "JUAN BERNARDINO",
+    "SANTA MARÍA DE GUADALUPE",
+    "LA MORENITA DEL TEPEYAC",
+    "NUESTRA SEÑORA",
+    "LUPITA",
+];
+
 /// The words and the names a holiday hides in the rain.
-fn lexicon(kind: Kind) -> (&'static [&'static str], &'static [&'static str]) {
-    match kind {
+fn lexicon(f: Fiesta) -> (&'static [&'static str], &'static [&'static str]) {
+    match f.kind {
+        Kind::Navidad if f.guadalupe() => (GUADALUPE_WORDS, GUADALUPE_NAMES),
         Kind::Navidad => (NAVIDAD_WORDS, NAVIDAD_NAMES),
         Kind::Patrias => (PATRIAS_WORDS, PATRIAS_NAMES),
         Kind::Corpus => (CORPUS_WORDS, CORPUS_NAMES),
@@ -1423,6 +1463,14 @@ fn lexicon(kind: Kind) -> (&'static [&'static str], &'static [&'static str]) {
 
 /// The words of the day, by day and `fiesta.level`.
 fn day_words(f: Fiesta) -> &'static [&'static str] {
+    if f.guadalupe() {
+        return &[
+            "¡VIVA LA VIRGEN DE GUADALUPE!",
+            "LAS MAÑANITAS",
+            "12 DE DICIEMBRE",
+            "¡FELICIDADES, LUPITAS!",
+        ];
+    }
     if f.is(Kind::Corpus) {
         return &[
             "JUEVES DE CORPUS",
@@ -1432,7 +1480,8 @@ fn day_words(f: Fiesta) -> &'static [&'static str] {
     }
     if f.is(Kind::Navidad) {
         return match f.date() {
-            (12, 12..=15) => &["VIRGEN DE GUADALUPE", "LAS MAÑANITAS", "GUADALUPE-REYES"],
+            // (December 12 has its own, above.)
+            (12, 13..=15) => &["VIRGEN DE GUADALUPE", "LAS MAÑANITAS", "GUADALUPE-REYES"],
             (12, 24) => &["NOCHEBUENA", "LA ÚLTIMA POSADA", "NIÑO DIOS"],
             (12, 16..=23) => &[
                 "POSADAS",
@@ -1784,9 +1833,90 @@ const MULITAS: &[&[&str]] = &[
     ],
 ];
 
+/// A rosa de Castilla on its stem: `R` the petals, `r` the light on them, `g` its leaves.
+const ROSAS: &[&[&str]] = &[
+    &[
+        "  rRRrr  ",
+        "RRrrrRRrR",
+        "rRrrrrRrr",
+        "rRRrRRrrR",
+        "  RRggg  ",
+        "  ggg    ",
+        "    g    ",
+    ],
+    &[
+        "   rrrrrRR   ",
+        " rrRRRRRrrRR ",
+        "rRRrrrrrRRrRR",
+        "RrrRrrrrRRrRR",
+        "RrrRrrRRrrRRr",
+        " RrrRRRRRgRr ",
+        "   grrgggr   ",
+        "    ggg      ",
+        "      g      ",
+        "      g      ",
+    ],
+    &[
+        "     RRRRRRRRr     ",
+        "   RrrrrrrrrRRRR   ",
+        " RrrRRRRRRRRrrRRRr ",
+        "RrrRRrrrrrrRRrrRRrr",
+        "rrRRrrRRRRrrRRrRRRr",
+        "rRRRrRRrrRRRRrrRRrr",
+        "rrRRrrRRrrrrrrRRrrR",
+        " rRRRrrRRRRRRRRrrR ",
+        "   RRRRrrrrrrrrR   ",
+        "     rRRRgRRgg     ",
+        "     gg  ggg       ",
+        "       ggg         ",
+        "         g         ",
+        "         g         ",
+    ],
+];
+
+/// The starry pattern of the mantle, a cloth of verde azulado `t` with gold stars `y` and
+/// a gold hem `d`.
+const MANTOS: &[&[&str]] = &[
+    &[
+        "ddddddddddddd",
+        "dttytttttyttd",
+        "dtttttttttttd",
+        "dtttttytttttd",
+        "dttyttttttytd",
+        "dtdtdtdtdtdtd",
+    ],
+    &[
+        "ddddddddddddddddddd",
+        "dtttytttttytttttttd",
+        "dttyyytttyyytttyttd",
+        "dtttytttttytttyyytd",
+        "dttttttytttttttyttd",
+        "dtttttyyyttttyttttd",
+        "dtttyttyttttyyytttd",
+        "dttyyytttttttyttttd",
+        "dtdtytdtdtdtdtdtdtd",
+    ],
+    &[
+        "ddddddddddddddddddddddddd",
+        "dtttttttttttytttttttttttd",
+        "dttttytttttyyytttttyttttd",
+        "dtttyyytttttytttttyyytttd",
+        "dttttytttttttttttttyttttd",
+        "dtttttttytttttttttttttttd",
+        "dttttttyyyttttttytttttttd",
+        "dtttttttyttttttyyyttttytd",
+        "dtttttttttttttttyttttyyyd",
+        "dtttytttttttytttttttttytd",
+        "dttyyytttttyyyttttttttttd",
+        "dtttytttttttytttttttttttd",
+        "dtdtdtdtdtdtdtdtdtdtdtdtd",
+    ],
+];
+
 /// The paintings a holiday has, each in three sizes, small to big.
-fn paintings(kind: Kind) -> &'static [&'static [&'static [&'static str]]] {
-    match kind {
+fn paintings(f: Fiesta) -> &'static [&'static [&'static [&'static str]]] {
+    match f.kind {
+        Kind::Navidad if f.guadalupe() => &[ROSAS, MANTOS],
         Kind::Navidad => &[PINATAS, ESTRELLAS, NOCHEBUENAS],
         Kind::Patrias => &[AGUILAS, CAMPANAS],
         Kind::Corpus => &[MULITAS],
@@ -1905,7 +2035,8 @@ struct Holiday {
     /// The other palettes some droplets fall in (as long as the scene's pair
     /// table): rosa mexicano on Día de Muertos; rojo nochebuena and dorado on
     /// Navidad; blanco and rojo on the Fiestas Patrias; rosa mexicano and
-    /// morado on the Corpus. Empty when the rain keeps the user's colors.
+    /// morado on the Corpus; rosa and dorado on the Virgen de Guadalupe. Empty
+    /// when the rain keeps the user's colors.
     alt: [Vec<Color>; 2],
     word: Color,
     name: Color,
@@ -1993,7 +2124,8 @@ impl Holiday {
     /// when it changes too: cempasúchil, or verde pino, under `classic`, the
     /// theme accent nearest to it otherwise, unless the user picked the colors.
     fn retheme(&mut self, ctx: &Ctx, auto: bool, native: bool) -> Option<Vec<Color>> {
-        let was = self.kind;
+        // The Virgen's day dresses the Navidad's rain differently.
+        let was = (self.kind, self.fiesta.guadalupe());
         self.kind = match ctx.fiesta.kind {
             k @ (Kind::Muertos | Kind::Navidad | Kind::Patrias | Kind::Corpus) => k,
             _ => Kind::None,
@@ -2014,13 +2146,14 @@ impl Holiday {
             self.figs.clear();
             return None;
         }
-        if was != self.kind {
+        if was != (self.kind, self.fiesta.guadalupe()) {
             self.figs.clear();
             self.next_word = self.clock + 0.3;
             self.next_art = self.clock + 1.2;
         }
         self.inks = [[Color::Reset; INKS]; 2];
         match self.kind {
+            Kind::Navidad if self.fiesta.guadalupe() => self.guadalupe(ctx, auto, native),
             Kind::Navidad => self.navidad(ctx, auto, native),
             Kind::Patrias => self.patrias(ctx, auto, native),
             Kind::Corpus => self.corpus(ctx, auto, native),
@@ -2267,6 +2400,71 @@ impl Holiday {
         Some(main)
     }
 
+    /// The Virgen de Guadalupe: rain in the verde azulado of her mantle and
+    /// the rosa of the rosas de Castilla, golden-headed, with a few droplets in
+    /// the gold of its stars; a rose and the starry pattern of the mantle
+    /// painted out of it (never her image). Under other themes, the accents
+    /// nearest in hue to those colors.
+    fn guadalupe(&mut self, ctx: &Ctx, auto: bool, native: bool) -> Option<Vec<Color>> {
+        let theme = ctx.theme;
+        let green = nearest(theme, MANTO, None);
+        let rosa = nearest(theme, ROSA_CASTILLA, Some(green));
+        let gold = nearest(theme, ESTRELLA, None);
+        // The rose in one variant of the painting, and with its pinks the other way round.
+        let (pinks, inks) = if theme.native {
+            self.word = ESTRELLA;
+            self.name = BLANCO;
+            self.flash = Color::Rgb(255, 250, 236);
+            let inks = [
+                (b'g', VERDE_ROSAL),
+                (b't', MANTO),
+                (b'y', ESTRELLA),
+                (b'd', DORADO),
+            ];
+            (
+                [[ROSA_CASTILLA, ROSA_CLARA], [ROSA_CLARA, ROSA_CASTILLA]],
+                inks,
+            )
+        } else {
+            self.word = gold;
+            self.name = theme.fg;
+            self.flash = theme.fg.lerp(WHITE, 0.8);
+            let light = rosa.lerp(WHITE, 0.35);
+            let inks = [
+                (b'g', nearest(theme, VERDE_ROSAL, Some(green))),
+                (b't', green),
+                (b'y', gold.lerp(WHITE, 0.2)),
+                (b'd', gold),
+            ];
+            ([[rosa, light], [light, rosa]], inks)
+        };
+        for (m, c) in inks {
+            self.ink(m, c);
+        }
+        for (v, [petals, swirl]) in pinks.into_iter().enumerate() {
+            self.inks[v][slot(b'R')] = petals;
+            self.inks[v][slot(b'r')] = swirl;
+        }
+        if !auto {
+            return None;
+        }
+        let (main, rosas, golds) = if native {
+            (
+                rain_table(MANTO_RAIN),
+                rain_table(ROSA_CASTILLA_RAIN),
+                rain_table(DORADO_RAIN),
+            )
+        } else {
+            (
+                accent_pairs(ctx, green, gold.lerp(WHITE, 0.45)),
+                accent_pairs(ctx, rosa, gold.lerp(WHITE, 0.45)),
+                accent_pairs(ctx, gold, gold.lerp(WHITE, 0.7)),
+            )
+        };
+        self.alt = [rosas, golds];
+        Some(main)
+    }
+
     /// The palette of a new droplet (0 the scene's, 1 and 2 the others): more
     /// fall in rosa mexicano as Día de Muertos comes, in rojo nochebuena and
     /// dorado as Navidad does, in blanco and rojo as the mes patrio goes, and
@@ -2277,6 +2475,14 @@ impl Holiday {
         }
         let r = self.rng.f32();
         match self.kind {
+            // A third of the droplets in the rosa of the roses, a few in gold.
+            Kind::Navidad if self.fiesta.guadalupe() => {
+                if r < 0.06 {
+                    2
+                } else {
+                    (r < 0.06 + 0.34) as u8
+                }
+            }
             Kind::Navidad => {
                 let gold = 0.04 + 0.08 * self.level;
                 let red = 0.15 + 0.3 * self.level;
@@ -2433,7 +2639,7 @@ impl Holiday {
             return;
         };
         let shape = if art {
-            let set = paintings(self.kind);
+            let set = paintings(self.fiesta);
             let sizes = if set.len() > 1 {
                 set[self.rng.usize(0..set.len())]
             } else {
@@ -2448,7 +2654,7 @@ impl Holiday {
             };
             Shape::Art(sizes[i], self.rng.bool())
         } else {
-            let (words, names) = lexicon(self.kind);
+            let (words, names) = lexicon(self.fiesta);
             let day = day_words(self.fiesta);
             let day_chance = if self.kind == Kind::Muertos {
                 0.15
@@ -2476,6 +2682,8 @@ impl Holiday {
             // screen tall enough for them.
             20.. if self.kind == Kind::Corpus => 11,
             _ if self.kind == Kind::Corpus => 5,
+            // The papel picado of the Virgen's day hangs from its garland.
+            _ if self.fiesta.guadalupe() => 8,
             _ if self.level >= 0.8 => 6,
             _ if self.kind == Kind::Navidad && self.fiesta.posadas() => 6,
             _ => 4,
@@ -2693,6 +2901,11 @@ const OJO: Color = Color::Rgb(42, 26, 20);
 const MANGO: Color = Color::Rgb(255, 176, 46);
 const TUNA: Color = Color::Rgb(194, 24, 91);
 const MORADO: Color = Color::Rgb(112, 40, 160);
+const ROSA_CASTILLA: Color = Color::Rgb(216, 27, 96);
+const ROSA_CLARA: Color = Color::Rgb(240, 98, 146);
+const VERDE_ROSAL: Color = Color::Rgb(46, 125, 50);
+const MANTO: Color = Color::Rgb(0, 121, 107);
+const ESTRELLA: Color = Color::Rgb(242, 193, 78);
 
 /// The papel de china of a piñata, by painting marker.
 const PAPEL: [(u8, Color); 6] = [
@@ -2731,6 +2944,29 @@ const ROSA_RAIN: &[(u8, u8, u8)] = &[
     (236, 34, 138),
     (250, 116, 184),
     (255, 206, 96),
+];
+
+/// The rain in the verde azulado of the Virgen's mantle under `classic`, with
+/// golden heads.
+const MANTO_RAIN: &[(u8, u8, u8)] = &[
+    (0, 22, 20),
+    (0, 46, 42),
+    (0, 80, 72),
+    (0, 121, 107),
+    (38, 166, 154),
+    (120, 214, 204),
+    (255, 226, 130),
+];
+
+/// In the rosa of the rosas de Castilla, golden-headed too.
+const ROSA_CASTILLA_RAIN: &[(u8, u8, u8)] = &[
+    (44, 6, 22),
+    (100, 10, 48),
+    (156, 16, 78),
+    (216, 27, 96),
+    (240, 98, 146),
+    (248, 164, 194),
+    (255, 226, 130),
 ];
 
 /// The rain in hoja de maíz under `classic` on the Jueves de Corpus, pair 1
@@ -3075,12 +3311,20 @@ mod tests {
     #[test]
     fn figures_fit_their_slabs() {
         let fits = |w: &str| w.chars().count() <= SLAB && w.chars().all(|c| !odd_width(c));
-        for kind in [Kind::Muertos, Kind::Navidad, Kind::Patrias, Kind::Corpus] {
-            let (words, names) = lexicon(kind);
+        let every = [
+            Fiesta::of_day(11, 2),
+            Fiesta::height(Kind::Navidad),
+            Fiesta::of_day(9, 15),
+            Fiesta::height(Kind::Corpus),
+            Fiesta::of_day(12, 12),
+        ];
+        for fiesta in every {
+            let kind = fiesta.kind;
+            let (words, names) = lexicon(fiesta);
             for w in words.iter().chain(names) {
                 assert!(fits(w), "{w}");
             }
-            for set in paintings(kind) {
+            for set in paintings(fiesta) {
                 assert_eq!(set.len(), 3, "three sizes");
                 for (i, s) in set.iter().enumerate() {
                     let w = s[0].len();
@@ -3118,10 +3362,21 @@ mod tests {
         let words = day_words(Fiesta::height(Kind::Corpus));
         assert!(words.contains(&"JUEVES DE CORPUS") && words.iter().all(|w| fits(w)));
         // The words the holiday promises are among its own.
-        let (words, _) = lexicon(Kind::Corpus);
+        let (words, _) = lexicon(Fiesta::height(Kind::Corpus));
         for w in ["CORPUS", "MULITAS", "HUACALES", "PAPANTLA", "VOLADORES"] {
             assert!(words.contains(&w), "{w}");
         }
+        let (words, names) = lexicon(Fiesta::of_day(12, 12));
+        for w in [
+            "GUADALUPE",
+            "TEPEYAC",
+            "LAS MAÑANITAS",
+            "ROSAS DE CASTILLA",
+            "PEREGRINOS",
+        ] {
+            assert!(words.contains(&w), "{w}");
+        }
+        assert!(names.contains(&"JUAN DIEGO"));
     }
 
     /// Every marker of every painting has an ink, under `classic` and a theme.
@@ -3130,13 +3385,13 @@ mod tests {
         let opts = Opts::new(INFO.options, toml::Table::new());
         for theme in [Theme::classic(), Theme::builtin("nord").unwrap()] {
             let corpus = Fiesta::height(Kind::Corpus);
-            for fiesta in [(11, 2), (12, 24), (9, 15)]
+            for fiesta in [(11, 2), (12, 24), (9, 15), (12, 12)]
                 .map(|(m, d)| Fiesta::of_day(m, d))
                 .into_iter()
                 .chain([corpus])
             {
                 let n = dressed(&theme, &opts, fiesta, 40, 12);
-                for set in paintings(n.holiday.kind) {
+                for set in paintings(n.holiday.fiesta) {
                     for rows in *set {
                         for m in rows.iter().flat_map(|r| r.bytes()) {
                             for v in 0..2 {
@@ -3241,10 +3496,18 @@ mod tests {
             a.tick(&plain, 1.0 / 30.0, 1.0 / 30.0);
         }
         let corpus = Fiesta::height(Kind::Corpus);
-        let days = [(11, 2), (12, 24), (12, 28), (1, 6), (9, 3), (9, 15)]
-            .map(|(m, d)| Fiesta::of_day(m, d))
-            .into_iter()
-            .chain([corpus]);
+        let days = [
+            (11, 2),
+            (12, 12),
+            (12, 24),
+            (12, 28),
+            (1, 6),
+            (9, 3),
+            (9, 15),
+        ]
+        .map(|(m, d)| Fiesta::of_day(m, d))
+        .into_iter()
+        .chain([corpus]);
         for fiesta in days {
             let (m, d) = fiesta.date();
             let ctx = Ctx { fiesta, ..plain };
@@ -3510,6 +3773,137 @@ mod tests {
             n.holiday.spawn(true, 110, 36);
             assert!(n.holiday.figs.iter().all(|f| f.y >= 11));
         }
+    }
+
+    /// What the Virgen de Guadalupe adds shows: the rain in the verde azulado
+    /// of her mantle with rosa and a few gold droplets, words and names that
+    /// land in place, a rosa de Castilla and the starry pattern of the mantle
+    /// painted in their own colors.
+    #[test]
+    fn guadalupe_lights_the_rain() {
+        let theme = Theme::classic();
+        let opts = Opts::new(INFO.options, toml::Table::new());
+        let fiesta = Fiesta::of_day(12, 12);
+        assert!(fiesta.guadalupe());
+        let ctx = Ctx {
+            theme: &theme,
+            opts: &opts,
+            bg: Color::Rgb(13, 17, 23),
+            seed: 11,
+            fiesta,
+        };
+        let mut n = dressed(&theme, &opts, fiesta, 110, 36);
+        assert!(n.holiday.kind == Kind::Navidad && !n.holiday.prank);
+        assert_eq!(n.pairs, rain_table(MANTO_RAIN));
+        assert_eq!(n.holiday.alt[0], rain_table(ROSA_CASTILLA_RAIN));
+        assert_eq!(n.holiday.alt[1], rain_table(DORADO_RAIN));
+        let (mut word, mut name, mut painted) = (false, false, [false; 2]);
+        let mut seen = [0usize; 3];
+        run(&mut n, &ctx, 300.0, |n, c| {
+            for g in n.screen.iter().filter(|g| g.pair != 0) {
+                seen[g.hue as usize] += 1;
+            }
+            for f in &n.holiday.figs {
+                if n.holiday.clock >= f.born + f.life - FADE {
+                    continue;
+                }
+                let lit = (0..f.w * f.h).all(|k| {
+                    let (dx, dy) = (k % f.w, k / f.w);
+                    !f.shape.has(dx, dy) || n.holiday.touched[f.slot * SLAB + k] >= 0.0
+                });
+                match f.shape {
+                    Shape::Word(w, is_name) => {
+                        let landed = lit && row_is(c, f.x, f.y, w);
+                        word |= landed && !is_name;
+                        name |= landed && is_name;
+                    }
+                    Shape::Art(rows, alt) if lit => {
+                        let (mut inked, mut cells) = (0, 0);
+                        for (dy, row) in rows.iter().enumerate() {
+                            for (dx, m) in row.bytes().enumerate() {
+                                if matches!(m, b' ' | b'.') {
+                                    continue;
+                                }
+                                cells += 1;
+                                let cell = c.get((f.x + dx) as i32, (f.y + dy) as i32);
+                                inked += cell
+                                    .is_some_and(|x| x.fg == n.holiday.inks[alt as usize][slot(m)])
+                                    as usize;
+                            }
+                        }
+                        if inked * 2 > cells {
+                            // A rose has petals `R`, the mantle its cloth `t`.
+                            let which = b"Rt"
+                                .iter()
+                                .position(|&m| rows.iter().any(|r| r.as_bytes().contains(&m)));
+                            painted[which.unwrap()] = true;
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        });
+        assert!(word && name, "words and names landed in the rain");
+        assert!(painted == [true; 2], "a rose and the mantle: {painted:?}");
+        assert!(
+            seen.iter().all(|&k| k > 0),
+            "all three colors fell: {seen:?}"
+        );
+        // The pinks of the rose swap places in the other variant.
+        assert_eq!(n.holiday.inks[0][slot(b'R')], n.holiday.inks[1][slot(b'r')]);
+        assert_ne!(n.holiday.inks[0][slot(b'R')], Color::Reset);
+        // Nothing but roses and the mantle's pattern is ever painted.
+        assert_eq!(paintings(fiesta).len(), 2);
+        // The papel picado hangs from the garland: figures keep below it.
+        for _ in 0..40 {
+            n.holiday.figs.clear();
+            n.holiday.spawn(true, 110, 36);
+            assert!(n.holiday.figs.iter().all(|f| f.y >= 8));
+        }
+    }
+
+    /// On December 13 the rain is the Navidad's again, as it was: verde pino
+    /// with rojo nochebuena and dorado, its piñatas, estrellas and
+    /// nochebuenas, and the words of the Guadalupe–Reyes.
+    #[test]
+    fn the_day_after_guadalupe_the_rain_is_the_navidad() {
+        let theme = Theme::classic();
+        let opts = Opts::new(INFO.options, toml::Table::new());
+        let virgen = Fiesta::of_day(12, 12);
+        let after = Fiesta::of_day(12, 13);
+        assert!(!after.guadalupe() && after.is(Kind::Navidad));
+        let mut ctx = Ctx {
+            theme: &theme,
+            opts: &opts,
+            bg: Color::Rgb(13, 17, 23),
+            seed: 11,
+            fiesta: virgen,
+        };
+        let mut n = dressed(&theme, &opts, after, 110, 36);
+        assert_eq!(n.pairs, rain_table(VERDE_RAIN));
+        assert_eq!(n.holiday.alt[0], rain_table(ROJO_RAIN));
+        assert_eq!(n.holiday.alt[1], rain_table(DORADO_RAIN));
+        assert_eq!(lexicon(after).0, NAVIDAD_WORDS);
+        assert_eq!(paintings(after).len(), 3);
+        assert!(day_words(after).contains(&"VIRGEN DE GUADALUPE"));
+        // Midnight turns one into the other, and back, and what was hidden
+        // in the rain goes with the day.
+        let mut b = dressed(&theme, &opts, virgen, 110, 36);
+        assert_eq!(b.pairs, rain_table(MANTO_RAIN));
+        let mut seen = false;
+        run(&mut b, &ctx, 30.0, |n, _| {
+            seen |= !n.holiday.figs.is_empty()
+        });
+        assert!(seen);
+        ctx.fiesta = after;
+        b.retheme(&ctx);
+        assert_eq!(b.pairs, rain_table(VERDE_RAIN));
+        assert!(b.holiday.figs.is_empty() && b.holiday.kind == Kind::Navidad);
+        ctx.fiesta = virgen;
+        b.retheme(&ctx);
+        assert_eq!(b.pairs, rain_table(MANTO_RAIN));
+        assert!(b.holiday.figs.is_empty());
+        run(&mut n, &ctx, 5.0, |_, _| {});
     }
 
     /// The Santos Inocentes: now and then the rain turns upside down, falls
@@ -3819,6 +4213,7 @@ mod tests {
                 let days = [
                     (10, 28),
                     (11, 2),
+                    (12, 12),
                     (12, 16),
                     (12, 24),
                     (12, 28),
