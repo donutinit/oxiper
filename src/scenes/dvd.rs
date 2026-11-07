@@ -84,10 +84,21 @@
 //! naranjas, a rebozo thrown over its back. It leaves petals, fruit and hojas
 //! along its way. At a corner it trots three times as fast for a moment while
 //! they fly off, and the banner reads "¡FELIZ JUEVES DE CORPUS!".
+//!
+//! On December 12, the Virgen de Guadalupe, the first day of the Navidad, the
+//! piñata gives way to a ramo of rosas de Castilla, the roses of the Tepeyac:
+//! five roses in two pinks that take each other's places on every bounce,
+//! among their leaves, wrapped in manta and tied with a ribbon in the verde
+//! azulado of her mantle with stars of gold on it. Her image never bounces:
+//! the bouquet does. It lets petals, roses, leaves and gold stars fall as it
+//! goes; at a corner the stars of the mantle glint among the roses and more
+//! of it falls, and the banner reads "¡FELICIDADES A TODAS LAS LUPITAS!". On
+//! December 13 the piñata is back.
 
 mod candelaria;
 mod carnaval;
 mod corpus;
+mod guadalupe;
 mod guelaguetza;
 mod muertos;
 mod navidad;
@@ -316,6 +327,8 @@ fn look_for(f: Fiesta) -> Option<&'static Look> {
         Kind::Corpus => Some(&corpus::LOOK),
         Kind::Guelaguetza => Some(&guelaguetza::LOOK),
         Kind::Muertos => Some(&muertos::LOOK),
+        // On the Virgen's day a bouquet of her roses bounces instead.
+        Kind::Navidad if f.guadalupe() => Some(&guadalupe::LOOK),
         Kind::Navidad => Some(navidad::look(f)),
         Kind::Nino => Some(&nino::LOOK),
         Kind::Patrias => Some(&patrias::LOOK),
@@ -1512,6 +1525,7 @@ mod tests {
             ("lunes del cerro", Fiesta::height(Kind::Guelaguetza)),
             ("sábado de guelaguetza", Fiesta::of_date(2027, 7, 17)),
             ("corpus", Fiesta::height(Kind::Corpus)),
+            ("guadalupe", Fiesta::of_day(12, 12)),
         ]
     }
 
@@ -1623,7 +1637,8 @@ mod tests {
                     if !size.react.is_empty() {
                         let laugh = Sprite::pixels(look, size, 0, true, level);
                         assert_eq!((s.w, s.h), (laugh.w, laugh.h), "{day}");
-                        assert_ne!(s.cells, laugh.cells, "{day}");
+                        // It differs in its shape or in what its parts are.
+                        assert!(s.cells != laugh.cells || s.parts != laugh.parts, "{day}");
                     }
                     // Every letter of the art is a part with a color.
                     for &p in s.parts.iter().filter(|p| **p != 0 && **p != b'k') {
@@ -2319,6 +2334,79 @@ mod tests {
             assert!(kinds.len() >= 4, "{kinds:?}: petals, fruit and hojas");
             assert!(play(&mut d, &ctx, 0.5).to_text().contains("esquinas: 1"));
         }
+    }
+
+    #[test]
+    fn guadalupe_bounces_a_ramo_of_roses() {
+        let o = crate::scene::Opts::new(INFO.options, toml::Table::new());
+        for theme in ["classic", "nord"] {
+            let th = crate::theme::Theme::builtin(theme).unwrap();
+            let ctx = ctx(&th, &o, Fiesta::of_day(12, 12));
+            assert!(ctx.fiesta.guadalupe());
+            let mut d = dressed(&ctx, 120, 40);
+            // Roses in both pairs of pinks, leaves, stems, the manta it is
+            // wrapped in, the ribbon of her mantle and its gold stars.
+            for p in b"RrQqGSwxTY" {
+                assert!(parts(&d, &[*p]) > 0, "{}", *p as char);
+            }
+            if th.native {
+                assert_eq!(d.palette, guadalupe::LOOK.classic.to_vec());
+                let c = play(&mut d, &ctx, 15.0);
+                for col in [rgb(0xd81b60), rgb(0x2e7d32), rgb(0x00796b), rgb(0xf2c14e)] {
+                    assert!(c.cells().iter().any(|cell| cell.fg == col), "{col:?}");
+                }
+            }
+            let banner = Sprite::fit_lines(&["¡Felicidades", "a todas", "las Lupitas!"], 120, 40);
+            assert_eq!(d.banner.cells, banner.cells);
+            // The bouquet stays as it is: no frames, nothing that moves about
+            // on its own; at a corner the stars of the mantle glint among the
+            // roses and petals, roses, stars and leaves fall.
+            assert!(d.frames.is_empty());
+            let stars = parts(&d, b"Y");
+            assert!(d.laugh.parts.iter().filter(|p| **p == b'Y').count() > stars * 2);
+            d.bits.clear();
+            d.celebrate(0);
+            assert_eq!(d.pose(0, &d.logos[0]).0.cells, d.laugh.cells);
+            assert!(d.bits.len() > 20);
+            let kinds: std::collections::HashSet<u8> = d.bits.iter().map(|b| b.kind).collect();
+            assert!(kinds.len() >= 3, "{kinds:?}");
+            assert!(play(&mut d, &ctx, 0.5).to_text().contains("esquinas: 1"));
+        }
+    }
+
+    /// The Virgen's day is the only day of the Navidad that is a ramo: on
+    /// December 13 the piñata is back, as on every other day.
+    #[test]
+    fn the_day_after_guadalupe_the_pinata_is_back() {
+        let o = crate::scene::Opts::new(INFO.options, toml::Table::new());
+        let th = crate::theme::Theme::builtin("classic").unwrap();
+        let virgen = ctx(&th, &o, Fiesta::of_day(12, 12));
+        let after = ctx(&th, &o, Fiesta::of_day(12, 13));
+        let eve = ctx(&th, &o, Fiesta::of_day(12, 24));
+        let mut d = dressed(&virgen, 120, 40);
+        let ramo = d.sprite.cells.clone();
+        let mut pinata = dressed(&after, 120, 40);
+        // The same piñata that hangs on Nochebuena, in its colors and with its
+        // banner; no ramo, no stars.
+        assert_ne!(pinata.sprite.cells, ramo);
+        assert_eq!(pinata.sprite.cells, dressed(&eve, 120, 40).sprite.cells);
+        assert_eq!(pinata.palette, navidad::look(after.fiesta).classic.to_vec());
+        let dale = Sprite::fit_lines(&["¡Dale, dale,", "dale!"], 120, 40);
+        assert_eq!(pinata.banner.cells, dale.cells);
+        assert_eq!(parts(&pinata, b"RQGSY"), 0);
+        for p in b"abcdefghr" {
+            assert!(parts(&pinata, &[*p]) > 0, "{}", *p as char);
+        }
+        // And midnight takes it from one to the other, and back.
+        d.retheme(&after);
+        assert_eq!(d.sprite.cells, pinata.sprite.cells);
+        d.retheme(&virgen);
+        assert_eq!(d.sprite.cells, ramo);
+        assert!(
+            play(&mut pinata, &after, 20.0)
+                .to_text()
+                .contains("esquinas: ")
+        );
     }
 
     #[test]
