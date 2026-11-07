@@ -38,6 +38,13 @@
 //! the soil (more by the Grito). At its foot grows the emblem: a nopal from a
 //! rock in the lake, a pad more each week, an eagle perching on it from the
 //! 11th and the serpent in its beak on the 15th and 16th.
+//!
+//! On the Jueves de Corpus the leaves are heaped with what children carry to
+//! church that day: flowers of papel in rosa mexicano, amarillo and morado,
+//! and fruit, mangos, naranjas, tunas and limones, in clumps as a huacal is
+//! loaded. The pot is a huacal, a wooden crate of slats with fruit and flowers
+//! in it, and at its foot stands a mulita de hoja de maíz, the little
+//! corn-husk mule, with a huacal of flowers on her back.
 
 use crate::color::{self, Color, rgb};
 use crate::fiesta::{self, Fiesta};
@@ -1669,6 +1676,159 @@ const SERPIENTE: Sprite = Sprite {
 };
 
 // ---------------------------------------------------------------------------
+// Jueves de Corpus: a tree heaped with fruit and flowers of papel, in a
+// huacal
+
+const MADERA: Color = rgb(0xa0703a);
+const HOJA_MAIZ: Color = rgb(0xd9c48a);
+const HOJA_TOSTADA: Color = rgb(0xb08d4a);
+const MANTA: Color = rgb(0xefe6cf);
+const REBOZO: Color = rgb(0x2a5caa);
+const MANGO: Color = rgb(0xffb02e);
+const NARANJA: Color = rgb(0xff8c1a);
+const TUNA: Color = rgb(0xc2185b);
+const LIMON_VERDE: Color = rgb(0x7cb342);
+
+/// What a leaf becomes on the tree of the Jueves de Corpus.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum Fruto {
+    Leaf,
+    /// A flower of papel: rosa mexicano, amarillo or morado.
+    Flor(u8),
+    /// Fruit: mango, naranja, tuna or limón.
+    Fruta(u8),
+}
+
+/// What the leaf at a cell of tree `seed` is on the Jueves de Corpus: in
+/// clumps about four cells wide and two tall, a heap of fruit here and of
+/// flowers there, as a huacal is loaded, the rest of the tree in its leaves.
+fn frutal(x: i32, y: i32, seed: u32) -> Fruto {
+    let (cx, cy) = (
+        (x + 2 * (y.div_euclid(2) & 1)).div_euclid(4),
+        y.div_euclid(2),
+    );
+    let clump = hash01(cx, cy, seed ^ 0x6672_7574);
+    let p = if clump < 0.6 { 0.8 } else { 0.08 };
+    if hash01(x, y, seed ^ 0x636f_7270) >= p {
+        return Fruto::Leaf;
+    }
+    if hash01(cx, cy, seed ^ 0x6b69_6e64) < 0.45 {
+        Fruto::Fruta(((hash01(x, y, seed ^ 0x6672_7461) * 4.0) as u8).min(3))
+    } else {
+        Fruto::Flor(((hash01(x, y, seed ^ 0x666c_6f72) * 3.0) as u8).min(2))
+    }
+}
+
+/// The Jueves de Corpus' colors.
+struct Corpus {
+    inks: Inks,
+    /// Flowers of papel: rosa mexicano, amarillo, morado.
+    flor: [Color; 3],
+    /// Fruit: mango, naranja, tuna, limón.
+    fruta: [Color; 4],
+}
+
+impl Corpus {
+    fn classic(pairs: &[Color; 5]) -> Corpus {
+        Corpus::make(
+            pairs,
+            [ROSA, AMARILLO, MORADO],
+            [MANGO, NARANJA, TUNA, LIMON_VERDE],
+            [MADERA, HOJA_MAIZ, HOJA_TOSTADA, MANTA, REBOZO],
+        )
+    }
+
+    /// The same dress in the theme's colors.
+    fn themed(ctx: &Ctx, pairs: &[Color; 5]) -> Corpus {
+        let t = ctx.theme;
+        let wood = pairs[WOOD_BRIGHT as usize];
+        let leaf = pairs[LEAF_BRIGHT as usize];
+        let by = |hue, tol, avoid, i, native| {
+            by_hue(&t.colors, hue, tol, avoid).unwrap_or_else(|| ctx.pick(i, native))
+        };
+        let rosa = by(330.0, 40.0, None, 0, ROSA);
+        let amarillo = by(52.0, 22.0, Some(rosa), 1, AMARILLO);
+        let morado = by(275.0, 45.0, Some(rosa), 2, MORADO);
+        let naranja = by(28.0, 22.0, Some(rosa), 3, NARANJA);
+        let tuna = by(350.0, 30.0, Some(rosa), 0, TUNA);
+        let azul = by(220.0, 45.0, Some(rosa), 2, REBOZO);
+        Corpus::make(
+            pairs,
+            [rosa, amarillo, morado],
+            [amarillo.lerp(naranja, 0.4), naranja, tuna, leaf],
+            [
+                wood,
+                wood.lerp(t.fg, 0.45),
+                wood.lerp(t.fg, 0.1),
+                t.fg,
+                azul,
+            ],
+        )
+    }
+
+    /// `rest`: madera, hoja de maíz, hoja tostada, manta, rebozo.
+    fn make(pairs: &[Color; 5], flor: [Color; 3], fruta: [Color; 4], rest: [Color; 5]) -> Corpus {
+        let [madera, hoja, tostada, manta, rebozo] = rest;
+        let inks = Inks::new(&[
+            (b'h', madera),
+            (b'W', pairs[WOOD_BRIGHT as usize]),
+            (b'p', flor[0]),
+            (b'y', flor[1]),
+            (b'v', flor[2]),
+            (b'M', fruta[0]),
+            (b'O', fruta[1]),
+            (b'T', fruta[2]),
+            (b'l', fruta[3]),
+            (b'H', hoja),
+            (b's', tostada),
+            (b'm', manta),
+            (b'r', rebozo),
+        ]);
+        Corpus { inks, flor, fruta }
+    }
+}
+
+/// Cbonsai's pot one as a huacal, the wooden crate that fruit and flowers are
+/// carried in: slats of madera, heaped with flowers of papel and fruit.
+const HUACAL_ONE: Sprite = Sprite {
+    art: &[
+        r":===========.[~~~].===========:",
+        r" |@o*@o*@o*@o*@o*@o*@o*@o*@o*| ",
+        r"  |=========================| ",
+        r"  |_|                     |_|",
+    ],
+    ink: &[
+        "hhhhhhhhhhhhWWWWWWWhhhhhhhhhhhh",
+        " hpMyvOpyTvplyvMpyOvpTyvlpyMvh ",
+        "  hhhhhhhhhhhhhhhhhhhhhhhhhhh ",
+        "  hhh                     hhh",
+    ],
+};
+
+const HUACAL_TWO: Sprite = Sprite {
+    art: &[r":===.[~~~].===:", r" |@o*@o*@o*@o| ", r"  |=========|  "],
+    ink: &["hhhhWWWWWWWhhhh", " hpMyvOpyTvplh ", "  hhhhhhhhhhh  "],
+};
+
+/// A mulita de hoja de maíz, the little corn-husk mule children lead to church,
+/// facing left with a huacal of flowers on her back, 16 wide.
+const MULITA: Sprite = Sprite {
+    art: &[
+        r" ^ ^    @*o@    ",
+        r"(o.o)  [#####]  ",
+        r" \_/HHHHHHHHHH\ ",
+        r"   || ||  || || ",
+    ],
+    ink: &[
+        " s s    pyOv    ",
+        "HmHmH  hhhhhhh  ",
+        " HHHrrrrrrrrrrs ",
+        "   ss ss  ss ss ",
+    ],
+};
+const MULITA_W: i32 = 16;
+
+// ---------------------------------------------------------------------------
 // The scene
 
 /// The holiday the tree is dressed for. Any other holiday leaves it as it is
@@ -1679,6 +1839,7 @@ enum Look {
     Muertos,
     Navidad,
     Patrias,
+    Corpus,
 }
 
 impl Look {
@@ -1687,6 +1848,7 @@ impl Look {
             fiesta::Kind::Muertos => Look::Muertos,
             fiesta::Kind::Navidad => Look::Navidad,
             fiesta::Kind::Patrias => Look::Patrias,
+            fiesta::Kind::Corpus => Look::Corpus,
             _ => Look::Plain,
         }
     }
@@ -1745,6 +1907,7 @@ struct Bonsai {
     dress: Dress,
     navidad: Navidad,
     patrias: Patrias,
+    corpus: Corpus,
     /// Leaves may turn into blossom glyphs (only with the default `&` leaves;
     /// leaves the user chose keep their glyph and only change color).
     bloom_glyphs: bool,
@@ -1835,6 +1998,7 @@ impl Bonsai {
             dress: Dress::CLASSIC,
             navidad: Navidad::classic(&CLASSIC),
             patrias: Patrias::classic(&CLASSIC, false),
+            corpus: Corpus::classic(&CLASSIC),
             bloom_glyphs,
             frng: fastrand::Rng::with_seed(ctx.seed ^ FIESTA_SALT),
             petals: Vec::with_capacity(PETALS),
@@ -2221,6 +2385,7 @@ impl Bonsai {
         match self.look {
             Look::Navidad => self.navidad.inks.get(k),
             Look::Patrias => self.patrias.inks.get(k),
+            Look::Corpus => self.corpus.inks.get(k),
             _ => Color::Reset,
         }
     }
@@ -2264,6 +2429,7 @@ impl Bonsai {
         let (one, two) = match self.look {
             Look::Navidad => (&NOCHEBUENA_ONE, &NOCHEBUENA_TWO),
             Look::Patrias => (&PATRIA_ONE, &PATRIA_TWO),
+            Look::Corpus => (&HUACAL_ONE, &HUACAL_TWO),
             _ => return,
         };
         let (pot, bold) = match self.base {
@@ -2316,6 +2482,27 @@ impl Bonsai {
             Tri::Blanco(s) => (glyph('*'), p.blanco[s as usize]),
             Tri::Rojo(s) => (glyph('@'), p.rojo[s as usize]),
         }
+    }
+
+    /// What a leaf is on the Jueves de Corpus: its glyph and color.
+    fn fruity(&self, x: i32, y: i32, cell: GCell) -> (char, Color) {
+        let glyph = |g: char| if self.bloom_glyphs { g } else { cell.ch };
+        let k = &self.corpus;
+        match frutal(x, y, self.seed) {
+            Fruto::Leaf => (cell.ch, self.pairs[(cell.style & 7) as usize]),
+            Fruto::Flor(i) => (glyph('@'), k.flor[i.min(2) as usize]),
+            Fruto::Fruta(i) => (glyph('o'), k.fruta[i.min(3) as usize]),
+        }
+    }
+
+    /// The mulita de hoja at the foot of the tree, to the right of the pot
+    /// when there is room, else to the left.
+    fn draw_mulita(&self, ctx: &Ctx, c: &mut Canvas) {
+        let Some((x, _)) = self.room(MULITA_W, 1) else {
+            return;
+        };
+        let (_, _, ground) = self.foot();
+        self.plot(ctx, c, (x, ground), &MULITA, 0, 0.0);
     }
 
     /// The step of the series' blinking the scene is at.
@@ -2662,6 +2849,13 @@ impl Scene for Bonsai {
                     Patrias::themed(ctx, &self.pairs)
                 };
             }
+            Look::Corpus => {
+                self.corpus = if ctx.theme.native {
+                    Corpus::classic(&self.pairs)
+                } else {
+                    Corpus::themed(ctx, &self.pairs)
+                };
+            }
             _ => {}
         }
         // petals belong to the holiday that dropped them
@@ -2680,7 +2874,7 @@ impl Scene for Bonsai {
             Look::Muertos | Look::Patrias => self.tick_fiesta(dt, real),
             // the series blinks on the wall clock, however fast the scene runs
             Look::Navidad => self.clock = (self.clock + real.clamp(0.0, 1.0)).rem_euclid(3600.0),
-            Look::Plain => {}
+            Look::Plain | Look::Corpus => {}
         }
         let mut t = (dt.max(0.0) as f64).min(86_400.0);
         let mut r = (real.max(0.0) as f64).min(86_400.0);
@@ -2748,7 +2942,7 @@ impl Scene for Bonsai {
                 self.draw_musgo(c);
                 self.draw_pot(ctx, c);
             }
-            Look::Patrias => self.draw_pot(ctx, c),
+            Look::Patrias | Look::Corpus => self.draw_pot(ctx, c),
             Look::Plain => self.draw_base(c),
         }
         let mid = self.mid();
@@ -2774,6 +2968,10 @@ impl Scene for Bonsai {
                                 let (ch, fg) = self.patriotic(x, y, mid, cell);
                                 (ch, fg, attr)
                             }
+                            Look::Corpus if leaf => {
+                                let (ch, fg) = self.fruity(x, y, cell);
+                                (ch, fg, attr)
+                            }
                             _ => (cell.ch, self.pairs[pair as usize], attr),
                         };
                         c.set_attr(x, y, ch, fg, attr);
@@ -2790,6 +2988,7 @@ impl Scene for Bonsai {
                 self.draw_banderitas(c);
                 self.flying_petals(c);
             }
+            Look::Corpus => self.draw_mulita(ctx, c),
             Look::Plain => {}
         }
         self.draw_message(c);
@@ -3139,6 +3338,9 @@ mod tests {
             &PENCA,
             &AGUILA_SPRITE,
             &SERPIENTE,
+            &HUACAL_ONE,
+            &HUACAL_TWO,
+            &MULITA,
         ] {
             assert_eq!(s.art.len(), s.ink.len(), "{:?}", s.art);
             for (art, ink) in s.art.iter().zip(s.ink) {
@@ -3148,6 +3350,12 @@ mod tests {
         assert_eq!(PORTAL.art[0].len() as i32, PORTAL_W);
         assert_eq!(PORTAL_COMPACT.art[0].len() as i32, COMPACT_W);
         assert_eq!(ROCA.art[0].len() as i32, EMBLEMA_W);
+        // The huacal is as big as the pot it stands in for.
+        assert_eq!(HUACAL_ONE.art.len() as i32, base_size(1).1);
+        assert_eq!(HUACAL_ONE.art[0].len() as i32, base_size(1).0);
+        assert_eq!(HUACAL_TWO.art.len() as i32, base_size(2).1);
+        assert_eq!(HUACAL_TWO.art[0].len() as i32, base_size(2).0);
+        assert_eq!(MULITA.art[0].len() as i32, MULITA_W);
     }
 
     /// The nacimiento's side of the screen: the bottom rows, without the
@@ -3231,7 +3439,7 @@ mod tests {
             let (_, c) = dressed(GROWN, &theme, Fiesta::of_day(m, d), 100, 30);
             count(&c, |cell| cell.ch == 'O' && FOQUITOS.contains(&cell.fg))
         };
-        assert!(bulbs(12, 12) < bulbs(12, 24));
+        assert!(bulbs(12, 13) < bulbs(12, 24));
     }
 
     #[test]
@@ -3532,12 +3740,169 @@ mod tests {
         assert!(count(&c, |cell| cell.ch == '*' && cell.fg == theme.fg) > 3);
     }
 
+    /// The Jueves de Corpus heaps the tree with flowers of papel and fruit,
+    /// puts it in a huacal and a mulita de hoja at its foot.
+    #[test]
+    fn corpus_heaps_the_tree_with_fruit_and_flowers() {
+        let theme = Theme::classic();
+        let corpus = Fiesta::height(crate::fiesta::Kind::Corpus);
+        assert!(corpus.is(crate::fiesta::Kind::Corpus));
+        let k = Corpus::classic(&CLASSIC);
+        let (b, c) = dressed(GROWN, &theme, corpus, 100, 30);
+        let text = c.to_text();
+        // Flowers of papel in the three colors, fruit in the four, and
+        // leaves between them.
+        for color in k.flor {
+            assert!(
+                count(&c, |cell| cell.ch == '@' && cell.fg == color) >= 2,
+                "{text}"
+            );
+        }
+        let fruit = count(&c, |cell| cell.ch == 'o' && k.fruta.contains(&cell.fg));
+        let leaves = count(&c, |cell| cell.ch == '&' && CLASSIC[..3].contains(&cell.fg));
+        assert!(fruit > 5 && leaves > 15, "{fruit} {leaves}\n{text}");
+        // The huacal in place of the pot, heaped with them, and the mulita.
+        assert!(text.contains(":===========.[~~~].==========="), "{text}");
+        assert!(text.contains("|@o*@o*@o*@o*@o*"), "{text}");
+        for piece in ["(o.o)", "[#####]", r"\_/HHHHHHHHHH\", "|| ||  || ||"] {
+            assert!(text.contains(piece), "{piece}\n{text}");
+        }
+        // The colors of the day: madera, hoja de maíz, the rebozo, the manta.
+        for color in [MADERA, HOJA_MAIZ, REBOZO, HOJA_TOSTADA, MANGO, TUNA] {
+            assert!(count(&c, |cell| cell.fg == color) >= 2, "{color:?}\n{text}");
+        }
+        // Nothing falls, nothing flickers: the grown tree is still.
+        assert!(b.petals.is_empty());
+        assert_eq!(b.next_change(), f32::INFINITY);
+        // The little pot.
+        let (_, c) = dressed(&format!("{GROWN}\nbase = 2"), &theme, corpus, 100, 30);
+        assert!(c.to_text().contains("|@o*@o*@o*@o|"), "{}", c.to_text());
+    }
+
+    /// The mulita stands to the left of the pot when the right has no room,
+    /// and is left out where there is room for neither.
+    #[test]
+    fn the_mulita_stands_where_there_is_room() {
+        let theme = Theme::classic();
+        let corpus = Fiesta::height(crate::fiesta::Kind::Corpus);
+        let place = |w, h| {
+            let (_, c) = dressed(GROWN, &theme, corpus, w, h);
+            let t = c.to_text();
+            let at = t
+                .lines()
+                .find_map(|l| l.find("[#####]").map(|b| l[..b].chars().count()));
+            (t.contains("[#####]"), at.map(|x| x as i32 - (w as i32 / 2)))
+        };
+        // beside the pot, on its right: the huacal is right of the middle
+        let (there, x) = place(100, 30);
+        assert!(there && x.is_some_and(|x| x > 0));
+        // no room on the right of the pot, nor on its left, at 40 columns
+        assert!(!place(40, 20).0);
+    }
+
+    /// The tree comes back to its plain self when the day goes by, and goes
+    /// through the Jueves de Corpus on its way.
+    #[test]
+    fn corpus_comes_and_goes_through_retheme() {
+        let theme = Theme::classic();
+        let opts = Opts::new(INFO.options, GROWN.parse().unwrap());
+        let ctx = |fiesta| Ctx {
+            theme: &theme,
+            opts: &opts,
+            bg: Color::Reset,
+            seed: 1,
+            fiesta,
+        };
+        let plain = ctx(Fiesta::NONE);
+        let mut b = Bonsai::new(&plain);
+        b.resize(&plain, 100, 30);
+        b.retheme(&plain);
+        let draw = |b: &mut Bonsai, ctx: &Ctx| {
+            let mut c = Canvas::new(100, 30, Color::Reset);
+            b.draw(ctx, &mut c);
+            c
+        };
+        let before = draw(&mut b, &plain);
+        let corpus = ctx(Fiesta::height(crate::fiesta::Kind::Corpus));
+        b.retheme(&corpus);
+        assert!(draw(&mut b, &corpus).to_text().contains("[#####]"));
+        b.retheme(&plain);
+        assert_eq!(draw(&mut b, &plain).cells(), before.cells());
+        // and from one holiday to another
+        b.retheme(&corpus);
+        b.retheme(&ctx(Fiesta::of_day(9, 15)));
+        assert!(!draw(&mut b, &plain).to_text().contains("[#####]"));
+    }
+
+    /// Under a theme the flowers, fruit and wood are the theme's.
+    #[test]
+    fn corpus_under_a_theme_uses_its_colors() {
+        let theme = Theme::builtin("dracula").unwrap();
+        let corpus = Fiesta::height(crate::fiesta::Kind::Corpus);
+        let (_, c) = dressed(GROWN, &theme, corpus, 100, 30);
+        for classic in [
+            ROSA,
+            AMARILLO,
+            MORADO,
+            MANGO,
+            TUNA,
+            LIMON_VERDE,
+            HOJA_MAIZ,
+            MANTA,
+            REBOZO,
+        ] {
+            assert_eq!(count(&c, |cell| cell.fg == classic), 0, "{classic:?}");
+        }
+        // dracula's pink and its purple for the flowers of papel
+        assert!(count(&c, |cell| cell.ch == '@' && cell.fg == rgb(0xff79c6)) > 3);
+        assert!(count(&c, |cell| cell.ch == '@' && cell.fg == rgb(0xbd93f9)) > 3);
+    }
+
+    /// Odd sizes and huge steps on the Jueves de Corpus.
+    #[test]
+    fn corpus_survives_odd_sizes_and_huge_steps() {
+        let themes = [Theme::classic(), Theme::builtin("dracula").unwrap()];
+        for theme in &themes {
+            for opts in [
+                "",
+                "base = 2",
+                "base = 0\nmessage = 'hola'",
+                "geometry = '3,70'",
+                "leaves = '木,葉'",
+            ] {
+                for (w, h) in [(1, 1), (2, 3), (7, 2), (40, 6), (61, 20), (300, 90)] {
+                    let opts = Opts::new(INFO.options, opts.parse().unwrap());
+                    let ctx = Ctx {
+                        theme,
+                        opts: &opts,
+                        bg: rgb(0x0d1117),
+                        seed: 5,
+                        fiesta: Fiesta::height(crate::fiesta::Kind::Corpus),
+                    };
+                    let mut b = Bonsai::new(&ctx);
+                    b.resize(&ctx, w, h);
+                    b.retheme(&ctx);
+                    let mut c = Canvas::new(w, h, Color::Reset);
+                    for dt in [5.0, 0.01, 5.0, 1e6, 0.0, 5.0] {
+                        b.tick(&ctx, dt, dt);
+                        b.draw(&ctx, &mut c);
+                        assert!(b.next_change() >= 0.0);
+                    }
+                }
+            }
+        }
+    }
+
     #[test]
     fn user_leaves_keep_their_glyph_on_every_holiday() {
         let theme = Theme::classic();
         let opts = "seed = 42\nlive = false\ninfinite = false\nleaves = '#'";
-        for day in [(12, 24), (9, 15)] {
-            let (_, c) = dressed(opts, &theme, Fiesta::of_day(day.0, day.1), 100, 30);
+        for fiesta in [
+            Fiesta::of_day(12, 24),
+            Fiesta::of_day(9, 15),
+            Fiesta::height(crate::fiesta::Kind::Corpus),
+        ] {
+            let (_, c) = dressed(opts, &theme, fiesta, 100, 30);
             assert_eq!(count(&c, |cell| cell.ch == '&'), 0);
             assert!(count(&c, |cell| cell.ch == '#' && cell.fg.is_rgb()) > 20);
         }
