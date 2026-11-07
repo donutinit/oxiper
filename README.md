@@ -41,7 +41,7 @@ plus sixteen more scenes. One small binary. Nearly no CPU. Your terminal's trans
   the original twelve frames.
 - **One binary, twenty-one scenes.** Mix them into a playlist and give each one its own theme, pace and
   time on screen. And now and then, when you least expect it, a train, a duck or Nyan Cat goes by.
-- **Fiestas.** On eleven Mexican holidays the scenes dress up. On Día de Muertos the dog becomes a
+- **Fiestas.** On twelve Mexican holidays the scenes dress up. On Día de Muertos the dog becomes a
   xoloitzcuintle walking a path of marigolds to an ofrenda and papel picado hangs over everything;
   in the Navidad the bonsai grows a nacimiento at its foot and foquitos blink across the top; on the
   night of the Grito the fireworks light up the Zócalo; and Carnaval, the Guelaguetza, the
@@ -287,7 +287,7 @@ Can't wait? Press <kbd>E</kbd>.
 
 On the [holidays](#fiestas) visitors of the season join them and come far more often: La
 Catrina and the monarchs on Día de Muertos, a posada and a piñata in the Navidad, the Grito in
-September, chinelos at Carnaval, and more.
+September, chinelos at Carnaval, the Voladores de Papantla on Corpus, and more.
 
 The aurora sends its own: Nyan Cat or sl's train crosses its sky about three times an hour
 (`aurora.visitors`), whatever these settings say.
@@ -300,30 +300,34 @@ way it does in the street: the posadas climb to Nochebuena, September climbs to 
 
 | Holiday | Days | Over every scene | Visitors |
 |---|---|---|---|
-| [Navidad](#navidad) | December 12 (the Virgen de Guadalupe) to January 6 (the Reyes) | foquitos, heno and esferas; a piñata during the posadas | posada, piñata, Reyes, pastorela, and a prank on December 28 |
+| [Navidad](#navidad) | December 12 (the Virgen de Guadalupe) to January 6 (the Reyes) | foquitos, heno and esferas; a piñata during the posadas; rosas de Castilla on December 12 | posada, piñata, Reyes, pastorela; peregrinos, mañanitas and matachines on December 12, the Noche de Rábanos on December 23, and a prank on December 28 |
 | [Candelaria](#the-rest-of-the-year) | February 2 | | the tamalero |
 | [Carnaval](#the-rest-of-the-year) | Thursday to Martes de Carnaval | confetti, serpentinas, banderines | chinelos, a comparsa |
 | [Equinoccio](#the-rest-of-the-year) | March 19 to 22 | | Kukulcán |
 | [Quema de Judas](#the-rest-of-the-year) | Viernes Santo and Sábado de Gloria | | a Judas |
 | [Día del Niño](#the-rest-of-the-year) | April 30 | globos | toys, a lotería |
 | [Día de la Santa Cruz](#the-rest-of-the-year) | May 3 | | the builders' cross |
+| [Jueves de Corpus](#the-rest-of-the-year) | the Thursday 60 days after Easter | an enramada of leaves and paper flowers, mulitas hanging from it | mulitas, the Voladores de Papantla |
 | [Guelaguetza](#the-rest-of-the-year) | the two Lunes del Cerro (late July), from the Saturday before | papel picado in Oaxacan colors | the Flor de Piña, a calenda |
 | [Fiestas Patrias](#fiestas-patrias) | September 1 to 16 | papel picado in verde, blanco y rojo | the Grito, the jarabe tapatío, the águila |
 | [Día de Muertos](#día-de-muertos) | October 28 to November 3 | papel picado, cempasúchil petals | La Catrina, monarchs, an alebrije, mariachis, a calaverita |
 | [Día de la Revolución](#the-rest-of-the-year) | November 20 | tricolor banderines | Adelitas, a revolutionary train |
 
-Carnaval and the quema de Judas follow Easter and the Guelaguetza the Lunes del Cerro, worked
-out for every year. oxiper follows your local date; try any of them any day, or turn them off:
+Carnaval, the quema de Judas and Corpus follow Easter and the Guelaguetza the Lunes del Cerro,
+worked out for every year. oxiper follows your local date; try any of them any day, or turn them off:
 
 ```sh
 oxiper -o fiestas=navidad               # a holiday at its height
 oxiper -o fiestas=navidad@12-28         # or one of its days
+oxiper -o fiestas=guadalupe             # a day of the Navidad, by its name
 oxiper -o fiestas=carnaval@2027-02-09   # a movable one, in a given year
 ```
 
 ```toml
 fiestas = "auto"   # "none", or navidad, candelaria, carnaval, equinoccio, judas, nino,
-                   # santa-cruz, guelaguetza, patrias, muertos, revolucion (@MM-DD for one day)
+                   # santa-cruz, corpus, guelaguetza, patrias, muertos, revolucion
+                   # (@MM-DD for one day), or a day of the Navidad: guadalupe, rabanos,
+                   # nochebuena, inocentes, ano-nuevo, reyes
 ```
 
 Under other themes a holiday takes the theme's colors, keeping only flames, food and a few
@@ -405,6 +409,23 @@ no pierdas el tino!") until it bursts into colación and fruit, the **Reyes** on
 elephant (January 2 to 6), a **pastorela** where San Miguel drives Luzbel off, and on December 28
 only an **inocente**: a frightening system failure that turns out to be "¡INOCENTE PALOMITA, QUE
 TE DEJASTE ENGAÑAR!".
+
+On **December 12**, the Virgen de Guadalupe's own day, a garland of rosas de Castilla takes the
+place of the foquitos, with papel picado in rosa and verde azulado cut with gold stars, and rose
+petals drift down. **Peregrinos** walk and cycle to the Basílica with estandartes, roses and
+veladoras, mariachis sing her the **mañanitas** at midnight while cohetes go up, and
+**matachines** in skirts of carrizos dance under an arch of roses. **fireworks** moves to the
+Basílica at midnight, the round new one and the old one beside it, bursts roses and the gold stars
+of her mantle and lights her rays at the top of the castillo; **dog** walks among the pilgrims to
+both Basílicas in a collar of roses; **bonsai** blooms with the roses of the Tepeyac over a nicho
+with veladoras; **dvd** bounces a ramo of rosas de Castilla ("¡Felicidades a todas las Lupitas!"),
+**neo** rains verde azulado and rosa and paints roses and the stars of her mantle out of its
+glyphs, and **nyancat** flies a bouquet of roses on a garland of roses and stars ("¡Llevas N
+segundos cantando las mañanitas!"). On December 13 the Navidad is back.
+
+On **December 23**, the **Noche de Rábanos** fills the zócalo of Oaxaca with mesas of figures
+carved from radishes (a nacimiento, a calenda with its marmota, mariachis, a danzante de la
+Pluma), and a judge pins the ribbon on the winner.
 
 - **bonsai** is trimmed the Mexican way: esferas, a series of foquitos along the branches, heno,
   a star on the crown, a pot of nochebuenas, and at its foot a nacimiento that fills up posada by
@@ -544,6 +565,14 @@ serpent in her beak to land on a nopal.
 - **Día de la Santa Cruz** (May 3): builders raise a cross of paper flowers over a half-built
   house. **fireworks** sends cohetes up from the building sites and **pipes** turn into
   scaffolding topped with crosses.
+- **Jueves de Corpus** (the Thursday 60 days after Easter): an enramada of leaves and paper
+  flowers hangs over every scene, mulitas de hoja de maíz swinging from it; children in manta and
+  rebozo go by with huacales of fruit and flowers past a puesto of **mulitas**, and the
+  **Voladores de Papantla** circle down from their pole, thirteen turns each. **fireworks** and
+  **dog** go to a church atrium where the children carry their huacales in, **bonsai** grows in a
+  huacal heaped with fruit and paper flowers, **dvd** bounces a mulita with its huacal ("¡Feliz
+  Jueves de Corpus!"), **neo** rains hoja de maíz and paints a mulita, and **nyancat** carries a
+  huacal on a mulita's back ("¡Llevas N segundos de mulita!").
 - **Guelaguetza** (the Lunes del Cerro): papel picado in Oaxacan colors over every scene, the Flor
   de Piña and a calenda going by. **fireworks** runs toritos and marmotas under a burning
   castillo, and **dvd** bounces the Danza de la Pluma's penacho ("¡VIVA OAXACA!").
