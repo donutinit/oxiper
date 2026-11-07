@@ -3,7 +3,7 @@
 //! the holidays paint over the sky, in cat pixels.
 
 use super::frames::{FRAME_HEIGHT, FRAME_WIDTH};
-use crate::color::Color;
+use crate::color::{self, Color};
 use crate::render::Pixels;
 
 /// A frame, one byte per pixel.
@@ -109,6 +109,29 @@ pub(super) fn spot(f: &Plain, flip: bool, x: i32, y: i32) -> Spot {
 pub(super) fn share(n: usize, level: f32, from: f32) -> usize {
     let k = ((level - from) / (1.0 - from)).clamp(0.0, 1.0);
     ((n as f32 * k).ceil() as usize).min(n)
+}
+
+/// For each of `hexes`, the color of a theme's rainbow (see `theme_rainbow`)
+/// nearest to it in hue, a different one for each while there are any left;
+/// that is how a holiday's colors become a theme's.
+pub(super) fn like_each<const N: usize>(rainbow: &[Color; 6], hexes: [u32; N]) -> [Color; N] {
+    let mut taken = [false; 6];
+    hexes.map(|hex| {
+        let want = super::hue(color::rgb(hex));
+        let far = |c: Color| match (want, super::hue(c)) {
+            (Some(a), Some(b)) => {
+                let d = (a - b).abs();
+                d.min(360.0 - d)
+            }
+            _ => f32::MAX,
+        };
+        let i = (0..6)
+            .filter(|&i| !taken[i])
+            .min_by(|&a, &b| far(rainbow[a]).total_cmp(&far(rainbow[b])))
+            .unwrap_or(0);
+        taken[i] = true;
+        rainbow[i]
+    })
 }
 
 /// Paints a holiday's sprites in cat pixels over the sky.

@@ -29,8 +29,14 @@
 //! On the Candelaria (`nyancat/candelaria.rs`) the pop-tart is a steaming
 //! tamal in its hoja de maíz and the stars are the flames of the velas
 //! blessed that day.
+//!
+//! On the Jueves de Corpus (`nyancat/corpus.rs`) the pop-tart is a huacal of
+//! fruit and flowers of papel on a mulita's back, on a rebozo, and the stars
+//! are flowers of papel that open and fall apart, with petals and strips of
+//! hoja de maíz drifting by.
 
 mod candelaria;
+mod corpus;
 mod costume;
 pub(crate) mod frames;
 mod muertos;
@@ -224,6 +230,8 @@ enum Dress {
     Patrias,
     /// The day of the tamales: a tamal in its husk.
     Candelaria,
+    /// The Thursday of Corpus Christi: a huacal on a mulita's back.
+    Corpus,
 }
 
 /// Seeds the holiday's own randomness, apart from the scene's.
@@ -452,6 +460,8 @@ impl Scene for Nyancat {
             Dress::Patrias
         } else if fiesta.is(Kind::Candelaria) {
             Dress::Candelaria
+        } else if fiesta.is(Kind::Corpus) {
+            Dress::Corpus
         } else {
             Dress::None
         };
@@ -467,6 +477,7 @@ impl Scene for Nyancat {
                         Dress::Navidad { reyes } => navidad::dress(f, reyes),
                         Dress::Patrias => patrias::dress(f),
                         Dress::Candelaria => candelaria::dress(f),
+                        Dress::Corpus => corpus::dress(f),
                         _ => muertos::dress(f),
                     })
                     .collect();
@@ -485,6 +496,7 @@ impl Scene for Nyancat {
                 Dress::Candelaria => {
                     candelaria::palette(&mut hp, (!native).then_some(self.star_color))
                 }
+                Dress::Corpus => corpus::palette(&mut hp, rainbow),
                 _ => {
                     muertos::palette(&mut hp, rainbow);
                     if native {
@@ -543,6 +555,7 @@ impl Scene for Nyancat {
             Dress::Navidad { .. } => return self.draw_navidad(c, i, flip),
             Dress::Patrias => return self.draw_patrias(c, i, flip),
             Dress::Candelaria => return self.draw_candelaria(c, i, flip),
+            Dress::Corpus => return self.draw_corpus(c, i, flip),
         }
         let f = &self.frames[i];
         self.px.clear();
@@ -750,6 +763,36 @@ impl Nyancat {
         self.draw_counter(c);
     }
 
+    /// The animation dressed for the Jueves de Corpus, frame `i`: the rainbow
+    /// is the rainbow.
+    fn draw_corpus(&mut self, c: &mut Canvas, i: usize, flip: bool) {
+        let (level, k) = (self.level, self.ticks as i64 & 0xffff_ffff);
+        self.paint(i, flip, |_, _, _, ch| ch);
+
+        // Flowers of papel where the stars are, then petals and strips of
+        // husk, behind the cat.
+        let shift = self.star_shift(k);
+        let f = &self.dressed[i];
+        let solid = |x: i32, y: i32| costume::is_solid(sample(f, flip, x, y));
+        let filled = |x: i32, y: i32| sample(f, flip, x, y) != b',';
+        let mut p = Painter {
+            px: &mut self.px,
+            pal: &self.holiday_pal,
+            ox: self.ox,
+            oy: self.oy,
+            s: self.scale,
+            mirror: false,
+        };
+        for (n, st) in self.stars.iter().enumerate() {
+            let cx = self.star_lo + (st.x - self.star_lo - shift).rem_euclid(self.star_span);
+            let stage = (st.phase as i64 + st.dir as i64 * (k % 6)).rem_euclid(6) as usize;
+            corpus::star(&mut p, &solid, n, cx, st.y, stage);
+        }
+        corpus::sky(&mut p, &self.drift, level, k, &filled);
+        self.px.blit(c);
+        self.draw_counter(c);
+    }
+
     /// nyancat's counter on the bottom line, in Spanish for the holiday.
     fn draw_counter(&self, c: &mut Canvas) {
         if self.anim_rows() < self.h {
@@ -773,6 +816,7 @@ impl Nyancat {
                 Dress::Navidad { .. } => ("¡Llevas ", seconds, " segundos de posada!"),
                 Dress::Patrias => ("¡Llevas ", seconds, " segundos gritando VIVA MÉXICO!"),
                 Dress::Candelaria => ("¡Llevas ", seconds, " segundos pagando los tamales!"),
+                Dress::Corpus => ("¡Llevas ", seconds, " segundos de mulita!"),
             };
             let len = (before.chars().count() + num.len() + after.chars().count()) as i32;
             let x = ((self.w as i32 - len) / 2).max(0);
@@ -1021,10 +1065,28 @@ mod tests {
         assert!(lit((10, 28)) < lit((11, 2)));
     }
 
+    /// A day for a test: a (month, day) of the fixed calendar, or a
+    /// [`Fiesta`](crate::fiesta::Fiesta) (the movable holidays have no fixed day).
+    trait Day: std::fmt::Debug + Copy {
+        fn fiesta(self) -> crate::fiesta::Fiesta;
+    }
+
+    impl Day for (u32, u32) {
+        fn fiesta(self) -> crate::fiesta::Fiesta {
+            crate::fiesta::Fiesta::of_day(self.0, self.1)
+        }
+    }
+
+    impl Day for crate::fiesta::Fiesta {
+        fn fiesta(self) -> crate::fiesta::Fiesta {
+            self
+        }
+    }
+
     /// A scene on an ordinary day, then on `day` (through `retheme`, as when
     /// midnight passes), then on an ordinary day again: the picture changes
     /// and comes back. Returns what it looked like on `day`.
-    fn comes_and_goes(day: (u32, u32)) -> Vec<crate::render::Cell> {
+    fn comes_and_goes(day: impl Day) -> Vec<crate::render::Cell> {
         use crate::fiesta::Fiesta;
         use crate::scene::Opts;
         use crate::theme::Theme;
@@ -1047,7 +1109,7 @@ mod tests {
                 c.cells().to_vec()
             };
             let before = snap(&mut s, &ctx);
-            ctx.fiesta = Fiesta::of_day(day.0, day.1);
+            ctx.fiesta = day.fiesta();
             s.retheme(&ctx);
             during = snap(&mut s, &ctx);
             assert_ne!(before, during, "{day:?}");
@@ -1064,8 +1126,7 @@ mod tests {
     }
 
     /// Odd sizes and huge steps with the holiday on `days`.
-    fn survives(days: &[(u32, u32)]) {
-        use crate::fiesta::Fiesta;
+    fn survives(days: &[impl Day]) {
         use crate::scene::Opts;
         use crate::theme::Theme;
         let cases = [
@@ -1082,7 +1143,7 @@ mod tests {
                         opts: &opts,
                         bg: Color::Reset,
                         seed: 11,
-                        fiesta: Fiesta::of_day(day.0, day.1),
+                        fiesta: day.fiesta(),
                     };
                     let mut s = (INFO.make)(&ctx);
                     for &(w, h) in &[(1u16, 1u16), (2, 3), (3, 1), (1, 40), (300, 90), (80, 24)] {
@@ -1384,6 +1445,70 @@ mod tests {
     #[test]
     fn the_candelaria_survives_anything() {
         survives(&[(2, 2)]);
+    }
+
+    #[test]
+    fn dresses_up_for_corpus() {
+        use crate::fiesta::Fiesta;
+        use crate::theme::Theme;
+        let theme = Theme::classic();
+        let gray = color::rgb(0x999999);
+        let wood = color::rgb(0xa0703a);
+        let husk = color::rgb(0xd9c48a);
+        let rebozo = color::rgb(0x2a5caa);
+        let leaves = color::rgb(0x2f9a3a);
+        let fruit = [0xffb02e, 0xc2185b, 0xff8c1a].map(color::rgb);
+        let papel = [0xe4007c, 0xffd200, 0x7028a0].map(color::rgb);
+        let tan = color::rgb(0xffcd98);
+        let pink = color::rgb(0xffa9ff);
+        let red = color::rgb(0xff1900);
+        let corpus = Fiesta::height(Kind::Corpus);
+        assert!(corpus.is(Kind::Corpus));
+        let c = frame(&theme, corpus, 120, 50, 2.0);
+        // A huacal of fruit and flowers on a mulita's back, on a rebozo; the
+        // cat and the rainbow are as they were.
+        for col in [wood, husk, rebozo, leaves, gray, red]
+            .into_iter()
+            .chain(fruit)
+            .chain(papel)
+        {
+            assert!(count(&c, col) > 4, "{col:?}");
+        }
+        assert_eq!(count(&c, tan) + count(&c, pink), 0);
+        let text = c.to_text();
+        assert!(text.contains("segundos de mulita!"), "{text}");
+        // The flowers of papel are the stars: fewer white ones than ever.
+        let ordinary = frame(&theme, Fiesta::NONE, 120, 50, 2.0);
+        let white = color::rgb(0xffffff);
+        assert!(count(&c, white) < count(&ordinary, white));
+        // An ordinary day has none of it.
+        for col in [wood, husk, rebozo, leaves]
+            .into_iter()
+            .chain(fruit)
+            .chain(papel)
+        {
+            assert_eq!(count(&ordinary, col), 0, "{col:?}");
+        }
+        // Other themes color the flowers as the rainbow, not the crate.
+        let nord = Theme::builtin("nord").unwrap();
+        let c = frame(&nord, corpus, 120, 50, 2.0);
+        assert_eq!(count(&c, red), 0);
+        for col in papel {
+            assert_eq!(count(&c, col), 0, "{col:?}");
+        }
+        assert!(count(&c, wood) > 4 && count(&c, husk) > 4);
+    }
+
+    #[test]
+    fn the_corpus_comes_and_goes_through_retheme() {
+        use crate::fiesta::Fiesta;
+        comes_and_goes(Fiesta::height(Kind::Corpus));
+    }
+
+    #[test]
+    fn the_corpus_survives_anything() {
+        use crate::fiesta::Fiesta;
+        survives(&[Fiesta::height(Kind::Corpus)]);
     }
 
     #[test]
