@@ -81,6 +81,20 @@
 //! shells burn in the colors of the embroidery, some as flores. More
 //! marmotas, toritos, lights and flores as the Lunes del Cerro comes.
 //!
+//! On the Jueves de Corpus the city becomes the atrium of a village church:
+//! its tower with the bell lit in the belfry, the nave's gable and a dome
+//! behind it, the door open on the candles inside, a stone cross and a tree in
+//! the atrium and the houses of the village either side, with strings of
+//! papel picado in every color fluttering from the church to the rooftops.
+//! Children in manta and rebozo walk to the church with huacales of flowers
+//! on their backs, leading a mulita de hoja de maíz; cohetes whistle up from
+//! the atrium for the procession and burst in loud white bangs, and a small
+//! castillo is lit now and then, its wheels spinning tier by tier and a flor
+//! of papel bursting from its crown. The shells burn in the colors of the
+//! papel (rosa mexicano, amarillo, morado, naranja, limón) and the gold of the
+//! hoja de maíz, some as flowers of papel, and the finale is a mulita de hoja
+//! carrying her huacal of flowers, between two of them.
+//!
 //! MIT License
 //!
 //! Copyright (c) 2026 Santiago Sánchez
@@ -102,6 +116,8 @@
 //! LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 //! OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 //! SOFTWARE.
+
+mod corpus;
 
 use std::f32::consts::{FRAC_PI_2, PI, TAU};
 
@@ -203,8 +219,12 @@ enum Shell {
     Cohete,
     /// Día de la Santa Cruz: the cross hung with papel flowers.
     Cruz,
-    /// Guelaguetza: a flor of Oaxacan embroidery.
+    /// Guelaguetza: a flor of Oaxacan embroidery; on the Jueves de Corpus a
+    /// flower of papel.
     Flor,
+    /// Jueves de Corpus: a mulita de hoja de maíz with her huacal of flowers,
+    /// drawn in sparks.
+    Mulita,
     /// Carnaval: a mask with a plume, drawn in sparks.
     Mascara,
     /// Carnaval: a shower of confetti, tumbling in every color as it falls.
@@ -634,6 +654,32 @@ impl Fest {
                     SH_BLANCO,
                 ],
             ),
+            (true, Kind::Corpus) => (
+                corpus::CO_ROSA,
+                corpus::CO_LIMON,
+                corpus::CO_HOJA,
+                SH_BLANCO,
+                [
+                    corpus::CO_ROSA,
+                    corpus::CO_AMARILLO,
+                    corpus::CO_MORADO,
+                    corpus::CO_NARANJA,
+                    corpus::CO_LIMON,
+                    corpus::CO_REBOZO,
+                ],
+                // The papel's colors with the gold of the hoja de maíz.
+                vec![
+                    corpus::CO_ROSA,
+                    corpus::CO_ROSA,
+                    corpus::CO_AMARILLO,
+                    corpus::CO_AMARILLO,
+                    corpus::CO_MORADO,
+                    corpus::CO_NARANJA,
+                    corpus::CO_LIMON,
+                    corpus::CO_HOJA,
+                    SH_BLANCO,
+                ],
+            ),
             (true, Kind::Judas) => (
                 JU_ROJO,
                 JU_AMARILLO,
@@ -741,6 +787,12 @@ impl Fest {
         };
         let shape = match kind {
             Kind::SantaCruz => [gold, hues[0], hues[1], hues[2], hues[3], white, gold, gold],
+            // The flower of papel and the mulita: rosa, amarillo, morado and
+            // naranja for the flowers, limón for the leaves, white for the
+            // manta, the blue of the rebozo and the hoja de maíz.
+            Kind::Corpus => [
+                hues[0], hues[1], hues[2], hues[3], hues[4], white, hues[5], gold,
+            ],
             // The embroidered flower: its petals through the colors.
             Kind::Guelaguetza => [
                 hues[0], hues[1], hues[2], hues[3], hues[4], hues[5], white, gold,
@@ -779,6 +831,13 @@ impl Fest {
                         mix(stone, hues[1], 0.26),
                         mix(stone, hues[3], 0.22),
                     ]
+                } else if kind == Kind::Corpus {
+                    // The village's whitewash, in cal, rosa and ocre.
+                    [
+                        mix(stone, c8(236, 226, 196), 0.3),
+                        mix(stone, hues[0], 0.2),
+                        mix(stone, hues[1], 0.22),
+                    ]
                 } else {
                     [
                         mix(stone, c8(230, 200, 140), 0.3),
@@ -788,7 +847,12 @@ impl Fest {
                 },
                 ground: mix(stone, c8(110, 90, 80), 0.4),
                 window: scale(FLAMA, 0.7),
-                roof: scale(ROJO_NOCHEBUENA, 0.6),
+                roof: if kind == Kind::Corpus {
+                    // Tejas de barro.
+                    c8(112, 52, 30)
+                } else {
+                    scale(ROJO_NOCHEBUENA, 0.6)
+                },
                 pine: scale(VERDE_PINO, 0.8),
                 wood: c8(70, 40, 20),
                 cable: c8(30, 80, 45),
@@ -1394,6 +1458,10 @@ enum Role {
     Torito,
     /// A marmota of the calenda, a big paper globe on a pole.
     Marmota,
+    /// A string of papel picado across the atrium, fluttering.
+    Papel,
+    /// Children leading a mulita to church, walking across the atrium.
+    Procesion,
 }
 
 /// Something that moves in the scenery, drawn over it every frame.
@@ -1401,10 +1469,14 @@ enum Role {
 struct Actor {
     role: Role,
     /// Where it stands, in pixels: a flag's top (its pole hangs from it), a
-    /// bell's hook, a castillo's base (its feet, at the middle).
+    /// bell's hook, a castillo's base (its feet, at the middle), the left end
+    /// of a string of papel picado, the front of the procession (its feet).
     x: f32,
     y: f32,
-    /// How big it is: a flag's height, a bell's height, a castillo's height.
+    /// How big it is: a flag's height, a bell's height, a castillo's height,
+    /// how long a string of papel picado is (its right end hangs at row
+    /// `left`, and `state` is the size of its flags), the size of the
+    /// procession's pixels.
     size: f32,
     /// Where it is in its cycle, and for how many steps more.
     state: u8,
@@ -1727,6 +1799,23 @@ impl Fireworks {
                 shell = Shell::Flor;
                 (x, vy) = fit_shape(w, hh, x, apex);
             }
+        } else if self.fiesta.is(Kind::Corpus) {
+            // Jueves de Corpus: the colors of the papel and the hoja de maíz,
+            // flowers of papel among the shells, and cohetes for the
+            // procession whistling up from the atrium.
+            let f = &mut self.frng;
+            color = self.fest.shells[f.usize(0..self.fest.shells.len())];
+            let roll = f.f32();
+            if roll < 0.16 {
+                shell = Shell::Flor;
+                (x, vy) = fit_shape(w, hh, x, apex);
+            } else if roll < 0.46 && !self.sites.is_empty() {
+                shell = Shell::Cohete;
+                color = self.fest.white;
+                x = self.sites[f.usize(0..self.sites.len())] as f32 + rangef(f, -1.5, 1.5);
+                let apex = rangef(f, 0.3, 0.6) * hh;
+                vy = -(2.0 * ROCKET_G * (hh - apex).max(1.0)).sqrt();
+            }
         } else if self.fiesta.is(Kind::Judas) {
             // The quema de Judas: cartón rojo and yellow, white-gold sparks,
             // and the odd cohete.
@@ -1775,6 +1864,7 @@ impl Fireworks {
             || self.fiesta.is(Kind::Carnaval)
             || self.fiesta.is(Kind::Judas)
             || self.fiesta.is(Kind::Guelaguetza)
+            || self.fiesta.is(Kind::Corpus)
     }
 
     /// Does this holiday end a finale with a gran final?
@@ -1785,6 +1875,7 @@ impl Fireworks {
             || self.fiesta.is(Kind::SantaCruz)
             || self.fiesta.is(Kind::Carnaval)
             || self.fiesta.is(Kind::Guelaguetza)
+            || self.fiesta.is(Kind::Corpus)
     }
 
     /// The holiday's gran final, a big shaped shell between two smaller
@@ -1792,7 +1883,8 @@ impl Fireworks {
     /// Muertos ends with a calavera between two marigolds, Navidad with an
     /// estrella de siete picos between two bells, and on Año Nuevo with the
     /// year's greeting in sparks; the Fiestas Patrias with the águila
-    /// between two tricolor rings, or "VIVA MÉXICO" in sparks.
+    /// between two tricolor rings, or "VIVA MÉXICO" in sparks; the Jueves de
+    /// Corpus with a mulita de hoja between two flowers of papel.
     fn gran_final(&mut self) {
         if self.fiesta.ano_nuevo() && self.write(FELIZ_ANO) {
             return;
@@ -1814,6 +1906,8 @@ impl Fireworks {
             (Shell::Mascara, Shell::Serpentina, self.fest.gold)
         } else if self.fiesta.is(Kind::Guelaguetza) {
             (Shell::Flor, Shell::Multi, self.fest.gold)
+        } else if self.fiesta.is(Kind::Corpus) {
+            (Shell::Mulita, Shell::Flor, self.fest.gold)
         } else {
             return;
         };
@@ -2040,6 +2134,7 @@ impl Fireworks {
             Shell::Text(text) => return self.burst_text(r, text),
             Shell::Aguila => return self.burst_mask(r, AGUILA),
             Shell::Mascara => return self.burst_mask(r, MASCARA),
+            Shell::Mulita => return self.burst_mask(r, corpus::MULITA),
             _ => {}
         }
         if r.shell.shaped() {
@@ -2174,6 +2269,7 @@ impl Fireworks {
             | Shell::Cruz
             | Shell::Mascara
             | Shell::Flor
+            | Shell::Mulita
             | Shell::Text(_) => {}
             Shell::Confeti => {
                 // Bits of paper in every color: light, so they tumble down
@@ -2276,6 +2372,7 @@ impl Fireworks {
             Shell::Nochebuena => (NOCHEBUENA, ft.shape),
             Shell::Campana => (CAMPANA, ft.shape),
             Shell::Cruz => (CRUZ_SHAPE, ft.shape),
+            Shell::Flor if self.fiesta.is(Kind::Corpus) => (corpus::FLOR_PAPEL, ft.shape),
             Shell::Flor => (FLOR, ft.shape),
             _ => (
                 MARIGOLD,
@@ -2425,6 +2522,7 @@ impl Fireworks {
         self.build_carnaval();
         self.build_judas();
         self.build_calenda();
+        self.build_atrio();
     }
 
     /// Carnaval keeps the city and strings colored lights along some of its
@@ -2468,6 +2566,40 @@ impl Fireworks {
             let i = y as usize * self.w + x as usize;
             self.town[i] = 1;
             self.town_col[i] = c;
+        }
+    }
+
+    /// Fills a rectangle of the town (what is off the screen is left out).
+    fn rect(&mut self, x: i32, y: i32, w: i32, h: i32, c: V3) {
+        for yy in y.max(0)..(y + h).min(self.ph as i32) {
+            for xx in x.max(0)..(x + w).min(self.w as i32) {
+                self.put(xx, yy, c);
+            }
+        }
+    }
+
+    /// Fills a disc of radius `r` about (`cx`, `cy`) in the town, or only its
+    /// upper half (the dome of a church).
+    fn disc(&mut self, (cx, cy): (f32, f32), r: f32, top: bool, c: V3) {
+        let bottom = if top { cy.floor() } else { (cy + r).ceil() };
+        for y in (cy - r).floor() as i32..=bottom as i32 {
+            let dy = y as f32 + 0.5 - cy;
+            let half = (r * r - dy * dy).max(0.0).sqrt();
+            for x in (cx - half).round() as i32..(cx + half).round() as i32 {
+                self.put(x, y, c);
+            }
+        }
+    }
+
+    /// Fills a triangle of the town that stands on row `base - 1` and `h`
+    /// rows tall, `half` wide either side of `cx` at its foot: a gable, the
+    /// cap of a tower.
+    fn gable(&mut self, cx: i32, (base, h): (i32, i32), half: f32, c: V3) {
+        for r in 0..h {
+            let hw = half * (1.0 - r as f32 / h as f32);
+            for x in (cx as f32 - hw).round() as i32..(cx as f32 + hw).round() as i32 {
+                self.put(x, base - 1 - r, c);
+            }
         }
     }
 
@@ -3969,6 +4101,7 @@ impl Fireworks {
                 Role::Judas => self.burn_judas(&mut a),
                 Role::Torito => self.run_torito(&mut a),
                 Role::Marmota => self.drift_marmota(&mut a),
+                Role::Procesion => self.walk_procesion(&mut a),
                 _ => {}
             }
             self.actors[k] = a;
@@ -3977,7 +4110,7 @@ impl Fireworks {
 
     /// The shell that crowns a castillo as its last tier burns out.
     fn crown(&self) -> Shell {
-        if self.fiesta.is(Kind::Guelaguetza) {
+        if self.fiesta.is(Kind::Guelaguetza) || self.fiesta.is(Kind::Corpus) {
             Shell::Flor
         } else {
             Shell::Tricolor
@@ -4075,6 +4208,8 @@ impl Fireworks {
                 Role::Judas => self.draw_judas(&a),
                 Role::Torito => self.draw_torito(&a),
                 Role::Marmota => self.draw_marmota(&a),
+                Role::Papel => self.draw_papel(&a),
+                Role::Procesion => self.draw_procesion(&a),
             }
         }
     }
@@ -4837,6 +4972,7 @@ mod tests {
                     Fiesta::height(Kind::Carnaval),
                     Fiesta::height(Kind::Judas),
                     Fiesta::height(Kind::Guelaguetza),
+                    Fiesta::height(Kind::Corpus),
                 ] {
                     let (mut f, o) = make(v, &theme);
                     let ctx = Ctx {
@@ -4954,6 +5090,7 @@ mod tests {
             Shell::Confeti,
             Shell::Serpentina,
             Shell::Flor,
+            Shell::Mulita,
         ] {
             assert!(!shells.contains(&s), "{shells:?}");
         }
@@ -4995,6 +5132,7 @@ mod tests {
             Shell::Cruz,
             Shell::Mascara,
             Shell::Flor,
+            Shell::Mulita,
             Shell::Text(FELIZ_ANO),
             Shell::Text(VIVA_MEXICO),
         ] {
@@ -5228,6 +5366,7 @@ mod tests {
             MASCARA,
             JUDAS,
             TORITO,
+            corpus::MULITA,
         ] {
             let w = art[0].chars().count();
             assert!(art.iter().all(|r| r.chars().count() == w), "{art:?}");
@@ -5856,6 +5995,228 @@ mod tests {
         f.gran_final();
         let shells: Vec<Shell> = f.born.iter().map(|p| p.shell).collect();
         assert_eq!(shells, [Shell::Flor, Shell::Multi, Shell::Multi]);
+    }
+
+    /// The sprites of the procession are rectangles, and their two frames
+    /// match.
+    #[test]
+    fn the_procession_is_drawn_in_rectangles() {
+        for (frames, _) in corpus::PROCESION {
+            let w = frames[0][0].len();
+            assert_eq!(frames[0].len(), frames[1].len());
+            for art in frames {
+                assert!(art.iter().all(|r| r.len() == w), "{art:?}");
+            }
+        }
+    }
+
+    /// The Jueves de Corpus turns the city into the atrium of a church: strings
+    /// of papel picado, children with their mulita, a castillo to light,
+    /// candles in the doorway, flowers of papel and cohetes from the atrium
+    /// among the shells.
+    #[test]
+    fn corpus_dresses_up() {
+        for theme in [Theme::classic(), Theme::builtin("dracula").unwrap()] {
+            let fiesta = Fiesta::height(Kind::Corpus);
+            assert!(fiesta.is(Kind::Corpus));
+            let (mut f, o) = make("", &theme);
+            holiday(&mut f, &theme, &o, fiesta);
+            let count = |f: &Fireworks, r: Role| f.actors.iter().filter(|a| a.role == r).count();
+            assert!(count(&f, Role::Papel) >= 3, "{}", theme.name);
+            assert!(count(&f, Role::Procesion) == 1 && count(&f, Role::Castillo) == 1);
+            assert!(f.town.contains(&1) && !f.bulbs.is_empty() && f.candles.len() >= 3);
+            assert!(f.sites.len() >= 4 && f.sites.iter().all(|&x| x >= 0 && x < f.w as i32));
+            // The papel picado and the children are drawn, in the day's colors.
+            let ctx = Ctx {
+                theme: &theme,
+                opts: &o,
+                bg: Color::Reset,
+                seed: 3,
+                fiesta,
+            };
+            let mut c = Canvas::new(120, 36, Color::Reset);
+            f.draw(&ctx, &mut c);
+            for k in 0..3 {
+                let col = to_color(scale(f.fest.hues[k], 0.92));
+                assert!(
+                    c.cells()
+                        .iter()
+                        .any(|cell| cell.fg == col || cell.bg == col),
+                    "{} {k}",
+                    theme.name
+                );
+            }
+            // The ground is drawn all along the bottom.
+            assert!(c.cells()[35 * 120..].iter().all(|cell| cell.ch != ' '));
+            let (mut flores, mut cohetes) = (false, 0);
+            for _ in 0..3000 {
+                f.step();
+                for p in f.ps.iter().filter(|p| p.flags & ROCKET != 0) {
+                    flores |= p.shell == Shell::Flor;
+                    // A cohete is sent up from the atrium.
+                    if p.shell == Shell::Cohete && p.y > f.ph as f32 - 3.0 {
+                        assert!(f.sites.iter().any(|&x| (p.x - x as f32).abs() < 3.0));
+                        cohetes += 1;
+                    }
+                }
+            }
+            assert!(flores && cohetes > 20, "{flores} {cohetes}");
+        }
+    }
+
+    /// The finale is a mulita between two flowers of papel, and the castillo
+    /// is crowned by one.
+    #[test]
+    fn gran_final_is_a_mulita() {
+        let theme = Theme::classic();
+        let (mut f, o) = make("", &theme);
+        holiday(&mut f, &theme, &o, Fiesta::height(Kind::Corpus));
+        f.born.clear();
+        f.gran_final();
+        let shells: Vec<Shell> = f.born.iter().map(|p| p.shell).collect();
+        assert_eq!(shells, [Shell::Mulita, Shell::Flor, Shell::Flor]);
+        assert_eq!(f.crown(), Shell::Flor);
+        // Drawn in the colors of the flowers, the manta, the rebozo and the hoja.
+        f.born.clear();
+        let r = P {
+            x: 60.0,
+            y: 30.0,
+            vx: 0.0,
+            vy: 0.0,
+            life: 1.0,
+            max: 1.0,
+            color: GOLD,
+            drag: 1.0,
+            grav: 0.0,
+            flags: ROCKET,
+            shell: Shell::Mulita,
+        };
+        f.burst(&r);
+        for col in [
+            corpus::CO_ROSA,
+            corpus::CO_AMARILLO,
+            corpus::CO_MORADO,
+            corpus::CO_NARANJA,
+            corpus::CO_LIMON,
+            corpus::CO_REBOZO,
+            corpus::CO_HOJA,
+            SH_BLANCO,
+        ] {
+            assert!(f.born.iter().any(|p| p.color == col), "{col:?}");
+        }
+    }
+
+    /// The children walk to the church door, stand there, go in and are gone
+    /// for a while, and come again from the right.
+    #[test]
+    fn the_children_walk_to_the_church() {
+        let theme = Theme::classic();
+        let (mut f, o) = make("", &theme);
+        holiday(&mut f, &theme, &o, Fiesta::height(Kind::Corpus));
+        let i = f
+            .actors
+            .iter()
+            .position(|a| a.role == Role::Procesion)
+            .unwrap();
+        let (x, door) = (f.actors[i].x, f.actors[i].seed);
+        assert!(x > door && door > 0.0);
+        let mut states = vec![f.actors[i].state];
+        let mut moved = true;
+        let (mut last, mut was) = (x, 0);
+        for _ in 0..4000 {
+            f.step();
+            let a = f.actors[i];
+            if states.last() != Some(&a.state) {
+                states.push(a.state);
+            }
+            // They only ever walk to the left, towards the door.
+            moved &= a.state != 0 || was != 0 || a.x <= last;
+            (last, was) = (a.x, a.state);
+        }
+        assert!(moved);
+        assert!(states.starts_with(&[0, 1, 2, 0, 1]), "{states:?}");
+    }
+
+    /// The flags of the papel picado flutter.
+    #[test]
+    fn the_papel_picado_flutters() {
+        let theme = Theme::classic();
+        let (mut f, o) = make("", &theme);
+        let fiesta = Fiesta::height(Kind::Corpus);
+        holiday(&mut f, &theme, &o, fiesta);
+        let ctx = Ctx {
+            theme: &theme,
+            opts: &o,
+            bg: Color::Reset,
+            seed: 3,
+            fiesta,
+        };
+        let mut c = Canvas::new(120, 36, Color::Reset);
+        f.actors.retain(|a| a.role == Role::Papel);
+        f.draw(&ctx, &mut c);
+        let before = c.to_text();
+        for _ in 0..12 {
+            f.step();
+        }
+        let mut c = Canvas::new(120, 36, Color::Reset);
+        f.draw(&ctx, &mut c);
+        assert_ne!(before, c.to_text());
+    }
+
+    /// The holiday comes and goes through `retheme`; the atrium fits any
+    /// size, and what does not fit a small screen is left out.
+    #[test]
+    fn corpus_comes_and_goes() {
+        let theme = Theme::classic();
+        let (mut f, o) = make("", &theme);
+        holiday(&mut f, &theme, &o, Fiesta::height(Kind::Corpus));
+        assert!(!f.actors.is_empty() && !f.sites.is_empty());
+        holiday(&mut f, &theme, &o, Fiesta::of_day(7, 17));
+        assert!(f.sites.is_empty() && f.candles.is_empty());
+        assert!(f.actors.iter().all(|a| a.role != Role::Papel));
+        holiday(&mut f, &theme, &o, Fiesta::height(Kind::Corpus));
+        holiday(&mut f, &theme, &o, Fiesta::NONE);
+        assert!(f.actors.is_empty() && f.bulbs.is_empty() && f.town.is_empty());
+        assert!(f.sites.is_empty() && f.candles.is_empty());
+        let (mut f, o) = make("skyline = false", &theme);
+        holiday(&mut f, &theme, &o, Fiesta::height(Kind::Corpus));
+        assert!(f.actors.is_empty() && f.sites.is_empty());
+        let (mut f, o) = make("", &theme);
+        let fiesta = Fiesta::height(Kind::Corpus);
+        let ctx = Ctx {
+            theme: &theme,
+            opts: &o,
+            bg: Color::Reset,
+            seed: 3,
+            fiesta,
+        };
+        for (w, h) in [
+            (1, 1),
+            (3, 6),
+            (24, 10),
+            (55, 20),
+            (56, 20),
+            (70, 20),
+            (80, 24),
+            (200, 60),
+            (500, 150),
+        ] {
+            f.resize(&ctx, w, h);
+            f.retheme(&ctx);
+            let (wi, hi) = (w as i32, h as i32 * 2);
+            assert!(
+                f.bulbs
+                    .iter()
+                    .all(|b| b.x >= 0 && b.y >= 0 && b.x < wi && b.y < hi),
+                "{w}x{h}"
+            );
+            assert!(f.sites.iter().all(|&x| x >= 0 && x < wi), "{w}x{h}");
+            let mut c = Canvas::new(w, h, Color::Reset);
+            for _ in 0..40 {
+                f.update(&ctx, 1.0 / 30.0);
+                f.draw(&ctx, &mut c);
+            }
+        }
     }
 
     /// With the sky transparent nothing is painted before the first launch,
