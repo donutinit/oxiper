@@ -84,6 +84,16 @@
 //! but `classic` the leaves, the flowers, the husk and the fruit take the
 //! theme's closest colors.
 //!
+//! The Virgen de Guadalupe, December 12 only, takes the place of the Navidad's
+//! foquitos: a garland of rosas de Castilla across the top, roses in two pinks
+//! among dark and light leaves, tied at its ties with a ribbon of verde azulado,
+//! and hanging from it papel picado in rosa and verde azulado with cut-out
+//! stars, rosas, veladoras and sprinkles of stars, backed with gold that glints.
+//! Rose petals drift down over everything. Six rows (the garland alone on a
+//! screen less than sixteen rows tall). Under any theme but `classic` the
+//! roses, the leaves, the paper and the gold take the theme's closest colors.
+//! On December 13 the foquitos are back, as they were.
+//!
 //! On an ordinary day, and on a holiday without an overlay, it draws nothing.
 
 mod bunting;
@@ -91,6 +101,7 @@ mod carnaval;
 mod cord;
 mod corpus;
 mod drift;
+mod guadalupe;
 mod guelaguetza;
 mod muertos;
 mod navidad;
@@ -108,6 +119,7 @@ use bunting::Bunting;
 use cord::Hung;
 use corpus::Enramada;
 use drift::{Fleck, Flecks};
+use guadalupe::Rosas;
 use navidad::Lights;
 use nino::{Balloon, Balloons};
 use papel::{Flag, Papel};
@@ -133,6 +145,8 @@ enum Themed {
     /// The first three colors are green, white and red as the theme paints
     /// them (the Mexican flag), the rest follow in turn.
     Tricolor,
+    /// Each takes the theme's color closest in hue to its own.
+    Like,
 }
 
 impl Themed {
@@ -145,6 +159,7 @@ impl Themed {
             Themed::Never => native,
             Themed::Accents => solid(theme.colors.get(i % theme.colors.len().max(1)), native),
             Themed::Tricolor => tricolor(theme)[i % 3],
+            Themed::Like => like(theme, native),
         }
     }
 }
@@ -164,6 +179,7 @@ struct Look {
     bunting: Option<&'static Bunting>,
     balloons: Option<&'static Balloons>,
     enramada: Option<&'static Enramada>,
+    rosas: Option<&'static Rosas>,
     /// A piñata hangs from the middle of the lights.
     pinata: bool,
 }
@@ -180,6 +196,7 @@ impl Look {
         bunting: None,
         balloons: None,
         enramada: None,
+        rosas: None,
         pinata: false,
     };
 
@@ -187,6 +204,7 @@ impl Look {
     fn of(fiesta: Fiesta) -> Option<Look> {
         match fiesta.kind {
             Kind::Muertos => Some(muertos::look(fiesta)),
+            Kind::Navidad if fiesta.guadalupe() => Some(guadalupe::look(fiesta)),
             Kind::Navidad => Some(navidad::look(fiesta)),
             Kind::Patrias => Some(patrias::look(fiesta)),
             Kind::Nino => Some(nino::look(fiesta)),
@@ -274,6 +292,10 @@ impl Overlay {
         if let Some(enramada) = look.enramada {
             self.hang_enramada(enramada, look.salt);
         }
+        // After the papel picado: the garland carries it.
+        if let Some(rosas) = look.rosas {
+            self.hang_rosas(rosas, look.salt);
+        }
     }
 
     /// Scatters what falls over the screen.
@@ -345,6 +367,9 @@ impl Overlay {
         }
         if let Some(enramada) = look.enramada {
             self.draw_enramada(c, theme, enramada);
+        }
+        if let Some(rosas) = look.rosas {
+            self.draw_rosas(c, theme, rosas);
         }
         if let Some(lights) = look.lights {
             self.draw_lights(c, theme, lights);

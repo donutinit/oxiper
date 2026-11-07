@@ -20,6 +20,8 @@ pub(super) enum Piece {
     Pennant,
     /// A paper flower of an enramada.
     Flower,
+    /// A rosa de Castilla of a garland.
+    Rosa,
     /// A mulita de hoja de maíz hanging from an enramada by a thread.
     Mulita,
 }

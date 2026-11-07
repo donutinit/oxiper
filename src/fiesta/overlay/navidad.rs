@@ -367,7 +367,7 @@ mod tests {
     fn dresses_every_day_of_navidad() {
         let theme = Theme::classic();
         for (month, day) in [
-            (12, 12),
+            (12, 13),
             (12, 16),
             (12, 24),
             (12, 28),
@@ -412,15 +412,15 @@ mod tests {
             // Lights, heno and esferas, not the piñata.
             cells(&c, 200, 0, 5)
         };
-        assert!(count(12, 24) > count(12, 12) + 40);
-        assert!(count(12, 20) > count(12, 12));
+        assert!(count(12, 24) > count(12, 13) + 40);
+        assert!(count(12, 20) > count(12, 13));
         // The bulbs lie closer together.
         let bulbs = |f| {
             let mut o = Overlay::new(200, 60);
             o.update(0.0, f);
             o.hung.iter().filter(|h| h.piece == Piece::Bulb).count()
         };
-        let (few, many) = (bulbs(Fiesta::of_day(12, 12)), bulbs(Fiesta::of_day(12, 24)));
+        let (few, many) = (bulbs(Fiesta::of_day(12, 13)), bulbs(Fiesta::of_day(12, 24)));
         assert!(many > few + 10, "{few} then {many}");
     }
 
@@ -428,7 +428,7 @@ mod tests {
     fn lights_keep_to_five_rows_and_the_pinata_to_eight() {
         let theme = Theme::classic();
         for (fiesta, rows) in [
-            (Fiesta::of_day(12, 12), 5),
+            (Fiesta::of_day(12, 13), 5),
             (Fiesta::of_day(12, 24), 8),
             (Fiesta::of_day(1, 6), 5),
             (Fiesta::of_day(12, 31), 5),
@@ -515,7 +515,7 @@ mod tests {
         let theme = Theme::builtin("dracula").unwrap();
         let mut o = Overlay::new(100, 30);
         let on = |o: &mut Overlay, f| !changed(&after(o, f, 1.0, &theme), 100).is_empty();
-        assert!(on(&mut o, Fiesta::of_day(12, 12)));
+        assert!(on(&mut o, Fiesta::of_day(12, 13)));
         assert!(o.hung.iter().any(|h| h.piece == Piece::Bulb));
         assert!(!on(&mut o, Fiesta::NONE));
         assert!(on(&mut o, Fiesta::of_day(12, 24)));
@@ -581,7 +581,7 @@ mod tests {
                 (500, 150),
             ] {
                 for fiesta in [
-                    Fiesta::of_day(12, 12),
+                    Fiesta::of_day(12, 13),
                     Fiesta::of_day(12, 24),
                     Fiesta::of_day(12, 31),
                     Fiesta::of_day(1, 6),
