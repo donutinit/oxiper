@@ -76,9 +76,18 @@
 //! as the Lunes del Cerro comes. At a corner it dances three times as fast
 //! for a moment while flowers, petals, feathers and sparks fly off, and the
 //! banner reads "¡VIVA OAXACA!".
+//!
+//! On the Jueves de Corpus the logo is a mulita de hoja de maíz, the little
+//! corn-husk mule that children lead to church, trotting under a huacal
+//! heaped with flowers of papel (rosa mexicano, amarillo, morado, naranja and
+//! blanco, taking each other's places on every bounce), mangos, tunas and
+//! naranjas, a rebozo thrown over its back. It leaves petals, fruit and hojas
+//! along its way. At a corner it trots three times as fast for a moment while
+//! they fly off, and the banner reads "¡FELIZ JUEVES DE CORPUS!".
 
 mod candelaria;
 mod carnaval;
+mod corpus;
 mod guelaguetza;
 mod muertos;
 mod navidad;
@@ -304,6 +313,7 @@ fn look_for(f: Fiesta) -> Option<&'static Look> {
     match f.kind {
         Kind::Candelaria => Some(&candelaria::LOOK),
         Kind::Carnaval => Some(&carnaval::LOOK),
+        Kind::Corpus => Some(&corpus::LOOK),
         Kind::Guelaguetza => Some(&guelaguetza::LOOK),
         Kind::Muertos => Some(&muertos::LOOK),
         Kind::Navidad => Some(navidad::look(f)),
@@ -1501,6 +1511,7 @@ mod tests {
             ("jueves de carnaval", Fiesta::of_date(2027, 2, 4)),
             ("lunes del cerro", Fiesta::height(Kind::Guelaguetza)),
             ("sábado de guelaguetza", Fiesta::of_date(2027, 7, 17)),
+            ("corpus", Fiesta::height(Kind::Corpus)),
         ]
     }
 
@@ -2266,5 +2277,61 @@ mod tests {
             seen[0] < seen[1] && shed[1] > shed[0] * 13 / 10,
             "{seen:?} {shed:?}"
         );
+    }
+
+    #[test]
+    fn corpus_trots_a_mulita_with_its_huacal() {
+        let o = crate::scene::Opts::new(INFO.options, toml::Table::new());
+        for theme in ["classic", "nord"] {
+            let th = crate::theme::Theme::builtin(theme).unwrap();
+            let ctx = ctx(&th, &o, Fiesta::height(Kind::Corpus));
+            assert!(ctx.fiesta.is(Kind::Corpus));
+            let mut d = dressed(&ctx, 120, 40);
+            // A mulita de hoja with a rebozo, and a huacal of flowers and fruit.
+            for p in b"hHnbmwWgpqryoMT" {
+                assert!(parts(&d, &[*p]) > 0, "{}", *p as char);
+            }
+            if th.native {
+                assert_eq!(d.palette, corpus::LOOK.classic.to_vec());
+                assert_eq!(d.palette.len(), 5);
+                let c = play(&mut d, &ctx, 15.0);
+                for col in [rgb(0xd9c48a), rgb(0x2a5caa), rgb(0xa0703a), rgb(0x2f9a3a)] {
+                    assert!(c.cells().iter().any(|cell| cell.fg == col), "{col:?}");
+                }
+            }
+            let banner = Sprite::fit_lines(&["¡Feliz Jueves", "de Corpus!"], 120, 40);
+            assert_eq!(d.banner.cells, banner.cells);
+            // The legs take turns, four steps a second.
+            assert_eq!(d.frames.len(), 1);
+            assert_ne!(d.sprite.parts, d.frames[0].parts);
+            d.party_t = PARTY;
+            d.clock = 0.1;
+            assert_eq!(d.pose(0, &d.logos[0]).0.parts, d.sprite.parts);
+            d.clock = 0.3;
+            assert_eq!(d.pose(0, &d.logos[0]).0.parts, d.frames[0].parts);
+            // Three times as fast at a corner, while petals and fruit fly off.
+            d.bits.clear();
+            d.celebrate(0);
+            d.clock = 0.1;
+            assert_eq!(d.pose(0, &d.logos[0]).0.parts, d.frames[0].parts);
+            assert!(d.bits.len() > 20);
+            let kinds: std::collections::HashSet<u8> = d.bits.iter().map(|b| b.kind).collect();
+            assert!(kinds.len() >= 4, "{kinds:?}: petals, fruit and hojas");
+            assert!(play(&mut d, &ctx, 0.5).to_text().contains("esquinas: 1"));
+        }
+    }
+
+    #[test]
+    fn the_mulita_leaves_petals_along_its_way() {
+        let o = crate::scene::Opts::new(INFO.options, toml::Table::new());
+        let th = crate::theme::Theme::builtin("classic").unwrap();
+        let ctx = ctx(&th, &o, Fiesta::height(Kind::Corpus));
+        let mut d = dressed(&ctx, 100, 30);
+        let mut shed = 0;
+        for _ in 0..(60.0 * 30.0) as usize {
+            d.tick(&ctx, 1.0 / 30.0, 1.0 / 30.0);
+            shed += d.bits.len() + d.floor.iter().filter(|f| f.life > 0.0).count();
+        }
+        assert!(shed > 200, "{shed}");
     }
 }
