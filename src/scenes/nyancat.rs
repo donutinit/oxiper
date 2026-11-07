@@ -34,11 +34,19 @@
 //! fruit and flowers of papel on a mulita's back, on a rebozo, and the stars
 //! are flowers of papel that open and fall apart, with petals and strips of
 //! hoja de maíz drifting by.
+//!
+//! On the Virgen de Guadalupe, December 12 (`nyancat/guadalupe.rs`), the
+//! pop-tart is a bouquet of rosas de Castilla tied with a ribbon of the verde
+//! azulado of her mantle, and the rainbow is a garland of roses and stars,
+//! swaying along the wave of the trail. The stars are gold, with rose petals
+//! drifting by, and the counter sings las mañanitas. On December 13 the cat is
+//! the Navidad's again.
 
 mod candelaria;
 mod corpus;
 mod costume;
 pub(crate) mod frames;
+mod guadalupe;
 mod muertos;
 mod navidad;
 mod patrias;
@@ -232,6 +240,9 @@ enum Dress {
     Candelaria,
     /// The Thursday of Corpus Christi: a huacal on a mulita's back.
     Corpus,
+    /// The Virgen de Guadalupe, the first day of the Navidad: a bouquet of
+    /// roses and a garland of roses and stars.
+    Guadalupe,
 }
 
 /// Seeds the holiday's own randomness, apart from the scene's.
@@ -452,6 +463,8 @@ impl Scene for Nyancat {
         let fiesta = ctx.fiesta;
         self.dress = if fiesta.is(Kind::Muertos) {
             Dress::Muertos
+        } else if fiesta.guadalupe() {
+            Dress::Guadalupe
         } else if fiesta.is(Kind::Navidad) {
             Dress::Navidad {
                 reyes: fiesta.reyes(),
@@ -478,6 +491,7 @@ impl Scene for Nyancat {
                         Dress::Patrias => patrias::dress(f),
                         Dress::Candelaria => candelaria::dress(f),
                         Dress::Corpus => corpus::dress(f),
+                        Dress::Guadalupe => guadalupe::dress(f),
                         _ => muertos::dress(f),
                     })
                     .collect();
@@ -497,6 +511,7 @@ impl Scene for Nyancat {
                     candelaria::palette(&mut hp, (!native).then_some(self.star_color))
                 }
                 Dress::Corpus => corpus::palette(&mut hp, rainbow),
+                Dress::Guadalupe => guadalupe::palette(&mut hp, rainbow, self.star_color),
                 _ => {
                     muertos::palette(&mut hp, rainbow);
                     if native {
@@ -556,6 +571,7 @@ impl Scene for Nyancat {
             Dress::Patrias => return self.draw_patrias(c, i, flip),
             Dress::Candelaria => return self.draw_candelaria(c, i, flip),
             Dress::Corpus => return self.draw_corpus(c, i, flip),
+            Dress::Guadalupe => return self.draw_guadalupe(c, i, flip),
         }
         let f = &self.frames[i];
         self.px.clear();
@@ -793,6 +809,40 @@ impl Nyancat {
         self.draw_counter(c);
     }
 
+    /// The animation dressed for the Virgen de Guadalupe, frame `i`: the
+    /// trail is a garland, its stars twinkling as the animation goes.
+    fn draw_guadalupe(&mut self, c: &mut Canvas, i: usize, flip: bool) {
+        let k = self.ticks as i64 & 0xffff_ffff;
+        let t = k / 3;
+        self.paint(i, flip, |f, x, y, _| guadalupe::garland(f, flip, x, y, t));
+
+        // Stars of gold in the sky, then petals and glints, behind the cat.
+        let shift = self.star_shift(k);
+        let f = &self.dressed[i];
+        let solid = |x: i32, y: i32| costume::is_solid(sample(f, flip, x, y));
+        let filled = |x: i32, y: i32| match sample(f, flip, x, y) {
+            b',' => false,
+            ch => !costume::is_band(ch) || guadalupe::garland(f, flip, x, y, t) != b',',
+        };
+        let mut p = Painter {
+            px: &mut self.px,
+            pal: &self.holiday_pal,
+            ox: self.ox,
+            oy: self.oy,
+            s: self.scale,
+            mirror: false,
+        };
+        for st in &self.stars {
+            let cx = self.star_lo + (st.x - self.star_lo - shift).rem_euclid(self.star_span);
+            let stage = (st.phase as i64 + st.dir as i64 * (k % 6)).rem_euclid(6) as usize;
+            guadalupe::star(&mut p, &solid, cx, st.y, stage);
+        }
+        // The petals fall all day: December 12 is a day on its own.
+        guadalupe::sky(&mut p, &self.drift, 1.0, k, &filled);
+        self.px.blit(c);
+        self.draw_counter(c);
+    }
+
     /// nyancat's counter on the bottom line, in Spanish for the holiday.
     fn draw_counter(&self, c: &mut Canvas) {
         if self.anim_rows() < self.h {
@@ -817,6 +867,7 @@ impl Nyancat {
                 Dress::Patrias => ("¡Llevas ", seconds, " segundos gritando VIVA MÉXICO!"),
                 Dress::Candelaria => ("¡Llevas ", seconds, " segundos pagando los tamales!"),
                 Dress::Corpus => ("¡Llevas ", seconds, " segundos de mulita!"),
+                Dress::Guadalupe => ("¡Llevas ", seconds, " segundos cantando las mañanitas!"),
             };
             let len = (before.chars().count() + num.len() + after.chars().count()) as i32;
             let x = ((self.w as i32 - len) / 2).max(0);
@@ -1509,6 +1560,113 @@ mod tests {
     fn the_corpus_survives_anything() {
         use crate::fiesta::Fiesta;
         survives(&[Fiesta::height(Kind::Corpus)]);
+    }
+
+    #[test]
+    fn dresses_up_for_guadalupe() {
+        use crate::fiesta::Fiesta;
+        use crate::theme::Theme;
+        let theme = Theme::classic();
+        let gray = color::rgb(0x999999);
+        let rosa = color::rgb(0xd81b60);
+        let light = color::rgb(0xf06292);
+        let leaves = color::rgb(0x2e7d32);
+        let ribbon = color::rgb(0x00796b);
+        let gold = color::rgb(0xf2c14e);
+        let manta = color::rgb(0xefe6cf);
+        let tan = color::rgb(0xffcd98);
+        let pink = color::rgb(0xffa9ff);
+        let rainbow = [0xff1900, 0xff9a00, 0xfff000, 0x28dc00, 0x0090ff, 0x6844ff].map(color::rgb);
+        let white = color::rgb(0xffffff);
+        let virgen = Fiesta::of_day(12, 12);
+        assert!(virgen.guadalupe());
+        let c = frame(&theme, virgen, 120, 50, 2.0);
+        // A bouquet of roses in two pinks with leaves, a ribbon with stars of
+        // gold, manta; the cat is itself and the rainbow is a garland.
+        for col in [rosa, light, leaves, ribbon, gold, manta, gray] {
+            assert!(count(&c, col) > 8, "{col:?}");
+        }
+        assert_eq!(count(&c, tan) + count(&c, pink), 0);
+        for col in rainbow {
+            assert_eq!(count(&c, col), 0, "{col:?}");
+        }
+        let text = c.to_text();
+        assert!(text.contains("segundos cantando las mañanitas!"), "{text}");
+        // The trail runs to the left of the cat: the garland's leaves and roses.
+        let (l, r) = halves(&c, leaves);
+        assert!(l > r);
+        let (l, r) = halves(&c, rosa);
+        assert!(
+            l > 0 && r > 0,
+            "roses on both sides: the bouquet and the garland"
+        );
+        // The stars of the sky are gold, not white (the eyes are).
+        let ordinary = frame(&theme, Fiesta::NONE, 120, 50, 2.0);
+        assert!(count(&c, white) < count(&ordinary, white));
+        // An ordinary day has none of it.
+        for col in [rosa, light, leaves, ribbon, gold, manta] {
+            assert_eq!(count(&ordinary, col), 0, "{col:?}");
+        }
+        // Other themes color the roses and the garland as the rainbow.
+        let nord = Theme::builtin("nord").unwrap();
+        let c = frame(&nord, virgen, 120, 50, 2.0);
+        for col in [rosa, light, leaves, ribbon, gold] {
+            assert_eq!(count(&c, col), 0, "{col:?}");
+        }
+        assert!(c.to_text().contains("cantando las mañanitas!"));
+    }
+
+    /// December 13 is the Navidad's cat again, as it was: a buñuelo and a
+    /// string of foquitos, and the counter of a posada.
+    #[test]
+    fn the_day_after_guadalupe_the_cat_is_the_navidad() {
+        use crate::fiesta::Fiesta;
+        use crate::scene::Opts;
+        use crate::theme::Theme;
+        let theme = Theme::classic();
+        let dough = color::rgb(0xe2aa55);
+        let cord = color::rgb(0x1f6f3a);
+        let rosa = color::rgb(0xd81b60);
+        let ribbon = color::rgb(0x00796b);
+        let after = frame(&theme, Fiesta::of_day(12, 13), 120, 50, 2.0);
+        assert!(count(&after, dough) > 30 && count(&after, cord) > 20);
+        assert_eq!(count(&after, rosa) + count(&after, ribbon), 0);
+        assert!(after.to_text().contains("segundos de posada!"));
+        // Midnight turns one into the other, and back.
+        let opts = Opts::new(INFO.options, "background = true".parse().unwrap());
+        let mut ctx = Ctx {
+            theme: &theme,
+            opts: &opts,
+            bg: Color::Reset,
+            seed: 3,
+            fiesta: Fiesta::of_day(12, 12),
+        };
+        let mut s = (INFO.make)(&ctx);
+        s.resize(&ctx, 100, 30);
+        s.update(&ctx, 1.0);
+        let snap = |s: &mut Box<dyn Scene>, ctx: &Ctx| {
+            let mut c = Canvas::new(100, 30, Color::Reset);
+            s.draw(ctx, &mut c);
+            c.to_text()
+        };
+        let virgen = snap(&mut s, &ctx);
+        assert!(virgen.contains("cantando las mañanitas!"));
+        ctx.fiesta = Fiesta::of_day(12, 13);
+        s.retheme(&ctx);
+        assert!(snap(&mut s, &ctx).contains("de posada!"));
+        ctx.fiesta = Fiesta::of_day(12, 12);
+        s.retheme(&ctx);
+        assert_eq!(snap(&mut s, &ctx), virgen);
+    }
+
+    #[test]
+    fn the_guadalupe_comes_and_goes_through_retheme() {
+        comes_and_goes((12, 12));
+    }
+
+    #[test]
+    fn the_guadalupe_survives_anything() {
+        survives(&[(12, 12), (12, 13)]);
     }
 
     #[test]
