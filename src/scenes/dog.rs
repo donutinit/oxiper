@@ -75,6 +75,18 @@
 //! tail of bows, tilting in the wind and sinking while the dog naps; and
 //! trompos spin on the ground, their stripes blurring, wobbling as they
 //! tire, falling over until another is thrown.
+//!
+//! On the Jueves de Corpus the meadow is the atrium of a church: paving
+//! laid in stones, the church with its tower, its belfry with the bell lit,
+//! its dome and its door open on the candles inside, a cross of stone in the
+//! atrium and strands of papel picado in every color hung from poles to the
+//! tower. A stand of mulitas de hoja de maíz of every size stands under an
+//! awning striped like the papel, the vendor in her rebozo among them, and
+//! the children in manta and rebozo come to the church door in a line, with
+//! huacales of flowers and fruit on their backs and mulitas on a rope, and
+//! go in. At night the church's windows and the stand's bombillas glow.
+
+mod corpus;
 
 use std::f32::consts::PI;
 
@@ -1517,6 +1529,75 @@ impl Navidad {
     }
 }
 
+/// Walkers on their way to a door, one behind the other. The head of the
+/// line sets out from beyond the edge of the world; each walker goes in at the
+/// door as it gets there, and when the last has gone in the line rests a
+/// while and sets out again.
+struct Line {
+    /// The door's world x, and which way the walkers go (1 right, -1 left).
+    door: f32,
+    way: f32,
+    /// How far the head has walked from where it set out.
+    walk: f32,
+    /// How far behind the head the last walker is.
+    length: f32,
+    /// Steps of rest left.
+    rest: u32,
+    /// The world's width.
+    w: f32,
+}
+
+impl Line {
+    /// How far beyond the edge of the world the line sets out.
+    const BEYOND: f32 = 14.0;
+
+    fn new(w: f32, door: f32, way: f32, length: f32, walk: f32) -> Line {
+        Line {
+            door,
+            way,
+            walk,
+            length,
+            rest: 0,
+            w,
+        }
+    }
+
+    /// Where the head sets out, in world x.
+    fn start(&self) -> f32 {
+        if self.way > 0.0 {
+            -Self::BEYOND
+        } else {
+            self.w + Self::BEYOND
+        }
+    }
+
+    /// How far it is from where the head sets out to the door.
+    fn far(&self) -> f32 {
+        (self.door - self.start()).abs().max(1.0)
+    }
+
+    /// Where the walker `off` behind the head is, in world x: none while it
+    /// has not set out and once it has gone in.
+    fn at(&self, off: f32) -> Option<f32> {
+        let p = self.walk - off;
+        (p >= 0.0 && p < self.far()).then(|| self.start() + self.way * p)
+    }
+
+    fn step(&mut self, speed: f32) {
+        if self.rest > 0 {
+            self.rest -= 1;
+            if self.rest == 0 {
+                self.walk = 0.0;
+            }
+            return;
+        }
+        self.walk += speed;
+        if self.walk - self.length > self.far() + 4.0 {
+            self.rest = 160;
+        }
+    }
+}
+
 /// A puesto of the tianguis: a stall under a striped awning selling banderas
 /// and rehiletes.
 struct Puesto {
@@ -1948,6 +2029,8 @@ struct Meadow {
     patrias: Option<Patrias>,
     /// Día del Niño, when it is on: the dog plays with its toys.
     nino: Option<Nino>,
+    /// The Jueves de Corpus, when it is on: the atrium of a church.
+    corpus: Option<corpus::Corpus>,
     /// Rows of the meadow where no grass grows for the holiday's street.
     street: Option<(i32, i32)>,
     /// What the dog wears.
@@ -2089,6 +2172,7 @@ impl Meadow {
             navidad: None,
             patrias: None,
             nino: None,
+            corpus: None,
             street: None,
             wear: Wear::Bare,
         };
@@ -2103,9 +2187,11 @@ impl Meadow {
         self.navidad = Navidad::of(ctx, self);
         self.patrias = Patrias::of(ctx, self);
         self.nino = Nino::of(ctx, self);
-        self.street = match (&self.navidad, &self.patrias) {
-            (Some(nv), _) => Some(nv.cleared(self.ground, self.fence)),
-            (_, Some(pa)) => Some(pa.cleared(self.fence)),
+        self.corpus = corpus::Corpus::of(ctx, self);
+        self.street = match (&self.navidad, &self.patrias, &self.corpus) {
+            (Some(nv), ..) => Some(nv.cleared(self.ground, self.fence)),
+            (_, Some(pa), _) => Some(pa.cleared(self.fence)),
+            (.., Some(co)) => Some(co.cleared(self.fence)),
             _ => None,
         };
         self.wear = Wear::of(ctx);
@@ -2223,6 +2309,9 @@ impl Meadow {
         }
         if let Some(nv) = &mut self.navidad {
             nv.step(self.w as f32);
+        }
+        if let Some(co) = &mut self.corpus {
+            co.step();
         }
         if let Some(ni) = &mut self.nino {
             let cx = self.dog.x + SPRITE_W as f32 / 2.0;
@@ -2546,6 +2635,10 @@ impl Meadow {
         if let Some(pa) = &pa {
             self.draw_tianguis(pa);
         }
+        let co = self.corpus.take();
+        if let Some(co) = &co {
+            self.draw_atrio(co);
+        }
         let ni = self.nino.take();
         let split = self.blades.partition_point(|b| b.y < self.ground);
         let mu = self.muertos.take();
@@ -2554,6 +2647,9 @@ impl Meadow {
                 self.draw_blades(0, split, None);
                 if let Some(nv) = &nv {
                     self.draw_pilgrims(nv);
+                }
+                if let Some(co) = &co {
+                    self.draw_romeria(co);
                 }
                 self.draw_dog();
                 self.draw_blades(split, self.blades.len(), None);
@@ -2582,6 +2678,7 @@ impl Meadow {
         self.navidad = nv;
         self.patrias = pa;
         self.nino = ni;
+        self.corpus = co;
     }
 
     fn draw_sun_moon(&mut self) {
@@ -3181,6 +3278,10 @@ impl Meadow {
         if let Some(pa) = self.patrias.take() {
             self.draw_patrias_lights(&pa, v, night);
             self.patrias = Some(pa);
+        }
+        if let Some(co) = self.corpus.take() {
+            self.draw_corpus_lights(&co, v, night);
+            self.corpus = Some(co);
         }
     }
 
@@ -5000,6 +5101,100 @@ mod tests {
         }
     }
 
+    /// On the Jueves de Corpus the meadow is the atrium of a church, with its
+    /// papel picado, its stand of mulitas and the children on their way to
+    /// the door; the dog is as it always is. On an ordinary day, none of it.
+    #[test]
+    fn corpus_dresses_the_atrium() {
+        let theme = Theme::classic();
+        let opts = Opts::new(INFO.options, toml::Table::new());
+        let c = holiday(&theme, &opts, Fiesta::height(Kind::Corpus));
+        let mut s = DogScene::new(&c);
+        s.resize(&c, 160, 48);
+        s.retheme(&c);
+        let mut cv = Canvas::new(160, 48, Color::Reset);
+        s.m.t = 0.4;
+        s.m.update_sky();
+        s.tick(&c, 0.05, 0.05);
+        s.draw(&c, &mut cv);
+        let co = s.m.corpus.as_ref().expect("dressed");
+        assert!(s.m.wear == Wear::Bare && s.m.street.is_some() && co.stand.is_some());
+        assert!(!co.poles.is_empty() && !co.walkers.is_empty());
+        // The papel in its five colors, the whitewash and tiles of the church,
+        // the hoja de maíz of the mulitas, the rebozo and the huacales.
+        for c in corpus::PAPELES {
+            assert!(painted(&s.m, c), "{c:?} missing");
+        }
+        for c in [
+            corpus::HOJA,
+            corpus::REBOZO,
+            corpus::HUACAL,
+            corpus::CAL,
+            TEJA,
+        ] {
+            assert!(painted(&s.m, c), "{c:?} missing");
+        }
+        // The children and their mulitas are on the way, some of them in view.
+        let l = &co.line;
+        assert!(co.walkers.iter().any(|w| l.at(w.off).is_some()));
+
+        // A narrow world has the church and the children, but no room for
+        // the stand.
+        s.resize(&c, 60, 40);
+        let co = s.m.corpus.as_ref().expect("dressed");
+        assert!(co.stand.is_none());
+        s.draw(&c, &mut cv);
+
+        let c = ctx(&theme, &opts);
+        let mut s = DogScene::new(&c);
+        s.resize(&c, 160, 48);
+        let mut cv = Canvas::new(160, 48, Color::Reset);
+        s.draw(&c, &mut cv);
+        assert!(s.m.corpus.is_none() && s.m.street.is_none());
+        assert!(!painted(&s.m, corpus::HUACAL) && !painted(&s.m, corpus::PAPELES[2]));
+    }
+
+    #[test]
+    fn corpus_comes_and_goes() {
+        comes_and_goes(Fiesta::height(Kind::Corpus), |m| {
+            m.corpus.is_some() && m.street.is_some() && m.wear == Wear::Bare
+        });
+    }
+
+    /// The children walk to the church door one behind the other and go in;
+    /// when the last is in, they rest and set out again from the far side.
+    #[test]
+    fn the_children_go_in_at_the_door() {
+        let theme = Theme::classic();
+        let opts = Opts::new(INFO.options, toml::Table::new());
+        let c = holiday(&theme, &opts, Fiesta::height(Kind::Corpus));
+        let mut s = DogScene::new(&c);
+        s.resize(&c, 120, 36);
+        let w = s.m.w as f32;
+        let mut rng = Rng::with_seed(1);
+        let (mut laps, mut last) = (0, s.m.corpus.as_ref().unwrap().line.walk);
+        let (mut seen, mut gone) = (0, 0);
+        for _ in 0..30_000 {
+            s.m.update(&mut rng);
+            let co = s.m.corpus.as_ref().unwrap();
+            let l = &co.line;
+            let xs: Vec<f32> = co.walkers.iter().filter_map(|k| l.at(k.off)).collect();
+            // Every child on the stage is in the world and on this side of the door.
+            assert!(
+                xs.iter()
+                    .all(|x| x.is_finite() && (-15.0..=w + 15.0).contains(x))
+            );
+            assert!(xs.iter().all(|x| (x - l.door) * l.way < 0.0), "{xs:?}");
+            seen = seen.max(xs.len());
+            gone += (xs.len() < co.walkers.len()) as i32;
+            if l.walk < last {
+                laps += 1;
+            }
+            last = l.walk;
+        }
+        assert!(laps >= 1 && seen >= 3 && gone > 100, "{laps} {seen} {gone}");
+    }
+
     /// Odd sizes, steps and options survive with the holiday on, under the
     /// native theme and another.
     #[test]
@@ -5021,6 +5216,7 @@ mod tests {
                     Fiesta::height(Kind::Patrias),
                     Fiesta::of_day(9, 16),
                     Fiesta::height(Kind::Nino),
+                    Fiesta::height(Kind::Corpus),
                 ] {
                     let c = holiday(theme, &opts, fiesta);
                     let mut s = (INFO.make)(&c);
