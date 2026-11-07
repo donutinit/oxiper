@@ -51,6 +51,7 @@ pub mod pina;
 pub mod pinata;
 pub mod posada;
 mod quema;
+pub mod rabanos;
 mod revolucion;
 pub mod reyes;
 mod santacruz;
@@ -127,6 +128,7 @@ pub const ALL: &[&Info] = &[
     &mananitas::INFO,
     &peregrinos::INFO,
     &matachines::INFO,
+    &rabanos::INFO,
 ];
 
 /// An `egg_rate` at or above this plays an egg at once, again and again, and

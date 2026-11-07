@@ -216,7 +216,6 @@ impl Fiesta {
 
     /// The Noche de Rábanos in Oaxaca, December 23: figures carved out of
     /// radishes fill the zócalo.
-    #[allow(dead_code)] // until the visitors and scenes for the day come
     pub fn rabanos(self) -> bool {
         self.is(Kind::Navidad) && self.date() == (12, 23)
     }
