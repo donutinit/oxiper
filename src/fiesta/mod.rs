@@ -18,12 +18,13 @@
 //! | Quema de Judas | Viernes Santo and Sábado de Gloria | Sábado de Gloria |
 //! | Día del Niño | April 30 | |
 //! | Día de la Santa Cruz | May 3 | |
+//! | Jueves de Corpus | the Thursday 60 days after Easter | |
 //! | Guelaguetza | the Saturday before the first Lunes del Cerro to the second | each Monday |
 //! | Fiestas Patrias | September 1 to 16 | the Grito, the night of the 15th |
 //! | Día de Muertos | October 28 to November 3 | November 2 |
 //! | Día de la Revolución | November 20 | |
 //!
-//! Carnaval and the quema de Judas follow Easter, and the Guelaguetza the
+//! Carnaval, the quema de Judas and Corpus follow Easter, and the Guelaguetza the
 //! Mondays after July 16. On the rare day one of them falls on a fixed
 //! holiday, the movable one wins, unless the fixed one is at its height and
 //! the movable one is not (Candelaria on a Friday of Carnaval).
@@ -58,6 +59,11 @@ pub enum Kind {
     /// Día de la Santa Cruz, May 3: builders raise a flowered cross over
     /// every building site and set off rockets.
     SantaCruz,
+    /// Jueves de Corpus, the Thursday of Corpus Christi, 60 days after
+    /// Easter: children in manta and rebozo carry huacales of fruit and
+    /// flowers to the church, mulitas of woven hoja de maíz are sold at its
+    /// door, and in Papantla the voladores fly.
+    Corpus,
     /// The Guelaguetza in Oaxaca: the two Lunes del Cerro after July 16 and
     /// the days between, from the Saturday before.
     Guelaguetza,
@@ -72,7 +78,7 @@ pub enum Kind {
 
 impl Kind {
     /// Every holiday, in the order the year brings them.
-    pub const ALL: [Kind; 11] = [
+    pub const ALL: [Kind; 12] = [
         Kind::Navidad,
         Kind::Candelaria,
         Kind::Carnaval,
@@ -80,6 +86,7 @@ impl Kind {
         Kind::Judas,
         Kind::Nino,
         Kind::SantaCruz,
+        Kind::Corpus,
         Kind::Guelaguetza,
         Kind::Patrias,
         Kind::Muertos,
@@ -97,6 +104,7 @@ impl Kind {
             Kind::Judas => "judas",
             Kind::Nino => "nino",
             Kind::SantaCruz => "santa-cruz",
+            Kind::Corpus => "corpus",
             Kind::Guelaguetza => "guelaguetza",
             Kind::Patrias => "patrias",
             Kind::Muertos => "muertos",
@@ -114,6 +122,7 @@ impl Kind {
             "judas" | "quema-de-judas" | "sabado-de-gloria" | "sábado-de-gloria" => Kind::Judas,
             "nino" | "niño" | "dia-del-nino" | "día-del-niño" => Kind::Nino,
             "santa-cruz" => Kind::SantaCruz,
+            "corpus" | "corpus-christi" | "jueves-de-corpus" | "mulitas" => Kind::Corpus,
             "guelaguetza" => Kind::Guelaguetza,
             "patrias" | "fiestas-patrias" | "independencia" | "grito" => Kind::Patrias,
             "muertos" | "dia-de-muertos" | "día-de-muertos" => Kind::Muertos,
@@ -125,7 +134,10 @@ impl Kind {
 
     /// Does it move with Easter or the Lunes del Cerro?
     fn movable(self) -> bool {
-        matches!(self, Kind::Carnaval | Kind::Judas | Kind::Guelaguetza)
+        matches!(
+            self,
+            Kind::Carnaval | Kind::Judas | Kind::Corpus | Kind::Guelaguetza
+        )
     }
 
     /// The day it is at its height in `year`.
@@ -139,6 +151,7 @@ impl Kind {
             Kind::Judas => civil(easter(year) - 1),
             Kind::Nino => (4, 30),
             Kind::SantaCruz => (5, 3),
+            Kind::Corpus => civil(easter(year) + 60),
             Kind::Guelaguetza => civil(lunes_del_cerro(year).0),
             Kind::Patrias => (9, 15),
             Kind::Muertos => (11, 2),
@@ -194,6 +207,21 @@ impl Fiesta {
         (self.month, self.day)
     }
 
+    /// The Virgen de Guadalupe, December 12, the day that opens the
+    /// Guadalupe–Reyes: pilgrims reach the Basílica, the mañanitas are sung
+    /// to her at midnight and the matachines dance.
+    #[allow(dead_code)] // until the visitors and scenes for the day come
+    pub fn guadalupe(self) -> bool {
+        self.is(Kind::Navidad) && self.date() == (12, 12)
+    }
+
+    /// The Noche de Rábanos in Oaxaca, December 23: figures carved out of
+    /// radishes fill the zócalo.
+    #[allow(dead_code)] // until the visitors and scenes for the day come
+    pub fn rabanos(self) -> bool {
+        self.is(Kind::Navidad) && self.date() == (12, 23)
+    }
+
     /// The posadas, December 16 to 24.
     pub fn posadas(self) -> bool {
         self.is(Kind::Navidad) && self.month == 12 && (16..=24).contains(&self.day)
@@ -230,7 +258,7 @@ impl Fiesta {
     }
 
     /// The holiday with a fixed date on a (month, day): every one but
-    /// Carnaval, the quema de Judas and the Guelaguetza, which move from
+    /// Carnaval, the quema de Judas, Corpus and the Guelaguetza, which move from
     /// year to year (see [`Fiesta::of_date`]).
     pub fn of_day(month: u32, day: u32) -> Fiesta {
         let (kind, level) = match (month, day) {
@@ -302,13 +330,14 @@ impl Fiesta {
 
 /// The movable holiday on serial day `n` of `year`, and its level.
 fn movable(year: i32, n: Serial) -> Option<(Kind, f32)> {
-    // Carnaval, from the quema del mal humor to Martes de Carnaval, and the
-    // quema de Judas.
+    // Carnaval, from the quema del mal humor to Martes de Carnaval, the
+    // quema de Judas and Jueves de Corpus.
     const CARNAVAL: [f32; 6] = [0.4, 0.55, 0.7, 0.8, 0.9, 1.0];
     match n - easter(year) {
         d @ -52..=-47 => return Some((Kind::Carnaval, CARNAVAL[(d + 52) as usize])),
         -2 => return Some((Kind::Judas, 0.4)),
         -1 => return Some((Kind::Judas, 1.0)),
+        60 => return Some((Kind::Corpus, 1.0)),
         _ => {}
     }
     // The Guelaguetza: each Monday at the height, the Saturday parade and the
@@ -421,6 +450,11 @@ impl Setting {
             "none" | "off" if date.is_none() => return Ok(Setting::Off),
             _ => {}
         }
+        if date.is_none()
+            && let Some((month, day)) = navidad_day(name)
+        {
+            return Ok(Setting::Fixed(Fiesta::of_day(month, day)));
+        }
         let kind = Kind::named(name).ok_or_else(bad)?;
         let year = today().0;
         let Some(date) = date else {
@@ -456,6 +490,20 @@ impl Setting {
             Setting::Fixed(f) => f,
         }
     }
+}
+
+/// The Navidad's days with names of their own in the `fiestas` setting.
+fn navidad_day(name: &str) -> Option<(u32, u32)> {
+    let day = match name {
+        "guadalupe" | "virgen-de-guadalupe" => (12, 12),
+        "rabanos" | "rábanos" | "noche-de-rabanos" | "noche-de-rábanos" => (12, 23),
+        "nochebuena" => (12, 24),
+        "inocentes" => (12, 28),
+        "ano-nuevo" | "año-nuevo" => (12, 31),
+        "reyes" | "rosca" => (1, 6),
+        _ => return None,
+    };
+    Some(day)
 }
 
 /// Today's (year, month, day) by the local clock.
@@ -594,6 +642,31 @@ mod tests {
         }
     }
 
+    /// Jueves de Corpus: the Thursday 60 days after Easter, one day only.
+    #[test]
+    fn corpus_follows_easter() {
+        for (y, m, d) in [
+            (2026, 6, 4),
+            (2027, 5, 27),
+            (2028, 6, 15),
+            (2038, 6, 24),
+            (2285, 5, 21),
+        ] {
+            let f = Fiesta::of_date(y, m, d);
+            assert_eq!((f.kind, f.level), (Kind::Corpus, 1.0), "{y}-{m}-{d}");
+            assert_eq!(weekday(serial(y, m, d)), 4, "{y}-{m}-{d}");
+            let n = serial(y, m, d);
+            for other in [n - 1, n + 1] {
+                let (m, d) = civil(other);
+                assert!(!Fiesta::of_date(y, m, d).is(Kind::Corpus), "{y}-{m}-{d}");
+            }
+        }
+        // The Navidad's own days.
+        assert!(Fiesta::of_day(12, 12).guadalupe() && !Fiesta::of_day(12, 13).guadalupe());
+        assert!(Fiesta::of_day(12, 23).rabanos() && Fiesta::of_day(12, 23).posadas());
+        assert!(!Fiesta::NONE.guadalupe() && !Fiesta::NONE.rabanos());
+    }
+
     #[test]
     fn dates_go_there_and_back() {
         let mut last = serial(1999, 12, 31);
@@ -649,6 +722,27 @@ mod tests {
         assert!(Setting::parse("muertos@12-25").is_err());
         assert!(Setting::parse("carnaval@2026-12-25").is_err());
         assert!(Setting::parse("halloween").is_err());
+        let Ok(Setting::Fixed(f)) = Setting::parse("guadalupe") else {
+            panic!("guadalupe");
+        };
+        assert!(f.guadalupe() && !f.rabanos());
+        let Ok(Setting::Fixed(f)) = Setting::parse("Noche-de-Rábanos") else {
+            panic!("rábanos");
+        };
+        assert!(f.rabanos() && !f.guadalupe() && f.posadas());
+        assert_eq!(
+            Setting::parse("inocentes"),
+            Ok(Setting::Fixed(Fiesta::of_day(12, 28)))
+        );
+        assert_eq!(
+            Setting::parse("reyes"),
+            Ok(Setting::Fixed(Fiesta::of_day(1, 6)))
+        );
+        assert!(Setting::parse("guadalupe@12-13").is_err());
+        assert_eq!(
+            Setting::parse("corpus@2027-05-27"),
+            Ok(Setting::Fixed(Fiesta::of_date(2027, 5, 27)))
+        );
         assert!(Setting::parse("muertos@11").is_err());
         assert!(Setting::parse("muertos@aa-bb").is_err());
         assert_eq!(Setting::Off.resolve(), Fiesta::NONE);

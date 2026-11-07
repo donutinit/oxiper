@@ -740,7 +740,15 @@ mod tests {
                 add(last);
             }
         }
-        for (month, day) in [(12, 16), (12, 24), (12, 28), (12, 31), (1, 1), (1, 6)] {
+        for (month, day) in [
+            (12, 16),
+            (12, 23),
+            (12, 24),
+            (12, 28),
+            (12, 31),
+            (1, 1),
+            (1, 6),
+        ] {
             add(Fiesta::of_date(2027, month, day));
         }
         days
