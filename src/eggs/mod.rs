@@ -20,6 +20,7 @@ mod carnaval;
 pub mod catrina;
 pub mod chinelos;
 pub mod comparsa;
+mod corpus;
 pub mod cruz;
 pub mod duckpond;
 mod equinoccio;
@@ -34,6 +35,7 @@ pub mod loteria;
 pub mod mariachis;
 pub mod monarcas;
 mod muertos;
+pub mod mulitas;
 mod navidad;
 mod nino;
 pub mod nyan;
@@ -52,6 +54,7 @@ pub mod sl;
 mod stage;
 pub mod tamalero;
 pub mod tren;
+pub mod voladores;
 
 use crate::color::Color;
 use crate::fiesta::{Fiesta, Kind};
@@ -115,6 +118,8 @@ pub const ALL: &[&Info] = &[
     &judas::INFO,
     &pina::INFO,
     &calenda::INFO,
+    &mulitas::INFO,
+    &voladores::INFO,
 ];
 
 /// An `egg_rate` at or above this plays an egg at once, again and again, and
