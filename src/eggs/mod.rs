@@ -25,6 +25,7 @@ pub mod cruz;
 pub mod duckpond;
 mod equinoccio;
 pub mod grito;
+mod guadalupe;
 mod guelaguetza;
 pub mod inocente;
 pub mod jarabe;
@@ -32,7 +33,9 @@ pub mod judas;
 pub mod juguetes;
 pub mod kukulcan;
 pub mod loteria;
+pub mod mananitas;
 pub mod mariachis;
+pub mod matachines;
 pub mod monarcas;
 mod muertos;
 pub mod mulitas;
@@ -43,6 +46,7 @@ pub(crate) mod palette;
 pub mod pastorela;
 mod patrias;
 mod pen;
+pub mod peregrinos;
 pub mod pina;
 pub mod pinata;
 pub mod posada;
@@ -120,6 +124,9 @@ pub const ALL: &[&Info] = &[
     &calenda::INFO,
     &mulitas::INFO,
     &voladores::INFO,
+    &mananitas::INFO,
+    &peregrinos::INFO,
+    &matachines::INFO,
 ];
 
 /// An `egg_rate` at or above this plays an egg at once, again and again, and

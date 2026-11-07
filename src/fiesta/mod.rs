@@ -210,7 +210,6 @@ impl Fiesta {
     /// The Virgen de Guadalupe, December 12, the day that opens the
     /// Guadalupe–Reyes: pilgrims reach the Basílica, the mañanitas are sung
     /// to her at midnight and the matachines dance.
-    #[allow(dead_code)] // until the visitors and scenes for the day come
     pub fn guadalupe(self) -> bool {
         self.is(Kind::Navidad) && self.date() == (12, 12)
     }
