@@ -85,8 +85,21 @@
 //! the children in manta and rebozo come to the church door in a line, with
 //! huacales of flowers and fruit on their backs and mulitas on a rope, and
 //! go in. At night the church's windows and the stand's bombillas glow.
+//!
+//! On December 12, the Virgen de Guadalupe, the first day of the Navidad, the
+//! street of houses gives way to the Basílica: the new one, round under its
+//! great roof of copper-green, and the old one beside it with its towers and
+//! dome, floodlit cantera with their windows lit, bushes of rosas de Castilla
+//! at the foot of the walls and petals strewn along the paving. Pilgrims walk
+//! to its doors in a line, on foot and on bicycles with roses round the
+//! handlebars, one with an estandarte high over the head, others with a
+//! framed image on the back or roses in the hand, and go in. Her image is
+//! only ever what they carry, upright and still. The dog wears a collar of
+//! rosas de Castilla instead of its suéter. On December 13 the street of
+//! houses and the suéter are back.
 
 mod corpus;
+mod guadalupe;
 
 use std::f32::consts::PI;
 
@@ -1165,11 +1178,20 @@ enum Wear {
     /// A sarape in verde, blanco and rojo, and a sombrero de charro with
     /// its crown and its gold trim.
     Charro([Rgb; 5]),
+    /// A collar of rosas de Castilla: two pinks and their leaves.
+    Rosas([Rgb; 3]),
 }
 
 impl Wear {
     fn of(ctx: &Ctx) -> Wear {
-        if ctx.fiesta.is(Kind::Navidad) {
+        if ctx.fiesta.guadalupe() {
+            let native = [
+                guadalupe::ROSA_CASTILLA,
+                guadalupe::ROSA_CLARA,
+                guadalupe::HOJA_ROSAL,
+            ];
+            Wear::Rosas(themed(ctx, native, 1))
+        } else if ctx.fiesta.is(Kind::Navidad) {
             Wear::Sueter(themed(ctx, [ROJO_NOCHEBUENA, VERDE_PINO, BLANCO], 6))
         } else if ctx.fiesta.is(Kind::Patrias) {
             let native = [VERDE_BANDERA, BLANCO, ROJO_BANDERA, AGUILA, ORO];
@@ -1296,8 +1318,8 @@ struct Navidad {
 impl Navidad {
     /// The holiday for this world, if it is on.
     fn of(ctx: &Ctx, m: &Meadow) -> Option<Navidad> {
-        ctx.fiesta
-            .is(Kind::Navidad)
+        // On the Virgen's day the Basílica stands in the street's place.
+        (ctx.fiesta.is(Kind::Navidad) && !ctx.fiesta.guadalupe())
             .then(|| Navidad::new(ctx, m.w, m.fence))
     }
 
@@ -2031,6 +2053,9 @@ struct Meadow {
     nino: Option<Nino>,
     /// The Jueves de Corpus, when it is on: the atrium of a church.
     corpus: Option<corpus::Corpus>,
+    /// The Virgen de Guadalupe, when it is her day: the Basílica and the
+    /// pilgrims.
+    guadalupe: Option<guadalupe::Guadalupe>,
     /// Rows of the meadow where no grass grows for the holiday's street.
     street: Option<(i32, i32)>,
     /// What the dog wears.
@@ -2173,6 +2198,7 @@ impl Meadow {
             patrias: None,
             nino: None,
             corpus: None,
+            guadalupe: None,
             street: None,
             wear: Wear::Bare,
         };
@@ -2188,10 +2214,12 @@ impl Meadow {
         self.patrias = Patrias::of(ctx, self);
         self.nino = Nino::of(ctx, self);
         self.corpus = corpus::Corpus::of(ctx, self);
-        self.street = match (&self.navidad, &self.patrias, &self.corpus) {
+        self.guadalupe = guadalupe::Guadalupe::of(ctx, self);
+        self.street = match (&self.navidad, &self.patrias, &self.corpus, &self.guadalupe) {
             (Some(nv), ..) => Some(nv.cleared(self.ground, self.fence)),
-            (_, Some(pa), _) => Some(pa.cleared(self.fence)),
-            (.., Some(co)) => Some(co.cleared(self.fence)),
+            (_, Some(pa), ..) => Some(pa.cleared(self.fence)),
+            (_, _, Some(co), _) => Some(co.cleared(self.fence)),
+            (.., Some(gu)) => Some(gu.cleared(self.fence)),
             _ => None,
         };
         self.wear = Wear::of(ctx);
@@ -2312,6 +2340,9 @@ impl Meadow {
         }
         if let Some(co) = &mut self.corpus {
             co.step();
+        }
+        if let Some(gu) = &mut self.guadalupe {
+            gu.step();
         }
         if let Some(ni) = &mut self.nino {
             let cx = self.dog.x + SPRITE_W as f32 / 2.0;
@@ -2639,6 +2670,10 @@ impl Meadow {
         if let Some(co) = &co {
             self.draw_atrio(co);
         }
+        let gu = self.guadalupe.take();
+        if let Some(gu) = &gu {
+            self.draw_basilica(gu);
+        }
         let ni = self.nino.take();
         let split = self.blades.partition_point(|b| b.y < self.ground);
         let mu = self.muertos.take();
@@ -2650,6 +2685,9 @@ impl Meadow {
                 }
                 if let Some(co) = &co {
                     self.draw_romeria(co);
+                }
+                if let Some(gu) = &gu {
+                    self.draw_peregrinos(gu);
                 }
                 self.draw_dog();
                 self.draw_blades(split, self.blades.len(), None);
@@ -2679,6 +2717,7 @@ impl Meadow {
         self.patrias = pa;
         self.nino = ni;
         self.corpus = co;
+        self.guadalupe = gu;
     }
 
     fn draw_sun_moon(&mut self) {
@@ -3283,6 +3322,10 @@ impl Meadow {
             self.draw_corpus_lights(&co, v, night);
             self.corpus = Some(co);
         }
+        if let Some(gu) = self.guadalupe.take() {
+            self.draw_guadalupe_lights(&gu, v, night);
+            self.guadalupe = Some(gu);
+        }
     }
 
     /// The sleeping dog's z's, as letters over the picture.
@@ -3765,6 +3808,10 @@ impl Meadow {
         if self.wear == Wear::Bare {
             return None;
         }
+        if let Wear::Rosas([rosa, claro, hoja]) = self.wear {
+            // A collar of roses and leaves, nothing more.
+            return (ch == b'c').then(|| [rosa, claro, hoja][((rx + ry) % 3) as usize]);
+        }
         if let Wear::Sueter([_, _, cream]) = self.wear
             && ch == b'c'
         {
@@ -3799,7 +3846,7 @@ impl Meadow {
                     [verde, blanco, rojo][k as usize]
                 })
             }
-            Wear::Bare => None,
+            Wear::Bare | Wear::Rosas(_) => None,
         }
     }
 
@@ -4638,7 +4685,7 @@ mod tests {
         let theme = Theme::classic();
         let opts = Opts::new(INFO.options, toml::Table::new());
         let mut counts = Vec::new();
-        for fiesta in [Fiesta::of_day(12, 12), Fiesta::height(Kind::Navidad)] {
+        for fiesta in [Fiesta::of_day(12, 13), Fiesta::height(Kind::Navidad)] {
             let c = holiday(&theme, &opts, fiesta);
             let mut s = DogScene::new(&c);
             s.resize(&c, 160, 48);
@@ -4695,7 +4742,7 @@ mod tests {
         let theme = Theme::classic();
         let opts = Opts::new(INFO.options, toml::Table::new());
         for (fiesta, walkers) in [
-            (Fiesta::of_day(12, 12), false),
+            (Fiesta::of_day(12, 13), false),
             (Fiesta::of_day(12, 20), true),
             (Fiesta::of_day(12, 24), true),
             (Fiesta::of_day(12, 26), false),
@@ -5195,6 +5242,201 @@ mod tests {
         assert!(laps >= 1 && seen >= 3 && gone > 100, "{laps} {seen} {gone}");
     }
 
+    /// On December 12 the meadow is the Basílica instead of the Navidad's
+    /// street: both Basílicas, roses at their foot, pilgrims on their way and
+    /// a collar of roses on the dog. On an ordinary day, none of it.
+    #[test]
+    fn guadalupe_dresses_the_street() {
+        let theme = Theme::classic();
+        let opts = Opts::new(INFO.options, toml::Table::new());
+        let virgen = Fiesta::of_day(12, 12);
+        assert!(virgen.guadalupe());
+        let c = holiday(&theme, &opts, virgen);
+        let mut s = DogScene::new(&c);
+        s.resize(&c, 160, 48);
+        s.retheme(&c);
+        let mut cv = Canvas::new(160, 48, Color::Reset);
+        s.m.t = 0.4;
+        s.m.update_sky();
+        s.tick(&c, 0.05, 0.05);
+        // The head of the line, with its estandarte, is half way to the door.
+        let gu = s.m.guadalupe.as_mut().expect("dressed");
+        gu.line.walk = gu.line.far() * 0.5;
+        s.draw(&c, &mut cv);
+        let gu = s.m.guadalupe.as_ref().unwrap();
+        assert!(s.m.navidad.is_none() && s.m.street.is_some());
+        assert!(gu.antigua.is_some() && gu.width == 72 && !gu.rosales.is_empty());
+        // Roses in two pinks among their leaves, her mantle and its stars
+        // and her gown on the estandarte.
+        for c in [
+            guadalupe::ROSA_CASTILLA,
+            guadalupe::ROSA_CLARA,
+            guadalupe::HOJA_ROSAL,
+            guadalupe::MANTO,
+            guadalupe::ORO_MANTO,
+            guadalupe::VESTIDO,
+        ] {
+            assert!(painted(&s.m, c), "{c:?} missing");
+        }
+        // Nothing of the Navidad's: no houses, no tiles, no foquitos.
+        assert!(!painted(&s.m, TEJA) && !painted(&s.m, FOQUITOS[2]));
+        // The collar of roses, and nothing else on the dog.
+        let Wear::Rosas([rosa, claro, hoja]) = s.m.wear else {
+            panic!("no collar of roses")
+        };
+        let collar: Vec<_> = (0..3).filter_map(|rx| s.m.worn(b'c', rx, 0)).collect();
+        assert!(collar == [rosa, claro, hoja]);
+        assert!(s.m.worn(b'B', 8, 6).is_none() && s.m.worn(b'D', 8, 7).is_none());
+        // A narrow world has the new Basílica alone.
+        s.resize(&c, 30, 40);
+        let gu = s.m.guadalupe.as_ref().expect("dressed");
+        assert!(gu.antigua.is_none() && gu.width < 72);
+        s.draw(&c, &mut cv);
+
+        let c = ctx(&theme, &opts);
+        let mut s = DogScene::new(&c);
+        s.resize(&c, 160, 48);
+        let mut cv = Canvas::new(160, 48, Color::Reset);
+        s.draw(&c, &mut cv);
+        assert!(s.m.guadalupe.is_none() && s.m.wear == Wear::Bare);
+        assert!(!painted(&s.m, guadalupe::ROSA_CASTILLA) && !painted(&s.m, guadalupe::MANTO));
+    }
+
+    #[test]
+    fn guadalupe_comes_and_goes() {
+        comes_and_goes(Fiesta::of_day(12, 12), |m| {
+            m.guadalupe.is_some()
+                && m.navidad.is_none()
+                && m.street.is_some()
+                && matches!(m.wear, Wear::Rosas(_))
+        });
+    }
+
+    /// December 13 is the Navidad's again, exactly as before: the street of
+    /// houses and the suéter, no Basílica, no roses; midnight takes the
+    /// meadow from one to the other, and once it has, it is exactly the
+    /// meadow of a day that was the 13th all along.
+    #[test]
+    fn the_day_after_guadalupe_the_street_is_back() {
+        let theme = Theme::classic();
+        let opts = Opts::new(INFO.options, "day = 30".parse().unwrap());
+        let base = holiday(&theme, &opts, Fiesta::of_day(12, 13));
+        let virgen = holiday(&theme, &opts, Fiesta::of_day(12, 12));
+        let (mut a, mut b) = (DogScene::new(&base), DogScene::new(&base));
+        a.resize(&base, 100, 30);
+        b.resize(&base, 100, 30);
+        for m in [&a.m, &b.m] {
+            assert!(m.navidad.is_some() && m.guadalupe.is_none());
+            assert!(matches!(m.wear, Wear::Sueter(_)));
+        }
+        let (mut ca, mut cb) = (
+            Canvas::new(100, 30, Color::Reset),
+            Canvas::new(100, 30, Color::Reset),
+        );
+        for i in 0..900 {
+            if i == 100 {
+                b.retheme(&virgen);
+                assert!(b.m.guadalupe.is_some() && b.m.navidad.is_none());
+            }
+            if i == 600 {
+                b.retheme(&base);
+                assert!(b.m.guadalupe.is_none() && b.m.navidad.is_some());
+                assert!(matches!(b.m.wear, Wear::Sueter(_)));
+            }
+            let c = if (100..600).contains(&i) {
+                &virgen
+            } else {
+                &base
+            };
+            a.tick(&base, 1.0 / 30.0, 1.0 / 30.0);
+            b.tick(c, 1.0 / 30.0, 1.0 / 30.0);
+            ca.clear();
+            cb.clear();
+            a.draw(&base, &mut ca);
+            b.draw(c, &mut cb);
+            assert_eq!(
+                ca.cells() == cb.cells(),
+                !(100..600).contains(&i),
+                "step {i}"
+            );
+        }
+    }
+
+    /// The pilgrims walk to the Basílica's door in a line, on foot and on
+    /// bicycles, and go in; then the line rests and sets out again.
+    #[test]
+    fn the_pilgrims_go_in_at_the_door() {
+        let theme = Theme::classic();
+        let opts = Opts::new(INFO.options, toml::Table::new());
+        let c = holiday(&theme, &opts, Fiesta::of_day(12, 12));
+        let mut s = DogScene::new(&c);
+        s.resize(&c, 120, 36);
+        let w = s.m.w as f32;
+        let mut rng = Rng::with_seed(1);
+        let (mut laps, mut last) = (0, s.m.guadalupe.as_ref().unwrap().line.walk);
+        let (mut seen, mut gone) = (0, 0);
+        for _ in 0..40_000 {
+            s.m.update(&mut rng);
+            let gu = s.m.guadalupe.as_ref().unwrap();
+            let l = &gu.line;
+            let xs: Vec<f32> = gu.pilgrims.iter().filter_map(|p| l.at(p.off)).collect();
+            assert!(
+                xs.iter()
+                    .all(|x| x.is_finite() && (-15.0..=w + 15.0).contains(x))
+            );
+            assert!(xs.iter().all(|x| (x - l.door) * l.way < 0.0), "{xs:?}");
+            seen = seen.max(xs.len());
+            gone += (xs.len() < gu.pilgrims.len()) as i32;
+            if l.walk < last {
+                laps += 1;
+            }
+            last = l.walk;
+        }
+        assert!(laps >= 1 && seen >= 4 && gone > 100, "{laps} {seen} {gone}");
+    }
+
+    /// Her image on the estandarte is drawn upright and as it is, whichever
+    /// way the pilgrims walk: never turned round.
+    #[test]
+    fn her_image_is_never_mirrored() {
+        let theme = Theme::classic();
+        let opts = Opts::new(INFO.options, toml::Table::new());
+        let c = holiday(&theme, &opts, Fiesta::of_day(12, 12));
+        let mut ways = Vec::new();
+        for seed in 0..40 {
+            let c = Ctx { seed, ..c };
+            let mut s = DogScene::new(&c);
+            s.resize(&c, 120, 36);
+            s.m.t = 0.4;
+            s.m.update_sky();
+            let gu = s.m.guadalupe.as_mut().unwrap();
+            let way = gu.line.way;
+            if ways.contains(&way) {
+                continue;
+            }
+            ways.push(way);
+            // The estandarte leads the line: put it in the middle of the street.
+            gu.line.walk = gu.line.far() * 0.5;
+            s.m.draw();
+            let gu = s.m.guadalupe.as_ref().unwrap();
+            let x = gu.line.at(0.0).unwrap().round() as i32;
+            let front = x + 3 * way as i32;
+            let (x0, y0) = (front - 3, s.m.ground - 3 - 20);
+            let mut checked = 0;
+            for (ry, row) in guadalupe::ESTANDARTE.iter().enumerate() {
+                for (rx, ch) in row.bytes().enumerate() {
+                    if let Some((want, _)) = guadalupe::image_colors(ch) {
+                        let at = ((y0 + ry as i32) * s.m.w + x0 + rx as i32) as usize;
+                        assert_eq!(s.m.px[at], want, "way {way}: {ch} at {rx},{ry}");
+                        checked += 1;
+                    }
+                }
+            }
+            assert!(checked > 30);
+        }
+        assert_eq!(ways.len(), 2, "both ways were tried");
+    }
+
     /// Odd sizes, steps and options survive with the holiday on, under the
     /// native theme and another.
     #[test]
@@ -5208,6 +5450,7 @@ mod tests {
                     Fiesta::of_day(11, 2),
                     Fiesta::of_day(11, 3),
                     Fiesta::of_day(12, 12),
+                    Fiesta::of_day(12, 13),
                     Fiesta::of_day(12, 20),
                     Fiesta::height(Kind::Navidad),
                     Fiesta::of_day(1, 6),
