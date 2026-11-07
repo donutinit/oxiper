@@ -45,6 +45,15 @@
 //! loaded. The pot is a huacal, a wooden crate of slats with fruit and flowers
 //! in it, and at its foot stands a mulita de hoja de maíz, the little
 //! corn-husk mule, with a huacal of flowers on her back.
+//!
+//! On December 12, the Virgen de Guadalupe, the first day of the Navidad, the
+//! tree is dressed for her instead of for Nochebuena: rosas de Castilla bloom
+//! among its leaves, the roses of the Tepeyac, in two pinks with a bud here
+//! and there, and petals let go of them and fall. It stands in a clay pot with
+//! a bush of roses in the soil, and at its foot a nicho of cantera holds her
+//! image, still, her rays around her and her mantle verde azulado with its
+//! stars of gold, between two veladoras whose flames flicker and with roses
+//! cut for her. On December 13 the Navidad's tree is back.
 
 use crate::color::{self, Color, rgb};
 use crate::fiesta::{self, Fiesta};
@@ -1829,6 +1838,200 @@ const MULITA: Sprite = Sprite {
 const MULITA_W: i32 = 16;
 
 // ---------------------------------------------------------------------------
+// The Virgen de Guadalupe: the roses of the Tepeyac on the tree, and a nicho
+// with veladoras at its foot
+
+const ROSA_CASTILLA: Color = rgb(0xd81b60);
+const ROSA_CLARA: Color = rgb(0xf06292);
+const HOJA_ROSAL: Color = rgb(0x2e7d32);
+const CANTERA: Color = rgb(0xbfa98a);
+const RAYOS: Color = rgb(0xf2b632);
+const MANTO: Color = rgb(0x00796b);
+const ORO_MANTO: Color = rgb(0xf2c14e);
+const VESTIDO: Color = rgb(0xe57373);
+const PIEL_MORENA: Color = rgb(0xa8743a);
+const BARRO: Color = rgb(0xb5602a);
+const VIDRIO_ROJO: Color = rgb(0xc62828);
+const VIDRIO_VERDE: Color = rgb(0x2e9a5a);
+
+/// What a leaf becomes on the tree on the Virgen's day.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum Rosal {
+    Leaf,
+    /// A rosa de Castilla in bloom, in one of two pinks.
+    Rosa(u8),
+    /// A bud.
+    Capullo,
+}
+
+/// What the leaf at a cell of tree `seed` is on December 12: roses in the
+/// leaves, in clumps about four cells wide and two tall, as they bloom on a
+/// rosal, here and there a bud.
+fn rosal(x: i32, y: i32, seed: u32) -> Rosal {
+    let (cx, cy) = (
+        (x + 2 * (y.div_euclid(2) & 1)).div_euclid(4),
+        y.div_euclid(2),
+    );
+    let clump = hash01(cx, cy, seed ^ 0x726f_7361);
+    let p = if clump < 0.62 { 0.84 } else { 0.1 };
+    if hash01(x, y, seed ^ 0x6361_7374) >= p {
+        return Rosal::Leaf;
+    }
+    match hash01(x, y, seed ^ 0x7368_6164) {
+        k if k < 0.12 => Rosal::Capullo,
+        k if k < 0.62 => Rosal::Rosa(0),
+        _ => Rosal::Rosa(1),
+    }
+}
+
+/// The Virgen's day's colors.
+struct Guadalupe {
+    inks: Inks,
+    /// Rosas de Castilla: rosa and its light, and the buds.
+    rosa: [Color; 2],
+    capullo: Color,
+    /// The glass of the two veladoras: rojo and verde.
+    glass: [Color; 2],
+}
+
+impl Guadalupe {
+    fn classic(pairs: &[Color; 5]) -> Guadalupe {
+        Guadalupe::make(
+            pairs,
+            [ROSA_CASTILLA, ROSA_CLARA, rgb(0xad1457)],
+            [VIDRIO_ROJO, VIDRIO_VERDE],
+            [
+                HOJA_ROSAL,
+                BARRO,
+                CANTERA,
+                RAYOS,
+                MANTO,
+                PIEL_MORENA,
+                VESTIDO,
+                ORO_MANTO,
+            ],
+        )
+    }
+
+    /// The same dress in the theme's colors.
+    fn themed(ctx: &Ctx, pairs: &[Color; 5]) -> Guadalupe {
+        let t = ctx.theme;
+        let leaf = pairs[LEAF_BRIGHT as usize];
+        let wood = pairs[WOOD_BRIGHT as usize];
+        let by = |hue, tol, avoid, i, native| {
+            by_hue(&t.colors, hue, tol, avoid).unwrap_or_else(|| ctx.pick(i, native))
+        };
+        let rosa = by(340.0, 40.0, None, 1, ROSA_CASTILLA);
+        let rojo = by(355.0, 35.0, Some(rosa), 0, VIDRIO_ROJO);
+        let oro = by(45.0, 25.0, Some(rosa), 3, ORO_MANTO);
+        let manto = by(175.0, 40.0, Some(rosa), 2, MANTO);
+        Guadalupe::make(
+            pairs,
+            [rosa, rosa.lerp(t.fg, 0.35), ctx.fade(rosa, 0.3)],
+            [rojo, leaf],
+            [
+                leaf,
+                wood,
+                t.fg.lerp(wood, 0.5),
+                oro,
+                manto,
+                wood.lerp(t.fg, 0.2),
+                rosa.lerp(t.fg, 0.4),
+                oro.lerp(t.fg, 0.3),
+            ],
+        )
+    }
+
+    /// `rosa`: rosa, its light, the buds; `rest`: the leaves, the clay of the
+    /// pot, cantera, the rays, the mantle, her face, her gown, the stars.
+    fn make(
+        pairs: &[Color; 5],
+        rosa: [Color; 3],
+        glass: [Color; 2],
+        rest: [Color; 8],
+    ) -> Guadalupe {
+        let [hoja, barro, cantera, rayos, manto, piel, vestido, oro] = rest;
+        let inks = Inks::new(&[
+            (b'r', rosa[0]),
+            (b'R', rosa[1]),
+            (b'g', hoja),
+            (b't', barro),
+            (b'W', pairs[WOOD_BRIGHT as usize]),
+            (b'c', cantera),
+            (b'y', rayos),
+            (b'm', manto),
+            (b's', piel),
+            (b'e', vestido),
+            (b'q', oro),
+        ]);
+        Guadalupe {
+            inks,
+            rosa: [rosa[0], rosa[1]],
+            capullo: rosa[2],
+            glass,
+        }
+    }
+}
+
+/// The same pots in clay, with a bush of rosas de Castilla in the soil: roses
+/// in two pinks among their leaves.
+const MACETA_ONE: Sprite = Sprite {
+    art: &[
+        r":___________./~~~\.___________:",
+        r" \@v@v@v@v@v@v@v@v@v@v@v@v@v@/ ",
+        r"  \_________________________/ ",
+        r"  (_)                     (_)",
+    ],
+    ink: &[
+        "ttttttttttttWWWWWWWtttttttttttt",
+        " trgRgrgRgrgRgrgRgrgRgrgRgrgRt ",
+        "  ttttttttttttttttttttttttttt ",
+        "  ttt                     ttt",
+    ],
+};
+
+const MACETA_TWO: Sprite = Sprite {
+    art: &[r"(---./~~~\.---)", r" (@v@v@v@v@v@) ", r"  (_________)  "],
+    ink: &["ttttWWWWWWWtttt", " trgRgrgRgrgRt ", "  ttttttttttt  "],
+};
+
+/// The nicho of cantera with the Virgen's image in it, still and upright: her
+/// rays around her, her mantle verde azulado with its stars of gold over her
+/// rose gown. 9 wide.
+const NICHO: Sprite = Sprite {
+    art: &[
+        r"  .-'-.  ",
+        r" / \|/ \ ",
+        r"| -(o)- |",
+        r"|  /#\  |",
+        r"| /*#*\ |",
+        r"|_/###\_|",
+        r"[=======]",
+    ],
+    ink: &[
+        "  ccccc  ",
+        " c yyy c ",
+        "c ymsmy c",
+        "c  mem  c",
+        "c mqeqm c",
+        "ccmeeemcc",
+        "ccccccccc",
+    ],
+};
+
+/// A smaller one for a narrow screen, 7 wide.
+const NICHO_CHICO: Sprite = Sprite {
+    art: &[r" .-'-. ", r"|\(o)/|", r"| /#\ |", r"|/*#*\|", r"[=====]"],
+    ink: &[" ccccc ", "cymsmyc", "c mem c", "cmqeqmc", "ccccccc"],
+};
+
+/// A few roses cut for the nicho, with their leaves, 5 wide.
+const ROSAS: Sprite = Sprite {
+    art: &[" @ @ ", "v@v@v"],
+    ink: &[" r R ", "gRgrg"],
+};
+
+// ---------------------------------------------------------------------------
 // The scene
 
 /// The holiday the tree is dressed for. Any other holiday leaves it as it is
@@ -1840,12 +2043,15 @@ enum Look {
     Navidad,
     Patrias,
     Corpus,
+    Guadalupe,
 }
 
 impl Look {
     fn of(f: Fiesta) -> Look {
         match f.kind {
             fiesta::Kind::Muertos => Look::Muertos,
+            // On the Virgen's day her roses bloom instead.
+            fiesta::Kind::Navidad if f.guadalupe() => Look::Guadalupe,
             fiesta::Kind::Navidad => Look::Navidad,
             fiesta::Kind::Patrias => Look::Patrias,
             fiesta::Kind::Corpus => Look::Corpus,
@@ -1908,6 +2114,7 @@ struct Bonsai {
     navidad: Navidad,
     patrias: Patrias,
     corpus: Corpus,
+    guadalupe: Guadalupe,
     /// Leaves may turn into blossom glyphs (only with the default `&` leaves;
     /// leaves the user chose keep their glyph and only change color).
     bloom_glyphs: bool,
@@ -1999,6 +2206,7 @@ impl Bonsai {
             navidad: Navidad::classic(&CLASSIC),
             patrias: Patrias::classic(&CLASSIC, false),
             corpus: Corpus::classic(&CLASSIC),
+            guadalupe: Guadalupe::classic(&CLASSIC),
             bloom_glyphs,
             frng: fastrand::Rng::with_seed(ctx.seed ^ FIESTA_SALT),
             petals: Vec::with_capacity(PETALS),
@@ -2333,6 +2541,14 @@ impl Bonsai {
                     Tri::Rojo(_) => (self.patrias.rojo[0], self.patrias.rojo[1]),
                     Tri::Leaf => continue,
                 },
+                // Petals of rosa de Castilla, in both pinks.
+                Look::Guadalupe => match rosal(x, y, self.seed) {
+                    Rosal::Rosa(s) => {
+                        let g = &self.guadalupe;
+                        (g.rosa[s.min(1) as usize], g.rosa[1 - s.min(1) as usize])
+                    }
+                    _ => continue,
+                },
                 _ => match bloom(x, y, self.seed, self.fiesta.level) {
                     Bloom::Marigold(_) => (d.marigold[2], d.marigold[1]),
                     Bloom::Velvet(_) => (d.velvet[1], d.velvet[0]),
@@ -2386,6 +2602,7 @@ impl Bonsai {
             Look::Navidad => self.navidad.inks.get(k),
             Look::Patrias => self.patrias.inks.get(k),
             Look::Corpus => self.corpus.inks.get(k),
+            Look::Guadalupe => self.guadalupe.inks.get(k),
             _ => Color::Reset,
         }
     }
@@ -2430,6 +2647,7 @@ impl Bonsai {
             Look::Navidad => (&NOCHEBUENA_ONE, &NOCHEBUENA_TWO),
             Look::Patrias => (&PATRIA_ONE, &PATRIA_TWO),
             Look::Corpus => (&HUACAL_ONE, &HUACAL_TWO),
+            Look::Guadalupe => (&MACETA_ONE, &MACETA_TWO),
             _ => return,
         };
         let (pot, bold) = match self.base {
@@ -2492,6 +2710,52 @@ impl Bonsai {
             Fruto::Leaf => (cell.ch, self.pairs[(cell.style & 7) as usize]),
             Fruto::Flor(i) => (glyph('@'), k.flor[i.min(2) as usize]),
             Fruto::Fruta(i) => (glyph('o'), k.fruta[i.min(3) as usize]),
+        }
+    }
+
+    /// What a leaf is on the Virgen's day: its glyph and color.
+    fn rosy(&self, x: i32, y: i32, cell: GCell) -> (char, Color) {
+        let glyph = |g: char| if self.bloom_glyphs { g } else { cell.ch };
+        let g = &self.guadalupe;
+        match rosal(x, y, self.seed) {
+            Rosal::Leaf => (cell.ch, self.pairs[(cell.style & 7) as usize]),
+            Rosal::Rosa(s) => (glyph('@'), g.rosa[s.min(1) as usize]),
+            Rosal::Capullo => (glyph('o'), g.capullo),
+        }
+    }
+
+    /// The nicho at the foot of the tree, to the right of the pot when there
+    /// is room, else to the left: her image in it, a veladora either side and
+    /// roses cut for her when the screen is wide enough; a smaller nicho when
+    /// it is narrow, none when there is no room for one.
+    fn draw_nicho(&self, ctx: &Ctx, c: &mut Canvas) {
+        let Some((width, (x, _))) = [29, 17, 15]
+            .into_iter()
+            .find_map(|w| self.room(w, 1).map(|r| (w, r)))
+        else {
+            return;
+        };
+        let (_, _, ground) = self.foot();
+        let g = &self.guadalupe;
+        // The nicho and where it stands, and where the two veladoras do.
+        let (nicho, nicho_x): (&Sprite, i32) = match width {
+            29 => (&NICHO, 10),
+            17 => (&NICHO, 4),
+            _ => (&NICHO_CHICO, 4),
+        };
+        let velas = match width {
+            29 => [6, 20],
+            17 => [0, 14],
+            _ => [0, 12],
+        };
+        self.plot(ctx, c, (x + nicho_x, ground), nicho, 0, 0.0);
+        for (i, dx) in velas.into_iter().enumerate() {
+            self.sprite(c, x + dx, ground, &VELADORA_SHORT, g.glass[i], i as i32, 0);
+        }
+        if width == 29 {
+            for dx in [0, 24] {
+                self.plot(ctx, c, (x + dx, ground), &ROSAS, 0, 0.0);
+            }
         }
     }
 
@@ -2856,10 +3120,17 @@ impl Scene for Bonsai {
                     Corpus::themed(ctx, &self.pairs)
                 };
             }
+            Look::Guadalupe => {
+                self.guadalupe = if ctx.theme.native {
+                    Guadalupe::classic(&self.pairs)
+                } else {
+                    Guadalupe::themed(ctx, &self.pairs)
+                };
+            }
             _ => {}
         }
         // petals belong to the holiday that dropped them
-        if look != self.look || !matches!(look, Look::Muertos | Look::Patrias) {
+        if look != self.look || !matches!(look, Look::Muertos | Look::Patrias | Look::Guadalupe) {
             self.petals.clear();
         }
         self.look = look;
@@ -2871,7 +3142,7 @@ impl Scene for Bonsai {
 
     fn tick(&mut self, _ctx: &Ctx, dt: f32, real: f32) {
         match self.look {
-            Look::Muertos | Look::Patrias => self.tick_fiesta(dt, real),
+            Look::Muertos | Look::Patrias | Look::Guadalupe => self.tick_fiesta(dt, real),
             // the series blinks on the wall clock, however fast the scene runs
             Look::Navidad => self.clock = (self.clock + real.clamp(0.0, 1.0)).rem_euclid(3600.0),
             Look::Plain | Look::Corpus => {}
@@ -2916,7 +3187,7 @@ impl Scene for Bonsai {
     }
 
     fn next_change(&self) -> f32 {
-        if matches!(self.look, Look::Muertos | Look::Patrias) {
+        if matches!(self.look, Look::Muertos | Look::Patrias | Look::Guadalupe) {
             // candles flicker and petals fall
             return 0.0;
         }
@@ -2942,7 +3213,7 @@ impl Scene for Bonsai {
                 self.draw_musgo(c);
                 self.draw_pot(ctx, c);
             }
-            Look::Patrias | Look::Corpus => self.draw_pot(ctx, c),
+            Look::Patrias | Look::Corpus | Look::Guadalupe => self.draw_pot(ctx, c),
             Look::Plain => self.draw_base(c),
         }
         let mid = self.mid();
@@ -2972,6 +3243,10 @@ impl Scene for Bonsai {
                                 let (ch, fg) = self.fruity(x, y, cell);
                                 (ch, fg, attr)
                             }
+                            Look::Guadalupe if leaf => {
+                                let (ch, fg) = self.rosy(x, y, cell);
+                                (ch, fg, attr)
+                            }
                             _ => (cell.ch, self.pairs[pair as usize], attr),
                         };
                         c.set_attr(x, y, ch, fg, attr);
@@ -2989,6 +3264,11 @@ impl Scene for Bonsai {
                 self.flying_petals(c);
             }
             Look::Corpus => self.draw_mulita(ctx, c),
+            Look::Guadalupe => {
+                self.lying_petals(ctx, c);
+                self.draw_nicho(ctx, c);
+                self.flying_petals(c);
+            }
             Look::Plain => {}
         }
         self.draw_message(c);
@@ -3341,6 +3621,11 @@ mod tests {
             &HUACAL_ONE,
             &HUACAL_TWO,
             &MULITA,
+            &MACETA_ONE,
+            &MACETA_TWO,
+            &NICHO,
+            &NICHO_CHICO,
+            &ROSAS,
         ] {
             assert_eq!(s.art.len(), s.ink.len(), "{:?}", s.art);
             for (art, ink) in s.art.iter().zip(s.ink) {
@@ -3356,6 +3641,10 @@ mod tests {
         assert_eq!(HUACAL_TWO.art.len() as i32, base_size(2).1);
         assert_eq!(HUACAL_TWO.art[0].len() as i32, base_size(2).0);
         assert_eq!(MULITA.art[0].len() as i32, MULITA_W);
+        assert_eq!(MACETA_ONE.art.len() as i32, base_size(1).1);
+        assert_eq!(MACETA_ONE.art[0].len() as i32, base_size(1).0);
+        assert_eq!(MACETA_TWO.art.len() as i32, base_size(2).1);
+        assert_eq!(MACETA_TWO.art[0].len() as i32, base_size(2).0);
     }
 
     /// The nacimiento's side of the screen: the bottom rows, without the
@@ -3575,6 +3864,7 @@ mod tests {
         let before = draw(&mut b, &plain);
         for (fiesta, mark) in [
             (Fiesta::of_day(12, 24), "(*)v(*)"),
+            (Fiesta::of_day(12, 12), r"\@v@v@v"),
             (Fiesta::of_day(9, 15), "(:)"),
             (Fiesta::of_day(11, 2), "~@~."),
         ] {
@@ -3597,6 +3887,7 @@ mod tests {
         let themes = [Theme::classic(), Theme::builtin("dracula").unwrap()];
         let days = [
             (12, 12),
+            (12, 13),
             (12, 20),
             (12, 24),
             (1, 3),
@@ -3893,6 +4184,238 @@ mod tests {
         }
     }
 
+    /// The Virgen's day: the roses of the Tepeyac bloom on the tree, it
+    /// stands in a clay pot with a bush of roses, and at its foot a nicho with
+    /// her image and veladoras.
+    #[test]
+    fn guadalupe_blooms_the_tree_in_roses() {
+        let theme = Theme::classic();
+        let virgen = Fiesta::of_day(12, 12);
+        assert!(virgen.guadalupe());
+        let g = Guadalupe::classic(&CLASSIC);
+        let (b, c) = dressed(GROWN, &theme, virgen, 100, 30);
+        let text = c.to_text();
+        // roses in both pinks, buds, and leaves between them
+        for color in g.rosa {
+            assert!(
+                count(&c, |cell| cell.ch == '@' && cell.fg == color) >= 3,
+                "{text}"
+            );
+        }
+        let leaves = count(&c, |cell| cell.ch == '&' && CLASSIC[..3].contains(&cell.fg));
+        assert!(leaves > 15, "{leaves}\n{text}");
+        assert!(
+            count(&c, |cell| cell.ch == 'o' && cell.fg == g.capullo) >= 1,
+            "{text}"
+        );
+        // the clay pot with its bush of roses
+        assert!(text.contains(r"\@v@v@v@v@v"), "{text}");
+        assert!(count(&c, |cell| cell.fg == BARRO) > 10);
+        // the nicho with her image, between two veladoras, and roses cut for her
+        for piece in [
+            ".-'-.",
+            r"/ \|/ \",
+            "-(o)-",
+            r"|  /#\  |",
+            r"|_/###\_|",
+            "[=======]",
+            "|~|",
+            "v@v@v",
+        ] {
+            assert!(text.contains(piece), "{piece}\n{text}");
+        }
+        assert_eq!(text.matches("|~|").count(), 2, "{text}");
+        for color in [RAYOS, MANTO, ORO_MANTO, VESTIDO, PIEL_MORENA, CANTERA] {
+            assert!(count(&c, |cell| cell.fg == color) >= 1, "{color:?}\n{text}");
+        }
+        // one veladora in rojo, the other in verde
+        for color in g.glass {
+            assert!(count(&c, |cell| cell.fg == color) >= 2, "{color:?}\n{text}");
+        }
+        assert!(count(&c, |cell| cell.fg == FLAMA_EDGE) >= 2, "{text}");
+        // petals fall from the roses, in her pinks
+        assert!(!b.petals.is_empty());
+        assert!(b.petals.iter().all(|p| g.rosa.contains(&p.color)));
+        assert!(b.next_change() == 0.0);
+        // none of the Navidad's: no nochebuenas, esferas, foquitos or pesebre
+        assert!(!text.contains("(*)v(*)") && !text.contains("(..)") && !text.contains(".-'~~"));
+        assert_eq!(count(&c, |cell| FOQUITOS.contains(&cell.fg)), 0);
+    }
+
+    /// Her image only ever stands in its nicho, upright and still, and the
+    /// veladoras beside it flicker.
+    #[test]
+    fn her_image_stays_in_the_nicho() {
+        let theme = Theme::classic();
+        let virgen = Fiesta::of_day(12, 12);
+        let (mut b, c) = dressed(GROWN, &theme, virgen, 100, 30);
+        let opts = Opts::new(INFO.options, GROWN.parse().unwrap());
+        let ctx = Ctx {
+            theme: &theme,
+            opts: &opts,
+            bg: Color::Reset,
+            seed: 1,
+            fiesta: virgen,
+        };
+        // Where her image is: the rows of the nicho and its nine columns.
+        let image = |c: &Canvas| {
+            let t = c.to_text();
+            let lines: Vec<&str> = t.lines().collect();
+            let (row, col) = lines
+                .iter()
+                .enumerate()
+                .find_map(|(y, l)| l.find(".-'-.").map(|x| (y, l[..x].chars().count() - 2)))
+                .expect("the nicho");
+            (
+                row,
+                col,
+                lines[row..row + 7]
+                    .iter()
+                    .map(|l| l.chars().skip(col).take(9).collect::<String>())
+                    .collect::<Vec<_>>(),
+            )
+        };
+        let (row, col, one) = image(&c);
+        let mut seen = std::collections::HashSet::new();
+        let mut canvas = Canvas::new(100, 30, Color::Reset);
+        for _ in 0..60 {
+            b.tick(&ctx, 0.11, 0.11);
+            canvas.clear();
+            b.draw(&ctx, &mut canvas);
+            seen.insert(canvas.to_text());
+            // it never moves or changes, whatever the petals and the flames do
+            assert_eq!(image(&canvas), (row, col, one.clone()));
+        }
+        assert!(
+            seen.len() > 20,
+            "the veladoras do not flicker: {}",
+            seen.len()
+        );
+        // a narrower screen, a smaller nicho; and none where there is no room
+        let (_, c) = dressed(GROWN, &theme, virgen, 66, 24);
+        assert!(c.to_text().contains(r"|\(o)/|"), "{}", c.to_text());
+        let (_, c) = dressed(GROWN, &theme, virgen, 50, 20);
+        assert!(!c.to_text().contains("(o)"), "{}", c.to_text());
+    }
+
+    /// December 13 is the Navidad's again, exactly as before, and midnight
+    /// takes the tree from one to the other and back through `retheme`.
+    #[test]
+    fn the_day_after_guadalupe_the_navidad_tree_is_back() {
+        let theme = Theme::classic();
+        let opts = Opts::new(INFO.options, GROWN.parse().unwrap());
+        let (virgen, after) = (Fiesta::of_day(12, 12), Fiesta::of_day(12, 13));
+        let ctx = |fiesta| Ctx {
+            theme: &theme,
+            opts: &opts,
+            bg: Color::Reset,
+            seed: 1,
+            fiesta,
+        };
+        let make = |fiesta| {
+            let ctx = ctx(fiesta);
+            let mut b = Bonsai::new(&ctx);
+            b.resize(&ctx, 100, 30);
+            b.retheme(&ctx);
+            b
+        };
+        let draw = |b: &mut Bonsai, ctx: &Ctx| {
+            let mut c = Canvas::new(100, 30, Color::Reset);
+            b.draw(ctx, &mut c);
+            c
+        };
+        let (mut fresh, mut b) = (make(after), make(virgen));
+        let (v, a) = (ctx(virgen), ctx(after));
+        let roses = draw(&mut b, &v);
+        assert!(roses.to_text().contains("-(o)-"));
+        for _ in 0..30 {
+            b.tick(&v, 0.2, 0.2);
+        }
+        assert!(!b.petals.is_empty());
+        // Midnight: the Navidad's tree, petals gone, as a tree that never
+        // knew the roses.
+        b.retheme(&a);
+        assert!(b.petals.is_empty() && b.look == Look::Navidad);
+        let mut b = make(virgen);
+        b.retheme(&a);
+        let navidad = draw(&mut b, &a);
+        assert_eq!(navidad.cells(), draw(&mut fresh, &a).cells());
+        let text = navidad.to_text();
+        assert!(text.contains("(*)v(*)") && text.contains(".-'~~"));
+        assert!(!text.contains("-(o)-") && !text.contains(r"\@v@v"));
+        assert!(count(&navidad, |cell| FOQUITOS.contains(&cell.fg)) > 5);
+        // and back to the roses
+        b.retheme(&v);
+        assert_eq!(draw(&mut b, &v).cells(), roses.cells());
+        // the same Navidad as on any day of it, Nochebuena's included
+        let (_, eve) = dressed(GROWN, &theme, Fiesta::of_day(12, 24), 100, 30);
+        assert!(eve.to_text().contains("(*)v(*)"));
+    }
+
+    /// Under a theme the roses, the glass and the nicho are the theme's.
+    #[test]
+    fn guadalupe_under_a_theme_uses_its_colors() {
+        let theme = Theme::builtin("dracula").unwrap();
+        let (_, c) = dressed(GROWN, &theme, Fiesta::of_day(12, 12), 100, 30);
+        for classic in [
+            ROSA_CASTILLA,
+            ROSA_CLARA,
+            MANTO,
+            RAYOS,
+            VESTIDO,
+            CANTERA,
+            BARRO,
+            VIDRIO_ROJO,
+        ] {
+            assert_eq!(count(&c, |cell| cell.fg == classic), 0, "{classic:?}");
+        }
+        // dracula's pink for the roses
+        assert!(count(&c, |cell| cell.ch == '@' && cell.fg == rgb(0xff79c6)) > 3);
+    }
+
+    /// Odd sizes and huge steps on the Virgen's day.
+    #[test]
+    fn guadalupe_survives_odd_sizes_and_huge_steps() {
+        let themes = [Theme::classic(), Theme::builtin("dracula").unwrap()];
+        for theme in &themes {
+            for opts in [
+                "",
+                "base = 2",
+                "base = 0\nmessage = 'hola'",
+                "geometry = '3,70'",
+                "leaves = '木,葉'",
+            ] {
+                for (w, h) in [
+                    (1, 1),
+                    (2, 3),
+                    (7, 2),
+                    (40, 6),
+                    (61, 20),
+                    (80, 24),
+                    (300, 90),
+                ] {
+                    let opts = Opts::new(INFO.options, opts.parse().unwrap());
+                    let ctx = Ctx {
+                        theme,
+                        opts: &opts,
+                        bg: rgb(0x0d1117),
+                        seed: 5,
+                        fiesta: Fiesta::of_day(12, 12),
+                    };
+                    let mut b = Bonsai::new(&ctx);
+                    b.resize(&ctx, w, h);
+                    b.retheme(&ctx);
+                    let mut c = Canvas::new(w, h, Color::Reset);
+                    for dt in [5.0, 0.01, 5.0, 1e6, 0.0, 5.0] {
+                        b.tick(&ctx, dt, dt);
+                        b.draw(&ctx, &mut c);
+                    }
+                    assert!(b.petals.len() <= PETALS);
+                }
+            }
+        }
+    }
+
     #[test]
     fn user_leaves_keep_their_glyph_on_every_holiday() {
         let theme = Theme::classic();
@@ -3901,6 +4424,7 @@ mod tests {
             Fiesta::of_day(12, 24),
             Fiesta::of_day(9, 15),
             Fiesta::height(crate::fiesta::Kind::Corpus),
+            Fiesta::of_day(12, 12),
         ] {
             let (_, c) = dressed(opts, &theme, fiesta, 100, 30);
             assert_eq!(count(&c, |cell| cell.ch == '&'), 0);
