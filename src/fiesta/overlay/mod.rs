@@ -74,11 +74,22 @@
 //! on the Lunes del Cerro. Four rows, six with two strings. Under any theme
 //! but `classic` the paper and the petals take the theme's colors.
 //!
+//! Jueves de Corpus hangs an enramada across the top: a garland of green
+//! leaves, dark and in the sun, with tips that stir in the breeze, paper
+//! flowers (rosa mexicano, amarillo and morado, never two of a color side by
+//! side) sitting on it, knots of wood at its ties and, on a screen twenty rows
+//! tall or more, small mulitas de hoja de maíz hanging by threads in every third
+//! gap between the flowers, turned one way or the other and carrying fruit,
+//! swaying with the breeze: ten rows with them, four without. Under any theme
+//! but `classic` the leaves, the flowers, the husk and the fruit take the
+//! theme's closest colors.
+//!
 //! On an ordinary day, and on a holiday without an overlay, it draws nothing.
 
 mod bunting;
 mod carnaval;
 mod cord;
+mod corpus;
 mod drift;
 mod guelaguetza;
 mod muertos;
@@ -95,6 +106,7 @@ use crate::render::{Canvas, Cell};
 use crate::theme::Theme;
 use bunting::Bunting;
 use cord::Hung;
+use corpus::Enramada;
 use drift::{Fleck, Flecks};
 use navidad::Lights;
 use nino::{Balloon, Balloons};
@@ -151,6 +163,7 @@ struct Look {
     lights: Option<&'static Lights>,
     bunting: Option<&'static Bunting>,
     balloons: Option<&'static Balloons>,
+    enramada: Option<&'static Enramada>,
     /// A piñata hangs from the middle of the lights.
     pinata: bool,
 }
@@ -166,6 +179,7 @@ impl Look {
         lights: None,
         bunting: None,
         balloons: None,
+        enramada: None,
         pinata: false,
     };
 
@@ -179,6 +193,7 @@ impl Look {
             Kind::Revolucion => Some(revolucion::look(fiesta)),
             Kind::Carnaval => Some(carnaval::look(fiesta)),
             Kind::Guelaguetza => Some(guelaguetza::look(fiesta)),
+            Kind::Corpus => Some(corpus::look(fiesta)),
             _ => None,
         }
     }
@@ -256,6 +271,9 @@ impl Overlay {
         if let Some(bunting) = look.bunting {
             self.hang_bunting(bunting, look.salt);
         }
+        if let Some(enramada) = look.enramada {
+            self.hang_enramada(enramada, look.salt);
+        }
     }
 
     /// Scatters what falls over the screen.
@@ -324,6 +342,9 @@ impl Overlay {
         }
         if let Some(bunting) = look.bunting {
             self.draw_bunting(c, theme, bunting);
+        }
+        if let Some(enramada) = look.enramada {
+            self.draw_enramada(c, theme, enramada);
         }
         if let Some(lights) = look.lights {
             self.draw_lights(c, theme, lights);

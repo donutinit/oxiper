@@ -18,6 +18,10 @@ pub(super) enum Piece {
     Banderita,
     /// A pennant of a string of bunting.
     Pennant,
+    /// A paper flower of an enramada.
+    Flower,
+    /// A mulita de hoja de maíz hanging from an enramada by a thread.
+    Mulita,
 }
 
 pub(super) struct Hung {
