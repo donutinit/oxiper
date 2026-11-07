@@ -95,6 +95,20 @@
 //! hoja de maíz, some as flowers of papel, and the finale is a mulita de hoja
 //! carrying her huacal of flowers, between two of them.
 //!
+//! On December 12, the Virgen de Guadalupe, the first day of the Navidad, the
+//! city becomes the Basílica at midnight instead of the plaza: the new one,
+//! round under its great roof of copper-green, and the old one beside it with
+//! its towers and dome, floodlit cantera with their windows lit and lights
+//! chasing along their eaves, pilgrims in front with banderitas, veladoras in
+//! their glass and rosas de Castilla at the foot of the walls. The mañanitas'
+//! cohetes go up from the atrio and burst in loud white bangs; the other
+//! shells are roses in two pinks, stars of her mantle in gold, showers of
+//! rose petals and the pink and gold of the day. A castillo is lit now and
+//! then, its wheels spinning tier by tier, and when the last has burned its
+//! top lights up with her rays, still, for a good while. The finale is a rosa
+//! de Castilla between two of her stars. On December 13 the plaza and its
+//! kiosco are back.
+//!
 //! MIT License
 //!
 //! Copyright (c) 2026 Santiago Sánchez
@@ -118,6 +132,7 @@
 //! SOFTWARE.
 
 mod corpus;
+mod guadalupe;
 
 use std::f32::consts::{FRAC_PI_2, PI, TAU};
 
@@ -225,6 +240,10 @@ enum Shell {
     /// Jueves de Corpus: a mulita de hoja de maíz with her huacal of flowers,
     /// drawn in sparks.
     Mulita,
+    /// The Virgen de Guadalupe: a rosa de Castilla.
+    Rosa,
+    /// The Virgen de Guadalupe: one of the gold stars of her mantle.
+    Lucero,
     /// Carnaval: a mask with a plume, drawn in sparks.
     Mascara,
     /// Carnaval: a shower of confetti, tumbling in every color as it falls.
@@ -249,6 +268,8 @@ impl Shell {
                 | Shell::Cruz
                 | Shell::Mascara
                 | Shell::Flor
+                | Shell::Rosa
+                | Shell::Lucero
                 | Shell::Text(_)
         )
     }
@@ -618,6 +639,7 @@ impl Fest {
         } else {
             mix(pal.white, stone, 0.2)
         };
+        let guadalupe = ctx.fiesta.guadalupe();
         let (red, green, gold, white, hues, shells) = match (t.native, kind) {
             (true, Kind::Patrias) => (
                 PA_ROJO,
@@ -677,6 +699,33 @@ impl Fest {
                     corpus::CO_NARANJA,
                     corpus::CO_LIMON,
                     corpus::CO_HOJA,
+                    SH_BLANCO,
+                ],
+            ),
+            (true, Kind::Navidad) if guadalupe => (
+                guadalupe::GL_ROSA,
+                guadalupe::GL_MANTO,
+                guadalupe::GL_ORO,
+                SH_BLANCO,
+                [
+                    guadalupe::GL_ROSA,
+                    guadalupe::GL_ROSA_CLARO,
+                    guadalupe::GL_ORO,
+                    guadalupe::GL_MANTO,
+                    guadalupe::GL_VESTIDO,
+                    guadalupe::GL_HOJA,
+                ],
+                // Roses in two pinks, with the gold and the verde azulado of
+                // her mantle.
+                vec![
+                    guadalupe::GL_ROSA,
+                    guadalupe::GL_ROSA,
+                    guadalupe::GL_ROSA_CLARO,
+                    guadalupe::GL_ROSA_CLARO,
+                    guadalupe::GL_ORO,
+                    guadalupe::GL_ORO,
+                    guadalupe::GL_MANTO,
+                    guadalupe::GL_VESTIDO,
                     SH_BLANCO,
                 ],
             ),
@@ -764,6 +813,29 @@ impl Fest {
                     SH_ROJO, SH_ROJO, SH_VERDE, SH_VERDE, SH_DORADO, SH_DORADO, SH_PLATA, SH_BLANCO,
                 ],
             ),
+            (false, Kind::Navidad) if guadalupe => (
+                hue(0),
+                hue(1),
+                pal.gold,
+                pal.white,
+                [
+                    hue(0),
+                    mix(hue(0), pal.white, 0.4),
+                    pal.gold,
+                    hue(1),
+                    mix(hue(0), hue(2), 0.5),
+                    hue(2),
+                ],
+                vec![
+                    hue(0),
+                    hue(0),
+                    mix(hue(0), pal.white, 0.4),
+                    pal.gold,
+                    pal.gold,
+                    hue(1),
+                    pal.white,
+                ],
+            ),
             (false, Kind::Patrias) => (
                 hue(0),
                 hue(1),
@@ -787,6 +859,12 @@ impl Fest {
         };
         let shape = match kind {
             Kind::SantaCruz => [gold, hues[0], hues[1], hues[2], hues[3], white, gold, gold],
+            // The rosa de Castilla and the star: rosa, its lighter pink, gold,
+            // the verde azulado of her mantle, the leaves, white and the rose
+            // of her gown.
+            Kind::Navidad if guadalupe => [
+                hues[0], hues[1], hues[2], hues[3], hues[5], white, hues[4], gold,
+            ],
             // The flower of papel and the mulita: rosa, amarillo, morado and
             // naranja for the flowers, limón for the leaves, white for the
             // manta, the blue of the rebozo and the hoja de maíz.
@@ -831,6 +909,13 @@ impl Fest {
                         mix(stone, hues[1], 0.26),
                         mix(stone, hues[3], 0.22),
                     ]
+                } else if guadalupe {
+                    // The cantera of the Basílica.
+                    [
+                        mix(stone, guadalupe::CANTERA[0], 0.7),
+                        mix(stone, guadalupe::CANTERA[1], 0.66),
+                        mix(stone, guadalupe::CANTERA[2], 0.66),
+                    ]
                 } else if kind == Kind::Corpus {
                     // The village's whitewash, in cal, rosa and ocre.
                     [
@@ -850,6 +935,9 @@ impl Fest {
                 roof: if kind == Kind::Corpus {
                     // Tejas de barro.
                     c8(112, 52, 30)
+                } else if guadalupe {
+                    // Copper gone green.
+                    scale(guadalupe::COBRE, 0.85)
                 } else {
                     scale(ROJO_NOCHEBUENA, 0.6)
                 },
@@ -871,14 +959,22 @@ impl Fest {
                 shape,
                 hues,
                 stone,
-                wall: [
-                    mix(stone, hue(2), 0.22),
-                    mix(stone, hue(0), 0.22),
-                    mix(stone, hue(3), 0.22),
-                ],
+                wall: if guadalupe {
+                    [
+                        mix(stone, white, 0.35),
+                        mix(stone, gold, 0.3),
+                        mix(stone, white, 0.25),
+                    ]
+                } else {
+                    [
+                        mix(stone, hue(2), 0.22),
+                        mix(stone, hue(0), 0.22),
+                        mix(stone, hue(3), 0.22),
+                    ]
+                },
                 ground: mix(stone, white, 0.12),
                 window: scale(gold, 0.7),
-                roof: scale(red, 0.55),
+                roof: scale(if guadalupe { green } else { red }, 0.55),
                 pine: scale(green, 0.55),
                 wood: mix(stone, gold, 0.3),
                 cable: scale(green, 0.5),
@@ -1745,6 +1841,28 @@ impl Fireworks {
             } else if matches!(shell, Shell::Willow | Shell::Palm) && f.f32() < 0.5 {
                 shell = Shell::Petals;
             }
+        } else if self.fiesta.guadalupe() {
+            // The Virgen's day: roses and the stars of her mantle among the
+            // shells, the mañanitas' cohetes whistling up from the atrio, and
+            // showers of rose petals.
+            let f = &mut self.frng;
+            color = self.fest.shells[f.usize(0..self.fest.shells.len())];
+            let roll = f.f32();
+            if roll < 0.2 {
+                shell = Shell::Rosa;
+                (x, vy) = fit_shape(w, hh, x, apex);
+            } else if roll < 0.32 {
+                shell = Shell::Lucero;
+                (x, vy) = fit_shape(w, hh, x, apex);
+            } else if roll < 0.5 && !self.sites.is_empty() {
+                shell = Shell::Cohete;
+                color = self.fest.white;
+                x = self.sites[f.usize(0..self.sites.len())] as f32 + rangef(f, -1.5, 1.5);
+                let apex = rangef(f, 0.3, 0.6) * hh;
+                vy = -(2.0 * ROCKET_G * (hh - apex).max(1.0)).sqrt();
+            } else if matches!(shell, Shell::Willow | Shell::Palm) && f.f32() < 0.5 {
+                shell = Shell::Petals;
+            }
         } else if self.fiesta.is(Kind::Navidad) {
             // Navidad: its own colors, and more estrellas, nochebuenas and
             // bells as the posadas go by.
@@ -1884,13 +2002,17 @@ impl Fireworks {
     /// estrella de siete picos between two bells, and on Año Nuevo with the
     /// year's greeting in sparks; the Fiestas Patrias with the águila
     /// between two tricolor rings, or "VIVA MÉXICO" in sparks; the Jueves de
-    /// Corpus with a mulita de hoja between two flowers of papel.
+    /// Corpus with a mulita de hoja between two flowers of papel, and the
+    /// Virgen de Guadalupe with a rosa de Castilla between two stars of her
+    /// mantle.
     fn gran_final(&mut self) {
         if self.fiesta.ano_nuevo() && self.write(FELIZ_ANO) {
             return;
         }
         let (mid, side, color) = if self.fiesta.is(Kind::Muertos) {
             (Shell::Calavera, Shell::Marigold, self.dress.bone)
+        } else if self.fiesta.guadalupe() {
+            (Shell::Rosa, Shell::Lucero, self.fest.gold)
         } else if self.fiesta.is(Kind::Navidad) {
             (Shell::Estrella, Shell::Campana, self.fest.gold)
         } else if self.fiesta.is(Kind::Patrias) {
@@ -2247,15 +2369,21 @@ impl Fireworks {
                 // Slow and light, so they drift down for a long while.
                 let drag = 0.93;
                 let v0 = radius * (1.0 - drag) * 0.9;
+                let rosas = self.fiesta.guadalupe();
                 for _ in 0..base / 2 {
                     let a = rng.f32() * TAU;
                     let s = v0 * rangef(rng, 0.2, 1.0).sqrt();
                     let life = rangef(rng, 110.0, 170.0);
-                    // Mostly marigold, some terciopelo.
-                    let col = match rng.u32(0..5) {
-                        0 => dress.terciopelo,
-                        1 | 2 => dress.mari[1],
-                        _ => dress.mari[2],
+                    // Mostly marigold, some terciopelo; on the Virgen's day
+                    // petals of rosa de Castilla, in two pinks, and a few in
+                    // gold.
+                    let col = match (rosas, rng.u32(0..5)) {
+                        (true, 0) => ft.hues[2],
+                        (true, 1 | 2) => ft.hues[0],
+                        (true, _) => ft.hues[1],
+                        (false, 0) => dress.terciopelo,
+                        (false, 1 | 2) => dress.mari[1],
+                        (false, _) => dress.mari[2],
                     };
                     spark(a.cos() * s, a.sin() * s - 0.1, life, col, drag, PETAL);
                 }
@@ -2270,6 +2398,8 @@ impl Fireworks {
             | Shell::Mascara
             | Shell::Flor
             | Shell::Mulita
+            | Shell::Rosa
+            | Shell::Lucero
             | Shell::Text(_) => {}
             Shell::Confeti => {
                 // Bits of paper in every color: light, so they tumble down
@@ -2372,6 +2502,8 @@ impl Fireworks {
             Shell::Nochebuena => (NOCHEBUENA, ft.shape),
             Shell::Campana => (CAMPANA, ft.shape),
             Shell::Cruz => (CRUZ_SHAPE, ft.shape),
+            Shell::Rosa => (guadalupe::ROSA_CASTILLA, ft.shape),
+            Shell::Lucero => (guadalupe::LUCERO, ft.shape),
             Shell::Flor if self.fiesta.is(Kind::Corpus) => (corpus::FLOR_PAPEL, ft.shape),
             Shell::Flor => (FLOR, ft.shape),
             _ => (
@@ -2523,6 +2655,7 @@ impl Fireworks {
         self.build_judas();
         self.build_calenda();
         self.build_atrio();
+        self.build_basilica();
     }
 
     /// Carnaval keeps the city and strings colored lights along some of its
@@ -2757,7 +2890,13 @@ impl Fireworks {
     /// lights are on and how many strings hang.
     fn build_plaza(&mut self) {
         let (w, ph) = (self.w, self.ph);
-        if !self.fiesta.is(Kind::Navidad) || !self.show_city || w == 0 || ph < 12 {
+        // On the Virgen's day the Basílica stands in its place.
+        if !self.fiesta.is(Kind::Navidad)
+            || self.fiesta.guadalupe()
+            || !self.show_city
+            || w == 0
+            || ph < 12
+        {
             return;
         }
         self.town.resize(w * ph, 0);
@@ -4125,6 +4264,18 @@ impl Fireworks {
         let tiers = castillo_tiers(a.size);
         let state = a.state as usize;
         a.left -= 1;
+        if self.fiesta.guadalupe() && state >= tiers && a.left % 5 == 0 {
+            // The picture on its top lights the rooftops around it.
+            let h = guadalupe::rayos_h(a.size) as f32;
+            let power = 0.14 * guadalupe::rayos_glow(a);
+            self.flashes.push(Flash {
+                x: a.x,
+                y: a.y - a.size - 4.0 - h * 0.5,
+                radius: h * 0.9 + 6.0,
+                color: self.fest.gold,
+                power,
+            });
+        }
         if state == 0 {
             if a.left <= 0 {
                 a.state = 1;
@@ -4186,9 +4337,14 @@ impl Fireworks {
                 flags: ROCKET,
                 shell: self.crown(),
             };
-            self.burst(&top);
+            // On the Virgen's day nothing bursts there: her rays light up.
+            if self.fiesta.guadalupe() {
+                a.left = guadalupe::RAYOS_STEPS;
+            } else {
+                self.burst(&top);
+                a.left = 150;
+            }
             a.state += 1;
-            a.left = 150;
         } else if a.left <= 0 {
             // Built anew, to be lit in a while: sooner as the holiday comes.
             let level = self.fiesta.level.clamp(0.0, 1.0);
@@ -4307,6 +4463,9 @@ impl Fireworks {
         // The crown: a little tuft over the last tier.
         for (dx, dy) in [(0, -1), (-1, -2), (0, -2), (1, -2), (0, -3)] {
             self.px.set(a.x.round() as i32 + dx, top + dy, frame_c);
+        }
+        if self.fiesta.guadalupe() {
+            self.draw_rayos(a);
         }
         // The wheels.
         for tier in 0..tiers {
@@ -4965,6 +5124,8 @@ mod tests {
                 for fiesta in [
                     Fiesta::NONE,
                     Fiesta::of_day(11, 2),
+                    Fiesta::of_day(12, 12),
+                    Fiesta::of_day(12, 13),
                     Fiesta::of_day(12, 24),
                     Fiesta::of_day(12, 31),
                     Fiesta::of_day(9, 15),
@@ -5091,6 +5252,8 @@ mod tests {
             Shell::Serpentina,
             Shell::Flor,
             Shell::Mulita,
+            Shell::Rosa,
+            Shell::Lucero,
         ] {
             assert!(!shells.contains(&s), "{shells:?}");
         }
@@ -5133,6 +5296,8 @@ mod tests {
             Shell::Mascara,
             Shell::Flor,
             Shell::Mulita,
+            Shell::Rosa,
+            Shell::Lucero,
             Shell::Text(FELIZ_ANO),
             Shell::Text(VIVA_MEXICO),
         ] {
@@ -5190,7 +5355,7 @@ mod tests {
     #[test]
     fn navidad_dresses_up() {
         for theme in [Theme::classic(), Theme::builtin("dracula").unwrap()] {
-            for (m, d) in [(12, 24), (12, 12), (1, 6)] {
+            for (m, d) in [(12, 24), (12, 13), (1, 6)] {
                 let fiesta = Fiesta::of_day(m, d);
                 let (mut f, o) = make("", &theme);
                 holiday(&mut f, &theme, &o, fiesta);
@@ -5221,7 +5386,7 @@ mod tests {
     fn navidad_comes_and_goes() {
         let theme = Theme::classic();
         let (mut f, o) = make("", &theme);
-        holiday(&mut f, &theme, &o, Fiesta::of_day(12, 12));
+        holiday(&mut f, &theme, &o, Fiesta::of_day(12, 13));
         let (first, wires) = (f.bulbs.len(), f.town.iter().filter(|&&t| t == 1).count());
         holiday(&mut f, &theme, &o, Fiesta::of_day(12, 24));
         assert!(f.bulbs.len() > first, "{first} {}", f.bulbs.len());
@@ -6217,6 +6382,358 @@ mod tests {
                 f.draw(&ctx, &mut c);
             }
         }
+    }
+
+    /// The Virgen de Guadalupe turns the city into the Basílica at midnight:
+    /// both of them lit, veladoras and roses at their foot, a castillo to
+    /// light, and roses, stars of her mantle, petals and the mañanitas'
+    /// cohetes among the shells, instead of the plaza's.
+    #[test]
+    fn guadalupe_dresses_up() {
+        for theme in [Theme::classic(), Theme::builtin("dracula").unwrap()] {
+            let fiesta = Fiesta::of_day(12, 12);
+            assert!(fiesta.guadalupe());
+            let (mut f, o) = make("", &theme);
+            holiday(&mut f, &theme, &o, fiesta);
+            let count = |f: &Fireworks, r: Role| f.actors.iter().filter(|a| a.role == r).count();
+            assert!(
+                count(&f, Role::Castillo) == 1 && f.actors.len() == 1,
+                "{}",
+                theme.name
+            );
+            assert!(f.town.contains(&1) && !f.bulbs.is_empty());
+            // Veladoras burn in threes, and the cohetes go up from the atrio.
+            assert!(
+                f.candles.len() >= 6 && f.candles.len() % 3 == 0,
+                "{}",
+                f.candles.len()
+            );
+            assert!(f.sites.len() >= 4 && f.sites.iter().all(|&x| x >= 0 && x < f.w as i32));
+            // Cantera, warm; and the roof gone green.
+            if theme.native {
+                assert!(
+                    f.town_col
+                        .iter()
+                        .any(|c| c[0] > 0.45 && c[0] > c[1] && c[1] > c[2])
+                );
+                assert!(
+                    f.town_col
+                        .iter()
+                        .any(|c| c[1] > 0.3 && c[1] > c[0] && c[2] > c[0] * 0.8)
+                );
+            }
+            let (shells, wisps) = watch(&mut f, 3000);
+            for s in [Shell::Rosa, Shell::Lucero, Shell::Petals, Shell::Cohete] {
+                assert!(shells.contains(&s), "{} {shells:?}", theme.name);
+            }
+            assert!(wisps);
+            // Not the plaza's, nor any other holiday's.
+            for s in [
+                Shell::Estrella,
+                Shell::Nochebuena,
+                Shell::Campana,
+                Shell::Flor,
+                Shell::Mulita,
+                Shell::Calavera,
+            ] {
+                assert!(!shells.contains(&s), "{} {shells:?}", theme.name);
+            }
+            // The ground is drawn all along the bottom.
+            let ctx = Ctx {
+                theme: &theme,
+                opts: &o,
+                bg: Color::Reset,
+                seed: 3,
+                fiesta,
+            };
+            let mut c = Canvas::new(120, 36, Color::Reset);
+            f.draw(&ctx, &mut c);
+            assert!(c.cells()[35 * 120..].iter().all(|cell| cell.ch != ' '));
+        }
+    }
+
+    /// The finale is a rosa de Castilla between two of her stars.
+    #[test]
+    fn gran_final_is_a_rosa() {
+        let theme = Theme::classic();
+        let (mut f, o) = make("", &theme);
+        holiday(&mut f, &theme, &o, Fiesta::of_day(12, 12));
+        f.born.clear();
+        f.gran_final();
+        let shells: Vec<Shell> = f.born.iter().map(|p| p.shell).collect();
+        assert_eq!(shells, [Shell::Rosa, Shell::Lucero, Shell::Lucero]);
+        // The petals of a rosa are her pinks, with the gold of the heart and
+        // the green of its leaves.
+        f.born.clear();
+        let r = P {
+            x: 60.0,
+            y: 30.0,
+            vx: 0.0,
+            vy: 0.0,
+            life: 1.0,
+            max: 1.0,
+            color: GOLD,
+            drag: 1.0,
+            grav: 0.0,
+            flags: ROCKET,
+            shell: Shell::Rosa,
+        };
+        f.burst(&r);
+        for col in [
+            guadalupe::GL_ROSA,
+            guadalupe::GL_ROSA_CLARO,
+            guadalupe::GL_ORO,
+            guadalupe::GL_HOJA,
+            guadalupe::GL_VESTIDO,
+        ] {
+            assert!(f.born.iter().any(|p| p.color == col), "{col:?}");
+        }
+        // The petals that fall are in her pinks too, and not marigolds.
+        f.born.clear();
+        f.burst(&P {
+            shell: Shell::Petals,
+            ..r
+        });
+        assert!(f.born.len() > 20);
+        let pinks = [
+            guadalupe::GL_ROSA,
+            guadalupe::GL_ROSA_CLARO,
+            guadalupe::GL_ORO,
+        ];
+        assert!(f.born.iter().all(|p| pinks.contains(&p.color)));
+    }
+
+    /// Her picture on top of the castillo is dark until the last wheel has
+    /// burned, then lit, still and upright, for a good while; nothing bursts
+    /// there, and it never moves about.
+    #[test]
+    fn her_rays_light_the_castillo() {
+        let theme = Theme::classic();
+        let (mut f, o) = make("", &theme);
+        let fiesta = Fiesta::of_day(12, 12);
+        holiday(&mut f, &theme, &o, fiesta);
+        let ctx = Ctx {
+            theme: &theme,
+            opts: &o,
+            bg: Color::Reset,
+            seed: 3,
+            fiesta,
+        };
+        f.rate = 0.0;
+        f.until_finale = 1_000_000;
+        let i = f
+            .actors
+            .iter()
+            .position(|a| a.role == Role::Castillo)
+            .unwrap();
+        let tiers = castillo_tiers(f.actors[i].size);
+        // It starts dark and goes through its tiers.
+        assert_eq!(guadalupe::rayos_glow(&f.actors[i]), 0.0);
+        let mut best = 0.0f32;
+        let mut lit_steps = 0;
+        let mut states = vec![f.actors[i].state];
+        for _ in 0..3000 {
+            f.step();
+            let a = f.actors[i];
+            if states.last() != Some(&a.state) {
+                states.push(a.state);
+            }
+            let g = guadalupe::rayos_glow(&a);
+            assert!((0.0..=1.0).contains(&g), "{g}");
+            // Nothing is thrown from her picture: a crown shell never bursts.
+            assert!(
+                f.ps.iter()
+                    .all(|p| p.flags & ROCKET == 0 && p.shell == Shell::Sphere)
+            );
+            if a.state as usize > tiers {
+                lit_steps += (g >= 0.99) as i32;
+            }
+            best = best.max(g);
+        }
+        assert!(best >= 0.99 && lit_steps > 150, "{best} {lit_steps}");
+        // Burnt and built anew: it goes round again.
+        assert!(states.starts_with(&[0, 1, 2]) && states.contains(&(tiers as u8 + 2)));
+        assert!(
+            states.iter().filter(|&&s| s == 0).count() >= 2,
+            "{states:?}"
+        );
+        // Lit, it is drawn in gold, verde azulado and rose; and it holds
+        // still: only the shimmer of its rays changes between two frames.
+        let a = &mut f.actors[i];
+        a.state = tiers as u8 + 2;
+        a.left = guadalupe::RAYOS_STEPS - 80;
+        let shape = |f: &mut Fireworks| {
+            let mut c = Canvas::new(120, 36, Color::Reset);
+            f.draw(&ctx, &mut c);
+            c
+        };
+        f.ps.clear();
+        let one = shape(&mut f);
+        for _ in 0..7 {
+            f.step();
+        }
+        f.actors[i].state = tiers as u8 + 2;
+        f.actors[i].left = guadalupe::RAYOS_STEPS - 80;
+        let two = shape(&mut f);
+        let drawn = |c: &Canvas| c.cells().iter().map(|cell| cell.ch).collect::<Vec<_>>();
+        // (The halo of a veladora flickers; the castillo is on the right.)
+        let right = |c: &Canvas| {
+            let cells = drawn(c);
+            (0..cells.len())
+                .filter(|i| i % 120 >= 100)
+                .map(|i| cells[i])
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(right(&one), right(&two));
+        assert!(right(&one).iter().filter(|&&ch| ch != ' ').count() > 40);
+        assert_ne!(one.cells(), two.cells());
+        // What is in the picture's place, above the castillo.
+        let a = f.actors[i];
+        let (x, top) = (
+            a.x as i32,
+            ((a.y - a.size) as i32 - 4 - guadalupe::rayos_h(a.size)) / 2,
+        );
+        let has = |c: &Canvas, f: &dyn Fn(u8, u8, u8) -> bool| {
+            (top..top + 8).any(|y| {
+                (x - 8..x + 8).any(|x| {
+                    let cell = c.get(x, y).unwrap();
+                    [cell.fg, cell.bg]
+                        .iter()
+                        .any(|c| matches!(c, Color::Rgb(r, g, b) if f(*r, *g, *b)))
+                })
+            })
+        };
+        assert!(has(&one, &|r, g, b| r > 200 && g > 150 && b < 120));
+        assert!(has(&one, &|r, g, b| g > 150 && b > 130 && r < 80));
+        // Dark, it is a faint frame.
+        f.actors[i].state = 0;
+        f.actors[i].left = 500;
+        let dark = shape(&mut f);
+        assert!(!has(&dark, &|r, g, b| r > 200 && g > 150 && b < 120));
+    }
+
+    /// The Virgen's day is the only day of the Navidad that is the Basílica:
+    /// on December 13 the plaza and its kiosco are back, exactly as on any
+    /// other day, and midnight takes it from one to the other and back.
+    #[test]
+    fn the_day_after_guadalupe_the_plaza_is_back() {
+        let theme = Theme::classic();
+        let virgen = Fiesta::of_day(12, 12);
+        let after = Fiesta::of_day(12, 13);
+        // A scene that only ever knew December 13, as the reference.
+        let (mut plain, o) = make("", &theme);
+        holiday(&mut plain, &theme, &o, after);
+        let (mut f, _) = make("", &theme);
+        holiday(&mut f, &theme, &o, virgen);
+        let (basilica, wires) = (f.town.clone(), f.town_col.clone());
+        let (bulbs, sites) = (f.bulbs.len(), f.sites.clone());
+        assert_ne!(basilica, plain.town);
+        assert!(!f.sites.is_empty() && plain.sites.is_empty());
+        let same = |a: &Fireworks, b: &Fireworks| {
+            a.town == b.town
+                && a.town_col == b.town_col
+                && a.bulbs.len() == b.bulbs.len()
+                && a.candles.len() == b.candles.len()
+                && a.actors.len() == b.actors.len()
+                && a.sites == b.sites
+                && a.fest.shells == b.fest.shells
+                && a.fest.hues == b.fest.hues
+                && a.fest.roof == b.fest.roof
+                && a.fest.wall == b.fest.wall
+        };
+        // Midnight: the plaza is back, the same one.
+        holiday(&mut f, &theme, &o, after);
+        assert!(same(&f, &plain));
+        assert!(f.actors.is_empty() && f.sites.is_empty());
+        assert!(f.candles.len() >= 4 && f.bulbs.len() > 20);
+        // And back to the Virgen's night.
+        holiday(&mut f, &theme, &o, virgen);
+        assert!(f.town == basilica && f.town_col == wires);
+        assert!((f.bulbs.len(), f.sites.clone()) == (bulbs, sites));
+        // The plaza's shells and finale on the 13th, hers on the 12th.
+        holiday(&mut f, &theme, &o, after);
+        f.born.clear();
+        f.gran_final();
+        let shells: Vec<Shell> = f.born.iter().map(|p| p.shell).collect();
+        assert_eq!(shells, [Shell::Estrella, Shell::Campana, Shell::Campana]);
+        let (shells, _) = watch(&mut f, 3000);
+        for s in [Shell::Estrella, Shell::Nochebuena, Shell::Campana] {
+            assert!(shells.contains(&s), "{shells:?}");
+        }
+        for s in [Shell::Rosa, Shell::Lucero] {
+            assert!(!shells.contains(&s), "{shells:?}");
+        }
+        // The same colors as on Nochebuena, rojo and verde.
+        let (mut eve, _) = make("", &theme);
+        holiday(&mut eve, &theme, &o, Fiesta::of_day(12, 24));
+        assert_eq!(f.fest.shells, eve.fest.shells);
+        assert_eq!(f.fest.hues, eve.fest.hues);
+        // The same under a theme.
+        let dracula = Theme::builtin("dracula").unwrap();
+        let (mut t13, o) = make("", &dracula);
+        holiday(&mut t13, &dracula, &o, virgen);
+        holiday(&mut t13, &dracula, &o, after);
+        let (mut fresh, _) = make("", &dracula);
+        holiday(&mut fresh, &dracula, &o, after);
+        assert!(same(&t13, &fresh));
+    }
+
+    /// The Basílica fits any size: nothing is off the screen, the old one
+    /// is left out of a narrow screen and the castillo out of a short one.
+    #[test]
+    fn guadalupe_fits_any_size() {
+        let theme = Theme::classic();
+        let (mut f, o) = make("", &theme);
+        let fiesta = Fiesta::of_day(12, 12);
+        let ctx = Ctx {
+            theme: &theme,
+            opts: &o,
+            bg: Color::Reset,
+            seed: 3,
+            fiesta,
+        };
+        for (w, h) in [
+            (1, 1),
+            (3, 6),
+            (24, 10),
+            (55, 20),
+            (56, 20),
+            (70, 20),
+            (70, 22),
+            (80, 24),
+            (200, 60),
+            (500, 150),
+        ] {
+            f.resize(&ctx, w, h);
+            f.retheme(&ctx);
+            let (wi, hi) = (w as i32, h as i32 * 2);
+            assert!(f.town.is_empty() || f.town.len() == (wi * hi) as usize);
+            assert!(
+                f.bulbs
+                    .iter()
+                    .all(|b| b.x >= 0 && b.y >= 0 && b.x < wi && b.y < hi),
+                "{w}x{h}"
+            );
+            assert!(f.sites.iter().all(|&x| x >= 0 && x < wi), "{w}x{h}");
+            assert!(
+                f.candles
+                    .iter()
+                    .all(|c| c.x >= 0 && c.y >= 0 && c.x < wi && c.y < hi),
+                "{w}x{h}"
+            );
+            let castillo = f.actors.iter().any(|a| a.role == Role::Castillo);
+            assert_eq!(castillo, w >= 70 && h >= 22, "{w}x{h}");
+            let mut c = Canvas::new(w, h, Color::Reset);
+            for _ in 0..40 {
+                f.update(&ctx, 1.0 / 30.0);
+                f.draw(&ctx, &mut c);
+            }
+        }
+        let (mut f, o) = make("skyline = false", &theme);
+        holiday(&mut f, &theme, &o, fiesta);
+        assert!(f.actors.is_empty() && f.sites.is_empty() && f.town.is_empty());
+        holiday(&mut f, &theme, &o, Fiesta::NONE);
+        assert!(f.town.is_empty() && f.candles.is_empty());
     }
 
     /// With the sky transparent nothing is painted before the first launch,
