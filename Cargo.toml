@@ -2,12 +2,16 @@
 name = "oxiper"
 version = "0.9.0"
 edition = "2024"
+# Let chains (`if let … && let …`) need 1.88.
+rust-version = "1.88"
 description = "Animated terminal wallpapers, oxidized: bonsai, matrix rain, fire, nyan cat, an aquarium and more"
 license = "GPL-3.0-only"
 repository = "https://github.com/donutinit/oxiper"
 readme = "README.md"
 keywords = ["terminal", "screensaver", "ascii-art", "animation", "wallpaper"]
 categories = ["command-line-utilities"]
+# The README's animations weigh 29 MB; a crate may weigh 10.
+exclude = ["/assets", "/scripts", "/.github"]
 
 [dependencies]
 clap = { version = "4.6", features = ["derive"] }
