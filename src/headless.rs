@@ -9,6 +9,10 @@ use crate::config::Config;
 use crate::render::{BOLD, Canvas, DIM, Renderer};
 use crate::theme::TermColors;
 
+/// The biggest screen `--size` takes: far beyond any terminal, and well short
+/// of what would only eat the memory (65535x65535 is 64 GB of cells).
+const MAX_CELLS: usize = 1_000_000;
+
 pub fn parse_size(s: &str) -> Result<(u16, u16), String> {
     let (w, h) = s
         .split_once(['x', 'X'])
@@ -23,6 +27,11 @@ pub fn parse_size(s: &str) -> Result<(u16, u16), String> {
         .map_err(|_| format!("bad height in '{s}'"))?;
     if w == 0 || h == 0 {
         return Err("size must be at least 1x1".into());
+    }
+    if w as usize * h as usize > MAX_CELLS {
+        return Err(format!(
+            "size '{s}' is too big: at most {MAX_CELLS} cells (1000x1000)"
+        ));
     }
     Ok((w, h))
 }
@@ -205,4 +214,23 @@ pub fn bench(
         });
     }
     Ok(rows)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// `--size` takes any screen there could be and refuses the ones that
+    /// would only eat the memory (65535x65535 is 64 GB of cells).
+    #[test]
+    fn sizes_have_a_ceiling() {
+        assert_eq!(parse_size("80x24"), Ok((80, 24)));
+        assert_eq!(parse_size(" 500 X 150 "), Ok((500, 150)));
+        assert_eq!(parse_size("1000x1000"), Ok((1000, 1000)));
+        assert_eq!(parse_size("4000x250"), Ok((4000, 250)));
+        assert!(parse_size("1001x1000").is_err());
+        assert!(parse_size("65535x65535").is_err());
+        assert!(parse_size("0x24").is_err());
+        assert!(parse_size("80").is_err());
+    }
 }
