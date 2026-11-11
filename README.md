@@ -12,7 +12,7 @@ plus sixteen more scenes. One small binary. Nearly no CPU. Your terminal's trans
 [![CI](https://github.com/donutinit/oxiper/actions/workflows/ci.yml/badge.svg)](https://github.com/donutinit/oxiper/actions/workflows/ci.yml)
 [![License: GPL-3.0-only](https://img.shields.io/badge/license-GPL--3.0--only-3b82f6)](LICENSE)
 [![Rust 2024](https://img.shields.io/badge/rust-2024_edition-f74c00?logo=rust&logoColor=white)](https://www.rust-lang.org)
-![Scenes](https://img.shields.io/badge/scenes-18-22c55e)
+![Scenes](https://img.shields.io/badge/scenes-21-22c55e)
 ![Themes](https://img.shields.io/badge/themes-23_+_yours-a855f7)
 
 [Gallery](#gallery) ·
@@ -36,7 +36,7 @@ plus sixteen more scenes. One small binary. Nearly no CPU. Your terminal's trans
   glibc's `rand()`, so `-o bonsai.seed=42` grows *exactly* the tree `cbonsai -s 42` grows. The aquarium
   carries all 95 sprites of asciiquarium, verified glyph by glyph against Term::Animation, with
   sharks that eat fish and hooks that catch them, and then grows into seven biomes with
-  **281 kinds of fish** and hundreds more creatures, plants, props and passers-by, all reacting
+  **290 kinds of fish** and hundreds more creatures, plants, props and passers-by, all reacting
   to each other. The rain is neo's droplet model, falling at neo's real speed. Nyan Cat flies with
   the original twelve frames.
 - **One binary, twenty-one scenes.** Mix them into a playlist and give each one its own theme, pace and
@@ -583,8 +583,8 @@ serpent in her beak to land on a nopal.
 ## The aquarium
 
 `biome = "classic"` is asciiquarium, exactly. Every other setting goes further, in asciiquarium's
-own drawing style: seven biomes with **281 fish**, 93 other creatures, 85 plants and corals,
-69 props and 84 passers-by, and they all notice each other.
+own drawing style: seven biomes with **290 fish**, 100 other creatures, 89 plants and corals,
+82 props and 91 passers-by, and they all notice each other.
 
 <p align="center"><img src="assets/biomes.png" alt="The aquarium in each biome: classic, reef, ocean, kelp, deep, fresh, arctic and tank" width="840"></p>
 
@@ -713,7 +713,7 @@ Per-frame cost of every scene at 200×60 (`oxiper bench`, release build):
 | metaballs | 415 | 542 | 194936 | 50.9% |
 | hollywood | 45 | 114 | 5742 | 11.1% |
 
-<sub>Intel i7-9700KF, one core. Even the busiest scenes stay under 1 ms per frame at 30 fps, i.e. under 3 % of one core.</sub>
+<sub>Intel i7-9700KF, one core, one run each (the seed and so the numbers change from run to run). Most scenes stay under 1 ms per frame, i.e. under 3 % of one core at 30 fps; the aurora's busiest looks reach about 1.5 ms.</sub>
 
 ## Scene options
 

@@ -573,3 +573,34 @@ fn real_main() -> Result<(), String> {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The README's counts are the program's own.
+    #[test]
+    fn the_readme_counts_what_there_is() {
+        let readme = include_str!("../README.md");
+        let says = |s: String| assert!(readme.contains(&s), "README.md should say {s:?}");
+        says(format!("badge/scenes-{}-", scenes::ALL.len()));
+        says(format!("badge/themes-{}_", theme::names().len()));
+        let roster = scenes::aquarium::roster();
+        let n = |title: &str| {
+            let (_, rows) = roster.iter().find(|(t, _)| *t == title).unwrap();
+            rows.len()
+        };
+        says(format!("**{} kinds of fish**", n("fish")));
+        says(format!(
+            "**{} fish**, {} other creatures, {} plants and corals,",
+            n("fish"),
+            n("critters"),
+            n("plants")
+        ));
+        says(format!(
+            "{} props and {} passers-by",
+            n("decor"),
+            n("visitors")
+        ));
+    }
+}
