@@ -113,7 +113,7 @@ mod ribbon;
 
 use super::{Fiesta, Kind};
 use crate::color::{Color, rgb};
-use crate::render::{Canvas, Cell};
+use crate::render::{Canvas, half_blocks, halves};
 use crate::theme::Theme;
 use bunting::Bunting;
 use cord::Hung;
@@ -461,16 +461,6 @@ fn tricolor(theme: &Theme) -> [Color; 3] {
     ]
 }
 
-/// The colors a cell shows in its upper and lower half.
-fn halves(cell: &Cell) -> (Color, Color) {
-    match cell.ch {
-        '▀' => (cell.fg, cell.bg),
-        '▄' => (cell.bg, cell.fg),
-        '█' => (cell.fg, cell.fg),
-        _ => (cell.bg, cell.bg),
-    }
-}
-
 /// Paints the pixel at column `x`, pixel row `y`, keeping the other half of
 /// its cell as the scene left it. Under strict transparency, where a cell
 /// cannot show two colors, it takes the whole cell instead.
@@ -532,25 +522,14 @@ fn put2(c: &mut Canvas, x: i32, row: i32, up: Option<Color>, down: Option<Color>
             _ => {}
         }
     }
-    let (ch, fg, cbg) = match (t, b) {
-        (t, Color::Reset) => ('▀', t, bg),
-        (Color::Reset, b) => ('▄', b, bg),
-        (t, b) if t == b => ('█', t, bg),
-        (t, b) if strict => ('█', t.lerp(b, 0.5), bg),
-        (t, b) => ('▀', t, b),
-    };
-    *slot = Cell {
-        ch,
-        fg,
-        bg: cbg,
-        attr: 0,
-    };
+    *slot = half_blocks(t, b, bg, strict);
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::color::rgb;
+    use crate::render::Cell;
 
     const MUERTOS: Fiesta = Fiesta {
         kind: super::super::Kind::Muertos,

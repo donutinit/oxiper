@@ -63,7 +63,8 @@ pub mod voladores;
 
 use crate::color::Color;
 use crate::fiesta::{Fiesta, Kind};
-use crate::render::{Canvas, Cell};
+pub(crate) use crate::render::halves;
+use crate::render::{Canvas, half_blocks};
 use crate::theme::Theme;
 
 /// One easter egg while it plays.
@@ -163,16 +164,6 @@ pub fn parse(s: &str, warnings: &mut Vec<String>) -> Vec<&'static Info> {
     out
 }
 
-/// The colors a cell shows in its upper and lower half.
-pub(crate) fn halves(cell: &Cell) -> (Color, Color) {
-    match cell.ch {
-        '▀' => (cell.fg, cell.bg),
-        '▄' => (cell.bg, cell.fg),
-        '█' => (cell.fg, cell.fg),
-        _ => (cell.bg, cell.bg),
-    }
-}
-
 /// Paints the upper and lower half of a cell as half-block pixels; a `None`
 /// half keeps what the cell showed there, so an egg covering a cell by half
 /// leaves the scene's other half alone.
@@ -185,20 +176,7 @@ pub(crate) fn paint(c: &mut Canvas, col: i32, row: i32, up: Option<Color>, down:
         return;
     };
     let (old_up, old_down) = halves(slot);
-    let (t, b) = (up.unwrap_or(old_up), down.unwrap_or(old_down));
-    let cell = |ch, fg, bg| Cell {
-        ch,
-        fg,
-        bg,
-        attr: 0,
-    };
-    *slot = match (t, b) {
-        (t, Color::Reset) => cell('▀', t, bg),
-        (Color::Reset, b) => cell('▄', b, bg),
-        (t, b) if t == b => cell('█', t, bg),
-        (t, b) if strict => cell('█', t.lerp(b, 0.5), bg),
-        (t, b) => cell('▀', t, b),
-    };
+    *slot = half_blocks(up.unwrap_or(old_up), down.unwrap_or(old_down), bg, strict);
 }
 
 /// Paints one half-block pixel (two to a cell, so `y` counts half rows).

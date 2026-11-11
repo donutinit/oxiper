@@ -24,6 +24,36 @@ impl Cell {
     };
 }
 
+/// The colors a cell shows in its upper and lower half, as half-block pixels.
+pub fn halves(cell: &Cell) -> (Color, Color) {
+    match cell.ch {
+        '▀' => (cell.fg, cell.bg),
+        '▄' => (cell.bg, cell.fg),
+        '█' => (cell.fg, cell.fg),
+        _ => (cell.bg, cell.bg),
+    }
+}
+
+/// The cell that shows `top` over `bottom` as half-block pixels, where empty
+/// cells are `bg`. A `Reset` half only sets a foreground color, so it stays
+/// see-through; under strict transparency, where a cell cannot show two
+/// colors, the two are mixed.
+pub fn half_blocks(top: Color, bottom: Color, bg: Color, strict: bool) -> Cell {
+    let (ch, fg, bg) = match (top, bottom) {
+        (t, Color::Reset) => ('▀', t, bg),
+        (Color::Reset, b) => ('▄', b, bg),
+        (t, b) if t == b => ('█', t, bg),
+        (t, b) if strict => ('█', t.lerp(b, 0.5), bg),
+        (t, b) => ('▀', t, b),
+    };
+    Cell {
+        ch,
+        fg,
+        bg,
+        attr: 0,
+    }
+}
+
 /// Does this character take two terminal columns (CJK, fullwidth forms, most emoji)?
 #[inline]
 pub fn is_wide(c: char) -> bool {
@@ -395,41 +425,11 @@ impl Pixels {
             for col in 0..self.w.min(c.w() as usize) {
                 let top = self.px[row * 2 * self.w + col];
                 let bot = self.px[(row * 2 + 1) * self.w + col];
-                let cell = match (top, bot) {
-                    (Color::Reset, Color::Reset) => continue,
-                    (t, Color::Reset) => Cell {
-                        ch: '▀',
-                        fg: t,
-                        bg,
-                        attr: 0,
-                    },
-                    (Color::Reset, b) => Cell {
-                        ch: '▄',
-                        fg: b,
-                        bg,
-                        attr: 0,
-                    },
-                    (t, b) if t == b => Cell {
-                        ch: '█',
-                        fg: t,
-                        bg,
-                        attr: 0,
-                    },
-                    (t, b) if strict => Cell {
-                        ch: '█',
-                        fg: t.lerp(b, 0.5),
-                        bg,
-                        attr: 0,
-                    },
-                    (t, b) => Cell {
-                        ch: '▀',
-                        fg: t,
-                        bg: b,
-                        attr: 0,
-                    },
-                };
+                if top == Color::Reset && bot == Color::Reset {
+                    continue;
+                }
                 if let Some(slot) = c.get_mut(col as i32, row as i32) {
-                    *slot = cell;
+                    *slot = half_blocks(top, bot, bg, strict);
                 }
             }
         }
