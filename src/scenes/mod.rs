@@ -61,7 +61,7 @@ pub fn find(name: &str) -> Option<&'static SceneInfo> {
 mod tests {
     use super::*;
     use crate::app::Player;
-    use crate::config::{Config, Override};
+    use crate::config::Config;
     use crate::render::Canvas;
     use crate::theme::TermColors;
 
@@ -70,18 +70,12 @@ mod tests {
     fn scenes_survive_sizes_and_time() {
         for info in ALL {
             for theme in ["classic", "dracula"] {
-                let ov = [
-                    Override::new("scene", toml::Value::String(info.name.into())),
-                    Override::new("theme", toml::Value::String(theme.into())),
-                    Override::new("seed", toml::Value::Integer(7)),
-                ];
-                let cfg = Config::load(
-                    Some(std::path::Path::new("/nonexistent-oxiper")),
-                    &ov,
-                    false,
-                );
-                // The explicit missing path is an error by design; fall back to no file.
-                let cfg = cfg.or_else(|_| Config::load(None, &ov, false)).unwrap();
+                // No config file and no holiday: the same test for whoever
+                // runs it, on any day of the year.
+                let cfg = Config::from_toml(&format!(
+                    "scene = '{}'\ntheme = '{theme}'\nseed = 7\nfiestas = 'none'\n",
+                    info.name
+                ));
                 let mut p = Player::new(cfg, TermColors::default(), 80, 24).unwrap();
                 for &(w, h) in &[(80u16, 24u16), (1, 1), (2, 3), (7, 2), (300, 90), (40, 12)] {
                     p.resize(w, h);

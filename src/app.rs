@@ -863,12 +863,10 @@ mod tests {
             for info in scenes::ALL {
                 let days = &days;
                 s.spawn(move || {
-                    let ov = [
-                        Override::new("scene", toml::Value::String(info.name.into())),
-                        Override::new("seed", toml::Value::Integer(7)),
-                        Override::new("fiestas", toml::Value::String("none".into())),
-                    ];
-                    let cfg = Config::load(None, &ov, false).unwrap();
+                    let cfg = Config::from_toml(&format!(
+                        "scene = '{}'\nseed = 7\nfiestas = 'none'\n",
+                        info.name
+                    ));
                     let mut p = Player::new(cfg, TermColors::default(), 80, 24).unwrap();
                     for &fiesta in days.iter().chain([&Fiesta::NONE]) {
                         p.set_fiesta(fiesta);
