@@ -26,14 +26,46 @@ pub fn resolve_theme(name: &str, cfg: &Config, tc: &TermColors) -> Result<Theme,
         }
     }
     if let Some(t) = cfg.theme_table(name) {
+        // `base` never looks at the user's themes, so `[themes.nord]` can
+        // inherit the built-in nord it is named after.
         let inherit = t.get("inherit").and_then(|v| v.as_str());
-        let parent = match inherit {
-            Some(p) if p != name => Some(base(p, tc)?),
-            _ => None,
-        };
+        let parent = inherit.map(|p| base(p, tc)).transpose()?;
         return Theme::from_table(name, t, parent);
     }
     base(name, tc)
+}
+
+/// The theme a scene asks for in its own table (`theme = ""`, the default
+/// the template shows, is none).
+fn scene_theme(cfg: &Config, scene: &str) -> Option<String> {
+    scene_str(cfg, scene, "theme").filter(|t| !t.is_empty())
+}
+
+/// The scenes whose own theme cannot be had. Any scene's, not only the
+/// playlist's: the arrow keys reach them all.
+fn scene_theme_problems(cfg: &Config, tc: &TermColors) -> Vec<String> {
+    let problem = |info: &&SceneInfo| {
+        let theme = scene_theme(cfg, info.name)?;
+        let e = resolve_theme(&theme, cfg, tc).err()?;
+        Some(format!("scenes.{}.theme: {e}", info.name))
+    };
+    scenes::ALL.iter().filter_map(problem).collect()
+}
+
+/// What `config check` has to say about the themes: the global one, the
+/// user's own and each scene's.
+pub fn theme_problems(cfg: &Config, tc: &TermColors) -> Vec<String> {
+    let mut problems = Vec::new();
+    if let Err(e) = resolve_theme(&cfg.theme, cfg, tc) {
+        problems.push(e);
+    }
+    for n in cfg.custom_theme_names() {
+        if let Err(e) = resolve_theme(&n, cfg, tc) {
+            problems.push(e);
+        }
+    }
+    problems.extend(scene_theme_problems(cfg, tc));
+    problems
 }
 
 /// Does this config need the terminal's 16-color palette?
@@ -102,8 +134,12 @@ const FIESTA_CHECK: f64 = 60.0;
 
 impl Player {
     pub fn new(cfg: Config, tc: TermColors, w: u16, h: u16) -> Result<Player, String> {
-        // Validate the global theme even if the first scene brings its own.
+        // Validate the global theme even if the first scene brings its own,
+        // and every scene's own, not only the first one's.
         let mut theme = resolve_theme(&cfg.theme, &cfg, &tc)?;
+        if let Some(e) = scene_theme_problems(&cfg, &tc).into_iter().next() {
+            return Err(e);
+        }
         let mut rng = cfg
             .seed
             .map_or_else(fastrand::Rng::new, fastrand::Rng::with_seed);
@@ -112,7 +148,7 @@ impl Player {
             rng.shuffle(&mut order);
         }
         let info = cfg.scenes[order[0]];
-        if let Some(name) = scene_str(&cfg, info.name, "theme") {
+        if let Some(name) = scene_theme(&cfg, info.name) {
             theme = resolve_theme(&name, &cfg, &tc)?;
         }
         let seed = rng.u64(..);
@@ -172,7 +208,7 @@ impl Player {
         let want = self
             .forced_theme
             .clone()
-            .or_else(|| scene_str(&self.cfg, self.info.name, "theme"))
+            .or_else(|| scene_theme(&self.cfg, self.info.name))
             .unwrap_or_else(|| self.cfg.theme.clone());
         if want != self.theme.name
             && let Ok(t) = resolve_theme(&want, &self.cfg, &self.tc)
@@ -390,6 +426,9 @@ impl Player {
     /// Applies a reloaded config, keeping as much running state as possible.
     pub fn reload(&mut self, cfg: Config) -> Result<(), String> {
         let theme = resolve_theme(&cfg.theme, &cfg, &self.tc)?;
+        if let Some(e) = scene_theme_problems(&cfg, &self.tc).into_iter().next() {
+            return Err(e);
+        }
         let same_list = cfg.scenes.iter().map(|s| s.name).eq(self
             .cfg
             .scenes
@@ -752,6 +791,64 @@ mod tests {
             add(Fiesta::of_date(2027, month, day));
         }
         days
+    }
+
+    /// `[themes.nord]` with `inherit = "nord"` is the built-in nord with
+    /// the user's changes, not a theme built on nothing.
+    #[test]
+    fn a_theme_can_inherit_the_builtin_it_is_named_after() {
+        let cfg = Config::from_toml("[themes.nord]\ninherit = 'nord'\nfg = '#ff0000'\n");
+        let t = resolve_theme("nord", &cfg, &TermColors::default()).unwrap();
+        let nord = Theme::builtin("nord").unwrap();
+        assert_eq!(t.fg, Color::Rgb(255, 0, 0));
+        assert_eq!((t.ramp, t.colors, t.bg), (nord.ramp, nord.colors, nord.bg));
+    }
+
+    fn player(toml: &str) -> Result<Player, String> {
+        Player::new(Config::from_toml(toml), TermColors::default(), 80, 24)
+    }
+
+    /// A scene's own theme is checked like the global one, wherever the
+    /// scene is in the playlist (it used to be an error for the first scene
+    /// and silently ignored for the others).
+    #[test]
+    fn a_scenes_unknown_theme_is_an_error() {
+        for order in ["fire,neo", "neo,fire", "neo"] {
+            let toml =
+                format!("scene = '{order}'\nfiestas = 'none'\n[scenes.fire]\ntheme = 'nope'\n");
+            let Err(e) = player(&toml) else {
+                panic!("{order}: started with an unknown theme");
+            };
+            assert!(e.contains("scenes.fire.theme") && e.contains("nope"), "{e}");
+        }
+        // A reload with one is refused, and the old config stays.
+        let mut p = player("scene = 'neo,fire'\nfiestas = 'none'\n")
+            .ok()
+            .unwrap();
+        let bad =
+            Config::from_toml("scene = 'neo,fire'\nfps = 12\n[scenes.fire]\ntheme = 'nope'\n");
+        assert!(p.reload(bad).is_err());
+        assert_eq!(p.cfg.fps, 30);
+        // `theme = ""`, the default the template shows, is no theme of its own.
+        let p =
+            player("scene = 'fire'\nfiestas = 'none'\ntheme = 'nord'\n[scenes.fire]\ntheme = ''\n");
+        assert_eq!(p.ok().unwrap().theme.name, "nord");
+    }
+
+    /// `config check` reports a scene's unknown theme too.
+    #[test]
+    fn config_check_sees_scene_themes() {
+        let tc = TermColors::default();
+        let cfg =
+            Config::from_toml("[scenes.fire]\ntheme = 'nope'\n[scenes.neo]\ntheme = 'nord'\n");
+        let problems = theme_problems(&cfg, &tc);
+        assert_eq!(problems.len(), 1, "{problems:?}");
+        assert!(problems[0].contains("scenes.fire.theme"), "{problems:?}");
+        assert!(theme_problems(&Config::from_toml("theme = 'nord'"), &tc).is_empty());
+        assert_eq!(
+            theme_problems(&Config::from_toml("theme = 'nope'"), &tc).len(),
+            1
+        );
     }
 
     /// Every scene survives every holiday's days at odd sizes, with the

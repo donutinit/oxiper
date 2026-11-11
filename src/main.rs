@@ -407,14 +407,7 @@ fn real_main() -> Result<(), String> {
                 let cfg = load(false)?;
                 let tc = theme::TermColors::default();
                 let mut problems = cfg.warnings.clone();
-                if let Err(e) = app::resolve_theme(&cfg.theme, &cfg, &tc) {
-                    problems.push(e);
-                }
-                for n in cfg.custom_theme_names() {
-                    if let Err(e) = app::resolve_theme(&n, &cfg, &tc) {
-                        problems.push(e);
-                    }
-                }
+                problems.extend(app::theme_problems(&cfg, &tc));
                 let where_ = cfg
                     .path
                     .as_ref()
