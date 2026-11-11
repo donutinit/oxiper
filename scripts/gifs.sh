@@ -57,29 +57,30 @@ done
 # The theme sampler: pipes frozen mid-run in six themes (needs ImageMagick).
 if [[ $# -eq 0 || $want == *" themes "* ]]; then
   echo "• themes"
-  set -- classic dracula gruvbox nord sakura synthwave
-  for t in "$@"; do
+  # In an array, not `set --`: the arguments still say what was asked for.
+  themes=(classic dracula gruvbox nord sakura synthwave)
+  for t in "${themes[@]}"; do
     $OX record "$TMP/t-$t.cast" -s pipes --size 52x16 --seconds 0.5 --skip 5 --fps 4 -t "$t" --seed 5 \
-      -o pipes.style=heavy -o pipes.count=7 -o pipes.limit=0 -o bg_hint=#$BG 2>/dev/null
+      -o pipes.style=heavy -o pipes.count=7 -o pipes.limit=0 -o bg_hint=#$BG -o fiestas=none 2>/dev/null
     "$AGG" --theme "$THEME" --font-family "$FONTS" --font-size 14 --last-frame-duration 1 \
       "$TMP/t-$t.cast" "$TMP/t-$t.gif" >/dev/null 2>&1
     ffmpeg -loglevel error -y -i "$TMP/t-$t.gif" -vframes 1 "$TMP/$t.png"
   done
-  (cd "$TMP" && montage -label '%t' "${@/%/.png}" -tile 3x2 -geometry +6+6 -background "#$BG" \
+  (cd "$TMP" && montage -label '%t' "${themes[@]/%/.png}" -tile 3x2 -geometry +6+6 -background "#$BG" \
     -fill '#8b949e' -font DejaVu-Sans-Mono -pointsize 16 "$OLDPWD/assets/themes.png")
 fi
 # The biome sampler: the aquarium frozen in each of its places (needs ImageMagick).
 if [[ $# -eq 0 || $want == *" biomes "* ]]; then
   echo "• biomes"
-  set -- classic reef ocean kelp deep fresh arctic tank
-  for b in "$@"; do
+  biomes=(classic reef ocean kelp deep fresh arctic tank)
+  for b in "${biomes[@]}"; do
     $OX record "$TMP/b-$b.cast" -s aquarium --size 72x22 --seconds 0.5 --skip 25 --fps 4 --seed 3 \
-      -o aquarium.biome=$b -o bg_hint=#$BG 2>/dev/null
+      -o aquarium.biome=$b -o bg_hint=#$BG -o fiestas=none 2>/dev/null
     "$AGG" --theme "$THEME" --font-family "$FONTS" --font-size 14 --last-frame-duration 1 \
       "$TMP/b-$b.cast" "$TMP/b-$b.gif" >/dev/null 2>&1
     ffmpeg -loglevel error -y -i "$TMP/b-$b.gif" -vframes 1 "$TMP/$b.png"
   done
-  (cd "$TMP" && montage -label '%t' "${@/%/.png}" -tile 2x4 -geometry +6+6 -background "#$BG" \
+  (cd "$TMP" && montage -label '%t' "${biomes[@]/%/.png}" -tile 2x4 -geometry +6+6 -background "#$BG" \
     -fill '#8b949e' -font DejaVu-Sans-Mono -pointsize 16 "$OLDPWD/assets/biomes.png")
 fi
 ls -la assets/
