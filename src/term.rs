@@ -180,7 +180,8 @@ impl Term {
         }
         if n > 0 {
             self.buf.extend_from_slice(&chunk[..n as usize]);
-            parse(&mut self.buf, out, true);
+            let fd = self.in_fd;
+            settle(&mut self.buf, out, |buf| read_more(fd, ESC_WAIT, buf));
         }
     }
 
@@ -414,6 +415,45 @@ fn parse(buf: &mut Vec<u8>, out: &mut Vec<Event>, flush_esc: bool) {
     }
 }
 
+/// How long a lone ESC waits for the rest of an escape sequence before it is
+/// taken for the Escape key.
+const ESC_WAIT: Duration = Duration::from_millis(50);
+
+/// Parses what has arrived. A lone ESC at the end is the Escape key, or the
+/// start of a sequence whose rest is still on its way (a slow link can split
+/// an arrow key in two reads, and Escape quits): `more` waits a moment for
+/// it, appends what came and says whether anything did.
+fn settle(buf: &mut Vec<u8>, out: &mut Vec<Event>, mut more: impl FnMut(&mut Vec<u8>) -> bool) {
+    parse(buf, out, false);
+    while buf.as_slice() == [0x1b] {
+        if !more(buf) {
+            parse(buf, out, true);
+            break;
+        }
+        parse(buf, out, false);
+    }
+}
+
+/// Waits up to `wait` for more input on `fd` and appends it to `buf`.
+fn read_more(fd: RawFd, wait: Duration, buf: &mut Vec<u8>) -> bool {
+    let mut pfd = libc::pollfd {
+        fd,
+        events: libc::POLLIN,
+        revents: 0,
+    };
+    let ms = wait.as_millis().max(1) as i32;
+    if unsafe { libc::poll(&mut pfd, 1, ms) } <= 0 || pfd.revents & libc::POLLIN == 0 {
+        return false;
+    }
+    let mut chunk = [0u8; 256];
+    let n = unsafe { libc::read(fd, chunk.as_mut_ptr().cast(), chunk.len()) };
+    if n <= 0 {
+        return false;
+    }
+    buf.extend_from_slice(&chunk[..n as usize]);
+    true
+}
+
 fn utf8_len(b: u8) -> usize {
     match b {
         0xc0..=0xdf => 2,
@@ -529,6 +569,42 @@ mod tests {
         assert_eq!(events(b"\x1b[<0;10;5M\x1b[<0;10;5m"), [MouseDown]);
         assert_eq!(events("é".as_bytes()), [Key(self::Key::Char('é'))]);
         assert_eq!(events(b"\x03"), [Key(self::Key::CtrlC)]);
+    }
+
+    /// What `settle` makes of `first` when `rest` arrives a moment later
+    /// (nothing more if `rest` is empty).
+    fn settled(first: &[u8], rest: &[u8]) -> Vec<Event> {
+        let mut buf = first.to_vec();
+        let mut out = Vec::new();
+        let mut rest = Some(rest).filter(|r| !r.is_empty());
+        settle(&mut buf, &mut out, |buf| match rest.take() {
+            Some(r) => {
+                buf.extend_from_slice(r);
+                true
+            }
+            None => false,
+        });
+        assert!(buf.is_empty(), "left over: {buf:?}");
+        out
+    }
+
+    /// A slow link can split an arrow key in two reads: the lone ESC waits
+    /// for the rest instead of being taken for the Escape key (which quits).
+    #[test]
+    fn a_lone_esc_waits_for_the_rest_of_its_sequence() {
+        use Event::Key as K;
+        assert_eq!(settled(b"\x1b", b"[C"), [K(Key::Right)]);
+        assert_eq!(settled(b"\x1b", b"OA"), [K(Key::Up)]);
+        assert_eq!(
+            settled(b"x\x1b", b"[I"),
+            [K(Key::Char('x')), Event::FocusIn]
+        );
+        // Nothing follows: it was the Escape key.
+        assert_eq!(settled(b"\x1b", b""), [K(Key::Esc)]);
+        assert_eq!(settled(b"\x1b", b"\x1b"), [K(Key::Esc), K(Key::Esc)]);
+        // Whole sequences never wait.
+        assert_eq!(settled(b"\x1b[D", b""), [K(Key::Left)]);
+        assert_eq!(settled(b"q", b""), [K(Key::Char('q'))]);
     }
 
     #[test]
