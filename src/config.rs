@@ -195,6 +195,11 @@ impl Override {
         {
             path[0] = info.name.to_string();
             path.insert(0, "scenes".into());
+        } else if path.len() > 2
+            && path[0] == "scenes"
+            && let Some(info) = scenes::find(&path[1])
+        {
+            path[1] = info.name.to_string();
         }
         let value = format!("v = {}", val.trim())
             .parse::<toml::Table>()
@@ -238,6 +243,31 @@ fn merge(dst: &mut toml::Table, src: &toml::Table) {
     }
 }
 
+/// Gives every `[scenes.<alias>]` table to the scene it means, under the name
+/// the scene's options are looked up by: `[scenes.matrix]` is neo's. Where the
+/// scene's own name sets the same key, that one wins. Done layer by layer
+/// (the file, `[saver]`, the overrides), so a later layer still wins.
+fn own_scene_tables(raw: &mut toml::Table) {
+    let Some(toml::Value::Table(tables)) = raw.get_mut("scenes") else {
+        return;
+    };
+    let aliased: Vec<(String, &'static str)> = tables
+        .iter()
+        .filter(|(_, v)| v.is_table())
+        .filter_map(|(k, _)| Some((k.clone(), scenes::find(k)?.name)))
+        .filter(|(k, name)| k != name)
+        .collect();
+    for (alias, name) in aliased {
+        let Some(toml::Value::Table(mut table)) = tables.remove(&alias) else {
+            continue;
+        };
+        if let Some(toml::Value::Table(own)) = tables.get(name) {
+            merge(&mut table, own);
+        }
+        tables.insert(name.to_string(), toml::Value::Table(table));
+    }
+}
+
 impl Config {
     pub fn load(
         path: Option<&Path>,
@@ -255,6 +285,7 @@ impl Config {
                         .parse::<toml::Table>()
                         .map_err(|e| format!("{}: {e}", p.display()))?;
                     mtime = std::fs::metadata(p).and_then(|m| m.modified()).ok();
+                    own_scene_tables(&mut raw);
                 }
                 Err(e) if e.kind() == std::io::ErrorKind::NotFound && !explicit => {}
                 Err(e) => return Err(format!("{}: {e}", p.display())),
@@ -263,6 +294,7 @@ impl Config {
         if saver && let Some(toml::Value::Table(s)) = raw.get("saver").cloned() {
             let mut s = s;
             s.remove("idle");
+            own_scene_tables(&mut s);
             merge(&mut raw, &s);
         }
         for o in overrides {
@@ -272,10 +304,11 @@ impl Config {
     }
 
     fn resolve(
-        raw: toml::Table,
+        mut raw: toml::Table,
         path: Option<PathBuf>,
         mtime: Option<SystemTime>,
     ) -> Result<Config, String> {
+        own_scene_tables(&mut raw);
         let mut warnings = Vec::new();
         let get = |k: &str| raw.get(k);
         let spec = |k: &str| GLOBAL.iter().find(|o| o.key == k).unwrap().default;
@@ -375,7 +408,17 @@ impl Config {
                 None
             }),
         };
-        let seed = num("seed", &mut warnings) as u64;
+        // Bit for bit: `--seed` hands the top half of its u64 over as negative
+        // numbers, and a detour through f64 would round the big ones.
+        let seed = match get("seed") {
+            Some(toml::Value::Integer(i)) => *i as u64,
+            Some(toml::Value::Float(f)) => *f as u64,
+            Some(v) => {
+                warnings.push(format!("'seed' should be an integer, got {v}"));
+                0
+            }
+            None => 0,
+        };
         let idle = match raw.get("saver").and_then(|s| s.get("idle")) {
             Some(toml::Value::Integer(i)) if *i > 0 => *i as u64,
             Some(v) => {
@@ -411,7 +454,17 @@ impl Config {
                         }
                     }
                 }
-                "themes" | "saver" => {}
+                "saver" => {
+                    let Some(t) = v.as_table() else { continue };
+                    for sk in t.keys() {
+                        let known = matches!(sk.as_str(), "scenes" | "themes")
+                            || SAVER.iter().chain(GLOBAL).any(|o| o.key == sk);
+                        if !known {
+                            warnings.push(format!("unknown setting 'saver.{sk}'"));
+                        }
+                    }
+                }
+                "themes" => {}
                 _ if GLOBAL.iter().any(|o| o.key == k) => {}
                 _ => warnings.push(format!("unknown setting '{k}'")),
             }
@@ -447,6 +500,13 @@ impl Config {
             mtime,
             warnings,
         })
+    }
+
+    /// A config from TOML text alone: no file is read, so tests never
+    /// depend on the config of whoever runs them.
+    #[cfg(test)]
+    pub fn from_toml(text: &str) -> Config {
+        Config::resolve(text.parse().unwrap(), None, None).unwrap()
     }
 
     /// The `[scenes.<name>]` table for a scene (empty if absent).
@@ -596,5 +656,78 @@ mod tests {
     fn template_parses() {
         let t: toml::Table = template().parse().unwrap();
         assert!(t.is_empty());
+    }
+
+    /// A `[scenes.<alias>]` table is the scene's own: `[scenes.matrix]` sets
+    /// neo's options, as `-o matrix.density=…` does.
+    #[test]
+    fn alias_tables_are_the_scenes_own() {
+        let c = Config::from_toml("[scenes.matrix]\ndensity = 0.05\n");
+        assert_eq!(
+            c.scene_table("neo").get("density"),
+            Some(&toml::Value::Float(0.05))
+        );
+        assert!(c.warnings.is_empty(), "{:?}", c.warnings);
+        // The scene's own name wins where both set a key.
+        let c = Config::from_toml(
+            "[scenes.matrix]\ndensity = 0.05\nglitch_pct = 1.0\n[scenes.neo]\ndensity = 0.5\n",
+        );
+        let neo = c.scene_table("neo");
+        assert_eq!(neo.get("density"), Some(&toml::Value::Float(0.5)));
+        assert_eq!(neo.get("glitch_pct"), Some(&toml::Value::Float(1.0)));
+        // A typo under an alias is still pointed out.
+        let c = Config::from_toml("[scenes.matrix]\nnope = 1\n");
+        assert!(c.warnings.iter().any(|w| w.contains("nope")));
+    }
+
+    /// An alias in a later layer (`[saver]`, then `-o`) still wins over the
+    /// scene's own name in an earlier one.
+    #[test]
+    fn alias_tables_keep_the_layers_in_order() {
+        let dir = std::env::temp_dir().join(format!("oxiper-alias-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let p = dir.join("c.toml");
+        std::fs::write(
+            &p,
+            "[scenes.neo]\ndensity = 1.0\n[saver.scenes.matrix]\ndensity = 2.0\n",
+        )
+        .unwrap();
+        let density = |ov: &[Override], saver| {
+            let c = Config::load(Some(&p), ov, saver).unwrap();
+            assert!(c.warnings.is_empty(), "{:?}", c.warnings);
+            c.scene_table("neo").get("density").cloned()
+        };
+        assert_eq!(density(&[], false), Some(toml::Value::Float(1.0)));
+        assert_eq!(density(&[], true), Some(toml::Value::Float(2.0)));
+        let ov = [Override::parse("scenes.matrix.density=3.0").unwrap()];
+        assert_eq!(density(&ov, true), Some(toml::Value::Float(3.0)));
+        std::fs::remove_dir_all(dir).ok();
+    }
+
+    /// Typos in `[saver]` are pointed out like any other, in a normal run too.
+    #[test]
+    fn saver_typos_are_pointed_out() {
+        let c = Config::from_toml(
+            "[saver]\nidle = 30\nidel = 30\nshuffle = true\nscene = 'neo'\n\
+             [saver.scenes.neo]\ndensity = 1.0\n[saver.themes.mine]\nfg = '#fff'\n",
+        );
+        assert_eq!(c.warnings.len(), 1, "{:?}", c.warnings);
+        assert!(c.warnings[0].contains("saver.idel"), "{:?}", c.warnings);
+    }
+
+    /// A seed is a whole 64-bit number: none is lost on the way in, and only
+    /// 0 means "different every run".
+    #[test]
+    fn seeds_are_kept_whole() {
+        let seed = |s: &str| Config::from_toml(s).seed;
+        assert_eq!(seed("seed = 0"), None);
+        assert_eq!(seed("seed = 7"), Some(7));
+        assert_eq!(seed("seed = 9007199254740993"), Some(9007199254740993));
+        // `--seed` hands its u64 over as an i64, so the top half is negative.
+        assert_eq!(seed(&format!("seed = {}", u64::MAX as i64)), Some(u64::MAX));
+        assert_eq!(seed("seed = -4"), Some(-4i64 as u64));
+        let c = Config::from_toml("seed = 'x'");
+        assert_eq!(c.seed, None);
+        assert!(c.warnings.iter().any(|w| w.contains("seed")));
     }
 }
