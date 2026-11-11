@@ -284,6 +284,7 @@ fn take_over(pid: i32, tty: &str, saver: &dyn Fn() -> Result<(), String>) -> Res
             return Ok(());
         }
         term::STOPPED_SHELL.store(pid, Ordering::SeqCst);
+        term::borrow_terminal(fd, shell_pg);
         libc::kill(pid, libc::SIGSTOP);
         for _ in 0..50 {
             if proc_stat(pid).is_some_and(|p| p.state == 'T') {
@@ -296,9 +297,9 @@ fn take_over(pid: i32, tty: &str, saver: &dyn Fn() -> Result<(), String>) -> Res
             return Ok(());
         }
         let res = saver();
+        // The terminal as it was, its foreground back with the shell, and
+        // the shell awake (as the panic hook would, had the saver died).
         term::restore();
-        libc::tcsetpgrp(fd, shell_pg);
-        term::resume_shell();
         libc::kill(pid, libc::SIGWINCH);
         term::QUIT.store(false, Ordering::SeqCst);
         res

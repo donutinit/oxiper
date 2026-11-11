@@ -23,6 +23,9 @@ pub static QUIT: AtomicBool = AtomicBool::new(false);
 static RESIZED: AtomicBool = AtomicBool::new(false);
 /// A shell we stopped to borrow its terminal (bash idle takeover); resumed on any exit path.
 pub static STOPPED_SHELL: AtomicI32 = AtomicI32::new(0);
+/// The terminal borrowed from that shell, and the foreground group to give it back to.
+static BORROWED_TTY: AtomicI32 = AtomicI32::new(-1);
+static BORROWED_FROM: AtomicI32 = AtomicI32::new(0);
 /// The fd and termios to restore, while we own the terminal.
 static SAVED: Mutex<Option<(RawFd, libc::termios)>> = Mutex::new(None);
 
@@ -276,7 +279,24 @@ pub fn restore() {
     resume_shell();
 }
 
+/// Notes the terminal we are about to take from a stopped shell and the
+/// foreground group it belongs to, so that `resume_shell` gives it back.
+pub fn borrow_terminal(fd: RawFd, pgrp: libc::pid_t) {
+    BORROWED_FROM.store(pgrp, Ordering::SeqCst);
+    BORROWED_TTY.store(fd, Ordering::SeqCst);
+}
+
+/// Hands a borrowed terminal back to the shell and wakes the shell, in that
+/// order: a shell that wakes up in the background fails its next read and
+/// exits. On any exit path, a panic included.
 pub fn resume_shell() {
+    let fd = BORROWED_TTY.swap(-1, Ordering::SeqCst);
+    let pgrp = BORROWED_FROM.swap(0, Ordering::SeqCst);
+    if fd >= 0 && pgrp > 0 {
+        unsafe {
+            libc::tcsetpgrp(fd, pgrp);
+        }
+    }
     let pid = STOPPED_SHELL.swap(0, Ordering::SeqCst);
     if pid > 0 {
         unsafe {
@@ -617,5 +637,99 @@ mod tests {
         buf.extend_from_slice(b"B");
         parse(&mut buf, &mut out, true);
         assert_eq!(out, [Event::Key(Key::Down)]);
+    }
+
+    /// The watcher's side of a takeover that goes wrong, in a session of its
+    /// own with `tty` as its terminal. Runs in a forked child: nothing here
+    /// may allocate. Returns 0, or the step that failed.
+    #[cfg(target_os = "linux")]
+    unsafe fn takeover_that_dies(tty: *const libc::c_char) -> i32 {
+        unsafe {
+            if libc::setsid() < 0 {
+                return 1;
+            }
+            let fd = libc::open(tty, libc::O_RDWR);
+            if fd < 0 {
+                return 2;
+            }
+            libc::signal(libc::SIGTTOU, libc::SIG_IGN);
+            // The shell: a child in a group of its own that owns the foreground.
+            let shell = libc::fork();
+            if shell < 0 {
+                return 3;
+            }
+            if shell == 0 {
+                loop {
+                    libc::pause();
+                }
+            }
+            libc::setpgid(shell, shell);
+            if libc::tcsetpgrp(fd, shell) != 0 {
+                return 4;
+            }
+            // Take over, as `shell::take_over` does.
+            let mut st = 0;
+            STOPPED_SHELL.store(shell, Ordering::SeqCst);
+            borrow_terminal(fd, shell);
+            libc::kill(shell, libc::SIGSTOP);
+            libc::waitpid(shell, &mut st, libc::WUNTRACED);
+            if !libc::WIFSTOPPED(st) {
+                return 5;
+            }
+            if libc::tcsetpgrp(fd, libc::getpgrp()) != 0 {
+                return 6;
+            }
+            // The saver dies here. This is all the panic hook does:
+            restore();
+            let foreground = libc::tcgetpgrp(fd);
+            let mut woke = false;
+            for _ in 0..200 {
+                if libc::waitpid(shell, &mut st, libc::WCONTINUED | libc::WNOHANG) == shell {
+                    woke = libc::WIFCONTINUED(st);
+                    break;
+                }
+                libc::usleep(10_000);
+            }
+            libc::kill(shell, libc::SIGKILL);
+            libc::waitpid(shell, &mut st, 0);
+            if foreground != shell {
+                return 7;
+            }
+            if !woke {
+                return 8;
+            }
+            0
+        }
+    }
+
+    /// A saver that dies while it has a stopped shell's terminal (a panic:
+    /// the hook runs `restore`) gives the terminal's foreground back and
+    /// wakes the shell. Left in the background, bash's next read fails and
+    /// the shell exits.
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn a_dying_saver_hands_the_terminal_back() {
+        unsafe {
+            let master = libc::posix_openpt(libc::O_RDWR | libc::O_NOCTTY);
+            let mut name = [0 as libc::c_char; 128];
+            if master < 0
+                || libc::grantpt(master) != 0
+                || libc::unlockpt(master) != 0
+                || libc::ptsname_r(master, name.as_mut_ptr(), name.len()) != 0
+            {
+                eprintln!("no pseudo-terminals here: skipped");
+                return;
+            }
+            let pid = libc::fork();
+            assert!(pid >= 0);
+            if pid == 0 {
+                libc::_exit(takeover_that_dies(name.as_ptr()));
+            }
+            let mut status = 0;
+            assert_eq!(libc::waitpid(pid, &mut status, 0), pid);
+            libc::close(master);
+            assert!(libc::WIFEXITED(status), "the watcher was killed");
+            assert_eq!(libc::WEXITSTATUS(status), 0, "the step that failed");
+        }
     }
 }
