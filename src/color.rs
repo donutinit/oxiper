@@ -32,6 +32,14 @@ impl Color {
         if !h.bytes().all(|b| b.is_ascii_hexdigit()) {
             return None;
         }
+        // Without a `#`, a number up to 255 is a palette index ("196"), not
+        // short hex.
+        if s.len() == h.len()
+            && h.len() <= 3
+            && let Ok(n) = h.parse()
+        {
+            return Some(Color::Ansi(n));
+        }
         match h.len() {
             6 => u32::from_str_radix(h, 16).ok().map(rgb),
             3 => {
@@ -39,7 +47,6 @@ impl Color {
                 let (r, g, b) = ((v >> 8) & 15, (v >> 4) & 15, v & 15);
                 Some(Color::Rgb((r * 17) as u8, (g * 17) as u8, (b * 17) as u8))
             }
-            1..=3 if s.len() == h.len() => h.parse().ok().map(Color::Ansi),
             _ => None,
         }
     }
@@ -343,6 +350,19 @@ mod tests {
         assert_eq!(Color::parse("12"), Some(Color::Ansi(12)));
         assert_eq!(Color::parse("default"), Some(Color::Reset));
         assert_eq!(Color::parse("#zzz"), None);
+    }
+
+    /// A bare number up to 255 is a palette index, three digits long or not;
+    /// `#` makes it hex.
+    #[test]
+    fn bare_numbers_are_palette_indices() {
+        assert_eq!(Color::parse("196"), Some(Color::Ansi(196)));
+        assert_eq!(Color::parse("255"), Some(Color::Ansi(255)));
+        assert_eq!(Color::parse("100"), Some(Color::Ansi(100)));
+        assert_eq!(Color::parse("#196"), Some(Color::Rgb(0x11, 0x99, 0x66)));
+        // No such index: short hex, as it has always been.
+        assert_eq!(Color::parse("999"), Some(Color::Rgb(0x99, 0x99, 0x99)));
+        assert_eq!(Color::parse("101018"), Some(Color::Rgb(0x10, 0x10, 0x18)));
     }
 
     #[test]
