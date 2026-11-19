@@ -81,12 +81,11 @@ pub fn record(
     for _ in 0..(skip * fps as f64) as usize {
         p.update(dt);
     }
-    let cycle = p.cfg.scenes.len() > 1;
     for i in 0..frames {
         if i > 0 {
             p.update(dt);
             p.elapsed += dt as f64;
-            if cycle && p.duration() > 0.0 && p.elapsed >= p.duration() {
+            if p.cycles() && p.elapsed >= p.duration() {
                 p.step_scene(1);
             }
         }

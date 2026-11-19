@@ -8,7 +8,7 @@ use std::time::{Duration, Instant};
 use crate::color::{Color, ColorMode};
 use crate::config::{Background, Config, Override};
 use crate::eggs::{self, Eggs};
-use crate::fiesta::{Fiesta, Overlay};
+use crate::fiesta::{Fiesta, Overlay, Setting};
 use crate::render::{BOLD, Canvas, DIM, Renderer};
 use crate::scene::{Ctx, Opts, Scene, SceneInfo};
 use crate::scenes;
@@ -108,6 +108,14 @@ fn scene_num(cfg: &Config, scene: &str, key: &str) -> Option<f64> {
     }
 }
 
+/// The holiday on the set: only a forced one.
+pub fn set_day(s: Setting) -> Fiesta {
+    match s {
+        Setting::Fixed(f) => f,
+        Setting::Auto | Setting::Off => Fiesta::NONE,
+    }
+}
+
 pub struct Player {
     pub cfg: Config,
     pub theme: Theme,
@@ -133,6 +141,9 @@ pub struct Player {
     fiesta: Fiesta,
     overlay: Overlay,
     fiesta_age: f64,
+    /// On a film set: `cfg.set_mode` at start, then the `s` key's, until a
+    /// reload changes `set_mode` itself.
+    set: bool,
 }
 
 /// Real seconds between looks at the date, so a holiday starts at midnight.
@@ -159,9 +170,10 @@ impl Player {
             theme = resolve_theme(&name, &cfg, &tc)?;
         }
         let seed = rng.u64(..);
-        let opts = Opts::new(info.options, cfg.scene_table(info.name));
+        let set = cfg.set_mode;
+        let opts = Opts::new(info.options, cfg.scene_table(info.name)).with_set_mode(set);
         let bg = Player::bg_for(&cfg, &theme, &tc);
-        let fiesta = cfg.fiestas.resolve();
+        let fiesta = Player::day(&cfg, set);
         let ctx = Ctx {
             theme: &theme,
             opts: &opts,
@@ -198,7 +210,36 @@ impl Player {
             fiesta,
             overlay,
             fiesta_age: 0.0,
+            set,
         })
+    }
+
+    /// The holiday on today: the calendar's, or on the set only a forced one.
+    fn day(cfg: &Config, set: bool) -> Fiesta {
+        if set {
+            set_day(cfg.fiestas)
+        } else {
+            cfg.fiestas.resolve()
+        }
+    }
+
+    /// Does the playlist move on by itself?
+    pub fn cycles(&self) -> bool {
+        !self.set && self.duration() > 0.0 && self.cfg.scenes.len() > 1
+    }
+
+    /// Flips set mode and rebuilds the scene; the HUD's note.
+    pub fn toggle_set(&mut self) -> String {
+        self.set = !self.set;
+        self.fiesta = Player::day(&self.cfg, self.set);
+        self.overlay.update(0.0, self.fiesta);
+        self.rebuild();
+        if self.set {
+            "set mode on"
+        } else {
+            "set mode off"
+        }
+        .into()
     }
 
     /// Seconds to show the current scene: its own `duration`, else the global one.
@@ -253,7 +294,8 @@ impl Player {
 
     fn rebuild(&mut self) {
         self.apply_scene_theme();
-        self.opts = Opts::new(self.info.options, self.cfg.scene_table(self.info.name));
+        self.opts = Opts::new(self.info.options, self.cfg.scene_table(self.info.name))
+            .with_set_mode(self.set);
         let ctx = Ctx {
             theme: &self.theme,
             opts: &self.opts,
@@ -289,7 +331,7 @@ impl Player {
         self.fiesta_age += dt;
         if self.fiesta_age >= FIESTA_CHECK {
             self.fiesta_age = 0.0;
-            self.set_fiesta(self.cfg.fiestas.resolve());
+            self.set_fiesta(Player::day(&self.cfg, self.set));
         }
     }
 
@@ -459,9 +501,15 @@ impl Player {
             .map(|s| s.name));
         let same_opts = cfg.scene_table(self.info.name) == self.cfg.scene_table(self.info.name);
         let same_bg = cfg.background == self.cfg.background;
+        // The last word wins: the key's choice stands until `set_mode` itself changes.
+        let was_set = self.set;
+        if cfg.set_mode != self.cfg.set_mode {
+            self.set = cfg.set_mode;
+        }
+        let same_set = self.set == was_set;
         self.cfg = cfg;
         // Re-dressed below, with the theme.
-        self.fiesta = self.cfg.fiestas.resolve();
+        self.fiesta = Player::day(&self.cfg, self.set);
         self.overlay.update(0.0, self.fiesta);
         if !same_list {
             self.order = (0..self.cfg.scenes.len()).collect();
@@ -473,7 +521,7 @@ impl Player {
         }
         self.forced_theme = None;
         self.set_theme(theme);
-        if !same_list || !same_opts || !same_bg {
+        if !same_list || !same_opts || !same_bg || !same_set {
             self.rebuild();
         } else {
             self.apply_scene_theme();
@@ -528,6 +576,7 @@ impl Hud {
                 ("+ -", "speed"),
                 ("0", "reset speed"),
                 ("r", "reseed scene"),
+                ("s", "set mode"),
                 ("?", "close help"),
                 ("q", "quit"),
             ];
@@ -644,10 +693,7 @@ pub fn run(cfg: Config, ro: RunOpts) -> Result<(), String> {
             player.watch_calendar(real_dt);
             player.elapsed += dt as f64;
             dirty = true;
-            if player.duration() > 0.0
-                && player.cfg.scenes.len() > 1
-                && player.elapsed >= player.duration()
-            {
+            if player.cycles() && player.elapsed >= player.duration() {
                 player.step_scene(1);
                 if hud_on && !ro.saver {
                     hud.show(player.label(), 2.0);
@@ -697,7 +743,7 @@ pub fn run(cfg: Config, ro: RunOpts) -> Result<(), String> {
         // change before then; input and signals wake us early either way.
         let deadline = if running {
             let mut wait = (1.0 / fps as f64).max(player.next_change().min(1.0));
-            if player.duration() > 0.0 && player.cfg.scenes.len() > 1 {
+            if player.cycles() {
                 wait = wait.min((player.duration() - player.elapsed).max(0.0) + 0.001);
             }
             if hud_visible {
@@ -780,6 +826,10 @@ pub fn run(cfg: Config, ro: RunOpts) -> Result<(), String> {
                             Key::Char('r') => {
                                 player.reseed();
                                 hud.show(format!("{} · reseeded", player.info.name), 1.2);
+                            }
+                            Key::Char('s') => {
+                                let note = player.toggle_set();
+                                hud.show(note, 2.0);
                             }
                             Key::Char('?') => hud.help = !hud.help,
                             Key::Char('E') if !hud.help => player.start_egg(),
@@ -1144,5 +1194,132 @@ mod tests {
             got.push(p.seed);
             assert_eq!(got, want, "shuffle {shuffle}");
         }
+    }
+
+    /// On the set the calendar is not looked at: only a forced holiday is on.
+    #[test]
+    fn only_a_forced_holiday_reaches_the_set() {
+        use crate::fiesta::Setting;
+        let f = Fiesta::height(Kind::Navidad);
+        assert_eq!(set_day(Setting::Fixed(f)), f);
+        assert_eq!(set_day(Setting::Auto), Fiesta::NONE);
+        assert_eq!(set_day(Setting::Off), Fiesta::NONE);
+    }
+
+    /// The `Player` on the set: a forced holiday stays, and the date is
+    /// never looked at, at start-up or a minute later.
+    #[test]
+    fn the_calendar_stays_out_of_set_mode() {
+        let mut p = player("scene = 'neo'\nset_mode = true\nfiestas = 'navidad'\n")
+            .ok()
+            .unwrap();
+        assert!(p.fiesta.is(Kind::Navidad));
+        p.watch_calendar(61.0);
+        assert!(p.fiesta.is(Kind::Navidad));
+        for fiestas in ["none", "auto"] {
+            let mut p = player(&format!(
+                "scene = 'neo'\nset_mode = true\nfiestas = '{fiestas}'\n"
+            ))
+            .ok()
+            .unwrap();
+            assert_eq!(p.fiesta, Fiesta::NONE, "{fiestas}");
+            p.watch_calendar(61.0);
+            assert_eq!(p.fiesta, Fiesta::NONE, "{fiestas}");
+        }
+    }
+
+    /// On the set the playlist does not move on by itself.
+    #[test]
+    fn the_playlist_stays_on_the_set() {
+        let mut p = player("scene = 'neo,fire'\nduration = 1\nfiestas = 'none'\n")
+            .ok()
+            .unwrap();
+        assert!(p.cycles());
+        p.toggle_set();
+        assert!(!p.cycles());
+        let mut p = player("scene = 'neo'\nduration = 1\nfiestas = 'none'\n")
+            .ok()
+            .unwrap();
+        assert!(!p.cycles());
+        p.toggle_set();
+        assert!(!p.cycles());
+    }
+
+    /// `s` builds the scene again on the set, with the seed and the theme
+    /// it had.
+    #[test]
+    fn s_rebuilds_and_keeps_what_it_can() {
+        let mut p = player("scene = 'neo'\nseed = 7\nfiestas = 'none'\n")
+            .ok()
+            .unwrap();
+        let seed = p.seed;
+        assert!(!p.set && !p.opts.set_mode());
+        assert_eq!(p.toggle_set(), "set mode on");
+        assert!(p.set && p.opts.set_mode());
+        assert_eq!(p.seed, seed);
+        assert_eq!(p.toggle_set(), "set mode off");
+        assert!(!p.set && !p.opts.set_mode());
+        p.step_theme(1);
+        let stepped = p.theme.name.clone();
+        assert_ne!(stepped, "classic");
+        p.toggle_set();
+        p.toggle_set();
+        assert_eq!(p.theme.name, stepped);
+        assert_eq!(p.seed, seed);
+    }
+
+    /// A reload changes set mode only when the config's own `set_mode`
+    /// changed: the key's choice outlives an unrelated edit.
+    #[test]
+    fn the_last_word_wins() {
+        let cfg = |set: bool, fps: u32| {
+            Config::from_toml(&format!(
+                "scene = 'neo'\nfiestas = 'none'\nset_mode = {set}\nfps = {fps}\n"
+            ))
+        };
+        let mut p = Player::new(cfg(false, 30), TermColors::default(), 80, 24)
+            .ok()
+            .unwrap();
+        assert!(!p.set);
+        p.toggle_set();
+        p.reload(cfg(false, 12)).unwrap();
+        assert!(p.set && p.opts.set_mode());
+        p.reload(cfg(true, 12)).unwrap();
+        assert!(p.set && p.opts.set_mode());
+        p.reload(cfg(false, 12)).unwrap();
+        assert!(!p.set && !p.opts.set_mode());
+    }
+
+    /// Every scene is built and run on the set (the shape of
+    /// `scenes_survive_sizes_and_time`).
+    #[test]
+    fn every_scene_survives_set_mode() {
+        std::thread::scope(|s| {
+            for info in scenes::ALL {
+                s.spawn(move || {
+                    let cfg = Config::from_toml(&format!(
+                        "scene = '{}'\ntheme = 'classic'\nseed = 7\nfiestas = 'none'\nset_mode = true\n",
+                        info.name
+                    ));
+                    let mut p = Player::new(cfg, TermColors::default(), 80, 24).unwrap();
+                    assert!(p.opts.set_mode());
+                    for &(w, h) in &[(80u16, 24u16), (1, 1), (2, 3), (7, 2), (300, 90), (40, 12)] {
+                        p.resize(w, h);
+                        let mut c = Canvas::new(w, h, Color::Reset);
+                        for _ in 0..240 {
+                            p.update(1.0 / 30.0);
+                            c.clear();
+                            p.draw(&mut c);
+                        }
+                        // A few huge steps, like after a suspend.
+                        for _ in 0..3 {
+                            p.update(5.0);
+                            c.clear();
+                            p.draw(&mut c);
+                        }
+                    }
+                });
+            }
+        });
     }
 }

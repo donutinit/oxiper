@@ -38,6 +38,9 @@ pub struct Config {
     pub egg_rate: f64,
     /// Which Mexican holiday the scenes dress up for (see `crate::fiesta`).
     pub fiestas: crate::fiesta::Setting,
+    /// On a film set: hollywood holds still, nothing follows the calendar
+    /// or the playlist (the `Player` keeps the running state).
+    pub set_mode: bool,
     pub idle: u64,
     /// The merged table, for scene options and user themes.
     pub raw: toml::Table,
@@ -132,6 +135,11 @@ pub const GLOBAL: &[Opt] = &[
         key: "fiestas",
         default: Val::S("auto"),
         help: "Mexican holidays the scenes dress up for: auto (by the local date), none, or one to force: navidad, candelaria, carnaval, equinoccio, judas, nino, santa-cruz, corpus, guelaguetza, patrias, muertos, revolucion; add @MM-DD for one of its days (@YYYY-MM-DD for carnaval, judas, corpus or guelaguetza in another year); or a day of the Navidad: guadalupe, rabanos, nochebuena, inocentes, ano-nuevo, reyes",
+    },
+    Opt {
+        key: "set_mode",
+        default: Val::B(false),
+        help: "On a film set: hollywood holds still and nothing follows the calendar or the playlist",
     },
 ];
 
@@ -494,6 +502,7 @@ impl Config {
             eggs,
             egg_rate: num("egg_rate", &mut warnings).max(0.0),
             fiestas,
+            set_mode: boolean("set_mode", &mut warnings),
             idle,
             raw,
             path,
@@ -729,5 +738,33 @@ mod tests {
         let c = Config::from_toml("seed = 'x'");
         assert_eq!(c.seed, None);
         assert!(c.warnings.iter().any(|w| w.contains("seed")));
+    }
+
+    /// `set_mode` is a top-level setting like any other: in the file, in
+    /// `-o`, in `[saver]`, checked, and documented by `config init`.
+    #[test]
+    fn set_mode_is_a_setting() {
+        assert!(!Config::from_toml("").set_mode);
+        assert!(Config::from_toml("set_mode = true").set_mode);
+        let o = Override::parse("set_mode=true").unwrap();
+        assert_eq!(o.path, ["set_mode"]);
+        assert_eq!(o.value, toml::Value::Boolean(true));
+        let dir = std::env::temp_dir().join(format!("oxiper-set-mode-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let p = dir.join("c.toml");
+        std::fs::write(&p, "[saver]\nset_mode = true\n").unwrap();
+        assert!(!Config::load(Some(&p), &[], false).unwrap().set_mode);
+        let c = Config::load(Some(&p), &[], true).unwrap();
+        assert!(c.set_mode && c.warnings.is_empty(), "{:?}", c.warnings);
+        assert!(Config::load(Some(&p), &[o], false).unwrap().set_mode);
+        std::fs::remove_dir_all(dir).ok();
+        let c = Config::from_toml("set_mode = 3");
+        assert!(!c.set_mode);
+        assert!(
+            c.warnings.iter().any(|w| w.contains("set_mode")),
+            "{:?}",
+            c.warnings
+        );
+        assert!(template().contains("# set_mode = false"));
     }
 }

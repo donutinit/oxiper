@@ -142,11 +142,29 @@ impl Val {
 pub struct Opts {
     specs: &'static [Opt],
     table: toml::Table,
+    /// On a film set (the `set_mode` setting, or the `s` key).
+    set: bool,
 }
 
 impl Opts {
     pub fn new(specs: &'static [Opt], table: toml::Table) -> Opts {
-        Opts { specs, table }
+        Opts {
+            specs,
+            table,
+            set: false,
+        }
+    }
+
+    /// The same options, on a film set or not.
+    pub fn with_set_mode(self, on: bool) -> Opts {
+        Opts { set: on, ..self }
+    }
+
+    /// Is this scene on a film set? It starts that way: the `Player`
+    /// builds the scene again whenever set mode goes on or off.
+    #[allow(dead_code)] // scene API (docs/SCENES.md)
+    pub fn set_mode(&self) -> bool {
+        self.set
     }
 
     fn spec(&self, key: &str) -> Option<Val> {
@@ -256,5 +274,15 @@ mod tests {
             (o.f("speed"), o.i("count"), o.b("on"), o.s("name")),
             (2.0, 9, false, "y")
         );
+    }
+
+    #[test]
+    fn set_mode_rides_on_the_options() {
+        let o = Opts::new(SPECS, toml::Table::new());
+        assert!(!o.set_mode());
+        let o = o.with_set_mode(true);
+        assert!(o.set_mode());
+        assert!(o.clone().set_mode());
+        assert!(!o.with_set_mode(false).set_mode());
     }
 }
