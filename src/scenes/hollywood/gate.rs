@@ -9,7 +9,8 @@ use super::letrero;
 use super::lexico::Vocab;
 
 /// Checks `v` against every rule the engine relies on. The error names the
-/// field and the entry: `dress.key_title: 15 bytes, at most 14`.
+/// field and the entry's index, never its text, so that it fits one HUD line:
+/// `dress.key_title: 15 bytes, at most 14`, `hosts[3]: not ASCII`.
 pub fn check(v: &Vocab) -> Result<(), String> {
     // `pick` indexes `rng.usize(..len)`; titles and names are not blank.
     filled("people", v.people, blank)?;
@@ -78,14 +79,13 @@ pub fn check(v: &Vocab) -> Result<(), String> {
         ));
     }
     // `Rain` spells its words byte by byte.
-    if let Some((i, w)) = d
+    if let Some(i) = d
         .rain_words
         .iter()
-        .enumerate()
-        .find(|(_, w)| !w.is_ascii() || w.len() < 3)
+        .position(|w| !w.is_ascii() || w.len() < 3)
     {
         return Err(format!(
-            "dress.rain_words[{i}]: {w:?}, not ASCII of 3 bytes or more"
+            "dress.rain_words[{i}]: not ASCII of 3 bytes or more"
         ));
     }
     // The trackers: five satellites, a market of eight with one that climbs.
@@ -107,11 +107,11 @@ pub fn check(v: &Vocab) -> Result<(), String> {
     if let Some(i) = d.users.iter().position(|u| u.is_empty()) {
         return Err(format!("dress.users[{i}]: empty"));
     }
-    // The banner's two lines, in big letters.
+    // The banner's two lines, in big letters; `letrero::fit` needs a word in each.
     for (name, words) in [("dress.granted", &d.granted), ("dress.denied", &d.denied)] {
         for (i, w) in words.iter().enumerate().take(2) {
-            if w.is_empty() {
-                return Err(format!("{name}[{i}]: empty"));
+            if w.split_whitespace().next().is_none() {
+                return Err(format!("{name}[{i}]: no word"));
             }
             if let Some(ch) = w.chars().find(|&c| c != ' ' && !letrero::has_glyph(c)) {
                 return Err(format!("{name}[{i}]: {ch:?} has no big letter"));
@@ -148,7 +148,7 @@ fn filled<T>(name: &str, list: &[T], blank: impl Fn(&T) -> bool) -> Result<(), S
 /// Every entry of `list` is ASCII.
 fn ascii(name: &str, list: &[&str]) -> Result<(), String> {
     match list.iter().position(|s| !s.is_ascii()) {
-        Some(i) => Err(format!("{name}[{i}]: {:?}, not ASCII", list[i])),
+        Some(i) => Err(format!("{name}[{i}]: not ASCII")),
         None => Ok(()),
     }
 }
@@ -317,6 +317,10 @@ mod tests {
         );
         names(&broken(|v| v.dress.denied[0] = ""), "dress.denied");
         names(&broken(|v| v.dress.denied[1] = "NO~"), "dress.denied");
+        assert_eq!(
+            broken(|v| v.dress.granted[1] = "   "),
+            "dress.granted[1]: no word"
+        );
 
         // Identifiers.
         let ascii: &[(&str, Break)] = &[
@@ -332,5 +336,36 @@ mod tests {
         for (field, f) in ascii {
             names(&broken(f), field);
         }
+    }
+
+    #[test]
+    fn errors_fit_the_hud_line() {
+        // An entry of any length still gives a message for one HUD line.
+        const LONG: &str = "pi\u{00f1}ata_de_siete_picos_rellena_de_colaci\u{00f3}n_y_tejocotes";
+        const RAIN: &str = "PI\u{00d1}ATA_DE_SIETE_PICOS_RELLENA_DE_COLACI\u{00d3}N_Y_TEJOCOTES";
+        let breaks: &[Break] = &[
+            |v| v.passwords = &[LONG],
+            |v| v.holy = &[LONG],
+            |v| v.locals = &[LONG],
+            |v| v.errs = &[LONG],
+            |v| v.files = &[LONG],
+            |v| v.dirs = &[LONG],
+            |v| v.daemons = &[LONG],
+            |v| v.hosts = &[LONG],
+            |v| v.dress.rain_words = &[RAIN],
+            |v| v.dress.granted[1] = RAIN,
+        ];
+        for f in breaks {
+            let e = broken(f);
+            assert!(e.chars().count() <= 60, "{e}");
+        }
+    }
+
+    #[test]
+    fn the_banner_takes_letreros_glyphs() {
+        let mut v = copy();
+        v.dress.granted[1] = "A\u{00d1}O \u{00bf}?";
+        v.dress.denied[0] = "NO. -+";
+        assert_eq!(check(&v), Ok(()));
     }
 }

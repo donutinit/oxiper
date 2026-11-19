@@ -180,6 +180,24 @@ fn capitalize_from(s: &mut String, from: usize) {
     }
 }
 
+/// Appends a thing filled into a blank, contracting "de el" into "del" and
+/// "a el" into "al" when `out` ends with that whole word (C30): "Auditoría
+/// de " and "el kernel" make "Auditoría del kernel", "De " makes "Del".
+fn push_thing(thing: &str, out: &mut String) {
+    if let Some(rest) = thing.strip_prefix("el ")
+        && let Some(head) = out.strip_suffix(' ')
+    {
+        let word = head.rsplit(' ').next().unwrap_or(head);
+        if word.eq_ignore_ascii_case("de") || word.eq_ignore_ascii_case("a") {
+            out.pop();
+            out.push_str("l ");
+            out.push_str(rest);
+            return;
+        }
+    }
+    out.push_str(thing);
+}
+
 /// Appends `s` with its `*` turned into `o` or `a`: "cuántic*" is "cuántico"
 /// for a masculine noun, "cuántica" for a feminine one.
 fn agree(s: &str, fem: bool, out: &mut String) {
@@ -195,7 +213,7 @@ fn agree(s: &str, fem: bool, out: &mut String) {
 // ------------------------------------------------------- plain technobabble
 
 /// Nouns: (word, feminine).
-const NOUNS: &[(&str, bool)] = &[
+pub(super) const NOUNS: &[(&str, bool)] = &[
     ("servidor", false),
     ("firewall", false),
     ("enrutador", false),
@@ -257,7 +275,7 @@ const NOUNS: &[(&str, bool)] = &[
 ];
 
 /// Adjectives; a `*` is the `o` or `a` that agrees with the noun.
-const ADJS: &[&str] = &[
+pub(super) const ADJS: &[&str] = &[
     "cuántic*",
     "polimórfic*",
     "asíncron*",
@@ -331,7 +349,7 @@ const DET_F: &[&str] = &[
 ];
 
 /// Verbs as (infinitive, gerund, participle without its `o`/`a`).
-const VERBS: &[(&str, &str, &str)] = &[
+pub(super) const VERBS: &[(&str, &str, &str)] = &[
     ("sincronizar", "sincronizando", "sincronizad"),
     ("compilar", "compilando", "compilad"),
     ("descifrar", "descifrando", "descifrad"),
@@ -379,7 +397,7 @@ const VERBS: &[(&str, &str, &str)] = &[
 ];
 
 /// How a noun can be: invariable or with a `*` for its gender.
-const STATES: &[&str] = &[
+pub(super) const STATES: &[&str] = &[
     "sobrecalentándose",
     "oscilando sin control",
     "perdiendo entropía",
@@ -411,7 +429,7 @@ const STATES: &[&str] = &[
 ];
 
 /// Whole failures: "Error al desplegar la X: {this}".
-const ERRORS: &[&str] = &[
+pub(super) const ERRORS: &[&str] = &[
     "falla de segmentación en el múltiple de flujo",
     "desbordamiento de búfer en 0xDEADBEEF",
     "el certificado fue revocado por una autoridad superior",
@@ -447,7 +465,7 @@ const TIMES: &[&str] = &[
     "épocas",
 ];
 
-const UNITS: &[&str] = &[
+pub(super) const UNITS: &[&str] = &[
     "THz",
     "GB/s",
     "teslas",
@@ -739,7 +757,7 @@ impl Vocab {
                 }
                 's' => out.push_str(pick(rng, self.people)),
                 'u' => out.push_str(pick(rng, self.users)),
-                'o' => out.push_str(pick(rng, self.things)),
+                'o' => push_thing(pick(rng, self.things), out),
                 't' => out.push_str(pick(rng, self.places)),
                 'p' => {
                     let _ = write!(out, "{}", rng.u8(1..100));
@@ -949,6 +967,76 @@ pub const ALL: [&Vocab; 3] = [
     &super::revolucion::VOCAB,
 ];
 
+/// Never "de el" or "a el" as words, in any case (C30).
+#[cfg(test)]
+pub(super) fn contracted(s: &str) -> bool {
+    let s = format!(" {}", s.to_lowercase());
+    !s.contains(" de el ") && !s.contains(" a el ")
+}
+
+/// The checks every vocabulary that reaches the screen under a preset
+/// passes, the base's and each preset's: 10,000 sentences at level 7 with
+/// no blank left, no `*` and no double space, contracted where a thing is
+/// filled in; titles in lower case, identifiers and passwords in ASCII,
+/// headlines in upper case, packets filled in. `name` is for the messages.
+/// Returns how many of the sentences were different.
+#[cfg(test)]
+pub(super) fn assert_writes_clean(v: &Vocab, name: &str) -> usize {
+    let mut rng = Rng::with_seed(9);
+    let mut set = std::collections::HashSet::new();
+    let mut s = String::new();
+    for _ in 0..10_000 {
+        s.clear();
+        v.sentence(&mut rng, 7, &mut s);
+        assert!(
+            !s.is_empty()
+                && !s.contains("  ")
+                && !s.contains('{')
+                && !s.contains('}')
+                && !s.contains('*')
+                && contracted(&s),
+            "{name}: {s:?}"
+        );
+        set.insert(s.clone());
+    }
+    let mut rng = Rng::with_seed(4);
+    for _ in 0..500 {
+        s.clear();
+        v.title(&mut rng, &mut s);
+        assert!(
+            !s.is_empty() && !s.contains('*') && s == s.to_lowercase(),
+            "{name}: {s:?}"
+        );
+        s.clear();
+        v.progress_label(&mut rng, 8, &mut s);
+        assert!(
+            !s.is_empty() && !s.contains('*') && !s.contains("  "),
+            "{name}: {s:?}"
+        );
+        s.clear();
+        v.ident(&mut rng, '_', &mut s);
+        assert!(s.is_ascii() && s.contains('_'), "{name}: {s:?}");
+        s.clear();
+        v.password(&mut rng, &mut s);
+        assert!(s.len() >= 6 && s.is_ascii(), "{name}: {s:?}");
+        s.clear();
+        v.headline(&mut rng, &mut s);
+        assert!(
+            !s.contains('{') && s == s.to_uppercase() && contracted(&s),
+            "{name}: {s:?}"
+        );
+        s.clear();
+        v.error(&mut rng, &mut s);
+        assert!(!s.is_empty() && !s.contains('*'), "{name}: {s:?}");
+        let (proto, _, len, info) = v.packet(&mut rng);
+        assert!(
+            !proto.is_empty() && len >= 40 && !info.contains('{') && contracted(&info),
+            "{name}: {info:?}"
+        );
+    }
+    set.len()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1071,6 +1159,73 @@ mod tests {
                         .all(|c| c == ' ' || super::super::widgets::has_glyph(c)),
                     "{w}"
                 );
+            }
+        }
+    }
+
+    #[test]
+    fn things_contract_after_de_and_a() {
+        let b = &super::super::neutro::BASE;
+        let v = Vocab {
+            things: &["el kernel", "la licencia", "las cuatro libertades"],
+            dress: Dress { ..b.dress },
+            ..*b
+        };
+        let mut rng = Rng::with_seed(30);
+        let mut seen = HashSet::new();
+        let mut s = String::new();
+        for tpl in [
+            "Auditoría de {o}",
+            "Acceso a {o}",
+            "De {o} depende todo",
+            "para {o}",
+        ] {
+            for _ in 0..10_000 {
+                s.clear();
+                v.expand(&mut rng, tpl, &mut s);
+                assert!(contracted(&s), "{s:?}");
+                seen.insert(s.clone());
+            }
+        }
+        for want in [
+            "Auditoría del kernel",
+            "Acceso al kernel",
+            "Auditoría de la licencia",
+            "Del kernel depende todo",
+            "para el kernel",
+        ] {
+            assert!(seen.contains(want), "{want}: {seen:?}");
+        }
+        // Only a whole word contracts, in any case, wherever `out` begins.
+        let one = Vocab {
+            things: &["el kernel"],
+            dress: Dress { ..b.dress },
+            ..*b
+        };
+        for (tpl, want) in [
+            ("de {o}", "del kernel"),
+            ("a {o}", "al kernel"),
+            ("DE {o}", "DEl kernel"),
+            ("Ruta A {o}", "Ruta Al kernel"),
+            ("verde {o}", "verde el kernel"),
+            ("hasta {o}", "hasta el kernel"),
+            ("de{o}", "deel kernel"),
+        ] {
+            s.clear();
+            one.expand(&mut rng, tpl, &mut s);
+            assert_eq!(s, want);
+        }
+        s.clear();
+        s.push_str("[ok] ");
+        one.expand(&mut rng, "de {o}", &mut s);
+        assert_eq!(s, "[ok] del kernel");
+    }
+
+    #[test]
+    fn the_holidays_things_have_no_article() {
+        for v in ALL {
+            for t in v.things {
+                assert!(!t.starts_with("el "), "{}: {t}", v.feeds[0]);
             }
         }
     }
