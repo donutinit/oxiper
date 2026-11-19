@@ -95,6 +95,8 @@
 mod archivo;
 mod babble;
 mod feed;
+#[cfg(test)]
+mod fingerprint;
 mod grito;
 mod inocentes;
 mod lexico;

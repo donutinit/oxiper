@@ -885,4 +885,47 @@ mod tests {
             }
         });
     }
+
+    /// Outside set mode `r` and the arrow keys draw the seeds they always drew.
+    #[test]
+    fn reseeding_draws_the_seeds_it_always_drew() {
+        for (shuffle, want) in [
+            (
+                false,
+                [
+                    14266376187910451857u64,
+                    4104141878723513376,
+                    13250119348504322419,
+                    8875224889773325713,
+                    2148687651783032108,
+                ],
+            ),
+            (
+                true,
+                [
+                    13250119348504322419,
+                    8875224889773325713,
+                    2148687651783032108,
+                    3053616117984519433,
+                    14602987178384512605,
+                ],
+            ),
+        ] {
+            let mut p = player(&format!(
+                "scene = 'neo,fire,rain'\nseed = 7\nshuffle = {shuffle}\nfiestas = 'none'\n"
+            ))
+            .ok()
+            .unwrap();
+            let mut got = vec![p.seed];
+            p.reseed();
+            got.push(p.seed);
+            p.step_scene(1);
+            got.push(p.seed);
+            p.step_scene(-1);
+            got.push(p.seed);
+            p.reseed();
+            got.push(p.seed);
+            assert_eq!(got, want, "shuffle {shuffle}");
+        }
+    }
 }
