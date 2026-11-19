@@ -10,7 +10,7 @@ use super::garb::Garb;
 use super::letrero::{self, Fit, Look, Size};
 use super::lexico::{self, Dress};
 use super::map::{self, Dots};
-use super::preset::{Banner, Preset, Round};
+use super::preset::Round;
 use super::revolucion;
 use super::{Env, Pal, Rect, Widget, babble, muertos, put, put_ch};
 use crate::color::Color;
@@ -1731,6 +1731,9 @@ pub(super) fn has_glyph(ch: char) -> bool {
     glyph(ch) != [0; 5]
 }
 
+/// On the set (spec 10.5): the seconds a banner takes to come in, and to leave.
+const RAMP: f32 = 0.5;
+
 pub struct Access {
     mx: Garb,
     feed: Feed,
@@ -1738,45 +1741,51 @@ pub struct Access {
     /// Some(granted, seconds left) while a banner is up.
     banner: Option<(bool, f32)>,
     wait: f32,
+    /// On the set: the seconds the banner that is up lasts, ramps included.
+    span: f32,
     /// Under a preset: its banners, each once before any repeats.
     deck: Round,
     /// Under a preset: the index of the banner last dealt.
     pick: usize,
-    /// Under a preset: that banner, fitted to the pane it was last drawn in.
+    /// Under a preset or on the set: the banner, fitted to the pane it was
+    /// last drawn in.
     fitted: Option<Fitted>,
 }
 
-/// A preset's banner fitted to its pane (spec 7.5). It is worked out when
-/// the banner comes up or the pane changes size, never frame by frame.
+/// A banner fitted to its pane (spec 7.5). It is worked out when the banner
+/// comes up or the pane changes size, never frame by frame.
 struct Fitted {
-    /// The banner's index and the inside of the pane it was fitted to.
+    /// The banner (a preset's index, or else granted or not) and the inside
+    /// of the pane it was fitted to.
     key: (usize, i32, i32),
     /// The box; below pocket, a box of three rows around `small`. None: no banner.
     fit: Option<Fit>,
     /// Below pocket, the one line of ordinary text; else empty.
     small: String,
-    /// The bottom caption with a space each side; empty for none.
-    caption: String,
+    /// The captions on the top and bottom edges of the frame, as drawn; empty for none.
+    captions: (&'static str, String),
 }
 
 impl Fitted {
-    fn new(b: &Banner, key: (usize, i32, i32)) -> Fitted {
+    /// The two lines `top` and `bottom` fitted by `letrero`, or below
+    /// pocket the line `small` makes.
+    fn new(
+        [top, bottom]: [&str; 2],
+        captions: (&'static str, String),
+        small: impl FnOnce() -> String,
+        key: (usize, i32, i32),
+    ) -> Fitted {
         let (_, w, h) = key;
-        if let Some(fit) = letrero::fit(b.top, b.bottom, w, h) {
-            let caption = if b.caption.is_empty() {
-                String::new()
-            } else {
-                format!(" {} ", b.caption)
-            };
+        if let Some(fit) = letrero::fit(top, bottom, w, h) {
             return Fitted {
                 key,
                 fit: Some(fit),
                 small: String::new(),
-                caption,
+                captions,
             };
         }
         // Below pocket: the one line of text of today's small banner.
-        let small = format!("{} {}", b.top, b.bottom);
+        let small = small();
         let fit = (w >= 10 && h >= 3).then(|| Fit {
             size: Size::Pocket,
             lines: Vec::new(),
@@ -1787,8 +1796,82 @@ impl Fitted {
             key,
             fit,
             small,
-            caption: String::new(),
+            captions: ("", String::new()),
         }
+    }
+
+    /// The box's rectangle in `r`, relative to it. None: no banner.
+    fn rect(&self, r: Rect) -> Option<Rect> {
+        self.fit.as_ref().map(|f| Rect {
+            x: (r.w - f.w) / 2,
+            y: (r.h - f.h) / 2,
+            w: f.w,
+            h: f.h,
+        })
+    }
+
+    /// Draws the banner centered in `r` in the colors of `look`; the line of
+    /// text below pocket is in the letters' color.
+    fn draw(&self, c: &mut Canvas, r: Rect, look: &Look) {
+        let Some(fit) = &self.fit else {
+            return;
+        };
+        if self.small.is_empty() {
+            letrero::draw(c, r, fit, (self.captions.0, &self.captions.1), look);
+        } else {
+            letrero::draw(c, r, fit, ("", ""), look);
+            let n = self.small.chars().count() as i32;
+            let (bx, by) = ((r.w - fit.w) / 2, (r.h - fit.h) / 2);
+            put(
+                c,
+                r,
+                bx + (fit.w - n) / 2,
+                by + 1,
+                &self.small,
+                look.letters,
+                BOLD,
+            );
+        }
+    }
+}
+
+/// The words of a banner with no preset, as `Access` has always chosen
+/// them: the holiday's dress, Día de Muertos' own, or English; and the
+/// captions on its frame, which only a holiday has.
+fn access_words(mx: Garb, granted: bool) -> ([&'static str; 2], Option<[&'static str; 2]>) {
+    if let Some(d) = dress(mx) {
+        let w = if granted { &d.granted } else { &d.denied };
+        ([w[0], w[1]], Some([w[2], w[3]]))
+    } else if mx.is(Kind::Muertos) {
+        if granted {
+            (
+                ["ACCESO", "CONCEDIDO"],
+                Some([" MICTL\u{00c1}N ", " \u{00a1}PASA, TE ESPERAN! "]),
+            )
+        } else {
+            (
+                ["ACCESO", "DENEGADO"],
+                Some([" MICTL\u{00c1}N ", " TODAV\u{00cd}A NO TE TOCA "]),
+            )
+        }
+    } else if granted {
+        (["ACCESS", "GRANTED"], None)
+    } else {
+        (["ACCESS", "DENIED"], None)
+    }
+}
+
+/// The little banner of a pane `w` columns wide says it in one line; at Día
+/// de Muertos it says as much of "ACCESO AL MICTLAN DENEGADO" as fits.
+fn access_line(mx: Garb, [w1, w2]: [&str; 2], w: i32) -> String {
+    if !mx.is(Kind::Muertos) || dress(mx).is_some() {
+        format!("{w1} {w2}")
+    } else if w >= 32 {
+        format!("{w1} AL MICTL\u{00c1}N {w2}")
+    } else if w >= 22 {
+        format!("MICTL\u{00c1}N {w2}")
+    } else {
+        w2.to_string()
     }
 }
 
@@ -1796,12 +1879,19 @@ impl Access {
     pub fn new(seed: u64, level: u8, mx: impl Into<Garb>) -> Access {
         let mx: Garb = mx.into();
         let mut rng = Rng::with_seed(seed ^ 0xacce55);
+        let first = rng.f32();
         Access {
             mx,
             feed: Feed::new(FeedKind::Auth, seed, level, mx),
-            wait: 2.0 + rng.f32() * 4.0,
+            // On the set the first banner comes within 2 s (spec 10.5).
+            wait: if mx.calm {
+                0.5 + 1.25 * first
+            } else {
+                2.0 + first * 4.0
+            },
             rng,
             banner: None,
+            span: 0.0,
             deck: Round::new(mx.preset.map_or(0, |p| p.banners.len())),
             pick: 0,
             fitted: None,
@@ -1814,42 +1904,105 @@ impl Access {
         self.mx.preset.and(self.banner).map(|_| self.pick)
     }
 
+    /// How far the banner that is up has come in: None with no banner; on
+    /// the set 0 to 1 while it comes in or leaves; 1 while it stays.
+    #[cfg(test)]
+    pub fn strength(&self) -> Option<f32> {
+        self.banner.map(|(_, left)| self.strength_at(left))
+    }
+
+    /// The strength of the banner with `left` seconds to go: off the set, 1.
+    fn strength_at(&self, left: f32) -> f32 {
+        if !self.mx.calm {
+            return 1.0;
+        }
+        ((self.span - left) / RAMP).min(left / RAMP).clamp(0.0, 1.0)
+    }
+
+    /// The banner that is up, fitted to `r` when it or the pane changed:
+    /// under a preset the one dealt, else today's words (spec 7.5, 10.5).
+    fn fitted(&mut self, r: Rect, granted: bool) -> Option<&Fitted> {
+        let mx = self.mx;
+        let key = match mx.preset {
+            Some(_) => (self.pick, r.w, r.h),
+            None => (usize::from(granted), r.w, r.h),
+        };
+        if self.fitted.as_ref().is_none_or(|f| f.key != key) {
+            self.fitted = Some(match mx.preset {
+                Some(p) => {
+                    let b = p.banners.get(self.pick)?;
+                    let d = &p.vocab.dress;
+                    let top = if b.green { d.granted[2] } else { d.denied[2] };
+                    let caption = if b.caption.is_empty() {
+                        String::new()
+                    } else {
+                        format!(" {} ", b.caption)
+                    };
+                    Fitted::new(
+                        [b.top, b.bottom],
+                        (top, caption),
+                        || format!("{} {}", b.top, b.bottom),
+                        key,
+                    )
+                }
+                None => {
+                    let (words, captions) = access_words(mx, granted);
+                    let captions =
+                        captions.map_or(("", String::new()), |[up, down]| (up, down.to_string()));
+                    Fitted::new(words, captions, || access_line(mx, words, r.w), key)
+                }
+            });
+        }
+        self.fitted.as_ref()
+    }
+
     /// Under a preset: the banner that is up, as the file wrote it, in big
     /// letters fitted to `r` by `letrero`, or in one line below pocket.
-    fn letrero(&mut self, c: &mut Canvas, r: Rect, pal: &Pal, p: &'static Preset) {
-        let Some(b) = p.banners.get(self.pick) else {
-            return;
-        };
-        let key = (self.pick, r.w, r.h);
-        if self.fitted.as_ref().is_none_or(|f| f.key != key) {
-            self.fitted = Some(Fitted::new(b, key));
-        }
-        let Some(Fitted {
-            fit: Some(fit),
-            small,
-            caption,
-            ..
-        }) = &self.fitted
-        else {
-            return;
-        };
-        let col = if b.green { pal.green } else { pal.red };
+    fn letrero(&mut self, c: &mut Canvas, r: Rect, pal: &Pal, granted: bool) {
+        let col = if granted { pal.green } else { pal.red };
         let look = Look {
             letters: col,
             frame: col,
             caption: pal.bright,
             ink: Some(pal.ink),
         };
-        if small.is_empty() {
-            let d = &p.vocab.dress;
-            let top = if b.green { d.granted[2] } else { d.denied[2] };
-            letrero::draw(c, r, fit, (top, caption), &look);
-        } else {
-            letrero::draw(c, r, fit, ("", ""), &look);
-            let n = small.chars().count() as i32;
-            let (bx, by) = ((r.w - fit.w) / 2, (r.h - fit.h) / 2);
-            put(c, r, bx + (fit.w - n) / 2, by + 1, small, col, BOLD);
+        if let Some(f) = self.fitted(r, granted) {
+            f.draw(c, r, &look);
         }
+    }
+
+    /// On the set (spec 10.5): the fitted banner at strength `k`, eased in
+    /// two halves. Below one half the log inside the box's rectangle fades
+    /// to the background; above it the box fades in from the background,
+    /// its own background toward `pal.ink`. Leaving runs the same backwards.
+    fn calm(&mut self, c: &mut Canvas, r: Rect, pal: &Pal, granted: bool, k: f32) {
+        let col = if granted { pal.green } else { pal.red };
+        let Some(f) = self.fitted(r, granted) else {
+            return;
+        };
+        let Some(b) = f.rect(r) else {
+            return;
+        };
+        if k < 0.5 {
+            for y in b.y.max(0)..(b.y + b.h).min(r.h) {
+                for x in b.x.max(0)..(b.x + b.w).min(r.w) {
+                    if let Some(cell) = c.get_mut(r.x + x, r.y + y)
+                        && cell.ch != ' '
+                    {
+                        cell.fg = pal.fade(cell.fg, 2.0 * k);
+                    }
+                }
+            }
+            return;
+        }
+        let away = 2.0 - 2.0 * k;
+        let look = Look {
+            ink: Some(pal.fade(pal.ink, away)),
+            letters: pal.fade(col, away),
+            frame: pal.fade(col, away),
+            caption: pal.fade(pal.bright, away),
+        };
+        f.draw(c, r, &look);
     }
 
     fn word(c: &mut Canvas, r: Rect, y: i32, word: &str, sx: i32, col: Color) {
@@ -1894,7 +2047,11 @@ impl Widget for Access {
                 *left -= dt;
                 if *left <= 0.0 {
                     self.banner = None;
-                    self.wait = 3.0 + self.rng.f32() * 7.0;
+                    self.wait = if self.mx.calm {
+                        2.0 + 2.0 * self.rng.f32()
+                    } else {
+                        3.0 + self.rng.f32() * 7.0
+                    };
                 }
             }
             None => {
@@ -1910,7 +2067,14 @@ impl Widget for Access {
                     } else {
                         self.rng.u8(..10) < 4
                     };
-                    self.banner = Some((granted, 1.8));
+                    // On the set: in, a stay of 6 to 10 s, and out.
+                    let up = if self.mx.calm {
+                        self.span = 2.0 * RAMP + 6.0 + 4.0 * self.rng.f32();
+                        self.span
+                    } else {
+                        1.8
+                    };
+                    self.banner = Some((granted, up));
                 }
             }
         }
@@ -1922,24 +2086,21 @@ impl Widget for Access {
             return;
         };
         let pal = &env.pal;
+        if self.mx.calm {
+            let k = self.strength_at(left);
+            self.calm(c, r, pal, granted, k);
+            return;
+        }
         let col = if granted { pal.green } else { pal.red };
-        let dr = dress(self.mx);
-        let words = dr.map(|d| if granted { &d.granted } else { &d.denied });
-        let mx = self.mx.is(Kind::Muertos) || dr.is_some();
-        let (w1, w2) = match (words, mx, granted) {
-            (Some(w), _, _) => (w[0], w[1]),
-            (None, true, true) => ("ACCESO", "CONCEDIDO"),
-            (None, true, false) => ("ACCESO", "DENEGADO"),
-            (None, false, true) => ("ACCESS", "GRANTED"),
-            (None, false, false) => ("ACCESS", "DENIED"),
-        };
+        let ([w1, w2], captions) = access_words(self.mx, granted);
+        let mx = captions.is_some();
         // Blink in the last moments.
         let on = left > 0.5 || (left * 10.0) as i32 % 2 == 0;
         if !on {
             return;
         }
-        if let Some(p) = self.mx.preset {
-            self.letrero(c, r, pal, p);
+        if self.mx.preset.is_some() {
+            self.letrero(c, r, pal, granted);
             return;
         }
         // (The ordinary banners keep their breakpoint: DENIED is narrower than GRANTED.)
@@ -1954,17 +2115,8 @@ impl Widget for Access {
         if r.h < bh || r.w < 10 {
             return;
         }
-        // The little banner says it in one line; at the holiday it says as
-        // much of "ACCESO AL MICTLAN DENEGADO" as fits.
-        let small = if !mx || dr.is_some() {
-            format!("{w1} {w2}")
-        } else if r.w >= 32 {
-            format!("{w1} AL MICTL\u{00c1}N {w2}")
-        } else if r.w >= 22 {
-            format!("MICTL\u{00c1}N {w2}")
-        } else {
-            w2.to_string()
-        };
+        // The little banner says it in one line.
+        let small = access_line(self.mx, [w1, w2], r.w);
         let bw = if big {
             bw
         } else {
@@ -1996,13 +2148,8 @@ impl Widget for Access {
             };
             Self::word(c, sub, by + 1, w1, sx, col);
             Self::word(c, sub, by + 7, w2, sx, col);
-            if mx {
-                // Captions on the frame: where to, and what the guard says.
-                let (up, down) = match words {
-                    Some(w) => (w[2], w[3]),
-                    None if granted => (" MICTL\u{00c1}N ", " \u{00a1}PASA, TE ESPERAN! "),
-                    None => (" MICTL\u{00c1}N ", " TODAV\u{00cd}A NO TE TOCA "),
-                };
+            // Captions on the frame: where to, and what the guard says.
+            if let Some([up, down]) = captions {
                 for (y, t) in [(by, up), (by + bh - 1, down)] {
                     let n = t.chars().count() as i32;
                     if n + 2 <= bw {
