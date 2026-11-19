@@ -202,7 +202,7 @@ fn check(table: &toml::Table) -> Result<Vec<String>, (String, String)> {
         }
         // Loaded before and bad now: the scene keeps what it has and says so.
         cache::Answer::Kept { why, .. } => Ok(vec![format!("{name}: {why}")]),
-        cache::Answer::Bad(why) => Err((path.display().to_string(), why)),
+        cache::Answer::Bad(why, _) => Err((path.display().to_string(), why)),
     }
 }
 
@@ -919,8 +919,9 @@ pub struct Hollywood {
     preset: Option<&'static Preset>,
     /// The file the `preset` option names, which `refresh` watches.
     preset_path: Option<PathBuf>,
-    /// The failure already shown on the HUD.
-    reported: Option<String>,
+    /// The failure already shown on the HUD: its reason and which failed
+    /// save it was.
+    reported: Option<(String, u32)>,
     /// The preset's titles and headlines, dealt in rounds.
     rounds: Rounds,
     seed: u64,
@@ -1366,8 +1367,8 @@ impl Scene for Hollywood {
 
     /// The preset file, through the cache: one `stat` when nothing changed.
     /// What is new is told by the preset the cache answers with and by its
-    /// reason, never by the file's stamp, which a check at start-up or reload
-    /// may have seen first.
+    /// reason and failed save, never by the file's stamp, which a check at
+    /// start-up or reload may have seen first.
     fn refresh(&mut self, ctx: &Ctx) -> Option<Result<String, String>> {
         let answer = cache::load(self.preset_path.as_deref()?);
         let new = answer
@@ -1376,15 +1377,17 @@ impl Scene for Hollywood {
         if let Some(p) = new {
             self.take(ctx, p);
         }
-        let (why, warnings) = match answer {
+        let (failure, warnings) = match answer {
             cache::Answer::Good { warnings, .. } => (None, warnings.len()),
-            cache::Answer::Kept { why, .. } | cache::Answer::Bad(why) => (Some(why), 0),
+            cache::Answer::Kept { why, save, .. } | cache::Answer::Bad(why, save) => {
+                (Some((why, save)), 0)
+            }
         };
-        match why {
-            // Once per failure, and once more for a scene built while it lasts.
-            Some(why) if self.reported.as_ref() != Some(&why) => {
-                let brief = cache::brief(&why);
-                self.reported = Some(why);
+        match failure {
+            // Once per bad save, and once more for a scene built while it lasts.
+            Some(failure) if self.reported.as_ref() != Some(&failure) => {
+                let brief = cache::brief(&failure.0);
+                self.reported = Some(failure);
                 Some(Err(brief))
             }
             Some(_) => new.map(|_| Ok(reloaded(0))),

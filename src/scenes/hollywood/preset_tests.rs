@@ -1107,6 +1107,25 @@ fn a_broken_file_is_said_once() {
     std::fs::remove_file(&path).ok();
 }
 
+/// A second bad save is said again, even with the same reason (spec 8.6).
+#[test]
+fn each_bad_save_is_said() {
+    let path = cache::temp("bad-saves", &one_headline("Lo primero"));
+    scene(&naming(&path), Fiesta::NONE, 80, 24, |s, ctx| {
+        std::fs::write(&path, "tema = \n").unwrap();
+        let Some(Err(first)) = s.refresh(ctx) else {
+            panic!("the first bad save was not said");
+        };
+        assert_eq!(s.refresh(ctx), None);
+        std::fs::write(&path, "tema = \n# otra vez\n").unwrap();
+        assert_eq!(s.refresh(ctx), Some(Err(first)));
+        assert_eq!(s.refresh(ctx), None);
+        play(s, ctx, 1.0);
+        assert!(tape(s).contains("LO PRIMERO"));
+    });
+    std::fs::remove_file(&path).ok();
+}
+
 #[test]
 fn a_deleted_file_keeps_the_words() {
     let path = cache::temp("deleted-scene", &one_headline("Aqui sigue"));
@@ -1114,7 +1133,10 @@ fn a_deleted_file_keeps_the_words() {
         play(s, ctx, 1.0);
         std::fs::remove_file(&path).unwrap();
         assert!(matches!(s.refresh(ctx), Some(Err(_))));
-        assert_eq!(s.refresh(ctx), None);
+        // Said once while the file stays gone.
+        for _ in 0..5 {
+            assert_eq!(s.refresh(ctx), None);
+        }
         play(s, ctx, 3.0);
         assert!(s.preset.is_some());
         assert!(tape(s).contains("AQUI SIGUE"));

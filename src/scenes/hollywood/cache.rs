@@ -20,20 +20,22 @@ pub enum Answer {
         preset: &'static Preset,
         warnings: Vec<String>,
     },
-    /// The file is bad now: the last good preset from this path, and why.
+    /// The file is bad now: the last good preset from this path, why, and
+    /// which failed save it is.
     Kept {
         preset: &'static Preset,
         why: String,
+        save: u32,
     },
-    /// This path has never loaded.
-    Bad(String),
+    /// This path has never loaded: why, and which failed save it is.
+    Bad(String, u32),
 }
 
 impl Answer {
     pub fn preset(&self) -> Option<&'static Preset> {
         match self {
             Answer::Good { preset, .. } | Answer::Kept { preset, .. } => Some(preset),
-            Answer::Bad(_) => None,
+            Answer::Bad(..) => None,
         }
     }
 }
@@ -81,6 +83,13 @@ struct Entry {
     good: Option<Loaded>,
     /// Why the file is bad right now.
     failure: Option<String>,
+    /// Failed saves so far: a scene that said one failure says the next,
+    /// even with the same reason (spec 8.6).
+    failures: u32,
+    /// The stamp seen at the last failure (`None` inside: no file); `None`
+    /// once a load succeeds. A file that fails again as it was, unreadable
+    /// or still gone, is the same failed save.
+    failed_at: Option<Option<Stamp>>,
     #[cfg(test)]
     parses: u32,
 }
@@ -95,12 +104,22 @@ impl Entry {
             (Some(l), Some(why)) => Answer::Kept {
                 preset: l.preset,
                 why: why.clone(),
+                save: self.failures,
             },
-            (None, why) => Answer::Bad(why.clone().unwrap_or_else(|| "not loaded".into())),
+            (None, why) => Answer::Bad(
+                why.clone().unwrap_or_else(|| "not loaded".into()),
+                self.failures,
+            ),
         }
     }
 
-    fn fail(&mut self, why: String) -> Answer {
+    /// The file at stamp `seen` (`None`: not there) failed: a new failed save
+    /// unless it is the one the last failure saw.
+    fn fail(&mut self, why: String, seen: Option<Stamp>) -> Answer {
+        if self.failed_at != Some(seen) {
+            self.failures = self.failures.wrapping_add(1);
+            self.failed_at = Some(seen);
+        }
         self.failure = Some(why);
         self.answer()
     }
@@ -119,6 +138,8 @@ pub fn load(path: &Path) -> Answer {
             stamp: None,
             good: None,
             failure: None,
+            failures: 0,
+            failed_at: None,
             #[cfg(test)]
             parses: 0,
         });
@@ -126,7 +147,7 @@ pub fn load(path: &Path) -> Answer {
         Ok(stamp) => stamp,
         Err(why) => {
             entry.stamp = None;
-            return entry.fail(why);
+            return entry.fail(why, None);
         }
     };
     if entry.stamp == Some(stamp) {
@@ -136,7 +157,7 @@ pub fn load(path: &Path) -> Answer {
         Ok(bytes) => bytes,
         Err(why) => {
             entry.stamp = None;
-            return entry.fail(why);
+            return entry.fail(why, Some(stamp));
         }
     };
     entry.stamp = Some(stamp);
@@ -148,14 +169,18 @@ pub fn load(path: &Path) -> Answer {
         // An editor that truncates before it writes: keep what had keys.
         Ok(l) if l.keys == 0 && entry.good.as_ref().is_some_and(|g| g.keys > 0) => {
             let why = l.warnings.into_iter().next();
-            entry.fail(why.unwrap_or_else(|| "the file is empty".into()))
+            entry.fail(
+                why.unwrap_or_else(|| "the file is empty".into()),
+                Some(stamp),
+            )
         }
         Ok(l) => {
             entry.good = Some(l);
             entry.failure = None;
+            entry.failed_at = None;
             entry.answer()
         }
-        Err(why) => entry.fail(why),
+        Err(why) => entry.fail(why, Some(stamp)),
     }
 }
 
@@ -233,7 +258,7 @@ mod tests {
 
     fn kept(a: &Answer) -> (&'static Preset, &str) {
         match a {
-            Answer::Kept { preset, why } => (preset, why),
+            Answer::Kept { preset, why, .. } => (preset, why),
             _ => panic!("expected Kept, got {}", show(a)),
         }
     }
@@ -242,12 +267,12 @@ mod tests {
         match a {
             Answer::Good { warnings, .. } => format!("Good {warnings:?}"),
             Answer::Kept { why, .. } => format!("Kept {why:?}"),
-            Answer::Bad(why) => format!("Bad {why:?}"),
+            Answer::Bad(why, _) => format!("Bad {why:?}"),
         }
     }
 
     fn is_bad(a: &Answer) -> bool {
-        matches!(a, Answer::Bad(why) if !why.is_empty() && !why.contains('\n'))
+        matches!(a, Answer::Bad(why, _) if !why.is_empty() && !why.contains('\n'))
     }
 
     #[test]
@@ -352,6 +377,49 @@ mod tests {
         assert!(!why.is_empty() && !why.contains('\n'), "{why}");
     }
 
+    /// Which failed save an answer is.
+    fn save(a: &Answer) -> u32 {
+        match a {
+            Answer::Kept { save, .. } | Answer::Bad(_, save) => *save,
+            Answer::Good { .. } => panic!("expected a failure, got {}", show(a)),
+        }
+    }
+
+    /// Each save that fails is a new failed save, with the same reason or
+    /// not; a file that fails again as it was is not.
+    #[test]
+    fn each_failed_save_is_counted() {
+        let path = temp("failed-saves", GOOD);
+        good(&load(&path));
+        std::fs::write(&path, "tema = \n").unwrap();
+        let a = load(&path);
+        let (one, why) = (save(&a), kept(&a).1.to_string());
+        assert_eq!(save(&load(&path)), one);
+        std::fs::write(&path, "tema = \n# otra vez\n").unwrap();
+        let a = load(&path);
+        assert_eq!(kept(&a).1, why);
+        let two = save(&a);
+        assert_ne!(two, one);
+        std::fs::remove_file(&path).unwrap();
+        let three = save(&load(&path));
+        assert_ne!(three, two);
+        for _ in 0..5 {
+            assert_eq!(save(&load(&path)), three);
+        }
+        // Good again, then gone again: a new failed save.
+        std::fs::write(&path, OTHER).unwrap();
+        good(&load(&path));
+        std::fs::remove_file(&path).unwrap();
+        assert_ne!(save(&load(&path)), three);
+        // Never there: the same failed save every time.
+        let missing = std::env::temp_dir().join(format!(
+            "oxiper-preset-{}-never-there.toml",
+            std::process::id()
+        ));
+        let n = save(&load(&missing));
+        assert_eq!(save(&load(&missing)), n);
+    }
+
     #[test]
     fn nothing_good_before_is_an_error() {
         let broken = temp("never-good", "tema = \n");
@@ -403,7 +471,7 @@ mod tests {
         let big = "#".repeat(preset::MAX_BYTES + 4096);
         let path = temp("big", &big);
         match load(&path) {
-            Answer::Bad(why) => assert!(
+            Answer::Bad(why, _) => assert!(
                 why.contains(&format!("{} bytes", preset::MAX_BYTES + 1)),
                 "{why}"
             ),
