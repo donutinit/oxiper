@@ -148,10 +148,14 @@ pub struct Vocab {
     pub dress: Dress,
 }
 
-/// The vocabulary of the day's holiday, if it has one (Día de Muertos has
-/// its own, `muertos.rs`).
+/// The vocabulary of the preset, or of the day's holiday if it has one (Día
+/// de Muertos has its own, `muertos.rs`).
 pub fn of(g: impl Into<Garb>) -> Option<&'static Vocab> {
-    match g.into().kind {
+    let g = g.into();
+    if let Some(p) = g.preset {
+        return Some(p.vocab);
+    }
+    match g.kind {
         Kind::Navidad => Some(&super::navidad::VOCAB),
         Kind::Patrias => Some(&super::patrias::VOCAB),
         Kind::Revolucion => Some(&super::revolucion::VOCAB),
@@ -845,22 +849,39 @@ impl Vocab {
     /// An UPPER-CASE progress label ("SINCRONIZANDO LA PIÑATA CUÁNTICA") or a
     /// transfer ("uploading aguinaldo_2026.tar.gz").
     pub fn progress_label(&self, rng: &mut Rng, level: u8, out: &mut String) {
+        const VERBS: &[&str] = &[
+            "uploading",
+            "downloading",
+            "subiendo",
+            "descargando",
+            "respaldando",
+            "transfiriendo",
+            "syncing",
+            "restaurando",
+        ];
+        self.label(rng, level, VERBS, out);
+    }
+
+    /// A progress label of the same shape whose transfers are `transfers`
+    /// ("subiendo"...): a preset's, which has no English in it.
+    pub fn progress_label_es(
+        &self,
+        rng: &mut Rng,
+        level: u8,
+        transfers: &[&'static str],
+        out: &mut String,
+    ) {
+        self.label(rng, level, transfers, out);
+    }
+
+    /// A progress label: two in five a transfer by one of `transfers`.
+    fn label(&self, rng: &mut Rng, level: u8, transfers: &[&'static str], out: &mut String) {
         use std::fmt::Write;
-        if rng.u8(..5) < 2 {
-            const VERBS: &[&str] = &[
-                "uploading",
-                "downloading",
-                "subiendo",
-                "descargando",
-                "respaldando",
-                "transfiriendo",
-                "syncing",
-                "restaurando",
-            ];
+        if rng.u8(..5) < 2 && !transfers.is_empty() {
             let _ = write!(
                 out,
                 "{} {} ({}.{} GB)",
-                pick(rng, VERBS),
+                pick(rng, transfers),
                 pick(rng, self.files),
                 rng.u8(0..9),
                 rng.u8(0..10)

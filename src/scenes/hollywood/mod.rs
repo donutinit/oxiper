@@ -113,6 +113,8 @@ mod neutro;
 mod patrias;
 mod posada;
 mod preset;
+#[cfg(test)]
+mod preset_tests;
 mod revolucion;
 mod rostro;
 mod sprite;
@@ -125,6 +127,7 @@ use crate::scene::{Ctx, Opt, Scene, SceneInfo, Val};
 use fastrand::Rng;
 use garb::Garb;
 use inocentes::Fool;
+use preset::Preset;
 
 pub const INFO: SceneInfo = SceneInfo {
     name: "hollywood",
@@ -150,6 +153,11 @@ pub const INFO: SceneInfo = SceneInfo {
             key: "babble",
             default: Val::I(7),
             help: "How much technobabble, 0 (plain logs) to 10 (maximum)",
+        },
+        Opt {
+            key: "preset",
+            default: Val::S(""),
+            help: "Preset with the topic the screen talks about: a name under presets/hollywood/ in the config folder, or a path (docs/PRESETS.md)",
         },
     ],
     make: |ctx| Box::new(Hollywood::new(ctx)),
@@ -319,10 +327,19 @@ impl Tints {
 }
 
 impl Pal {
+    /// The palette of the day (the scene itself builds it with `dressed`).
+    #[cfg(test)]
     fn new(ctx: &Ctx) -> Pal {
+        Pal::dressed(ctx, false)
+    }
+
+    /// The palette; `plain` (under a preset): the holiday counts as none and
+    /// the holiday gold is the palette's amber, so a theme sets every color.
+    fn dressed(ctx: &Ctx, plain: bool) -> Pal {
         let native = ctx.theme.native;
-        let mx = ctx.fiesta.is(Kind::Muertos);
-        let tint = Tints::of(ctx.fiesta);
+        let fiesta = if plain { Fiesta::NONE } else { ctx.fiesta };
+        let mx = fiesta.is(Kind::Muertos);
+        let tint = Tints::of(fiesta);
         let main = match (native, mx, tint) {
             (true, true, _) => rgb(0xffa01e),
             (true, false, Some(t)) => rgb(t.main),
@@ -341,6 +358,7 @@ impl Pal {
                 }),
             )
         };
+        let amber = pick(2, 0xffb000, 0xffd200, tint.map(|t| t.amber));
         Pal {
             main,
             dim: ctx.fade(main, 0.5),
@@ -356,7 +374,7 @@ impl Pal {
                 ctx.pick(5, main)
             },
             cyan: pick(4, 0x33d6e8, 0x00c0cc, tint.map(|t| t.cyan)),
-            amber: pick(2, 0xffb000, 0xffd200, tint.map(|t| t.amber)),
+            amber,
             red: pick(0, 0xff4545, 0xf0208c, tint.map(|t| t.red)),
             green: pick(3, 0x66ff66, 0x8cc828, tint.map(|t| t.green)),
             ink: if native {
@@ -383,7 +401,11 @@ impl Pal {
             },
             flor: rgb(0xff8c00),
             vela: rgb(0xffd678),
-            oro: rgb(tint.map_or(0xf2b632, |t| t.oro)),
+            oro: if plain {
+                amber
+            } else {
+                rgb(tint.map_or(0xf2b632, |t| t.oro))
+            },
             papel: std::array::from_fn(|i| ctx.pick(i, PAPEL[i])),
             bg: ctx.bg,
         }
@@ -815,8 +837,10 @@ pub struct Hollywood {
     tape_off: f32,
     tape_buf: String,
     /// The day's holiday (or `Fiesta::NONE`), cached; `retheme` re-dresses the
-    /// panes when it changes.
+    /// panes when it changes. Always `Fiesta::NONE` under a preset.
     fiesta: Fiesta,
+    /// The preset the screen talks about, which wins over the holiday.
+    preset: Option<&'static Preset>,
     seed: u64,
     /// Scene time, for the lights that blink along the title bars.
     clock: f32,
@@ -835,16 +859,24 @@ impl Hollywood {
             15.0
         };
         let speed = o.f("speed");
+        let preset = Self::load_preset(ctx);
+        // A preset wins over the holiday, forced or not (spec 8.3).
+        let fiesta = if preset.is_some() {
+            Fiesta::NONE
+        } else {
+            holiday(ctx)
+        };
         let mut s = Hollywood {
             env: Env {
-                pal: Pal::new(ctx),
+                pal: Pal::dressed(ctx, preset.is_some()),
                 level: o.i("babble").clamp(0, 10) as u8,
-                day: patrias::day_start(holiday(ctx), ctx.seed),
+                day: patrias::day_start(fiesta, ctx.seed),
             },
-            fiesta: holiday(ctx),
+            fiesta,
+            preset,
             seed: ctx.seed,
             clock: 0.0,
-            fool: holiday(ctx).inocentes().then(|| Fool::new(ctx.seed)),
+            fool: fiesta.inocentes().then(|| Fool::new(ctx.seed)),
             max_panes: o.i("panes").clamp(3, 12) as usize,
             reshuffle,
             speed: if speed.is_finite() {
@@ -864,6 +896,16 @@ impl Hollywood {
         s.next_event = Self::interval(&mut rng, reshuffle);
         s.rng = rng;
         s
+    }
+
+    /// The preset the `preset` option names, through the cache (spec 8.4): the
+    /// last good one from its file, or none when it never loaded. (Start-up
+    /// and reload say why; a scene that is built again never stops for it.)
+    fn load_preset(ctx: &Ctx) -> Option<&'static Preset> {
+        let config = crate::config::default_path();
+        let dir = config.as_deref().and_then(std::path::Path::parent);
+        let path = cache::wanted(ctx.opts.table(), dir).ok()??;
+        cache::load(&path).preset()
     }
 
     /// A jittered wait: with the default 15 s it lands between about 10 and 25.
@@ -922,9 +964,13 @@ impl Hollywood {
         Box::new(p)
     }
 
-    /// What the widgets wear: the day's holiday.
+    /// What every widget made from now on wears: the preset, or the day's
+    /// holiday.
     fn garb(&self) -> Garb {
-        Garb::plain(self.fiesta)
+        match self.preset {
+            Some(p) => Garb::preset(p),
+            None => Garb::plain(self.fiesta),
+        }
     }
 
     fn retitle(p: &mut Pane, rng: &mut Rng, level: u8, mx: Garb) {
@@ -932,13 +978,7 @@ impl Hollywood {
         p.title.push_str(p.widget.name());
         if level > 0 {
             p.title.push_str(" \u{00b7} ");
-            if mx.is(Kind::Muertos) {
-                muertos::mixed_title(rng, mx.level, &mut p.title);
-            } else if let Some(v) = lexico::of(mx) {
-                v.mixed_title(rng, mx.level, &mut p.title);
-            } else {
-                babble::title(rng, &mut p.title);
-            }
+            feed::title(rng, mx, &mut p.title);
         }
         p.retitle = 8.0 + rng.f32() * 14.0;
     }
@@ -1110,6 +1150,7 @@ impl Hollywood {
 
     fn feed_tape(&mut self) {
         let need = self.w.max(1) as usize + 80;
+        let mx = self.garb();
         while self.tape.len() < need {
             self.tape_buf.clear();
             let mut s = std::mem::take(&mut self.tape_buf);
@@ -1126,9 +1167,10 @@ impl Hollywood {
                     s.push_str(&up);
                 }
                 s.push_str("  \u{273f}  ");
-            } else if let Some(v) = lexico::of(self.fiesta) {
-                // Headlines of the holiday among its mission log; the days of
-                // the turn of the year and of the Reyes have some of their own.
+            } else if let Some(v) = lexico::of(mx) {
+                // Headlines of the holiday (or the preset) among its mission
+                // log; the days of the turn of the year and of the Reyes have
+                // some of their own.
                 let day = (v.days)(self.fiesta);
                 if !day.is_empty() && self.rng.f32() < 0.4 {
                     let tpl = day[self.rng.usize(..day.len())];
@@ -1137,14 +1179,14 @@ impl Hollywood {
                     let up = s[from..].to_uppercase();
                     s.truncate(from);
                     s.push_str(&up);
-                } else if self.rng.f32() < 0.3 + 0.3 * self.fiesta.level {
+                } else if self.rng.f32() < 0.3 + 0.3 * mx.level {
                     v.headline(&mut self.rng, &mut s);
                 } else {
                     s.push_str("MISI\u{00d3}N ");
                     s.push(v.mark);
                     s.push(' ');
                     let from = s.len();
-                    v.mixed(&mut self.rng, self.env.level, self.fiesta.level, &mut s);
+                    feed::say(&mut self.rng, self.env.level, mx, &mut s);
                     let up = s[from..].to_uppercase();
                     s.truncate(from);
                     s.push_str(&up);
@@ -1204,10 +1246,11 @@ impl Scene for Hollywood {
     }
 
     fn retheme(&mut self, ctx: &Ctx) {
-        self.env.pal = Pal::new(ctx);
-        // The holiday came or went (or moved on a day): new widgets in the seats.
+        self.env.pal = Pal::dressed(ctx, self.preset.is_some());
+        // The holiday came or went (or moved on a day): new widgets in the
+        // seats. Under a preset the calendar does not dress the screen.
         let mx = holiday(ctx);
-        if mx != self.fiesta {
+        if self.preset.is_none() && mx != self.fiesta {
             self.dress(mx);
         }
     }
@@ -1380,7 +1423,7 @@ impl Scene for Hollywood {
         // The mission ticker.
         if self.h >= 8 {
             let y = self.h - 1;
-            let mark = lexico::of(self.fiesta).map_or('\0', |v| v.mark);
+            let mark = lexico::of(self.garb()).map_or('\0', |v| v.mark);
             for (i, &ch) in self.tape.iter().take(self.w as usize).enumerate() {
                 let (col, at) = if ch == '\u{25c6}' {
                     (pal.amber, BOLD)

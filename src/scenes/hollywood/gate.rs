@@ -1,5 +1,3 @@
-#![allow(dead_code)] // wired in Task 10
-
 //! The last gate (spec 8.4): every rule the engine relies on, checked over a
 //! whole `Vocab`. A vocabulary that passes cannot make `lexico.rs`, `feed.rs`
 //! or the widgets panic: no list they pick from is empty, and the `Dress`

@@ -43,7 +43,7 @@ pub enum FeedKind {
 }
 
 /// Real errno values: (name, number, message).
-const ERRNOS: &[(&str, u8, &str)] = &[
+pub(super) const ERRNOS: &[(&str, u8, &str)] = &[
     ("EPERM", 1, "Operation not permitted"),
     ("ENOENT", 2, "No such file or directory"),
     ("ESRCH", 3, "No such process"),
@@ -91,7 +91,7 @@ const EXTS: &[&str] = &[
     "conf", "pcap", "enc", "shadow",
 ];
 
-const USERS: &[&str] = &[
+pub(super) const USERS: &[&str] = &[
     "root",
     "admin",
     "guest",
@@ -149,12 +149,17 @@ const LOCALS: &[&str] = &[
     "salt", "rounds", "flux",
 ];
 
-/// A sentence: on Día de Muertos the Mictlán's among the ordinary ones.
+/// A sentence: on Día de Muertos the Mictlán's among the ordinary ones,
+/// under a preset always its own (its canned lines are all Spanish).
 /// Returns whether it is Spanish.
-fn say(rng: &mut Rng, level: u8, mx: Garb, out: &mut String) -> bool {
+pub(super) fn say(rng: &mut Rng, level: u8, mx: Garb, out: &mut String) -> bool {
     if mx.is(Kind::Muertos) {
         muertos::mixed(rng, level, mx.level, out)
     } else if let Some(v) = lexico::of(mx) {
+        if mx.whole() {
+            v.sentence(rng, level, out);
+            return true;
+        }
         v.mixed(rng, level, mx.level, out)
     } else {
         babble::sentence(rng, level, out);
@@ -162,32 +167,40 @@ fn say(rng: &mut Rng, level: u8, mx: Garb, out: &mut String) -> bool {
     }
 }
 
-/// An UPPER-CASE progress label, the Mictlán's or an ordinary one.
-fn label(rng: &mut Rng, level: u8, mx: Garb, out: &mut String) {
+/// An UPPER-CASE progress label, the Mictlán's or an ordinary one; under a
+/// preset with its Spanish transfers.
+pub(super) fn label(rng: &mut Rng, level: u8, mx: Garb, out: &mut String) {
     if mx.is(Kind::Muertos) && rng.f32() < muertos::share(mx.level) {
         muertos::progress_label(rng, level, out);
     } else if let Some(v) = lexico::of(mx)
         && mx.takes(rng, 1.0)
     {
-        v.progress_label(rng, level, out);
+        match mx.preset {
+            Some(p) if mx.whole() => v.progress_label_es(rng, level, p.transfers, out),
+            _ => v.progress_label(rng, level, out),
+        }
     } else {
         babble::progress_label(rng, level, out);
     }
 }
 
-/// A title, the Mictlán's or an ordinary one.
-fn title(rng: &mut Rng, mx: Garb, out: &mut String) {
+/// A title, the Mictlán's or an ordinary one; under a preset its own.
+pub(super) fn title(rng: &mut Rng, mx: Garb, out: &mut String) {
     if mx.is(Kind::Muertos) {
         muertos::mixed_title(rng, mx.level, out);
     } else if let Some(v) = lexico::of(mx) {
-        v.mixed_title(rng, mx.level, out);
+        if mx.whole() {
+            v.title(rng, out);
+        } else {
+            v.mixed_title(rng, mx.level, out);
+        }
     } else {
         babble::title(rng, out);
     }
 }
 
 /// A daemon name, a holiday one half the time on Día de Muertos.
-fn daemon(rng: &mut Rng, mx: Garb) -> &'static str {
+pub(super) fn daemon(rng: &mut Rng, mx: Garb) -> &'static str {
     if mx.is(Kind::Muertos) && rng.f32() < 0.5 * muertos::share(mx.level) {
         babble::pick(rng, muertos::DAEMONS)
     } else if let Some(v) = lexico::of(mx)
@@ -1173,9 +1186,11 @@ impl Feed {
         let mut l = Line::new();
         let ident_pct = mid.iter().filter(|&&c| c == b'|').count() * 100 / len;
         let text = if let Some(v) = self.voc() {
+            // A preset's subjects are its contacts: never a person beside a score.
+            let names = self.mx.preset.map_or(v.people, |p| p.contacts);
             format!(
                 "> {}  Puntaje={} bits  Esperado={}e-{}  {}={ident_pct}%",
-                babble::pick(&mut self.rng, v.people),
+                babble::pick(&mut self.rng, names),
                 self.rng.u16(40..900),
                 self.rng.u8(1..9),
                 self.rng.u16(5..180),

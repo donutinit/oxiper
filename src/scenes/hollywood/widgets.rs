@@ -5,7 +5,7 @@
 //! Ideas after Dustin Kirkland's hollywood (Apache License 2.0): htop, bmon,
 //! cmatrix, map, sshart, apg and friends, all simulated here.
 
-use super::feed::{Feed, FeedKind};
+use super::feed::{self, Feed, FeedKind};
 use super::garb::Garb;
 use super::lexico::{self, Dress};
 use super::map::{self, Dots};
@@ -115,7 +115,7 @@ impl Htop {
             let mut cmd = String::from(if mx.is(Kind::Muertos) && rng.bool() {
                 babble::pick(&mut rng, muertos::DAEMONS)
             } else if let Some(v) = lexico::of(mx)
-                && rng.bool()
+                && (mx.whole() || rng.bool())
             {
                 babble::pick(&mut rng, v.daemons)
             } else {
@@ -768,9 +768,12 @@ impl Widget for WorldMap {
             let (from, to) = if self.mx.is(Kind::Revolucion) {
                 // The telegrams of the Revolución, along the historic routes.
                 revolucion::ROUTES[self.rng.usize(..revolucion::ROUTES.len())]
-            } else if self.mx.is(Kind::Muertos) || dress(self.mx).is_some() {
+            } else if self.mx.preset.is_none()
+                && (self.mx.is(Kind::Muertos) || dress(self.mx).is_some())
+            {
                 // Souls (or greetings, or aguinaldos, or echoes of the Grito)
-                // of the whole world on their way back to Mexico.
+                // of the whole world on their way back to Mexico. (A preset
+                // runs between the world's cities, as an ordinary day does.)
                 let homes = if self.mx.is(Kind::Patrias) {
                     map::SITES_PATRIAS
                 } else {
@@ -935,7 +938,7 @@ impl Radar {
                 soul: if mx.is(Kind::Muertos) {
                     muertos::soul(&mut rng, mx.level)
                 } else if let Some(v) = lexico::of(mx) {
-                    babble::pick(&mut rng, v.people)
+                    babble::pick(&mut rng, mx.preset.map_or(v.people, |p| p.contacts))
                 } else {
                     ""
                 },
@@ -998,7 +1001,10 @@ impl Widget for Radar {
                     b.dist = 0.9 + self.rng.f32() * 0.08;
                     b.ang = self.rng.f32() * TAU;
                     b.soul = match lexico::of(self.mx) {
-                        Some(v) => babble::pick(&mut self.rng, v.people),
+                        Some(v) => babble::pick(
+                            &mut self.rng,
+                            self.mx.preset.map_or(v.people, |p| p.contacts),
+                        ),
                         None => muertos::soul(&mut self.rng, self.mx.level),
                     };
                     b.id = self.rng.u16(100..999);
@@ -1094,7 +1100,14 @@ impl Widget for Radar {
                 let y = 2 + i as i32;
                 let col = if b.glow > 0.5 { pal.red } else { pal.main };
                 if mx {
-                    let name = b.soul;
+                    // A preset's contacts go by their call sign and number.
+                    let sign;
+                    let name = if self.mx.preset.is_some() {
+                        sign = format!("{}-{}", b.soul, b.id);
+                        sign.as_str()
+                    } else {
+                        b.soul
+                    };
                     let t = if b.home < 4.0 {
                         format!("{name:<13} {}", dr.map_or("EN CASA", |d| d.home))
                     } else {
@@ -1177,15 +1190,7 @@ impl Widget for Progress {
     fn update(&mut self, dt: f32, env: &Env) {
         for b in self.bars.iter_mut() {
             if b.label.is_empty() {
-                if self.mx.is(Kind::Muertos) && self.rng.f32() < muertos::share(self.mx.level) {
-                    muertos::progress_label(&mut self.rng, env.level.max(1), &mut b.label);
-                } else if let Some(v) = lexico::of(self.mx)
-                    && self.mx.takes(&mut self.rng, 1.0)
-                {
-                    v.progress_label(&mut self.rng, env.level.max(1), &mut b.label);
-                } else {
-                    babble::progress_label(&mut self.rng, env.level.max(1), &mut b.label);
-                }
+                feed::label(&mut self.rng, env.level.max(1), self.mx, &mut b.label);
             }
             if b.done > 0.0 {
                 b.done -= dt;

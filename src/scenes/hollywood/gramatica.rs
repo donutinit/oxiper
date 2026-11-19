@@ -1,5 +1,3 @@
-#![allow(dead_code)] // wired in Task 10
-
 //! The grammar a preset is written in (spec 7.4, 7.5, 8.2): the pure text
 //! rules that turn what an author writes into the engine's forms. Nouns
 //! carry their article, adjectives agree by `*`, verbs are written in the

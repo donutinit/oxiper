@@ -1,5 +1,3 @@
-#![allow(dead_code)] // wired in Task 10
-
 //! The neutral Spanish base (spec 8.1): what the hacker screen says under a
 //! preset when the preset has nothing to say. Spanish technobabble about
 //! nothing in particular, with no holiday, no country and no real person in

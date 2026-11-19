@@ -1,28 +1,72 @@
 //! What the widgets wear. Every ordinary widget is told what to look like by
-//! a `Garb`, which today is the day's holiday and nothing else: it derefs to
-//! that `Fiesta`, so `mx.is(..)`, `mx.level` and `mx.kind` read as they did
-//! when the widgets held the `Fiesta` itself.
+//! a `Garb`: the day's holiday, or a preset (spec 8.3). It derefs to a
+//! `Fiesta`, so `mx.is(..)`, `mx.level` and `mx.kind` read as they did when
+//! the widgets held the `Fiesta` itself. A preset is a holiday with no date:
+//! no `Kind`, always at its height, and every word its own.
 
 use super::lexico;
-use crate::fiesta::Fiesta;
+use super::preset::Preset;
+use crate::fiesta::{Fiesta, Kind};
 use fastrand::Rng;
 
-/// What a widget wears: today the day's holiday and nothing else.
+/// What a widget wears: the day's holiday, or a preset.
 #[derive(Clone, Copy)]
 pub struct Garb {
     fiesta: Fiesta,
+    /// The preset whose vocabulary every widget speaks (`lexico::of`).
+    pub preset: Option<&'static Preset>,
+    /// Test only: the preset's words, but a holiday's share of them.
+    leaky: bool,
 }
+
+/// What a preset derefs to: no holiday, at its height.
+const PRESET: Fiesta = Fiesta {
+    kind: Kind::None,
+    level: 1.0,
+    month: 0,
+    day: 0,
+};
 
 impl Garb {
     /// The day's holiday as it is (`Fiesta::NONE` on an ordinary day).
     pub fn plain(fiesta: Fiesta) -> Garb {
-        Garb { fiesta }
+        Garb {
+            fiesta,
+            preset: None,
+            leaky: false,
+        }
     }
 
-    /// Does the holiday's vocabulary take this one? `rng.f32() < k *
-    /// lexico::share(self.level)`, the very draw the widgets made before.
+    /// Under a preset the holiday is none, at its height: derefs to
+    /// `Fiesta { kind: Kind::None, level: 1.0, month: 0, day: 0 }`.
+    pub fn preset(p: &'static Preset) -> Garb {
+        Garb {
+            fiesta: PRESET,
+            preset: Some(p),
+            leaky: false,
+        }
+    }
+
+    /// The preset's vocabulary with a holiday's share of it at its height,
+    /// which lets English through: what the check of spec 11.3 must catch.
+    #[cfg(test)]
+    pub fn leaky(p: &'static Preset) -> Garb {
+        Garb {
+            leaky: true,
+            ..Garb::preset(p)
+        }
+    }
+
+    /// Is every word the preset's? (No draw is made for the share.)
+    pub fn whole(self) -> bool {
+        self.preset.is_some() && !self.leaky
+    }
+
+    /// Does the vocabulary take this one? Under a preset, always, without a
+    /// draw; else `rng.f32() < k * lexico::share(self.level)`, the very draw
+    /// the widgets made before.
     pub fn takes(self, rng: &mut Rng, k: f32) -> bool {
-        rng.f32() < k * lexico::share(self.fiesta.level)
+        self.whole() || rng.f32() < k * lexico::share(self.fiesta.level)
     }
 }
 
@@ -60,6 +104,27 @@ mod tests {
                 );
             }
             assert_eq!(a.u64(..), b.u64(..)); // one draw each time, no more
+        }
+    }
+
+    #[test]
+    fn a_preset_takes_every_word_without_a_draw() {
+        let p = super::super::preset_tests::bare();
+        let g = Garb::preset(p);
+        assert_eq!(*g, PRESET);
+        assert!(g.whole() && !Garb::leaky(p).whole() && !Garb::plain(Fiesta::NONE).whole());
+        let (mut a, b) = (Rng::with_seed(5), Rng::with_seed(5));
+        for k in [1.0, 0.6, 0.5] {
+            assert!(g.takes(&mut a, k));
+        }
+        assert_eq!(a.u64(..), b.clone().u64(..));
+        // The leaky one draws as a holiday at its height does.
+        let (mut a, mut b) = (Rng::with_seed(5), Rng::with_seed(5));
+        for _ in 0..1000 {
+            assert_eq!(
+                Garb::leaky(p).takes(&mut a, 0.6),
+                b.f32() < 0.6 * lexico::share(1.0)
+            );
         }
     }
 }

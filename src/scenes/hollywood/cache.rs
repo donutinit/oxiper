@@ -1,4 +1,4 @@
-#![allow(dead_code)] // wired in Task 10
+#![allow(dead_code)] // the warnings, the reasons and `brief` are read in Tasks 12 and 13
 
 //! The last good preset, by path (spec 8.4, K5): where a preset file lives,
 //! and one process-wide cache of what each path last loaded. A scene is built
