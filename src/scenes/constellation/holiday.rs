@@ -429,8 +429,7 @@ impl Holiday {
                 s.gain = (s.gain - real / 0.6).max(0.0);
             }
         }
-        for slot in 0..MAX_DRAWINGS {
-            let d = &mut self.drawings[slot];
+        for d in &mut self.drawings {
             if !d.on {
                 continue;
             }

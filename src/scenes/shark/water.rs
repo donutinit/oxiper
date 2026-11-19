@@ -173,7 +173,7 @@ impl Sea {
             // Shafts drift and pulse slowly, and in steps, to keep the
             // terminal's work down.
             let slow = (time * 4.0).floor() / 4.0;
-            for k in 0..n {
+            for (k, ray) in self.rays.iter_mut().enumerate().take(n) {
                 let u = (lo + k as i32 + bx) as i64 + ray_shift;
                 let cell = u.div_euclid(BEAM) as i32;
                 let mut r = 0.0;
@@ -191,7 +191,7 @@ impl Sea {
                         r += (1.0 - d * d) * (0.35 + 0.65 * pulse) * (0.45 + 0.55 * unit(c, 65, s));
                     }
                 }
-                self.rays[k] = ((r * RAY_LEVELS as f32) as usize).min(RAY_LEVELS - 1) as u8;
+                *ray = ((r * RAY_LEVELS as f32) as usize).min(RAY_LEVELS - 1) as u8;
             }
         }
         // The sand's tones and the caustics' strength.

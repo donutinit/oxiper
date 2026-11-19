@@ -190,14 +190,14 @@ impl Widget for Htop {
         let colw = if two { r.w / 2 } else { r.w };
         let mut y = 0;
         let per_col = if two { cores.div_ceil(2) } else { cores };
-        for i in 0..cores {
+        for (i, &cpu) in self.cpu.iter().enumerate().take(cores) {
             let (col, row) = if two {
                 (i / per_col, i % per_col)
             } else {
                 (0, i)
             };
             let mut t = String::new();
-            let _ = write!(t, "{:.1}%", self.cpu[i] * 100.0);
+            let _ = write!(t, "{:.1}%", cpu * 100.0);
             meter(
                 c,
                 r,
@@ -205,7 +205,7 @@ impl Widget for Htop {
                 row as i32,
                 colw - 1,
                 &format!("{:>2}", i + 1),
-                self.cpu[i],
+                cpu,
                 &t,
                 env,
             );

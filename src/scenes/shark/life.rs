@@ -427,8 +427,7 @@ impl Sea {
                 );
                 // Personal space: a body length ahead and behind, less above
                 // and below.
-                for b in first..first + n {
-                    let o = &self.life.fish[b];
+                for (b, o) in self.life.fish.iter().enumerate().skip(first).take(n) {
                     if b == a || !o.alive {
                         continue;
                     }

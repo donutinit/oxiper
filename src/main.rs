@@ -1,3 +1,6 @@
+// Tests index arrays to name the slot they assert on.
+#![cfg_attr(test, allow(clippy::needless_range_loop))]
+
 mod app;
 mod color;
 mod config;

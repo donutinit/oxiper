@@ -31,7 +31,9 @@ impl Fnv {
 /// Kinds whose cells are hashed: the ordinary ones, but for the three that
 /// draw with `sin` and `cos` (12, 13 and 15).
 fn plain(kind: usize) -> bool {
-    kind < KINDS && !matches!(kind, 12 | 13 | 15)
+    // 19: the number of ordinary kinds when the fingerprint was recorded,
+    // written out so the fingerprint stays frozen if `KINDS` changes.
+    kind < 19 && !matches!(kind, 12 | 13 | 15)
 }
 
 /// Two simulated minutes of hollywood at `w`x`h` on the day `fiesta`, with

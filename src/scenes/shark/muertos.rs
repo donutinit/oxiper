@@ -844,8 +844,7 @@ impl Sea {
         let tt = (t * 12.0).floor() / 12.0;
         let dark = 1.0 - self.daylight;
         let reach = 6.0 + 3.0 * m.dress.level;
-        for i in 0..m.flames.len() {
-            let (fx, fy, _) = m.flames[i];
+        for &(fx, fy, _) in &m.flames {
             let h = hash(fx, fy, self.seed) as f32 / u32::MAX as f32 * 40.0;
             let flicker = 0.78 + 0.22 * ((tt * 7.3 + h).sin() * (tt * 11.9 + h * 1.7).sin());
             let k = (0.16 + 0.5 * dark) * flicker;

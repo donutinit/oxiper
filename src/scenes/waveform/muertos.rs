@@ -217,8 +217,8 @@ impl Muertos {
                 pair
             };
             for (shade, &c) in pair.iter().enumerate() {
-                for f in 0..4 {
-                    m.loose[kind][shade][f] = ctx.fade(c, f as f32 * 0.22);
+                for (f, slot) in m.loose[kind][shade].iter_mut().enumerate() {
+                    *slot = ctx.fade(c, f as f32 * 0.22);
                 }
             }
         }
