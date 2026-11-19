@@ -50,7 +50,7 @@ pub struct Loaded {
 }
 
 /// The largest file that is read.
-const MAX_BYTES: usize = 256 * 1024;
+pub(super) const MAX_BYTES: usize = 256 * 1024;
 /// The most entries a list keeps.
 const MAX_ENTRIES: usize = 400;
 /// A HUD line, and so the longest error or warning.
@@ -98,7 +98,7 @@ const KEYS: &[Key] = &[
 
 /// One line, at most `LINE` characters: a longer one ends in `…`. Control
 /// characters (a quoted key can hold an escape sequence) become spaces.
-fn one_line(s: String) -> String {
+pub(super) fn one_line(s: String) -> String {
     let s: String = s
         .chars()
         .map(|c| if c.is_control() { ' ' } else { c })

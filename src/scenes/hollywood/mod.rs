@@ -94,6 +94,7 @@
 
 mod archivo;
 mod babble;
+mod cache;
 mod feed;
 #[cfg(test)]
 mod fingerprint;
