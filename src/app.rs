@@ -287,11 +287,11 @@ impl Player {
     }
 
     /// Flips set mode and rebuilds the scene; the HUD's note. Going on
-    /// with a seed no number leads to, it draws one and the note says it.
+    /// with a seed no number leads to, it draws one; going on, the note
+    /// says the number.
     pub fn toggle_set(&mut self) -> String {
         self.set = !self.set;
-        let draw = self.set && self.seed_no.is_none();
-        if draw {
+        if self.set && self.seed_no.is_none() {
             self.draw_number();
         }
         self.switch_eggs(!self.set || self.cfg.set_eggs);
@@ -299,8 +299,7 @@ impl Player {
         self.overlay.update(0.0, self.fiesta);
         self.rebuild();
         match self.seed_no {
-            Some(n) if draw => format!("set mode on · seed {n}"),
-            _ if self.set => "set mode on".into(),
+            Some(n) if self.set => format!("set mode on · seed {n}"),
             _ => "set mode off".into(),
         }
     }
@@ -607,6 +606,10 @@ impl Player {
             }
             self.pos = 0;
             self.info = self.cfg.scenes[self.order[0]];
+        }
+        // Set mode turned on by the config, as by `s`: a number to write down.
+        if !same_set && self.set && self.seed_no.is_none() {
+            self.draw_number();
         }
         self.forced_theme = None;
         self.set_theme(theme);
@@ -936,14 +939,9 @@ pub fn run(cfg: Config, ro: RunOpts) -> Result<(), String> {
                                 }
                             }
                             Key::Char('s') => {
-                                let had = player.seed_no();
                                 let note = player.toggle_set();
-                                // A number just drawn stays up as long as `r`'s.
-                                let secs = if player.seed_no() == had {
-                                    2.0
-                                } else {
-                                    SEED_SECS
-                                };
+                                // The number stays up as long as `r`'s.
+                                let secs = if player.set { SEED_SECS } else { 2.0 };
                                 hud.show(note, secs);
                             }
                             Key::Char('?') => hud.help = !hud.help,
@@ -1379,7 +1377,7 @@ mod tests {
             .unwrap();
         let seed = p.seed;
         assert!(!p.set && !p.opts.set_mode());
-        assert_eq!(p.toggle_set(), "set mode on");
+        assert_eq!(p.toggle_set(), "set mode on · seed 7");
         assert!(p.set && p.opts.set_mode());
         assert_eq!(p.seed, seed);
         assert_eq!(p.toggle_set(), "set mode off");
@@ -1633,14 +1631,18 @@ mod tests {
         }
     }
 
-    /// `s` off and on again keeps the number and the seed: none is drawn.
+    /// `s` off and on again keeps the number and the seed: none is drawn,
+    /// and the note says the number it keeps.
     #[test]
     fn s_off_and_on_keeps_the_number() {
         let mut p = player(&seeds_toml(false, true)).ok().unwrap();
         let (n, seed) = (p.seed_no(), p.seed);
         assert!(n.is_some());
         assert_eq!(p.toggle_set(), "set mode off");
-        assert_eq!(p.toggle_set(), "set mode on");
+        assert_eq!(
+            p.toggle_set(),
+            format!("set mode on · seed {}", n.unwrap_or_default())
+        );
         assert_eq!((p.seed_no(), p.seed), (n, seed));
     }
 
@@ -1705,5 +1707,28 @@ mod tests {
         assert_eq!(p.seed_no(), Some(n));
         p.step_scene(1);
         assert_eq!(p.seed_no(), None);
+    }
+
+    /// A reload that turns set mode on draws a number as `s` does, one that
+    /// `seed =` leads back to; one that keeps it on draws none.
+    #[test]
+    fn a_reload_onto_the_set_draws_a_number() {
+        for shuffle in [false, true] {
+            let mut p = player(&seeds_toml(shuffle, false)).ok().unwrap();
+            assert_eq!(p.seed_no(), None);
+            p.reload(Config::from_toml(&seeds_toml(shuffle, true)))
+                .unwrap();
+            assert!(p.set);
+            let n = p.seed_no().unwrap();
+            assert!((1..=9999).contains(&n), "shuffle {shuffle}: {n}");
+            assert_eq!(written(shuffle, n).seed, p.seed, "shuffle {shuffle}");
+            let seed = p.seed;
+            p.reload(Config::from_toml(&format!(
+                "{}fps = 12\n",
+                seeds_toml(shuffle, true)
+            )))
+            .unwrap();
+            assert_eq!((p.seed_no(), p.seed), (Some(n), seed), "shuffle {shuffle}");
+        }
     }
 }
