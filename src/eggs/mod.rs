@@ -5,6 +5,10 @@
 //! (30 seconds at most) and can be switched off with `eggs = "none"` or
 //! `egg_rate = 0`. The scene keeps running underneath.
 //!
+//! On a film set (`set_mode`) they play the same, unless `set_eggs = false`.
+//! The `e` key switches them off, cutting the one that plays, and back on,
+//! for as long as oxiper runs, in any mode (the `Player` holds the switch).
+//!
 //! The scheduler has its own RNG, separate from the scenes' seeded ones, so
 //! eggs never change what `record`, `snap` and `bench` produce. Those never
 //! roll for an egg; only the interactive loop does (or a forced rate).
@@ -255,6 +259,11 @@ impl Eggs {
         self.active.is_some()
     }
 
+    /// Drops the egg that is playing.
+    pub fn stop(&mut self) {
+        self.active = None;
+    }
+
     pub fn resize(&mut self, w: u16, h: u16) {
         self.w = w;
         self.h = h;
@@ -335,6 +344,7 @@ impl Eggs {
 mod tests {
     use super::*;
     use crate::color::{Color, rgb};
+    use crate::render::Cell;
 
     #[test]
     fn parses_the_setting() {
@@ -703,5 +713,47 @@ mod tests {
                 assert!(secs > 1.0, "{} ended at once", info.name);
             }
         }
+    }
+
+    /// `stop` drops the egg that is playing; with none playing it does nothing.
+    #[test]
+    fn stop_drops_the_egg() {
+        let mut e = Eggs::new(80, 24);
+        e.start(&parse("sl", &mut Vec::new()), Fiesta::NONE);
+        assert!(e.active());
+        e.stop();
+        assert!(!e.active());
+        e.stop();
+        assert!(!e.active());
+    }
+
+    /// Every egg draws on a tall screen, on a day it comes on, and is over
+    /// within its 30 seconds (spec 9.3). One thread per egg and size: a debug
+    /// build takes half a minute for them all.
+    #[test]
+    fn eggs_draw_on_tall_screens() {
+        std::thread::scope(|s| {
+            for info in ALL {
+                for (w, h) in [(60, 55), (67, 60), (120, 106), (130, 110)] {
+                    s.spawn(move || {
+                        let t = Theme::builtin("nord").unwrap();
+                        let mut e = Eggs::new(w, h);
+                        e.start(&[info], its_day(info));
+                        assert!(e.active(), "{} did not start at {w}x{h}", info.name);
+                        let mut c = Canvas::new(w, h, Color::Reset);
+                        let (mut secs, mut drew) = (0.0, false);
+                        while e.active() {
+                            e.update(1.0 / 30.0);
+                            c.clear();
+                            e.draw(&mut c, &t);
+                            drew = drew || c.cells().iter().any(|cell| *cell != Cell::BLANK);
+                            secs += 1.0 / 30.0;
+                            assert!(secs <= 31.0, "{} too long at {w}x{h}", info.name);
+                        }
+                        assert!(drew, "{} drew nothing at {w}x{h}", info.name);
+                    });
+                }
+            }
+        });
     }
 }

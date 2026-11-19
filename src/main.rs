@@ -27,7 +27,7 @@ Keys:
   ← →  scene      ↑ ↓  theme      space  pause
   + -  speed      0    reset      r      reseed
   ?    help       q    quit       (any key quits in --saver mode)
-  s    set mode";
+  s    set mode   e    eggs on/off";
 
 #[derive(Parser)]
 #[command(name = "oxiper", version, about = "Animated terminal wallpapers, oxidized.", after_help = KEYS)]

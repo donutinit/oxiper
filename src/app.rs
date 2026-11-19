@@ -144,6 +144,10 @@ pub struct Player {
     /// On a film set: `cfg.set_mode` at start, then the `s` key's, until a
     /// reload changes `set_mode` itself.
     set: bool,
+    /// May the eggs play? Set when set mode goes on (to `cfg.set_eggs`) or
+    /// off (to on), at start-up too; flipped by the `e` key; set again by a
+    /// reload only when `set_eggs` changed in it.
+    eggs_on: bool,
 }
 
 /// Real seconds between looks at the date, so a holiday starts at midnight.
@@ -171,6 +175,7 @@ impl Player {
         }
         let seed = rng.u64(..);
         let set = cfg.set_mode;
+        let eggs_on = !set || cfg.set_eggs;
         let opts = Opts::new(info.options, cfg.scene_table(info.name)).with_set_mode(set);
         let bg = Player::bg_for(&cfg, &theme, &tc);
         let fiesta = Player::day(&cfg, set);
@@ -187,7 +192,7 @@ impl Player {
         let mut overlay = Overlay::new(w, h);
         overlay.update(0.0, fiesta);
         // A forced rate (for testing) plays an egg even in `snap` and `record`.
-        if cfg.egg_rate >= eggs::FORCE_RATE {
+        if eggs_on && cfg.egg_rate >= eggs::FORCE_RATE {
             eggs.start(&cfg.eggs, fiesta);
         }
         Ok(Player {
@@ -211,6 +216,7 @@ impl Player {
             overlay,
             fiesta_age: 0.0,
             set,
+            eggs_on,
         })
     }
 
@@ -231,6 +237,7 @@ impl Player {
     /// Flips set mode and rebuilds the scene; the HUD's note.
     pub fn toggle_set(&mut self) -> String {
         self.set = !self.set;
+        self.eggs_on = !self.set || self.cfg.set_eggs;
         self.fiesta = Player::day(&self.cfg, self.set);
         self.overlay.update(0.0, self.fiesta);
         self.rebuild();
@@ -240,6 +247,16 @@ impl Player {
             "set mode off"
         }
         .into()
+    }
+
+    /// Flips the eggs' switch; turning it off cuts the egg that is playing.
+    /// The new state.
+    pub fn toggle_eggs(&mut self) -> bool {
+        self.eggs_on = !self.eggs_on;
+        if !self.eggs_on {
+            self.eggs.stop();
+        }
+        self.eggs_on
     }
 
     /// Seconds to show the current scene: its own `duration`, else the global one.
@@ -319,7 +336,7 @@ impl Player {
         self.scene.tick(&ctx, dt * self.speed(), dt);
         self.overlay.update(dt, self.fiesta);
         self.eggs.update(dt);
-        if self.cfg.egg_rate >= eggs::FORCE_RATE {
+        if self.eggs_on && self.cfg.egg_rate >= eggs::FORCE_RATE {
             self.eggs.start(&self.cfg.eggs, self.fiesta);
         }
     }
@@ -367,15 +384,20 @@ impl Player {
     }
 
     /// Rolls for an easter egg after `dt` real seconds (the interactive loop
-    /// only: `snap`, `record` and `bench` stay reproducible).
+    /// only: `snap`, `record` and `bench` stay reproducible). With the eggs
+    /// off the clock still runs, but nothing is rolled.
     pub fn roll_egg(&mut self, dt: f64, allow: bool) {
+        let allow = allow && self.eggs_on;
         self.eggs
             .roll(&self.cfg.eggs, self.cfg.egg_rate, dt, allow, self.fiesta);
     }
 
-    /// Plays an easter egg now (the hidden `E` key).
-    pub fn start_egg(&mut self) {
-        self.eggs.start(&self.cfg.eggs, self.fiesta);
+    /// Plays an egg now (the hidden `E` key). False: the eggs are off.
+    pub fn start_egg(&mut self) -> bool {
+        if self.eggs_on {
+            self.eggs.start(&self.cfg.eggs, self.fiesta);
+        }
+        self.eggs_on
     }
 
     pub fn draw(&mut self, c: &mut Canvas) {
@@ -507,6 +529,11 @@ impl Player {
             self.set = cfg.set_mode;
         }
         let same_set = self.set == was_set;
+        // The eggs' switch likewise: set again when set mode goes on or off,
+        // or on the set when `set_eggs` changed.
+        if !same_set || (self.set && cfg.set_eggs != self.cfg.set_eggs) {
+            self.eggs_on = !self.set || cfg.set_eggs;
+        }
         self.cfg = cfg;
         // Re-dressed below, with the theme.
         self.fiesta = Player::day(&self.cfg, self.set);
@@ -577,6 +604,7 @@ impl Hud {
                 ("0", "reset speed"),
                 ("r", "reseed scene"),
                 ("s", "set mode"),
+                ("e", "eggs on/off"),
                 ("?", "close help"),
                 ("q", "quit"),
             ];
@@ -832,7 +860,17 @@ pub fn run(cfg: Config, ro: RunOpts) -> Result<(), String> {
                                 hud.show(note, 2.0);
                             }
                             Key::Char('?') => hud.help = !hud.help,
-                            Key::Char('E') if !hud.help => player.start_egg(),
+                            Key::Char('e') => {
+                                let on = player.toggle_eggs();
+                                hud.show(if on { "eggs on" } else { "eggs off" }.into(), 1.2);
+                            }
+                            Key::Char('E') if !hud.help => {
+                                // Not a silent key: say why nothing came.
+                                let on = player.start_egg();
+                                if !on {
+                                    hud.show("eggs off".into(), 1.2);
+                                }
+                            }
                             _ => {}
                         }
                         dirty = true;
@@ -1288,6 +1326,121 @@ mod tests {
         assert!(p.set && p.opts.set_mode());
         p.reload(cfg(false, 12)).unwrap();
         assert!(!p.set && !p.opts.set_mode());
+    }
+
+    /// A forced `egg_rate`: an egg at once, and again whenever one ends.
+    const FORCED: &str = "egg_rate = 1000000.0\n";
+
+    /// On the set the eggs play as they do anywhere (spec 9.3).
+    #[test]
+    fn eggs_play_on_the_set() {
+        let p = player(&format!(
+            "scene = 'neo'\nfiestas = 'none'\nset_mode = true\n{FORCED}"
+        ))
+        .ok()
+        .unwrap();
+        assert!(p.eggs.active());
+    }
+
+    /// With `set_eggs` off nothing plays on the set: not the roll, not a
+    /// forced rate, not `E`.
+    #[test]
+    fn set_eggs_off_silences_every_route() {
+        let mut p = player(&format!(
+            "scene = 'neo'\nfiestas = 'none'\nset_mode = true\nset_eggs = false\n{FORCED}"
+        ))
+        .ok()
+        .unwrap();
+        assert!(!p.eggs.active());
+        for _ in 0..100 {
+            p.update(1.0 / 30.0);
+        }
+        assert!(!p.eggs.active());
+        p.roll_egg(3600.0, true);
+        assert!(!p.eggs.active());
+        assert!(!p.start_egg());
+        assert!(!p.eggs.active());
+    }
+
+    /// `e` cuts the egg that is playing in the same call, and lets them
+    /// play again; on the set and off it.
+    #[test]
+    fn e_cuts_the_egg() {
+        for set in [true, false] {
+            let mut p = player(&format!(
+                "scene = 'neo'\nfiestas = 'none'\nset_mode = {set}\n{FORCED}"
+            ))
+            .ok()
+            .unwrap();
+            assert!(p.eggs.active(), "set mode {set}");
+            assert!(!p.toggle_eggs());
+            assert!(!p.eggs.active(), "set mode {set}");
+            p.update(1.0 / 30.0);
+            assert!(!p.eggs.active(), "set mode {set}");
+            assert!(p.toggle_eggs());
+            assert!(p.start_egg(), "set mode {set}");
+            assert!(p.eggs.active(), "set mode {set}");
+        }
+    }
+
+    /// Going into set mode the switch takes `set_eggs`; coming out it is on.
+    #[test]
+    fn the_switch_follows_set_mode() {
+        let mut p = player("scene = 'neo'\nfiestas = 'none'\nset_eggs = false\n")
+            .ok()
+            .unwrap();
+        assert!(p.start_egg());
+        p.eggs.stop();
+        p.toggle_set();
+        assert!(!p.start_egg());
+        assert!(!p.eggs.active());
+        p.toggle_set();
+        assert!(p.start_egg());
+        assert!(p.eggs.active());
+    }
+
+    /// A reload sets the switch again only when `set_eggs` itself changed:
+    /// the key's choice outlives an unrelated edit.
+    #[test]
+    fn a_reload_leaves_the_keys_choice() {
+        let cfg = |set_eggs: bool, fps: u32| {
+            Config::from_toml(&format!(
+                "scene = 'neo'\nfiestas = 'none'\nset_mode = true\nset_eggs = {set_eggs}\nfps = {fps}\n"
+            ))
+        };
+        let mut p = Player::new(cfg(true, 30), TermColors::default(), 80, 24)
+            .ok()
+            .unwrap();
+        assert!(!p.toggle_eggs());
+        p.reload(cfg(true, 12)).unwrap();
+        assert!(!p.start_egg());
+        p.reload(cfg(false, 12)).unwrap();
+        assert!(!p.start_egg());
+        p.reload(cfg(true, 12)).unwrap();
+        assert!(p.start_egg());
+    }
+
+    /// On a set whose holiday is not forced only the everyday eggs can
+    /// play, whatever the date: a holiday's eggs never start, even forced.
+    /// (That the `Player`'s day is none there is
+    /// `the_calendar_stays_out_of_set_mode`.)
+    #[test]
+    fn only_everyday_eggs_on_an_unforced_set() {
+        let seasonal: Vec<&str> = eggs::ALL
+            .iter()
+            .filter(|i| i.fiesta != Kind::None)
+            .map(|i| i.name)
+            .collect();
+        let mut p = player(&format!(
+            "scene = 'neo'\nfiestas = 'auto'\nset_mode = true\neggs = '{}'\n{FORCED}",
+            seasonal.join(",")
+        ))
+        .ok()
+        .unwrap();
+        assert!(!p.eggs.active());
+        p.update(1.0 / 30.0);
+        assert!(p.start_egg());
+        assert!(!p.eggs.active());
     }
 
     /// Every scene is built and run on the set (the shape of

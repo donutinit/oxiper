@@ -41,6 +41,8 @@ pub struct Config {
     /// On a film set: hollywood holds still, nothing follows the calendar
     /// or the playlist (the `Player` keeps the running state).
     pub set_mode: bool,
+    /// In set mode, may the easter eggs play? (the `Player` keeps the switch).
+    pub set_eggs: bool,
     pub idle: u64,
     /// The merged table, for scene options and user themes.
     pub raw: toml::Table,
@@ -140,6 +142,11 @@ pub const GLOBAL: &[Opt] = &[
         key: "set_mode",
         default: Val::B(false),
         help: "On a film set: hollywood holds still and nothing follows the calendar or the playlist",
+    },
+    Opt {
+        key: "set_eggs",
+        default: Val::B(true),
+        help: "In set mode, may the easter eggs play? (the e key switches them off and on while running)",
     },
 ];
 
@@ -503,6 +510,7 @@ impl Config {
             egg_rate: num("egg_rate", &mut warnings).max(0.0),
             fiestas,
             set_mode: boolean("set_mode", &mut warnings),
+            set_eggs: boolean("set_eggs", &mut warnings),
             idle,
             raw,
             path,
