@@ -1,7 +1,8 @@
 # hollywood: presets and set mode
 
 Design, 2026-11-18; revised 2026-11-19 with the user's answers and with what a second read
-against the code turned up. Written against `main` at `f01e564`. Nothing here is built yet.
+against the code turned up, and amended the same day with K13 (no divided band on a tall
+screen). Written against `main` at `f01e564`. Nothing here is built yet.
 
 Three kinds of decision appear below, and they are told apart on purpose:
 
@@ -70,8 +71,9 @@ room above and below them. Set mode is laid out for the tall screen first, and w
    neutral Spanish base. (U)
 5. While a preset is on, hollywood ignores the calendar's holiday. (U)
 6. Presets can be edited while oxiper runs, and a mistake in one never takes the screen down.
-7. Set mode: frozen layout, fixed pane titles, few and big panes (3 or 4; 5 on a tall screen),
-   only the big visual widgets and one slow log, slower, no blinking or flashes, a bit dimmer,
+7. Set mode: frozen layout, fixed pane titles, few and big panes (3 or 4, on a tall screen as
+   on a wide one), only the big visual widgets and one slow log, slower, no blinking or
+   flashes, a bit dimmer,
    no calendar holiday unless one is forced with `fiestas=`. Switched by a setting (config,
    `-o`, live reload) and by the `s` key. Works with or without a preset. (U)
 8. A preset will usually be drafted by an assistant from the video's script and tweaked by
@@ -1038,7 +1040,7 @@ says `reseeded` as it does now.
 |---|---|---|
 | layout | a split, a merge or a reshuffle every 10 to 25 s | frozen (U); made for the screen's shape, tall or wide (U) |
 | pane titles | a new one every 8 to 22 s | fixed (U) |
-| panes | up to `panes` (6) | 3 or 4 (U); 4 or 5 on a tall screen (C25) |
+| panes | up to `panes` (6) | 3 or 4 (U), on a tall screen as on a wide one (K13) |
 | always there | nothing | the banner pane and one log pane (U) |
 | widgets | any of nineteen | the big visual ones, and one slow log (U) |
 | banner | two lines, one or two widths | fitted to its pane: lines wrap, eight sizes ([7.5](#75-the-banner)) |
@@ -1098,7 +1100,7 @@ They are the only other scrolling text on a set screen.
 
 ### 10.3 The layout
 
-(U2, C17, C25, C26) In set mode the layout is a pure function of the seed and the terminal
+(U2, C17, C25, C26, K13) In set mode the layout is a pure function of the seed and the terminal
 size. Nothing else goes into it: not the preset, not the clock, not the generator the words
 use.
 **Editing a preset, or switching to another, cannot move a pane** (anti-goal 8).
@@ -1118,10 +1120,10 @@ tall, 67x60 (one seed)                 wide, 120x33 (one seed)
 │ banner                 67x20   │    │ banner             74x22    │ radar    46x16  │
 │                                │    │                             │                 │
 │                                │    │                             │                 │
-├───────────────┬────────────────┤    │                             ├─────────────────┤
-│ rain   36x16  │ radar  31x16   │    ├─────────────────────────────┤ map      46x16  │
-│               │                │    │ log                74x10    │                 │
-├───────────────┴────────────────┤    │                             │                 │
+├────────────────────────────────┤    │                             ├─────────────────┤
+│ radar                  67x16   │    ├─────────────────────────────┤ map      46x16  │
+│                                │    │ log                74x10    │                 │
+├────────────────────────────────┤    │                             │                 │
 │ map                    67x16   │    └─────────────────────────────┴─────────────────┘
 │                                │      the ticker
 ├────────────────────────────────┤
@@ -1130,7 +1132,7 @@ tall, 67x60 (one seed)                 wide, 120x33 (one seed)
   the ticker
 ```
 
-**A tall screen is a stack of bands**, each as wide as the screen:
+**A tall screen is a stack of bands**, each as wide as the screen and each one pane (K13):
 
 - *The banner band.* Its height is the title row plus the box of three lines of big letters at
   the biggest size in which eight letters fit across ([7.5](#75-the-banner)): 20 rows under 99
@@ -1146,8 +1148,7 @@ tall, 67x60 (one seed)                 wide, 120x33 (one seed)
 
 At 9:16, the shape of a monitor on its side, this comes out even: a third of the height for
 the banner, an eighth for the log, and two bands each about a quarter as high as the screen is
-wide, which is the height at which a full-width band is the shape of the world map, and half
-of one is a square for the radar.
+wide, which is the height at which a full-width band is the shape of the world map.
 
 **A wide screen is two columns:**
 
@@ -1174,23 +1175,32 @@ that suits it:
 
 If nothing that is left suits a pane, it takes the next kind anyway.
 
-In a band of a tall screen a shaped widget does not take the whole width when the band is much
-wider than its shape. The radar takes its square (with its list, if that still leaves a
-neighbor 30 columns), the map takes four columns for each of its rows, neither less than 30
-columns, and whatever suits the rest of the band goes beside it, on the side the seed picks,
-provided the rest is at least 30 columns. Only one band is divided this way. That is where the
-fifth pane of a tall screen comes from: a radar is square, and half a band is a square.
+**A band is never divided (K13).** The first version of this design gave a shaped widget its
+natural width inside one band of a tall screen and put a neighbor beside it, which made a
+fifth pane. The user approved "3 or 4 panes, big", so every band holds exactly one pane, as
+wide as the screen. A shaped widget draws in its band as it would in any pane of that size,
+and no widget is changed for it:
 
-**How many panes.** Tall: banner, log and two bands, one of them possibly divided: 4 or 5.
-Wide: banner, log and one or two in the side column: 3 or 4. "Few and big" holds on both: at
-67x60 no pane of a full layout is narrower than 31 columns, and the only one lower than 16
-rows is the log.
+- *The radar* fits its circle to the band's height and draws it in the middle of the columns
+  left of its list, which stays at the right edge from 50 columns, as today. The circle is
+  round at any width. The "suits" table keeps the radar out of a band that is too flat for
+  it (more than 2.4 times as wide as tall, physically).
+- *The map* keeps the world's proportions by the rule of
+  [10.8](#108-a-tall-terminal-outside-set-mode), which every map follows on the set: the
+  largest rectangle in its area that is between three and six times as many columns as rows,
+  centered. In the 67x16 bands of a 67x60 screen that is the whole band; in a band only 9
+  rows high the map is narrower than the band, with a margin on each side.
+- *The rain, the graph and the bars* fill the width.
+
+**How many panes.** Tall: banner, log and two bands: 4. Wide: banner, log and one or two in
+the side column: 3 or 4. "Few and big" holds on both: at 67x60 every pane is as wide as the
+screen, and the only one lower than 16 rows is the log.
 
 | screen | panes (one seed) |
 |---|---|
-| 60x55 | banner 60x20, radar 30x13 beside rain 30x13, progress 60x14, log 60x7 |
-| 67x60 | banner 67x20, rain 36x16 beside radar 31x16, map 67x16, log 67x7 |
-| 120x106 | banner 120x29, radar 85x31 (with its list) beside rain 35x31, map 120x32, log 120x13 |
+| 60x55 | banner 60x20, radar 60x13, progress 60x14, log 60x7 |
+| 67x60 | banner 67x20, radar 67x16, map 67x16, log 67x7 |
+| 120x106 | banner 120x29, radar 120x31, map 120x32, log 120x13 |
 | 100x30 | banner 62x20 over log 62x9; radar 38x15 over rain 38x14 |
 | 120x33 | banner 74x22 over log 74x10; radar 46x16 over map 46x16 |
 | 213x60 | banner 132x45 over log 132x14; radar 81x30 over map 81x29 |
@@ -1522,15 +1532,15 @@ hundred seeds each:
 - The panes tile the area exactly: no overlap, no gap, the ticker's row left free.
 - There is exactly one banner pane, and exactly one log pane whenever `R` is 21 or more.
 - Every kind is in the pool; none twice.
-- Tall: every pane but those of one divided band is as wide as the screen; the banner band is
-  the first or second; 4 or 5 panes from 41 rows. Wide: the banner is above the log in one
-  column; 3 or 4 panes from 74 columns.
+- Tall: every pane is as wide as the screen, so no two share a row (K13); the banner band is
+  the first or second; exactly 4 panes from 41 rows, never more at any size. Wide: the banner
+  is above the log in one column; 3 or 4 panes from 74 columns.
 - No pane but the banner's is under 30 columns or 7 rows, at any size.
 - Whenever `R` is 14 or more the banner pane's inside is at least 13 rows, and on a screen of
   60 columns or more it holds eight letters in two lines at narrow or better.
 - Shape: every shape pane suits its kind by the table of 10.3, unless no kind that was left
-  suited it; a radar or a map that shares a band has its natural width, give or take a column,
-  and its neighbor has 30 columns or more.
+  suited it. On a tall screen a radar is therefore never in a band more than 2.4 times as
+  wide as tall while another kind that suits the band is left.
 - The table of examples in [10.3](#103-the-layout) for the seeds that produce it, and the
   table of minimums at its boundaries (40 and 41 rows, 29 and 30, 20 and 21; 73 and 74
   columns).
@@ -1767,6 +1777,7 @@ keeps its row, says so, and points to the row that replaced it.
 | K10 | a `preset` that is not a string is an error | `-o hollywood.preset=2026` meant a warning and then no preset | |
 | K11 | without `tema` the captions are the base's, never the file's name | it is shown on camera | |
 | K12 | the last gate allows `mundane_es <= mundane.len()` | the base wants `==`, the holidays' tests assert `<` | |
+| K13 | on a tall screen every band holds exactly one pane: at most 4 panes (banner, log, two shape bands), as on a wide screen; a shaped widget draws in its full-width band as in any pane of that size | the user approved "3 or 4 panes, big"; a divided band made a fifth, and two panes of 30 columns | reverses the divided band and the fifth pane of C25, and the neighbor clause of C26. The radar's circle and the map's proportions (C32) are what keep the shapes right in a wide band |
 | C1 | TOML, flat, lists as `'''` blocks | existing parser and habit; no per-item syntax to get wrong | a line-based format of our own: more code, no line numbers for free |
 | C2 | Spanish keys and blanks | the file is Spanish prose | English names; decide before the first real preset exists. Confirmed by K1 |
 | C3 | nouns carry their article; plurals only in blanks and tails | no gender table; the grammar is singular | |
@@ -1791,8 +1802,8 @@ keeps its row, says so, and points to the row that replaced it.
 | C22 | the example preset lives in `docs/` and in a test | it cannot rot | |
 | C23 | `set_eggs` (default on) for the set alone, and the `e` key for the run; when off, `E` plays nothing and says so, and the egg that is playing is cut | `eggs` and `egg_rate` can only silence a shoot by losing the eggs everywhere; a key is the quick way mid-take | the two existing settings only: a config edit to silence a take |
 | C24 | on the set an egg is as it always is: everyday eggs unless a holiday is forced, real time, own colors; a test for tall screens, and a holiday egg that looks wrong there is fixed in its own module, not here | holiday eggs keep to their days; an egg is meant to be seen; all 34 were run at 67x60 | dimmed or slowed eggs: work in 34 modules |
-| C25 | the set layout has two shapes, by the screen's physical aspect: bands on a tall screen (4 or 5 panes), two columns on a wide one (3 or 4); the banner band among the top two; panes dropped below the minimums, the banner last | U2; a monitor on its side at 9:16 divides evenly into a banner, a map, a radar's square and a log | one tiling for both: small letters and a stretched map on the tall screen. The fifth pane, against the user's "3 or 4": no divided band |
-| C26 | widgets are placed by shape: the radar takes a square, the map four columns a row, and what suits the rest goes beside them | a round radar and a world of the right proportions are most of what "looks right" means here | kinds by lot, as outside set mode |
+| C25 | the set layout has two shapes, by the screen's physical aspect: bands on a tall screen (4 or 5 panes), two columns on a wide one (3 or 4); the banner band among the top two; panes dropped below the minimums, the banner last | U2; a monitor on its side at 9:16 divides evenly into a banner, a map, a radar's square and a log | one tiling for both: small letters and a stretched map on the tall screen. **The divided band and the fifth pane are reversed by K13**: a tall screen has at most 4 panes, one to a band. The two shapes, the banner band's place and the minimums stand |
+| C26 | widgets are placed by shape: the radar takes a square, the map four columns a row, and what suits the rest goes beside them | a round radar and a world of the right proportions are most of what "looks right" means here | kinds by lot, as outside set mode. **"Goes beside them" is reversed by K13**: nothing shares a band. Placing by the "suits" table stands |
 | C27 | the log is the mission log; one line a scene second, never two in a frame; under a preset one sentence in three is a `frase`, in a shuffled round | U3; the calmest and plainest of the feeds; `frases` would otherwise be about one sentence in thirty | the syslog tail: more prefix, red lines |
 | C28 | under a preset and on the set the banner is fitted: lines wrap between words, eight sizes from x6 to pocket, the biggest that fits; elsewhere `Access` is untouched | U2: big letters on a narrow, tall pane, and big letters at all on a low one | two more fixed sizes: simpler, and wasteful on exactly the screen the user has |
 | C29 | the banner font gains `Ñ`, `?`, `¿`, `-`, `.`, `+`, and `¡` is allowed in big letters | Spanish titles about technology; the fitted banner centers by characters | refusing `Ñ`, as the first design did: no `AÑO`, no `CONTRASEÑA` |
