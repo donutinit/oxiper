@@ -56,7 +56,7 @@ const MAX_ENTRIES: usize = 400;
 /// A HUD line, and so the longest error or warning.
 const LINE: usize = 60;
 /// A banner's caption, drawn on the frame.
-const CAPTION: usize = 28;
+const CAPTION: usize = 40;
 /// The radar's contacts and the htop users the widgets need.
 const CONTACTS: usize = 8;
 const USERS: usize = 6;
@@ -80,19 +80,19 @@ const fn key(name: &'static str, max: usize, blanks: bool, star: bool) -> Key {
 }
 
 /// Every key, `tema` first (spec 7.4). The limits of `adjetivos`, `verbos`
-/// and the banners are this module's: a phrase, three written forms, and
-/// two lines of 12 with a caption.
+/// and the banners are the plan's: a phrase, room for three written forms,
+/// and two lines of 12 with a caption of 40 (12 + " / " + 12 + " / " + 40).
 const KEYS: &[Key] = &[
     key("tema", 24, false, false),
     key("titulares", 100, true, false),
     key("titulos", 40, true, false),
-    key("letrero_verde", 60, false, false),
-    key("letrero_rojo", 60, false, false),
+    key("letrero_verde", 70, false, false),
+    key("letrero_rojo", 70, false, false),
     key("personas", 28, false, false),
     key("nombres", 20, false, false),
     key("cosas", 40, false, false),
     key("adjetivos", 40, false, true),
-    key("verbos", 40, false, false),
+    key("verbos", 60, false, false),
     key("frases", 120, true, false),
 ];
 
@@ -1212,10 +1212,27 @@ mod tests {
         one_warning(
             &format!(
                 "letrero_verde = ['SOFTWARE / LIBRE', 'GNU / LIBRE / {}']",
-                long(29)
+                long(41)
             ),
             "letrero_verde[2]: ",
             green,
+        );
+        // At their limits: a caption of 40 on two lines of 12, three written forms.
+        let l = load(&format!(
+            "letrero_verde = ['ABCDEFGHIJKL / ABCDEFGHIJKL / {}']\nverbos = ['{}']",
+            long(40),
+            "desentumecer | desentumeciendo | desentumecido"
+        ));
+        assert!(l.warnings.is_empty(), "{:?}", l.warnings);
+        assert_eq!(l.preset.banners[0].caption, long(40));
+        assert_eq!(l.preset.vocab.verbs[0].1, "desentumeciendo");
+        one_warning(
+            &format!(
+                "verbos = ['liberar', 'proveer | proveyendo | {}o']",
+                long(39)
+            ),
+            "verbos[2]: ",
+            verbs,
         );
         one_warning(
             "letrero_rojo = ['NO']\nletrero_verde = ['SOFTWARE / LIBRE']",

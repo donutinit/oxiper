@@ -173,7 +173,7 @@ const IRREGULAR: &[(&str, &str, &str, bool)] = &[
     ("ver", "viendo", "vist", true),
     ("prever", "previendo", "previst", false),
     ("entrever", "entreviendo", "entrevist", false),
-    ("rever", "reviendo", "revist", false),
+    ("rever", "reviendo", "revist", true),
     // `corromper` is regular.
     ("romper", "rompiendo", "rot", true),
     ("poder", "pudiendo", "podid", true),
@@ -572,6 +572,7 @@ mod tests {
             ("sonreír", "sonriendo", "sonreído"),
             ("rever", "reviendo", "revisto"),
             ("entrever", "entreviendo", "entrevisto"),
+            ("atrever", "atreviendo", "atrevido"),
             ("Compilar", "compilando", "compilado"),
         ] {
             let got = verb(inf).map(|(i, g, p)| (i, g, format!("{p}o")));
