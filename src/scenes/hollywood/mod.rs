@@ -97,6 +97,7 @@ mod babble;
 mod feed;
 #[cfg(test)]
 mod fingerprint;
+mod garb;
 mod grito;
 mod inocentes;
 mod lexico;
@@ -116,6 +117,7 @@ use crate::fiesta::{Fiesta, Kind};
 use crate::render::{BOLD, Canvas, DIM};
 use crate::scene::{Ctx, Opt, Scene, SceneInfo, Val};
 use fastrand::Rng;
+use garb::Garb;
 use inocentes::Fool;
 
 pub const INFO: SceneInfo = SceneInfo {
@@ -749,8 +751,9 @@ fn dummy_pane() -> Pane {
     }
 }
 
-fn make_widget(kind: usize, seed: u64, level: u8, mx: Fiesta) -> Box<dyn Widget> {
+fn make_widget(kind: usize, seed: u64, level: u8, mx: impl Into<Garb>) -> Box<dyn Widget> {
     use feed::{Feed, FeedKind as K};
+    let mx: Garb = mx.into();
     match kind {
         0 => Box::new(Feed::new(K::Hex, seed, level, mx)),
         1 => Box::new(Feed::new(K::Log, seed, level, mx)),
@@ -770,22 +773,22 @@ fn make_widget(kind: usize, seed: u64, level: u8, mx: Fiesta) -> Box<dyn Widget>
         15 => Box::new(widgets::Satellites::new(seed, mx)),
         16 => Box::new(widgets::Ticker::new(seed, mx)),
         17 => Box::new(widgets::Access::new(seed, level, mx)),
-        GATEWAY => Box::new(mictlan::Gateway::new(seed, mx)),
-        OFRENDA => Box::new(mictlan::Ofrenda::new(seed, mx)),
-        FACE => Box::new(rostro::Face::new(seed, mx)),
-        REYES => Box::new(posada::Reyes::new(seed, mx)),
-        CARTAS => Box::new(posada::Cartas::new(seed, mx)),
-        PINATA => Box::new(posada::Pinata::new(seed, mx)),
-        PONCHE => Box::new(posada::Ponche::new(seed, mx)),
-        GRITO => Box::new(grito::Cuenta::new(seed, mx)),
-        CAMPANA => Box::new(grito::Campana::new(seed, mx)),
-        VIVAS => Box::new(grito::Vivas::new(seed, mx)),
-        DESFILE => Box::new(grito::Desfile::new(seed, mx)),
-        HISTORIA => Box::new(grito::Historia::new(seed, mx)),
-        TELEGRAFO => Box::new(archivo::Telegrafo::new(seed, mx)),
-        TRENES => Box::new(archivo::Trenes::new(seed, mx)),
-        ARCHIVO => Box::new(archivo::Archivo::new(seed, mx)),
-        LEMA => Box::new(archivo::Lema::new(seed, mx)),
+        GATEWAY => Box::new(mictlan::Gateway::new(seed, *mx)),
+        OFRENDA => Box::new(mictlan::Ofrenda::new(seed, *mx)),
+        FACE => Box::new(rostro::Face::new(seed, *mx)),
+        REYES => Box::new(posada::Reyes::new(seed, *mx)),
+        CARTAS => Box::new(posada::Cartas::new(seed, *mx)),
+        PINATA => Box::new(posada::Pinata::new(seed, *mx)),
+        PONCHE => Box::new(posada::Ponche::new(seed, *mx)),
+        GRITO => Box::new(grito::Cuenta::new(seed, *mx)),
+        CAMPANA => Box::new(grito::Campana::new(seed, *mx)),
+        VIVAS => Box::new(grito::Vivas::new(seed, *mx)),
+        DESFILE => Box::new(grito::Desfile::new(seed, *mx)),
+        HISTORIA => Box::new(grito::Historia::new(seed, *mx)),
+        TELEGRAFO => Box::new(archivo::Telegrafo::new(seed, *mx)),
+        TRENES => Box::new(archivo::Trenes::new(seed, *mx)),
+        ARCHIVO => Box::new(archivo::Archivo::new(seed, *mx)),
+        LEMA => Box::new(archivo::Lema::new(seed, *mx)),
         _ => Box::new(widgets::Keygen::new(seed, level, mx)),
     }
 }
@@ -899,20 +902,26 @@ impl Hollywood {
             kind = self.roll_kind();
         }
         let seed = self.rng.u64(..);
+        let garb = self.garb();
         let mut p = Pane {
             rect: Rect::default(),
             kind,
-            widget: make_widget(kind, seed, self.env.level, self.fiesta),
+            widget: make_widget(kind, seed, self.env.level, garb),
             title: String::new(),
             retitle: 0.0,
             age: 0.0,
             content: (u16::MAX, u16::MAX),
         };
-        Self::retitle(&mut p, &mut self.rng, self.env.level, self.fiesta);
+        Self::retitle(&mut p, &mut self.rng, self.env.level, garb);
         Box::new(p)
     }
 
-    fn retitle(p: &mut Pane, rng: &mut Rng, level: u8, mx: Fiesta) {
+    /// What the widgets wear: the day's holiday.
+    fn garb(&self) -> Garb {
+        Garb::plain(self.fiesta)
+    }
+
+    fn retitle(p: &mut Pane, rng: &mut Rng, level: u8, mx: Garb) {
         p.title.clear();
         p.title.push_str(p.widget.name());
         if level > 0 {
@@ -942,7 +951,7 @@ impl Hollywood {
             sig[0]
         };
         let area = self.area();
-        let (level, mx) = (self.env.level, self.fiesta);
+        let (level, mx) = (self.env.level, self.garb());
         let Some(root) = &mut self.root else {
             return;
         };
@@ -977,16 +986,16 @@ impl Hollywood {
         self.tape.clear();
         self.tape_off = 0.0;
         let area = self.area();
-        let level = self.env.level;
+        let (level, garb) = (self.env.level, self.garb());
         if let Some(root) = &mut self.root {
             let rng = &mut self.rng;
             root.each_mut(&mut |p| {
                 if p.kind >= KINDS && !extras(mx).contains(&p.kind) {
                     p.kind = rng.usize(..KINDS);
                 }
-                p.widget = make_widget(p.kind, rng.u64(..), level, mx);
+                p.widget = make_widget(p.kind, rng.u64(..), level, garb);
                 p.content = (u16::MAX, u16::MAX);
-                Self::retitle(p, rng, level, mx);
+                Self::retitle(p, rng, level, garb);
             });
             root.layout(area);
         }
@@ -1229,7 +1238,7 @@ impl Scene for Hollywood {
             self.change_layout();
             self.next_event = Self::interval(&mut self.rng, self.reshuffle);
         }
-        let (level, mx) = (self.env.level, self.fiesta);
+        let (level, mx) = (self.env.level, self.garb());
         if let Some(r) = &mut self.root {
             let rng = &mut self.rng;
             r.each_mut(&mut |p| {

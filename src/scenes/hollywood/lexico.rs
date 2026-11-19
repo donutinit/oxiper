@@ -12,6 +12,7 @@
 //! among the ordinary technobabble grows with how far the holiday has come
 //! (`share`).
 
+use super::garb::Garb;
 use super::{Tone, babble};
 use crate::fiesta::{Fiesta, Kind};
 use fastrand::Rng;
@@ -149,8 +150,8 @@ pub struct Vocab {
 
 /// The vocabulary of the day's holiday, if it has one (Día de Muertos has
 /// its own, `muertos.rs`).
-pub fn of(f: Fiesta) -> Option<&'static Vocab> {
-    match f.kind {
+pub fn of(g: impl Into<Garb>) -> Option<&'static Vocab> {
+    match g.into().kind {
         Kind::Navidad => Some(&super::navidad::VOCAB),
         Kind::Patrias => Some(&super::patrias::VOCAB),
         Kind::Revolucion => Some(&super::revolucion::VOCAB),

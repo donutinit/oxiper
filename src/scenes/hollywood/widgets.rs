@@ -6,12 +6,13 @@
 //! cmatrix, map, sshart, apg and friends, all simulated here.
 
 use super::feed::{Feed, FeedKind};
+use super::garb::Garb;
 use super::lexico::{self, Dress};
 use super::map::{self, Dots};
 use super::revolucion;
 use super::{Env, Pal, Rect, Widget, babble, muertos, put, put_ch};
 use crate::color::Color;
-use crate::fiesta::{Fiesta, Kind};
+use crate::fiesta::Kind;
 use crate::render::{BOLD, Canvas, DIM};
 use fastrand::Rng;
 use std::collections::VecDeque;
@@ -19,7 +20,7 @@ use std::f32::consts::{PI, TAU};
 use std::fmt::Write;
 
 /// How the day's holiday after Día de Muertos renames the ordinary widgets.
-fn dress(mx: Fiesta) -> Option<&'static Dress> {
+fn dress(mx: Garb) -> Option<&'static Dress> {
     lexico::of(mx).map(|v| &v.dress)
 }
 
@@ -87,7 +88,7 @@ struct Proc {
 }
 
 pub struct Htop {
-    mx: Fiesta,
+    mx: Garb,
     rng: Rng,
     cpu: [f32; 8],
     target: [f32; 8],
@@ -99,7 +100,8 @@ pub struct Htop {
 }
 
 impl Htop {
-    pub fn new(seed: u64, mx: Fiesta) -> Htop {
+    pub fn new(seed: u64, mx: impl Into<Garb>) -> Htop {
+        let mx: Garb = mx.into();
         let mut rng = Rng::with_seed(seed);
         let mut procs = Vec::new();
         let users = if mx.is(Kind::Muertos) {
@@ -312,7 +314,7 @@ impl Widget for Htop {
 // ---------------------------------------------------------------- bandwidth
 
 pub struct Bandwidth {
-    mx: Fiesta,
+    mx: Garb,
     rng: Rng,
     hist: VecDeque<(f32, f32)>,
     rx: f32,
@@ -326,7 +328,8 @@ pub struct Bandwidth {
 }
 
 impl Bandwidth {
-    pub fn new(seed: u64, mx: Fiesta) -> Bandwidth {
+    pub fn new(seed: u64, mx: impl Into<Garb>) -> Bandwidth {
+        let mx: Garb = mx.into();
         Bandwidth {
             mx,
             rng: Rng::with_seed(seed),
@@ -511,7 +514,7 @@ const RAIN_WORDS: &[&str] = &[
 ];
 
 pub struct Rain {
-    mx: Fiesta,
+    mx: Garb,
     rng: Rng,
     drops: Vec<Drop>,
     h: i32,
@@ -567,7 +570,8 @@ fn rain_sparkle(kind: Kind, n: u32) -> char {
 }
 
 impl Rain {
-    pub fn new(seed: u64, mx: Fiesta) -> Rain {
+    pub fn new(seed: u64, mx: impl Into<Garb>) -> Rain {
+        let mx: Garb = mx.into();
         Rain {
             mx,
             rng: Rng::with_seed(seed),
@@ -578,7 +582,7 @@ impl Rain {
         }
     }
 
-    fn respawn(rng: &mut Rng, h: i32, first: bool, mx: Fiesta) -> Drop {
+    fn respawn(rng: &mut Rng, h: i32, first: bool, mx: Garb) -> Drop {
         let mut len = rng.i32(5..(h.max(8) * 2 / 3).max(7));
         // Día de Muertos: some drops spell a word, more of them the higher
         // the holiday (drawn after the ordinary numbers).
@@ -713,7 +717,7 @@ struct Arc {
 }
 
 pub struct WorldMap {
-    mx: Fiesta,
+    mx: Garb,
     /// Souls that got home (Día de Muertos).
     home: u32,
     rng: Rng,
@@ -725,7 +729,8 @@ pub struct WorldMap {
 }
 
 impl WorldMap {
-    pub fn new(seed: u64, mx: Fiesta) -> WorldMap {
+    pub fn new(seed: u64, mx: impl Into<Garb>) -> WorldMap {
+        let mx: Garb = mx.into();
         WorldMap {
             mx,
             home: 100 + (seed % 900) as u32,
@@ -904,7 +909,7 @@ struct Blip {
 }
 
 pub struct Radar {
-    mx: Fiesta,
+    mx: Garb,
     rng: Rng,
     dots: Dots,
     sweep: f32,
@@ -912,7 +917,8 @@ pub struct Radar {
 }
 
 impl Radar {
-    pub fn new(seed: u64, mx: Fiesta) -> Radar {
+    pub fn new(seed: u64, mx: impl Into<Garb>) -> Radar {
+        let mx: Garb = mx.into();
         let mut rng = Rng::with_seed(seed);
         // The holiday tracks more souls the higher it is.
         let n = if mx.is(Kind::Muertos) || dress(mx).is_some() {
@@ -1124,13 +1130,14 @@ struct Bar {
 }
 
 pub struct Progress {
-    mx: Fiesta,
+    mx: Garb,
     rng: Rng,
     bars: Vec<Bar>,
 }
 
 impl Progress {
-    pub fn new(seed: u64, mx: Fiesta) -> Progress {
+    pub fn new(seed: u64, mx: impl Into<Garb>) -> Progress {
+        let mx: Garb = mx.into();
         Progress {
             mx,
             rng: Rng::with_seed(seed),
@@ -1173,7 +1180,7 @@ impl Widget for Progress {
                 if self.mx.is(Kind::Muertos) && self.rng.f32() < muertos::share(self.mx.level) {
                     muertos::progress_label(&mut self.rng, env.level.max(1), &mut b.label);
                 } else if let Some(v) = lexico::of(self.mx)
-                    && self.rng.f32() < lexico::share(self.mx.level)
+                    && self.mx.takes(&mut self.rng, 1.0)
                 {
                     v.progress_label(&mut self.rng, env.level.max(1), &mut b.label);
                 } else {
@@ -1309,7 +1316,7 @@ const SAT_NAMES_MX: &[&str] = &[
 ];
 
 pub struct Satellites {
-    mx: Fiesta,
+    mx: Garb,
     rng: Rng,
     land: Dots,
     fx: Dots,
@@ -1319,7 +1326,8 @@ pub struct Satellites {
 }
 
 impl Satellites {
-    pub fn new(seed: u64, mx: Fiesta) -> Satellites {
+    pub fn new(seed: u64, mx: impl Into<Garb>) -> Satellites {
+        let mx: Garb = mx.into();
         let mut rng = Rng::with_seed(seed);
         let mut names: Vec<&str> = if mx.is(Kind::Muertos) {
             SAT_NAMES_MX
@@ -1507,14 +1515,15 @@ struct Quote {
 }
 
 pub struct Ticker {
-    mx: Fiesta,
+    mx: Garb,
     rng: Rng,
     quotes: Vec<Quote>,
     timer: f32,
 }
 
 impl Ticker {
-    pub fn new(seed: u64, mx: Fiesta) -> Ticker {
+    pub fn new(seed: u64, mx: impl Into<Garb>) -> Ticker {
+        let mx: Garb = mx.into();
         Ticker {
             mx,
             rng: Rng::with_seed(seed),
@@ -1716,7 +1725,7 @@ pub(super) fn has_glyph(ch: char) -> bool {
 }
 
 pub struct Access {
-    mx: Fiesta,
+    mx: Garb,
     feed: Feed,
     rng: Rng,
     /// Some(granted, seconds left) while a banner is up.
@@ -1725,7 +1734,8 @@ pub struct Access {
 }
 
 impl Access {
-    pub fn new(seed: u64, level: u8, mx: Fiesta) -> Access {
+    pub fn new(seed: u64, level: u8, mx: impl Into<Garb>) -> Access {
+        let mx: Garb = mx.into();
         let mut rng = Rng::with_seed(seed ^ 0xacce55);
         Access {
             mx,
@@ -1910,7 +1920,7 @@ const ART_MX: [char; 15] = [
 ];
 
 pub struct Keygen {
-    mx: Fiesta,
+    mx: Garb,
     feed: Feed,
     rng: Rng,
     field: [[u8; 17]; 9],
@@ -1923,7 +1933,8 @@ pub struct Keygen {
 }
 
 impl Keygen {
-    pub fn new(seed: u64, level: u8, mx: Fiesta) -> Keygen {
+    pub fn new(seed: u64, level: u8, mx: impl Into<Garb>) -> Keygen {
+        let mx: Garb = mx.into();
         let mut k = Keygen {
             mx,
             feed: Feed::new(FeedKind::Passwords, seed, level, mx),

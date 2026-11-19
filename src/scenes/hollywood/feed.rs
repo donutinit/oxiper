@@ -7,9 +7,10 @@
 //! The widget ideas (hexdump, tail of logs, errno, tree, code, ssh-keygen
 //! art...) are those of Dustin Kirkland's hollywood (Apache License 2.0).
 
+use super::garb::Garb;
 use super::lexico::{self, Vocab};
 use super::{Env, Rect, Tone, Widget, babble, muertos, put};
-use crate::fiesta::{Fiesta, Kind};
+use crate::fiesta::Kind;
 use crate::render::{BOLD, Canvas};
 use fastrand::Rng;
 use std::collections::VecDeque;
@@ -150,7 +151,7 @@ const LOCALS: &[&str] = &[
 
 /// A sentence: on Día de Muertos the Mictlán's among the ordinary ones.
 /// Returns whether it is Spanish.
-fn say(rng: &mut Rng, level: u8, mx: Fiesta, out: &mut String) -> bool {
+fn say(rng: &mut Rng, level: u8, mx: Garb, out: &mut String) -> bool {
     if mx.is(Kind::Muertos) {
         muertos::mixed(rng, level, mx.level, out)
     } else if let Some(v) = lexico::of(mx) {
@@ -162,11 +163,11 @@ fn say(rng: &mut Rng, level: u8, mx: Fiesta, out: &mut String) -> bool {
 }
 
 /// An UPPER-CASE progress label, the Mictlán's or an ordinary one.
-fn label(rng: &mut Rng, level: u8, mx: Fiesta, out: &mut String) {
+fn label(rng: &mut Rng, level: u8, mx: Garb, out: &mut String) {
     if mx.is(Kind::Muertos) && rng.f32() < muertos::share(mx.level) {
         muertos::progress_label(rng, level, out);
     } else if let Some(v) = lexico::of(mx)
-        && rng.f32() < lexico::share(mx.level)
+        && mx.takes(rng, 1.0)
     {
         v.progress_label(rng, level, out);
     } else {
@@ -175,7 +176,7 @@ fn label(rng: &mut Rng, level: u8, mx: Fiesta, out: &mut String) {
 }
 
 /// A title, the Mictlán's or an ordinary one.
-fn title(rng: &mut Rng, mx: Fiesta, out: &mut String) {
+fn title(rng: &mut Rng, mx: Garb, out: &mut String) {
     if mx.is(Kind::Muertos) {
         muertos::mixed_title(rng, mx.level, out);
     } else if let Some(v) = lexico::of(mx) {
@@ -186,11 +187,11 @@ fn title(rng: &mut Rng, mx: Fiesta, out: &mut String) {
 }
 
 /// A daemon name, a holiday one half the time on Día de Muertos.
-fn daemon(rng: &mut Rng, mx: Fiesta) -> &'static str {
+fn daemon(rng: &mut Rng, mx: Garb) -> &'static str {
     if mx.is(Kind::Muertos) && rng.f32() < 0.5 * muertos::share(mx.level) {
         babble::pick(rng, muertos::DAEMONS)
     } else if let Some(v) = lexico::of(mx)
-        && rng.f32() < 0.5 * lexico::share(mx.level)
+        && mx.takes(rng, 0.5)
     {
         babble::pick(rng, v.daemons)
     } else {
@@ -199,11 +200,11 @@ fn daemon(rng: &mut Rng, mx: Fiesta) -> &'static str {
 }
 
 /// A local variable name.
-fn local(rng: &mut Rng, mx: Fiesta) -> &'static str {
+fn local(rng: &mut Rng, mx: Garb) -> &'static str {
     if mx.is(Kind::Muertos) && rng.f32() < muertos::share(mx.level) {
         babble::pick(rng, LOCALS_MX)
     } else if let Some(v) = lexico::of(mx)
-        && rng.f32() < lexico::share(mx.level)
+        && mx.takes(rng, 1.0)
     {
         babble::pick(rng, v.locals)
     } else {
@@ -212,13 +213,13 @@ fn local(rng: &mut Rng, mx: Fiesta) -> &'static str {
 }
 
 /// Writes a snake_case identifier from the babble tables: "flux_capacitor".
-fn ident(rng: &mut Rng, sep: char, mx: Fiesta, out: &mut String) {
+fn ident(rng: &mut Rng, sep: char, mx: Garb, out: &mut String) {
     if mx.is(Kind::Muertos) && rng.f32() < muertos::share(mx.level) {
         muertos::ident(rng, sep, out);
         return;
     }
     if let Some(v) = lexico::of(mx)
-        && rng.f32() < lexico::share(mx.level)
+        && mx.takes(rng, 1.0)
     {
         v.ident(rng, sep, out);
         return;
@@ -324,8 +325,8 @@ pub struct Feed {
     kind: FeedKind,
     rng: Rng,
     level: u8,
-    /// The day's holiday, or `Fiesta::NONE`.
-    mx: Fiesta,
+    /// What the feed wears: the day's holiday, or `Fiesta::NONE`.
+    mx: Garb,
     /// Navidad: the villancico that is scrolling by and the verse it is at.
     song: usize,
     verse: usize,
@@ -348,7 +349,7 @@ pub struct Feed {
 }
 
 impl Feed {
-    pub fn new(kind: FeedKind, seed: u64, level: u8, mx: Fiesta) -> Feed {
+    pub fn new(kind: FeedKind, seed: u64, level: u8, mx: impl Into<Garb>) -> Feed {
         let mut rng = Rng::with_seed(seed);
         let rate = match kind {
             FeedKind::Hex => 7.0,
@@ -366,7 +367,7 @@ impl Feed {
         Feed {
             kind,
             level,
-            mx,
+            mx: mx.into(),
             // (Not drawn from the generator: ordinary days draw the same numbers.)
             song: (seed % 9) as usize,
             verse: 0,
@@ -760,7 +761,7 @@ impl Feed {
             if self.mx.is(Kind::Muertos) && self.rng.f32() < muertos::share(self.mx.level) {
                 muertos::error(&mut self.rng, &mut err);
             } else if let Some(v) = self.voc()
-                && self.rng.f32() < lexico::share(self.mx.level)
+                && self.mx.takes(&mut self.rng, 1.0)
             {
                 v.error(&mut self.rng, &mut err);
             } else {
@@ -833,7 +834,7 @@ impl Feed {
             {
                 muertos::ERRNOS[self.rng.usize(..muertos::ERRNOS.len())]
             } else if let Some(v) = self.voc()
-                && self.rng.f32() < 0.6 * lexico::share(self.mx.level)
+                && self.mx.takes(&mut self.rng, 0.6)
             {
                 v.errnos[self.rng.usize(..v.errnos.len())]
             } else {
@@ -1073,7 +1074,7 @@ impl Feed {
             if self.mx.is(Kind::Muertos) && self.rng.f32() < muertos::share(self.mx.level) {
                 Some((muertos::DIRS, muertos::FILES))
             } else if let Some(v) = self.voc()
-                && self.rng.f32() < lexico::share(self.mx.level)
+                && self.mx.takes(&mut self.rng, 1.0)
             {
                 Some((v.dirs, v.files))
             } else {
@@ -1313,7 +1314,7 @@ impl Feed {
                 muertos::password(&mut self.rng, &mut pw);
                 pw
             } else if let Some(v) = self.voc()
-                && self.rng.f32() < lexico::share(self.mx.level)
+                && self.mx.takes(&mut self.rng, 1.0)
             {
                 let mut pw = String::new();
                 v.password(&mut self.rng, &mut pw);
@@ -1342,7 +1343,7 @@ impl Feed {
         let user = if self.mx.is(Kind::Muertos) && self.rng.f32() < muertos::share(self.mx.level) {
             babble::pick(&mut self.rng, muertos::USERS)
         } else if let Some(v) = self.voc()
-            && self.rng.f32() < lexico::share(self.mx.level)
+            && self.mx.takes(&mut self.rng, 1.0)
         {
             babble::pick(&mut self.rng, v.users)
         } else {
