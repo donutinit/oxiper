@@ -263,8 +263,8 @@ impl<W: Write> Write for Styled<W> {
     }
 }
 
-fn warn(cfg: &Config) {
-    for w in &cfg.warnings {
+fn warn(warnings: &[String]) {
+    for w in warnings {
         eprintln!("oxiper: warning: {w}");
     }
 }
@@ -294,8 +294,11 @@ fn real_main() -> Result<(), String> {
     match cli.cmd {
         None => {
             let cfg = load(cli.saver)?;
-            if !cli.saver && !cfg.warnings.is_empty() {
-                warn(&cfg);
+            // A preset that cannot be used stops here, before the terminal is taken.
+            let preset = app::preset_problems(&cfg)?;
+            if !cli.saver && !(cfg.warnings.is_empty() && preset.is_empty()) {
+                warn(&cfg.warnings);
+                warn(&preset);
                 std::thread::sleep(std::time::Duration::from_millis(1200));
             }
             app::run(
@@ -411,6 +414,10 @@ fn real_main() -> Result<(), String> {
                 let tc = theme::TermColors::default();
                 let mut problems = cfg.warnings.clone();
                 problems.extend(app::theme_problems(&cfg, &tc));
+                match app::preset_problems(&cfg) {
+                    Ok(warnings) => problems.extend(warnings),
+                    Err(e) => problems.push(e),
+                }
                 let where_ = cfg
                     .path
                     .as_ref()
@@ -442,7 +449,8 @@ fn real_main() -> Result<(), String> {
         }) => {
             let (w, h) = headless::parse_size(&size)?;
             let mut cfg = load(false)?;
-            warn(&cfg);
+            warn(&cfg.warnings);
+            warn(&app::preset_problems(&cfg)?);
             // Several scenes play in turn when a duration is set (a tour).
             if cfg.duration <= 0.0 {
                 cfg.scenes.truncate(1);
@@ -457,6 +465,7 @@ fn real_main() -> Result<(), String> {
         Some(Cmd::Snap { size, at, ansi }) => {
             let (w, h) = headless::parse_size(&size)?;
             let mut cfg = load(false)?;
+            warn(&app::preset_problems(&cfg)?);
             cfg.scenes.truncate(1);
             write!(stdout, "{}", headless::snap(cfg, w, h, at, ansi)?).map_err(io)
         }
@@ -563,6 +572,7 @@ fn real_main() -> Result<(), String> {
             };
             let saver = || {
                 let cfg = Config::load(path.as_deref(), &[], true)?;
+                app::preset_problems(&cfg)?;
                 app::run(
                     cfg,
                     app::RunOpts {

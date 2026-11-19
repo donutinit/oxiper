@@ -68,6 +68,12 @@ pub fn theme_problems(cfg: &Config, tc: &TermColors) -> Vec<String> {
     problems
 }
 
+/// The hollywood preset's warnings, or why it cannot be used (spec 8.5, 8.6).
+/// Checked whether or not hollywood is in the playlist: the arrow keys reach it.
+pub fn preset_problems(cfg: &Config) -> Result<Vec<String>, String> {
+    scenes::hollywood::preset_check(&cfg.scene_table("hollywood"))
+}
+
 /// Does this config need the terminal's 16-color palette?
 pub fn wants_palette(cfg: &Config) -> bool {
     let uses = |n: &str| {
@@ -140,6 +146,7 @@ impl Player {
         if let Some(e) = scene_theme_problems(&cfg, &tc).into_iter().next() {
             return Err(e);
         }
+        preset_problems(&cfg)?;
         let mut rng = cfg
             .seed
             .map_or_else(fastrand::Rng::new, fastrand::Rng::with_seed);
@@ -429,6 +436,8 @@ impl Player {
         if let Some(e) = scene_theme_problems(&cfg, &self.tc).into_iter().next() {
             return Err(e);
         }
+        // For the HUD: the reason first, on one line.
+        scenes::hollywood::preset_refusal(&cfg.scene_table("hollywood"))?;
         let same_list = cfg.scenes.iter().map(|s| s.name).eq(self
             .cfg
             .scenes
@@ -543,6 +552,39 @@ pub struct RunOpts {
     pub saver: bool,
 }
 
+/// What a reload of `config.toml` changed that the loop has to act on.
+pub struct Reloaded {
+    pub bg_changed: bool,
+    pub mode: ColorMode,
+}
+
+/// The once-a-second look at config.toml. None: unchanged. A refusal records
+/// the file's mtime, so it is not tried again until the file changes (K9).
+fn poll_config(player: &mut Player, ro: &RunOpts) -> Option<Result<Reloaded, String>> {
+    if !player.cfg.changed_on_disk() {
+        return None;
+    }
+    let refused = match Config::load(ro.config_path.as_deref(), &ro.overrides, ro.saver) {
+        Ok(cfg) => {
+            let bg_changed =
+                cfg.background != player.cfg.background || cfg.strict != player.cfg.strict;
+            let mode = cfg.color.unwrap_or_else(ColorMode::detect);
+            match player.reload(cfg) {
+                Ok(()) => return Some(Ok(Reloaded { bg_changed, mode })),
+                Err(e) => e,
+            }
+        }
+        Err(e) => e,
+    };
+    // Keep the old config but remember the mtime so we don't retry every second.
+    player.cfg.mtime = player
+        .cfg
+        .path
+        .as_ref()
+        .and_then(|p| std::fs::metadata(p).and_then(|m| m.modified()).ok());
+    Some(Err(refused))
+}
+
 pub fn run(cfg: Config, ro: RunOpts) -> Result<(), String> {
     term::install_handlers();
     let setup = |e: std::io::Error| format!("cannot set up the terminal: {e}");
@@ -612,34 +654,18 @@ pub fn run(cfg: Config, ro: RunOpts) -> Result<(), String> {
 
         if last_check.elapsed() >= Duration::from_secs(1) {
             last_check = Instant::now();
-            if player.cfg.changed_on_disk() {
-                match Config::load(ro.config_path.as_deref(), &ro.overrides, ro.saver) {
-                    Ok(cfg) => {
-                        let bg_changed = cfg.background != player.cfg.background
-                            || cfg.strict != player.cfg.strict;
-                        let new_mode = cfg.color.unwrap_or_else(ColorMode::detect);
-                        match player.reload(cfg) {
-                            Ok(()) => {
-                                if bg_changed || new_mode != renderer.mode {
-                                    renderer.mode = new_mode;
-                                    canvas.set_background(player.canvas_bg());
-                                    canvas.strict = player.cfg.strict;
-                                    renderer.invalidate();
-                                }
-                                hud.show("config reloaded".into(), 1.5);
-                            }
-                            Err(e) => hud.show(e, 5.0),
+            if let Some(polled) = poll_config(&mut player, &ro) {
+                match polled {
+                    Ok(r) => {
+                        if r.bg_changed || r.mode != renderer.mode {
+                            renderer.mode = r.mode;
+                            canvas.set_background(player.canvas_bg());
+                            canvas.strict = player.cfg.strict;
+                            renderer.invalidate();
                         }
+                        hud.show("config reloaded".into(), 1.5);
                     }
-                    Err(e) => {
-                        // Keep the old config but remember the mtime so we don't retry every second.
-                        player.cfg.mtime = player
-                            .cfg
-                            .path
-                            .as_ref()
-                            .and_then(|p| std::fs::metadata(p).and_then(|m| m.modified()).ok());
-                        hud.show(e, 5.0);
-                    }
+                    Err(e) => hud.show(e, 5.0),
                 }
                 dirty = true;
             }
@@ -849,6 +875,130 @@ mod tests {
             theme_problems(&Config::from_toml("theme = 'nope'"), &tc).len(),
             1
         );
+    }
+
+    /// A file of this test's own under the temporary directory, holding `text`.
+    fn temp_file(name: &str, text: &str) -> PathBuf {
+        let path =
+            std::env::temp_dir().join(format!("oxiper-app-{}-{name}.toml", std::process::id()));
+        std::fs::write(&path, text).unwrap();
+        path
+    }
+
+    /// `[scenes.hollywood]` naming the preset at `path`.
+    fn naming(path: &std::path::Path) -> String {
+        format!("[scenes.hollywood]\npreset = '{}'\n", path.display())
+    }
+
+    /// A preset that cannot be used and has never loaded stops oxiper before
+    /// it starts, whether or not hollywood is in the playlist (spec 8.6).
+    #[test]
+    fn a_broken_preset_stops_the_start() {
+        let broken = temp_file("start-broken", "tema = 'software libre'\ntitulos = [\n");
+        let missing = std::env::temp_dir().join(format!(
+            "oxiper-app-{}-start-missing.toml",
+            std::process::id()
+        ));
+        for scene in ["hollywood", "neo"] {
+            let head = format!("scene = '{scene}'\nfiestas = 'none'\n");
+            let Err(e) = player(&format!("{head}{}", naming(&broken))) else {
+                panic!("{scene}: started with a broken preset");
+            };
+            assert!(e.contains(&*broken.display().to_string()), "{e}");
+            assert!(e.contains("line"), "{e}");
+            let Err(e) = player(&format!("{head}{}", naming(&missing))) else {
+                panic!("{scene}: started with a missing preset");
+            };
+            assert!(e.contains(&*missing.display().to_string()), "{e}");
+            let Err(e) = player(&format!("{head}[scenes.hollywood]\npreset = 2026\n")) else {
+                panic!("{scene}: started with a preset that is a number");
+            };
+            assert!(e.contains("quote"), "{e}");
+        }
+    }
+
+    /// An empty file is a valid preset, the neutral base, when nothing
+    /// loaded from it before.
+    #[test]
+    fn an_empty_preset_that_never_loaded_is_the_base() {
+        let empty = temp_file("start-empty", "");
+        let toml = format!("scene = 'hollywood'\nfiestas = 'none'\n{}", naming(&empty));
+        assert!(player(&toml).is_ok());
+    }
+
+    /// A reload that names a preset that never loaded and is broken is
+    /// refused, and the config in use stays.
+    #[test]
+    fn a_reload_naming_a_broken_preset_is_refused() {
+        let broken = temp_file("reload-broken", "tema = \n");
+        let mut p = player("scene = 'neo,hollywood'\nfiestas = 'none'\n")
+            .ok()
+            .unwrap();
+        let bad = Config::from_toml(&format!(
+            "scene = 'neo,hollywood'\nfps = 12\n{}",
+            naming(&broken)
+        ));
+        let Err(e) = p.reload(bad) else {
+            panic!("a reload naming a broken preset was taken");
+        };
+        assert!(e.starts_with("preset: ") && e.chars().count() <= 60, "{e}");
+        assert_eq!(p.cfg.fps, 30);
+    }
+
+    /// `config check` lists a preset's warnings, each with the preset's
+    /// name, and its error.
+    #[test]
+    fn config_check_sees_presets() {
+        let one_bad = temp_file(
+            "check-one-bad",
+            "titulares = ['GNU no es Unix', 'Hola {n']\n",
+        );
+        let stem = one_bad.file_stem().unwrap().to_str().unwrap();
+        let cfg = Config::from_toml(&naming(&one_bad));
+        let problems = preset_problems(&cfg).unwrap();
+        assert_eq!(problems.len(), 1, "{problems:?}");
+        assert!(
+            problems[0].starts_with(&format!("{stem}: ")),
+            "{problems:?}"
+        );
+        assert!(problems[0].contains("titulares["), "{problems:?}");
+        let broken = temp_file("check-broken", "titulares = [\n");
+        assert!(preset_problems(&Config::from_toml(&naming(&broken))).is_err());
+        assert_eq!(preset_problems(&Config::from_toml("")), Ok(vec![]));
+    }
+
+    /// A reload that the `Player` refuses is not tried again until the file
+    /// changes: two polls after one bad save make one error (K9).
+    #[test]
+    fn a_refused_reload_is_tried_once() {
+        let path = temp_file("poll-config", "scene = 'neo'\nfiestas = 'none'\n");
+        let cfg = Config::load(Some(&path), &[], false).unwrap();
+        let mut p = Player::new(cfg, TermColors::default(), 80, 24)
+            .ok()
+            .unwrap();
+        let ro = RunOpts {
+            config_path: Some(path.clone()),
+            overrides: vec![],
+            saver: false,
+        };
+        assert!(poll_config(&mut p, &ro).is_none());
+        // The mtime alone can be the same within one tick: set it.
+        let rewrite = |text: &str, secs: u64| {
+            std::fs::write(&path, text).unwrap();
+            let f = std::fs::File::options().write(true).open(&path).unwrap();
+            f.set_modified(std::time::SystemTime::UNIX_EPOCH + Duration::from_secs(secs))
+                .unwrap();
+        };
+        rewrite(
+            "scene = 'neo'\nfiestas = 'none'\ntheme = 'nope'\n",
+            1_000_000,
+        );
+        assert!(matches!(poll_config(&mut p, &ro), Some(Err(_))));
+        assert!(poll_config(&mut p, &ro).is_none());
+        rewrite("scene = 'neo'\nfiestas = 'none'\nfps = 12\n", 2_000_000);
+        assert!(matches!(poll_config(&mut p, &ro), Some(Ok(_))));
+        assert_eq!(p.cfg.fps, 12);
+        assert!(poll_config(&mut p, &ro).is_none());
     }
 
     /// Every scene survives every holiday's days at odd sizes, with the

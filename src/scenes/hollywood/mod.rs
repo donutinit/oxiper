@@ -163,6 +163,48 @@ pub const INFO: SceneInfo = SceneInfo {
     make: |ctx| Box::new(Hollywood::new(ctx)),
 };
 
+/// The check of the `preset` option that start-up, a reload and `config check`
+/// run (spec 8.5, 8.6). Ok: the preset's warnings, each prefixed with its name
+/// (`software-libre: titulares[4]: ...`); none when no preset is set.
+/// Err: `<path>: <why>` for a preset that cannot be used and has never loaded,
+/// or an option that is not a string.
+pub fn preset_check(table: &toml::Table) -> Result<Vec<String>, String> {
+    check(table).map_err(|(at, why)| format!("{at}: {why}"))
+}
+
+/// The same check, a refusal in the HUD's form: `preset: <why>`, one line of
+/// 60 characters at most, the reason first (a long path would push it off).
+pub fn preset_refusal(table: &toml::Table) -> Result<(), String> {
+    check(table)
+        .map(drop)
+        .map_err(|(_, why)| cache::brief(&why))
+}
+
+/// The file the `preset` option names; a bare name is looked for beside the
+/// default config file (spec 8.4).
+fn wanted(table: &toml::Table) -> Result<Option<std::path::PathBuf>, String> {
+    let config = crate::config::default_path();
+    cache::wanted(table, config.as_deref().and_then(std::path::Path::parent))
+}
+
+/// The check, a refusal as where (the path, or the option) and why.
+fn check(table: &toml::Table) -> Result<Vec<String>, (String, String)> {
+    let path = match wanted(table) {
+        Ok(Some(path)) => path,
+        Ok(None) => return Ok(Vec::new()),
+        Err(why) => return Err(("scenes.hollywood.preset".into(), why)),
+    };
+    let name = path.file_stem().unwrap_or_default().to_string_lossy();
+    match cache::load(&path) {
+        cache::Answer::Good { warnings, .. } => {
+            Ok(warnings.iter().map(|w| format!("{name}: {w}")).collect())
+        }
+        // Loaded before and bad now: the scene keeps what it has and says so.
+        cache::Answer::Kept { why, .. } => Ok(vec![format!("{name}: {why}")]),
+        cache::Answer::Bad(why) => Err((path.display().to_string(), why)),
+    }
+}
+
 /// A rectangle in cells.
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
 pub struct Rect {
@@ -928,9 +970,7 @@ impl Hollywood {
     /// last good one from its file, or none when it never loaded. (Start-up
     /// and reload say why; a scene that is built again never stops for it.)
     fn load_preset(ctx: &Ctx) -> Option<&'static Preset> {
-        let config = crate::config::default_path();
-        let dir = config.as_deref().and_then(std::path::Path::parent);
-        let path = cache::wanted(ctx.opts.table(), dir).ok()??;
+        let path = wanted(ctx.opts.table()).ok()??;
         cache::load(&path).preset()
     }
 
