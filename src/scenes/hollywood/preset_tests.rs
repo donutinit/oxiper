@@ -6,7 +6,7 @@
 use super::feed::{self, Feed, FeedKind};
 use super::garb::Garb;
 use super::neutro::BASE;
-use super::preset::{self, Preset};
+use super::preset::{self, Preset, Round};
 use super::*;
 use crate::theme::Theme;
 use std::collections::BTreeSet;
@@ -350,18 +350,28 @@ fn scene_texts(path: &Path) -> BTreeSet<String> {
 
 #[test]
 fn no_english_prose_under_a_preset() {
-    // 1. What is drawn: nothing on the stop list, widget by widget and in
-    // the scene's ticker and titles, under the example and an empty preset.
+    // 1. What is drawn: nothing on the stop list, widget by widget, under
+    // the example and an empty preset.
     for p in [example(), bare()] {
         let (words, rows) = leaks(Garb::preset(p));
         assert!(words.is_empty(), "{words:?} in {rows:#?}");
     }
+}
+
+#[test]
+fn no_english_prose_in_the_scenes_ticker_and_titles() {
+    // 1. What is drawn: nothing on the stop list in the scene's ticker and
+    // titles, under the example and an empty preset.
     let empty = cache::temp("prose-empty", "");
     for path in [example_path(), empty.clone()] {
         let (words, rows) = stopped(&scene_texts(&path));
         assert!(words.is_empty(), "{path:?}: {words:?} in {rows:#?}");
     }
     std::fs::remove_file(&empty).ok();
+}
+
+#[test]
+fn the_check_for_english_prose_can_fail() {
     // 3. It can fail: the preset's words with a holiday's share of them let
     // `babble`'s sentences, its transfers and the real errno table through.
     let (words, rows) = leaks(Garb::leaky(example()));
@@ -406,7 +416,6 @@ fn the_words_come_from_the_preset() {
         for r in rows(&drawn(&mut auth, 160, 80, &env)) {
             let user = r.split('@').next().unwrap_or("");
             assert!(v.users.contains(&user), "{r}");
-            assert!(!feed::USERS.contains(&user) || v.users.contains(&user));
             n += 1;
         }
     }
@@ -645,4 +654,372 @@ fn a_preset_that_is_not_there_is_no_preset() {
             s.draw(ctx, &mut c);
         });
     }
+}
+
+// ------------------------------------------------------------------ what the camera reads
+
+/// The mark between two items of the ticker (the base's).
+const MARK: &str = "  \u{25c6}  ";
+
+/// hollywood with `opts` for `secs` simulated seconds at 140x40: every item
+/// of the ticker in the order it was fed, and every item seen whole on its row.
+fn ticker(opts: &str, secs: u32) -> (Vec<String>, BTreeSet<String>) {
+    let (mut fed, mut seen) = (String::new(), BTreeSet::new());
+    scene(opts, Fiesta::NONE, 140, 40, |s, ctx| {
+        assert!(s.preset.is_some());
+        for step in 0..secs * 10 {
+            s.tick(ctx, 0.1, 0.1);
+            let kept = s.tape.len();
+            if step % 10 == 0 {
+                let mut c = Canvas::new(140, 40, Color::Reset);
+                s.draw(ctx, &mut c);
+                let tape = row(&c, whole(140, 40), 39);
+                let parts: Vec<&str> = tape.split(MARK).collect();
+                // The first and the last are cut by the edges.
+                for p in parts.iter().skip(1).take(parts.len().saturating_sub(2)) {
+                    seen.insert(p.to_string());
+                }
+            } else {
+                s.feed_tape();
+            }
+            fed.extend(s.tape.get(kept..).unwrap_or(&[]));
+        }
+    });
+    let mut items: Vec<String> = fed.split(MARK).map(str::to_string).collect();
+    items.pop(); // what follows the last mark
+    (items, seen)
+}
+
+/// Is `item` the template `tpl` with its blanks filled, in capitals? (Its
+/// fixed words, in order; "DE" may have become "DEL".)
+fn filled(tpl: &str, item: &str) -> bool {
+    let tpl = tpl.to_uppercase();
+    let mut rest = item;
+    for (i, piece) in tpl.split(['{', '}']).enumerate() {
+        let piece = piece.trim();
+        if i % 2 == 1 || piece.is_empty() {
+            continue; // a blank's key
+        }
+        match rest.find(piece) {
+            Some(at) if i > 0 || at == 0 => rest = &rest[at + piece.len()..],
+            _ => return false,
+        }
+    }
+    true
+}
+
+#[test]
+fn the_ticker_is_the_files_headlines() {
+    const FIVE: [&str; 5] = [
+        "Primera noticia del día",
+        "1991: Torvalds publica el kernel",
+        "Libre como en libertad",
+        "Año de la GPL",
+        "Copyleft",
+    ];
+    let path = cache::temp(
+        "ticker-five",
+        &format!("titulares = '''\n{}\n'''\n", FIVE.join("\n")),
+    );
+    let want: BTreeSet<String> = FIVE.iter().map(|h| h.to_uppercase()).collect();
+    let (items, seen) = ticker(&naming(&path), 300);
+    std::fs::remove_file(&path).ok();
+    assert!(items.len() > 20, "{items:?}");
+    for item in &items {
+        assert!(want.contains(item), "{item:?}");
+    }
+    assert!(!seen.is_empty());
+    for item in &seen {
+        assert!(want.contains(item), "on screen: {item:?}");
+    }
+    // Every line once before any repeats.
+    for run in items.as_chunks::<5>().0 {
+        let run: BTreeSet<String> = run.iter().cloned().collect();
+        assert_eq!(run, want, "{items:?}");
+    }
+    // The example's, with or without babble: its headlines and nothing else.
+    for opts in [
+        naming(&example_path()),
+        format!("{}\nbabble = 0", naming(&example_path())),
+    ] {
+        let (items, seen) = ticker(&opts, 300);
+        assert!(items.len() > 20);
+        for item in items.iter().chain(&seen) {
+            assert!(
+                !item.contains("MISI\u{00d3}N") && !item.contains("MISSION"),
+                "{opts}: {item:?}"
+            );
+            assert_eq!(item, &item.to_uppercase(), "{opts}");
+            let tpls = example().vocab.headlines;
+            assert!(tpls.iter().any(|t| filled(t, item)), "{opts}: {item:?}");
+        }
+    }
+}
+
+#[test]
+fn without_titulares_the_ticker_is_the_engines_mix() {
+    let path = cache::temp("ticker-names", "nombres = '''\nGNU\nLinux\nDebian\n'''\n");
+    let (items, seen) = ticker(&naming(&path), 300);
+    std::fs::remove_file(&path).ok();
+    assert!(items.len() > 10, "{items:?}");
+    let (mut missions, mut headlines) = (0, 0);
+    for item in items.iter().chain(&seen) {
+        assert!(!item.contains("MISSION"), "{item:?}");
+        if item.starts_with("MISI\u{00d3}N \u{25c6} ") {
+            missions += 1;
+        } else {
+            assert!(BASE.headlines.iter().any(|t| filled(t, item)), "{item:?}");
+            headlines += 1;
+        }
+    }
+    assert!(missions > 0 && headlines > 0, "{items:?}");
+}
+
+/// Every pane's title, `secs` simulated seconds at 140x40, checked by
+/// `each(title, process name)`; every few seconds the scene is drawn and
+/// `drawn(canvas, title, its rect, palette)` sees each title as drawn.
+fn titles(
+    opts: &str,
+    secs: u32,
+    mut each: impl FnMut(&str, &str),
+    mut drawn: impl FnMut(&Canvas, &str, Rect, &Pal),
+) {
+    scene(opts, Fiesta::NONE, 140, 40, |s, ctx| {
+        assert!(s.preset.is_some());
+        for step in 0..secs * 10 {
+            s.tick(ctx, 0.1, 0.1);
+            if let Some(root) = &s.root {
+                root.each(&mut |p| each(&p.title, p.widget.name()));
+            }
+            if step % 50 == 0 {
+                let mut c = Canvas::new(140, 40, Color::Reset);
+                s.draw(ctx, &mut c);
+                if let Some(root) = &s.root {
+                    root.each(&mut |p| drawn(&c, &p.title, p.rect, &s.env.pal));
+                }
+            }
+        }
+    });
+}
+
+#[test]
+fn titles_come_first() {
+    let given = example().titles;
+    for (opts, secs) in [
+        (naming(&example_path()), 600),
+        (format!("{}\nbabble = 0", naming(&example_path())), 120),
+    ] {
+        let mut shown = BTreeSet::new();
+        let mut bright = 0;
+        titles(
+            &opts,
+            secs,
+            |title, name| {
+                let t = given
+                    .iter()
+                    .find(|t| title == format!("{t} \u{00b7} {name}"))
+                    .unwrap_or_else(|| panic!("{opts}: {title:?}"));
+                shown.insert(*t);
+            },
+            |c, title, r, pal| {
+                // The title's first word, as far as the bar shows it.
+                let tw = (r.w - 5).max(0) as usize;
+                let first = title.split(' ').next().unwrap_or("").chars().count();
+                if tw < 4 {
+                    return;
+                }
+                for i in 0..first.min(tw) {
+                    let cell = c.get(r.x + 3 + i as i32, r.y).unwrap();
+                    assert_eq!(cell.fg, pal.bright, "{title:?} at {i}");
+                    bright += 1;
+                }
+            },
+        );
+        assert!(bright > 0);
+        if secs >= 600 {
+            assert_eq!(shown.len(), given.len(), "{shown:?}");
+        }
+    }
+}
+
+#[test]
+fn without_titulos_titles_are_generated() {
+    let p = parsed(b"nombres = '''\nGNU\nLinux\n'''\n");
+    assert!(p.titles.is_empty());
+    let g = Garb::preset(p);
+    let mut round = Round::new(p.titles.len());
+    let mut a = Rng::with_seed(9);
+    for i in 0..2000 {
+        let kind = i % KINDS;
+        let mut pane = Pane {
+            rect: Rect::default(),
+            kind,
+            widget: make_widget(kind, i as u64, 7, g),
+            title: String::new(),
+            retitle: 0.0,
+            age: 0.0,
+            content: (0, 0),
+        };
+        // The very draws of `Vocab::title`, never `babble::title`'s.
+        let mut b = a.clone();
+        Hollywood::retitle(&mut pane, &mut a, 7, g, &mut round);
+        let mut want = format!("{} \u{00b7} ", pane.widget.name());
+        let from = want.len();
+        p.vocab.title(&mut b, &mut want);
+        assert_eq!(want[from..], want[from..].to_lowercase());
+        let _ = b.f32();
+        assert_eq!(pane.title, want);
+        assert_eq!(a.clone().u64(..), b.u64(..));
+    }
+    // In the scene: the process name, then the generated words.
+    let path = cache::temp("titles-generated", "nombres = '''\nGNU\nLinux\n'''\n");
+    titles(
+        &naming(&path),
+        60,
+        |title, name| {
+            let rest = title.strip_prefix(&format!("{name} \u{00b7} "));
+            assert!(rest.is_some_and(|r| r == r.to_lowercase()), "{title:?}");
+        },
+        |_, _, _, _| {},
+    );
+    std::fs::remove_file(&path).ok();
+}
+
+/// An `Access` dressed by `p`, stepped until a banner comes up: its index.
+fn next_banner(a: &mut widgets::Access, env: &Env) -> usize {
+    while a.showing().is_some() {
+        a.update(0.1, env);
+    }
+    loop {
+        a.update(0.1, env);
+        if let Some(i) = a.showing() {
+            return i;
+        }
+    }
+}
+
+/// The box of the banner `b` as `letrero` fits it in a `w`x`h` pane, as a
+/// rect of that pane.
+fn banner_box(b: &preset::Banner, w: i32, h: i32) -> Rect {
+    let f = letrero::fit(b.top, b.bottom, w, h).unwrap();
+    Rect {
+        x: (w - f.w) / 2,
+        y: (h - f.h) / 2,
+        w: f.w,
+        h: f.h,
+    }
+}
+
+#[test]
+fn the_banner_shows_the_files_pairs() {
+    let env = env();
+    let pal = &env.pal;
+    for p in [example(), parsed(b"letrero_verde = 'SOFTWARE / LIBRE'\n")] {
+        let mut a = widgets::Access::new(3, 7, Garb::preset(p));
+        a.resize(66, 19);
+        let mut dealt = Vec::new();
+        for _ in 0..200 {
+            let i = next_banner(&mut a, &env);
+            dealt.push(i);
+            let b = &p.banners[i];
+            let c = drawn(&mut a, 66, 19, &env);
+            let bx = banner_box(b, 66, 19);
+            let frame = c.get(bx.x, bx.y).unwrap();
+            assert_eq!(frame.ch, '\u{2551}');
+            assert_eq!(frame.fg, if b.green { pal.green } else { pal.red });
+            // Nothing in the box is in the other color.
+            let other = if b.green { pal.red } else { pal.green };
+            for y in bx.y..bx.y + bx.h {
+                for x in bx.x..bx.x + bx.w {
+                    assert_ne!(c.get(x, y).unwrap().fg, other, "({x}, {y})");
+                }
+            }
+        }
+        // Each once before any repeats.
+        let all: BTreeSet<usize> = (0..p.banners.len()).collect();
+        for run in dealt.chunks_exact(p.banners.len()) {
+            assert_eq!(run.iter().copied().collect::<BTreeSet<_>>(), all);
+        }
+        if p.banners.len() == 1 {
+            assert!(p.banners[0].green);
+        }
+    }
+}
+
+#[test]
+fn the_banner_is_fitted() {
+    let env = env();
+    let ink = env.pal.ink;
+    let p = parsed(b"letrero_verde = 'SOFTWARE / LIBRE'\n");
+    let mut a = widgets::Access::new(4, 7, Garb::preset(p));
+    next_banner(&mut a, &env);
+    // The cells of the box: its width and height.
+    let inked = |c: &Canvas| -> Option<(i32, i32, i32, i32)> {
+        let (mut x0, mut y0, mut x1, mut y1) = (i32::MAX, i32::MAX, -1, -1);
+        let mut n = 0;
+        for y in 0..c.h() as i32 {
+            for x in 0..c.w() as i32 {
+                if c.get(x, y).is_some_and(|cell| cell.bg == ink) {
+                    (x0, y0, x1, y1) = (x0.min(x), y0.min(y), x1.max(x), y1.max(y));
+                    n += 1;
+                }
+            }
+        }
+        (n > 0).then(|| {
+            assert_eq!(n, (x1 - x0 + 1) * (y1 - y0 + 1), "not a box");
+            (x0, y0, x1 - x0 + 1, y1 - y0 + 1)
+        })
+    };
+    for ((w, h), size) in [((66, 19), (66, 13)), ((33, 9), (18, 8))] {
+        a.resize(w, h);
+        let c = drawn(&mut a, w, h, &env);
+        let (.., bw, bh) = inked(&c).unwrap_or_else(|| panic!("{w}x{h}: no banner"));
+        assert_eq!((bw, bh), size, "{w}x{h}");
+    }
+    // Below pocket: today's small form, one line of text in three rows.
+    a.resize(33, 7);
+    let c = drawn(&mut a, 33, 7, &env);
+    let (x, y, bw, bh) = inked(&c).unwrap();
+    assert_eq!((bw, bh), (18, 3));
+    let text = row(&c, Rect { x, y, w: bw, h: bh }, 1);
+    assert_eq!(text, "\u{2551} SOFTWARE LIBRE \u{2551}");
+    for (w, h) in [(9, 9), (33, 2)] {
+        a.resize(w, h);
+        let c = drawn(&mut a, w, h, &env);
+        assert_eq!(inked(&c), None, "{w}x{h}");
+        assert!(
+            !c.cells().iter().any(|cell| cell.ch == '\u{2550}'),
+            "{w}x{h}"
+        );
+    }
+}
+
+#[test]
+fn the_captions_are_tema_and_the_authors() {
+    let env = env();
+    let p = parsed(
+        "tema = 'Software libre'\nletrero_verde = '''\nSOFTWARE / LIBRE / desde 1983\nGNU / NO ES UNIX\n'''\n"
+            .as_bytes(),
+    );
+    let mut a = widgets::Access::new(5, 7, Garb::preset(p));
+    a.resize(66, 19);
+    let mut both = BTreeSet::new();
+    for _ in 0..8 {
+        let i = next_banner(&mut a, &env);
+        let b = &p.banners[i];
+        let c = drawn(&mut a, 66, 19, &env);
+        let bx = banner_box(b, 66, 19);
+        let top = row(&c, Rect { h: 1, ..bx }, 0);
+        let bottom = row(&c, Rect { h: 1, ..bx }, bx.h - 1);
+        assert!(top.contains(" Software libre "), "{top}");
+        if b.caption.is_empty() {
+            let plain = format!("\u{2551}{}\u{2551}", "\u{2550}".repeat(bx.w as usize - 2));
+            assert_eq!(bottom, plain);
+        } else {
+            assert_eq!(b.caption, "desde 1983");
+            assert!(bottom.contains(" desde 1983 "), "{bottom}");
+        }
+        both.insert(i);
+    }
+    assert_eq!(both.len(), 2);
 }

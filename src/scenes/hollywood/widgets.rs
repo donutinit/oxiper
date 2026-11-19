@@ -7,8 +7,10 @@
 
 use super::feed::{self, Feed, FeedKind};
 use super::garb::Garb;
+use super::letrero::{self, Fit, Look, Size};
 use super::lexico::{self, Dress};
 use super::map::{self, Dots};
+use super::preset::{Banner, Preset, Round};
 use super::revolucion;
 use super::{Env, Pal, Rect, Widget, babble, muertos, put, put_ch};
 use crate::color::Color;
@@ -1736,6 +1738,58 @@ pub struct Access {
     /// Some(granted, seconds left) while a banner is up.
     banner: Option<(bool, f32)>,
     wait: f32,
+    /// Under a preset: its banners, each once before any repeats.
+    deck: Round,
+    /// Under a preset: the index of the banner last dealt.
+    pick: usize,
+    /// Under a preset: that banner, fitted to the pane it was last drawn in.
+    fitted: Option<Fitted>,
+}
+
+/// A preset's banner fitted to its pane (spec 7.5). It is worked out when
+/// the banner comes up or the pane changes size, never frame by frame.
+struct Fitted {
+    /// The banner's index and the inside of the pane it was fitted to.
+    key: (usize, i32, i32),
+    /// The box; below pocket, a box of three rows around `small`. None: no banner.
+    fit: Option<Fit>,
+    /// Below pocket, the one line of ordinary text; else empty.
+    small: String,
+    /// The bottom caption with a space each side; empty for none.
+    caption: String,
+}
+
+impl Fitted {
+    fn new(b: &Banner, key: (usize, i32, i32)) -> Fitted {
+        let (_, w, h) = key;
+        if let Some(fit) = letrero::fit(b.top, b.bottom, w, h) {
+            let caption = if b.caption.is_empty() {
+                String::new()
+            } else {
+                format!(" {} ", b.caption)
+            };
+            return Fitted {
+                key,
+                fit: Some(fit),
+                small: String::new(),
+                caption,
+            };
+        }
+        // Below pocket: the one line of text of today's small banner.
+        let small = format!("{} {}", b.top, b.bottom);
+        let fit = (w >= 10 && h >= 3).then(|| Fit {
+            size: Size::Pocket,
+            lines: Vec::new(),
+            w: (small.chars().count() as i32 + 4).min(w),
+            h: 3,
+        });
+        Fitted {
+            key,
+            fit,
+            small,
+            caption: String::new(),
+        }
+    }
 }
 
 impl Access {
@@ -1748,6 +1802,53 @@ impl Access {
             wait: 2.0 + rng.f32() * 4.0,
             rng,
             banner: None,
+            deck: Round::new(mx.preset.map_or(0, |p| p.banners.len())),
+            pick: 0,
+            fitted: None,
+        }
+    }
+
+    /// The index of the preset's banner that is up.
+    #[cfg(test)]
+    pub fn showing(&self) -> Option<usize> {
+        self.mx.preset.and(self.banner).map(|_| self.pick)
+    }
+
+    /// Under a preset: the banner that is up, as the file wrote it, in big
+    /// letters fitted to `r` by `letrero`, or in one line below pocket.
+    fn letrero(&mut self, c: &mut Canvas, r: Rect, pal: &Pal, p: &'static Preset) {
+        let Some(b) = p.banners.get(self.pick) else {
+            return;
+        };
+        let key = (self.pick, r.w, r.h);
+        if self.fitted.as_ref().is_none_or(|f| f.key != key) {
+            self.fitted = Some(Fitted::new(b, key));
+        }
+        let Some(Fitted {
+            fit: Some(fit),
+            small,
+            caption,
+            ..
+        }) = &self.fitted
+        else {
+            return;
+        };
+        let col = if b.green { pal.green } else { pal.red };
+        let look = Look {
+            letters: col,
+            frame: col,
+            caption: pal.bright,
+            ink: Some(pal.ink),
+        };
+        if small.is_empty() {
+            let d = &p.vocab.dress;
+            let top = if b.green { d.granted[2] } else { d.denied[2] };
+            letrero::draw(c, r, fit, (top, caption), &look);
+        } else {
+            letrero::draw(c, r, fit, ("", ""), &look);
+            let n = small.chars().count() as i32;
+            let (bx, by) = ((r.w - fit.w) / 2, (r.h - fit.h) / 2);
+            put(c, r, bx + (fit.w - n) / 2, by + 1, small, col, BOLD);
         }
     }
 
@@ -1799,8 +1900,12 @@ impl Widget for Access {
             None => {
                 self.wait -= dt;
                 if self.wait <= 0.0 {
-                    // The souls are let in more often the higher the holiday.
-                    let granted = if self.mx.is(Kind::Muertos) || dress(self.mx).is_some() {
+                    // A preset deals its own banners; the souls are let in
+                    // more often the higher the holiday.
+                    let granted = if let Some(p) = self.mx.preset {
+                        self.pick = self.deck.next(&mut self.rng);
+                        p.banners.get(self.pick).is_none_or(|b| b.green)
+                    } else if self.mx.is(Kind::Muertos) || dress(self.mx).is_some() {
                         self.rng.f32() < 0.25 + 0.4 * self.mx.level
                     } else {
                         self.rng.u8(..10) < 4
@@ -1831,6 +1936,10 @@ impl Widget for Access {
         // Blink in the last moments.
         let on = left > 0.5 || (left * 10.0) as i32 % 2 == 0;
         if !on {
+            return;
+        }
+        if let Some(p) = self.mx.preset {
+            self.letrero(c, r, pal, p);
             return;
         }
         // (The ordinary banners keep their breakpoint: DENIED is narrower than GRANTED.)

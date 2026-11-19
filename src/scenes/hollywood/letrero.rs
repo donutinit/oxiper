@@ -1,5 +1,3 @@
-#![allow(dead_code)] // wired in Task 11
-
 //! The fitted banner: the access pane's two lines of big letters, wrapped
 //! between words and drawn at the biggest of eight sizes that fits its pane
 //! (spec 7.5). A pure function chooses the size, the lines and the box; one

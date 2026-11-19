@@ -127,7 +127,7 @@ use crate::scene::{Ctx, Opt, Scene, SceneInfo, Val};
 use fastrand::Rng;
 use garb::Garb;
 use inocentes::Fool;
-use preset::Preset;
+use preset::{Preset, Round};
 
 pub const INFO: SceneInfo = SceneInfo {
     name: "hollywood",
@@ -821,6 +821,29 @@ fn make_widget(kind: usize, seed: u64, level: u8, mx: impl Into<Garb>) -> Box<dy
     }
 }
 
+/// What the camera reads that a preset deals in rounds, every entry once
+/// before any repeats (spec 7.3): its titles and its headlines. Built from
+/// the preset's lists, again whenever the preset is (re)loaded; a round is
+/// only ever read with `.get()`, so lists shorter than it never index past
+/// their end.
+struct Rounds {
+    titles: Round,
+    headlines: Round,
+}
+
+impl Rounds {
+    fn of(preset: Option<&Preset>) -> Rounds {
+        let titles = preset.map_or(0, |p| p.titles.len());
+        let headlines = preset
+            .filter(|p| p.verbatim_tape)
+            .map_or(0, |p| p.vocab.headlines.len());
+        Rounds {
+            titles: Round::new(titles),
+            headlines: Round::new(headlines),
+        }
+    }
+}
+
 pub struct Hollywood {
     rng: Rng,
     env: Env,
@@ -841,6 +864,8 @@ pub struct Hollywood {
     fiesta: Fiesta,
     /// The preset the screen talks about, which wins over the holiday.
     preset: Option<&'static Preset>,
+    /// The preset's titles and headlines, dealt in rounds.
+    rounds: Rounds,
     seed: u64,
     /// Scene time, for the lights that blink along the title bars.
     clock: f32,
@@ -874,6 +899,7 @@ impl Hollywood {
             },
             fiesta,
             preset,
+            rounds: Rounds::of(preset),
             seed: ctx.seed,
             clock: 0.0,
             fool: fiesta.inocentes().then(|| Fool::new(ctx.seed)),
@@ -960,7 +986,8 @@ impl Hollywood {
             age: 0.0,
             content: (u16::MAX, u16::MAX),
         };
-        Self::retitle(&mut p, &mut self.rng, self.env.level, garb);
+        let titles = &mut self.rounds.titles;
+        Self::retitle(&mut p, &mut self.rng, self.env.level, garb, titles);
         Box::new(p)
     }
 
@@ -973,12 +1000,25 @@ impl Hollywood {
         }
     }
 
-    fn retitle(p: &mut Pane, rng: &mut Rng, level: u8, mx: Garb) {
+    /// A pane's title: the widget's process name and a generated name, or
+    /// under a preset with `titulos` the next of them, first and bright,
+    /// then the process name (spec 7.3), whatever `babble` says.
+    fn retitle(p: &mut Pane, rng: &mut Rng, level: u8, mx: Garb, titles: &mut Round) {
         p.title.clear();
-        p.title.push_str(p.widget.name());
-        if level > 0 {
+        let given = mx
+            .preset
+            .filter(|pr| !pr.titles.is_empty())
+            .and_then(|pr| Some((pr.vocab, *pr.titles.get(titles.next(rng))?)));
+        if let Some((v, tpl)) = given {
+            v.expand(rng, tpl, &mut p.title);
             p.title.push_str(" \u{00b7} ");
-            feed::title(rng, mx, &mut p.title);
+            p.title.push_str(p.widget.name());
+        } else {
+            p.title.push_str(p.widget.name());
+            if level > 0 {
+                p.title.push_str(" \u{00b7} ");
+                feed::title(rng, mx, &mut p.title);
+            }
         }
         p.retitle = 8.0 + rng.f32() * 14.0;
     }
@@ -1009,7 +1049,7 @@ impl Hollywood {
         if have {
             return;
         }
-        let rng = &mut self.rng;
+        let (rng, titles) = (&mut self.rng, &mut self.rounds.titles);
         let mut done = false;
         root.each_mut(&mut |p| {
             if !done && p.rect.area() == biggest {
@@ -1017,7 +1057,7 @@ impl Hollywood {
                 p.kind = fallback;
                 p.widget = make_widget(fallback, rng.u64(..), level, mx);
                 p.content = (u16::MAX, u16::MAX);
-                Self::retitle(p, rng, level, mx);
+                Self::retitle(p, rng, level, mx, titles);
             }
         });
         root.layout(area);
@@ -1034,14 +1074,14 @@ impl Hollywood {
         let area = self.area();
         let (level, garb) = (self.env.level, self.garb());
         if let Some(root) = &mut self.root {
-            let rng = &mut self.rng;
+            let (rng, titles) = (&mut self.rng, &mut self.rounds.titles);
             root.each_mut(&mut |p| {
                 if p.kind >= KINDS && !extras(mx).contains(&p.kind) {
                     p.kind = rng.usize(..KINDS);
                 }
                 p.widget = make_widget(p.kind, rng.u64(..), level, garb);
                 p.content = (u16::MAX, u16::MAX);
-                Self::retitle(p, rng, level, garb);
+                Self::retitle(p, rng, level, garb, titles);
             });
             root.layout(area);
         }
@@ -1154,7 +1194,21 @@ impl Hollywood {
         while self.tape.len() < need {
             self.tape_buf.clear();
             let mut s = std::mem::take(&mut self.tape_buf);
-            if self.fiesta.is(Kind::Muertos) {
+            if let Some(p) = self.preset.filter(|p| p.verbatim_tape) {
+                // The file's headlines and nothing else, each once before
+                // any repeats (spec 7.3).
+                let v = p.vocab;
+                let i = self.rounds.headlines.next(&mut self.rng);
+                if let Some(tpl) = v.headlines.get(i) {
+                    v.expand(&mut self.rng, tpl, &mut s);
+                    let up = s.to_uppercase();
+                    s.clear();
+                    s.push_str(&up);
+                }
+                s.push_str("  ");
+                s.push(v.mark);
+                s.push_str("  ");
+            } else if self.fiesta.is(Kind::Muertos) {
                 // Headlines of the Mictlán among its mission log.
                 if self.rng.f32() < 0.3 + 0.3 * self.fiesta.level {
                     muertos::headline(&mut self.rng, &mut s);
@@ -1289,11 +1343,11 @@ impl Scene for Hollywood {
         }
         let (level, mx) = (self.env.level, self.garb());
         if let Some(r) = &mut self.root {
-            let rng = &mut self.rng;
+            let (rng, titles) = (&mut self.rng, &mut self.rounds.titles);
             r.each_mut(&mut |p| {
                 p.retitle -= real;
                 if p.retitle <= 0.0 {
-                    Self::retitle(p, rng, level, mx);
+                    Self::retitle(p, rng, level, mx, titles);
                 }
             });
         }
