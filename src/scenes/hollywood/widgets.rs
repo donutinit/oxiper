@@ -327,6 +327,20 @@ pub struct Bandwidth {
     acc: f32,
     dots: Dots,
     peak: f32,
+    /// On the set: the figures shown, rewritten once a scene second, and
+    /// the seconds until they are.
+    figures: Figures,
+    clock: f32,
+}
+
+/// What the bandwidth graph's two lines of figures say: the last receive
+/// and send rates, the peak and the average (as fractions of the line).
+#[derive(Clone, Copy, Default)]
+struct Figures {
+    rx: f32,
+    tx: f32,
+    peak: f32,
+    avg: f32,
 }
 
 impl Bandwidth {
@@ -344,6 +358,19 @@ impl Bandwidth {
             acc: 0.0,
             dots: Dots::new(1, 1),
             peak: 0.0,
+            figures: Figures::default(),
+            clock: 0.0,
+        }
+    }
+
+    /// The figures as they are this moment.
+    fn live(&self) -> Figures {
+        let (rx, tx) = self.hist.back().copied().unwrap_or((0.0, 0.0));
+        Figures {
+            rx,
+            tx,
+            peak: self.peak,
+            avg: self.hist.iter().map(|h| h.0).sum::<f32>() / self.hist.len().max(1) as f32,
         }
     }
 }
@@ -396,11 +423,24 @@ impl Widget for Bandwidth {
         while self.hist.len() > 600 {
             self.hist.pop_front();
         }
+        if self.mx.calm {
+            // On the set the figures are rewritten once a second.
+            self.clock -= dt;
+            if self.clock <= 0.0 {
+                self.clock = 1.0;
+                self.figures = self.live();
+            }
+        }
     }
 
     fn draw(&mut self, c: &mut Canvas, r: Rect, env: &Env) {
         let pal = &env.pal;
-        let (last_rx, last_tx) = self.hist.back().copied().unwrap_or((0.0, 0.0));
+        let f = if self.mx.calm {
+            self.figures
+        } else {
+            self.live()
+        };
+        let (last_rx, last_tx) = (f.rx, f.tx);
         let mut t = String::new();
         if self.mx.is(Kind::Muertos) {
             let _ = write!(
@@ -458,24 +498,24 @@ impl Widget for Bandwidth {
             let _ = write!(
                 t,
                 "pico {:.0} almas/s   prom {:.0} almas/s",
-                self.peak * 1840.0,
-                self.hist.iter().map(|h| h.0).sum::<f32>() / n.max(1) as f32 * 1840.0
+                f.peak * 1840.0,
+                f.avg * 1840.0
             );
         } else if let Some(d) = dress(self.mx) {
             let _ = write!(
                 t,
                 "pico {:.0} {}   prom {:.0} {}",
-                self.peak * 1840.0,
+                f.peak * 1840.0,
                 d.down_unit,
-                self.hist.iter().map(|h| h.0).sum::<f32>() / n.max(1) as f32 * 1840.0,
+                f.avg * 1840.0,
                 d.down_unit
             );
         } else {
             let _ = write!(
                 t,
                 "peak {:.0} Mbit/s   avg {:.0} Mbit/s",
-                self.peak * 940.0,
-                self.hist.iter().map(|h| h.0).sum::<f32>() / n.max(1) as f32 * 940.0
+                f.peak * 940.0,
+                f.avg * 940.0
             );
         }
         put(c, r, 0, r.h - 1, &t, pal.dim, 0);
@@ -715,8 +755,13 @@ struct Arc {
     from: (&'static str, f32, f32),
     to: (&'static str, f32, f32),
     t: f32,
+    /// After the arrival: 0 to 1, how far the arc has glowed red (or, on
+    /// the set, faded to the background).
     glow: f32,
 }
+
+/// On the set, the scene seconds an arc that arrived takes to fade out.
+const ARC_FADE: f32 = 1.5;
 
 pub struct WorldMap {
     mx: Garb,
@@ -743,6 +788,11 @@ impl WorldMap {
             spawn: 0.0,
             painted: false,
         }
+    }
+
+    #[cfg(test)]
+    pub fn arcs_len(&self) -> usize {
+        self.arcs.len()
     }
 }
 
@@ -803,6 +853,8 @@ impl Widget for WorldMap {
                 if a.t >= 1.0 {
                     self.home += 1;
                 }
+            } else if self.mx.calm {
+                a.glow += dt / ARC_FADE;
             } else {
                 a.glow += dt * 0.7;
             }
@@ -829,6 +881,9 @@ impl Widget for WorldMap {
         let mut status = String::new();
         let mx = self.mx.is(Kind::Muertos);
         let dr = dress(self.mx);
+        // On the set an arc that arrived keeps its color and fades to the
+        // background, and its marker is one glyph (spec 10.5).
+        let calm = self.mx.calm;
         for a in &self.arcs {
             let (_, la, lo) = a.from;
             let (_, lb, lob) = a.to;
@@ -836,12 +891,15 @@ impl Widget for WorldMap {
             let (x1, y1) = map::project(lb, lob, pw, ph);
             let lift = ((x1 - x0).abs() + (y1 - y0).abs()) * 0.25;
             let steps = 40;
-            let col = match (a.glow > 0.0, mx) {
+            let mut col = match (a.glow > 0.0 && !calm, mx) {
                 (true, _) => pal.red,
                 (false, true) => pal.main,
                 (false, false) if dr.is_some() => pal.oro,
                 (false, false) => pal.amber,
             };
+            if calm {
+                col = pal.fade(col, a.glow);
+            }
             let upto = (steps as f32 * a.t) as i32;
             let (mut px, mut py) = (x0, y0);
             for i in 1..=upto {
@@ -864,7 +922,7 @@ impl Widget for WorldMap {
         for a in &self.arcs {
             let (_, lb, lob) = a.to;
             let (x1, y1) = map::project(lb, lob, pw, ph);
-            let blink = a.t >= 1.0 && (a.glow * 6.0) as i32 % 2 == 0;
+            let blink = !calm && a.t >= 1.0 && (a.glow * 6.0) as i32 % 2 == 0;
             let ch = match (mx, blink) {
                 (true, true) => '\u{2740}',
                 (true, false) => '\u{273f}',
@@ -873,7 +931,7 @@ impl Widget for WorldMap {
                 (false, true) => '\u{25c9}',
                 (false, false) => '\u{25cf}',
             };
-            let col = if a.t >= 1.0 {
+            let mut col = if a.t >= 1.0 && !calm {
                 pal.red
             } else if mx {
                 pal.flor
@@ -882,6 +940,9 @@ impl Widget for WorldMap {
             } else {
                 pal.amber
             };
+            if calm {
+                col = pal.fade(col, a.glow);
+            }
             put_ch(c, body, (x1 / 2.0) as i32, (y1 / 4.0) as i32, ch, col, BOLD);
         }
         put(c, r, 0, 0, &status, pal.bright, BOLD);
@@ -911,6 +972,52 @@ struct Blip {
     /// Día de Muertos: the soul's name and how long ago it got home.
     soul: &'static str,
     home: f32,
+    /// On the set: the line the list shows, written when the sweep passes,
+    /// and whether it tells that the soul got home.
+    shown: String,
+    shown_home: bool,
+}
+
+impl Blip {
+    /// The contact's line in the list, written into `t`; true when it tells
+    /// that the soul got home.
+    fn describe(&self, mx: Garb, t: &mut String) -> bool {
+        t.clear();
+        let dr = dress(mx);
+        let bearing = (self.ang.to_degrees() as i32 + 90).rem_euclid(360);
+        if !(mx.is(Kind::Muertos) || dr.is_some()) {
+            let _ = write!(
+                t,
+                "TGT-{} BRG {:03} RNG {:4.1}",
+                self.id,
+                bearing,
+                self.dist * 40.0
+            );
+            return false;
+        }
+        // A preset's contacts go by their call sign and number.
+        if mx.preset.is_some() {
+            let _ = write!(t, "{}-{}", self.soul, self.id);
+        } else {
+            t.push_str(self.soul);
+        }
+        let n = t.chars().count();
+        t.extend(std::iter::repeat_n(' ', 13usize.saturating_sub(n)));
+        if self.home < 4.0 {
+            let _ = write!(t, " {}", dr.map_or("EN CASA", |d| d.home));
+            true
+        } else {
+            let _ = write!(t, " {bearing:03}\u{00b0} {:4.1}", self.dist * 40.0);
+            false
+        }
+    }
+
+    /// Writes the line the list shows on the set.
+    fn rewrite(&mut self, mx: Garb) {
+        let mut t = std::mem::take(&mut self.shown);
+        self.shown_home = self.describe(mx, &mut t);
+        self.shown = t;
+    }
 }
 
 pub struct Radar {
@@ -945,6 +1052,8 @@ impl Radar {
                     ""
                 },
                 home: 9.0,
+                shown: String::new(),
+                shown_home: false,
             })
             .collect();
         Radar {
@@ -992,6 +1101,8 @@ impl Widget for Radar {
             if crossed {
                 b.glow = 1.0;
             }
+            // On the set a contact's line is rewritten when the sweep passes.
+            let rewrite = self.mx.calm && (crossed || b.shown.is_empty());
             if mx {
                 // Souls walk toward the middle, the house with the ofrenda,
                 // and a new one sets out from the edge when one gets there.
@@ -1011,11 +1122,14 @@ impl Widget for Radar {
                     };
                     b.id = self.rng.u16(100..999);
                 }
-                continue;
+            } else {
+                // Contacts drift slowly.
+                b.ang = (b.ang + (self.rng.f32() - 0.5) * 0.01).rem_euclid(TAU);
+                b.dist = (b.dist + (self.rng.f32() - 0.5) * 0.004).clamp(0.1, 0.95);
             }
-            // Contacts drift slowly.
-            b.ang = (b.ang + (self.rng.f32() - 0.5) * 0.01).rem_euclid(TAU);
-            b.dist = (b.dist + (self.rng.f32() - 0.5) * 0.004).clamp(0.1, 0.95);
+            if rewrite {
+                b.rewrite(self.mx);
+            }
         }
     }
 
@@ -1063,8 +1177,9 @@ impl Widget for Radar {
         };
         self.dots.blit(c, area);
         if mx {
-            // The ofrenda (or the star of Belén) in the middle, its candle lit.
-            let lit = (self.sweep * 2.0) as i32 % 2 == 0;
+            // The ofrenda (or the star of Belén) in the middle, its candle
+            // lit; on the set it holds still.
+            let lit = self.mx.calm || (self.sweep * 2.0) as i32 % 2 == 0;
             let (ch, col) = match dr {
                 Some(_) => (if lit { '\u{2726}' } else { '\u{2736}' }, pal.oro),
                 None => (if lit { '\u{2740}' } else { '\u{273f}' }, pal.vela),
@@ -1098,38 +1213,24 @@ impl Widget for Radar {
             } else {
                 put(c, r, x0, 0, "CONTACTS", pal.cyan, BOLD);
             }
-            for (i, b) in self.blips.iter().enumerate() {
+            let mut t = String::new();
+            for (i, b) in self.blips.iter_mut().enumerate() {
                 let y = 2 + i as i32;
                 let col = if b.glow > 0.5 { pal.red } else { pal.main };
-                if mx {
-                    // A preset's contacts go by their call sign and number.
-                    let sign;
-                    let name = if self.mx.preset.is_some() {
-                        sign = format!("{}-{}", b.soul, b.id);
-                        sign.as_str()
-                    } else {
-                        b.soul
-                    };
-                    let t = if b.home < 4.0 {
-                        format!("{name:<13} {}", dr.map_or("EN CASA", |d| d.home))
-                    } else {
-                        format!(
-                            "{name:<13} {:03}\u{00b0} {:4.1}",
-                            (b.ang.to_degrees() as i32 + 90).rem_euclid(360),
-                            b.dist * 40.0
-                        )
-                    };
-                    let col = if b.home < 4.0 { glow } else { col };
-                    put(c, r, x0, y, &t, col, if b.home < 4.0 { BOLD } else { 0 });
-                    continue;
+                let (line, home) = if self.mx.calm {
+                    if b.shown.is_empty() {
+                        b.rewrite(self.mx);
+                    }
+                    (b.shown.as_str(), b.shown_home)
+                } else {
+                    let home = b.describe(self.mx, &mut t);
+                    (t.as_str(), home)
+                };
+                if home {
+                    put(c, r, x0, y, line, glow, BOLD);
+                } else {
+                    put(c, r, x0, y, line, col, 0);
                 }
-                let t = format!(
-                    "TGT-{} BRG {:03} RNG {:4.1}",
-                    b.id,
-                    (b.ang.to_degrees() as i32 + 90).rem_euclid(360),
-                    b.dist * 40.0
-                );
-                put(c, r, x0, y, &t, col, 0);
             }
         }
     }
@@ -1148,7 +1249,14 @@ pub struct Progress {
     mx: Garb,
     rng: Rng,
     bars: Vec<Bar>,
+    /// Rows from one bar to the next.
+    step: i32,
 }
+
+/// On the set, the scene seconds a finished bar stays with its tag, and
+/// then the seconds its two rows take to fade out.
+const BAR_STAY: f32 = 3.0;
+const BAR_FADE: f32 = 0.5;
 
 impl Progress {
     pub fn new(seed: u64, mx: impl Into<Garb>) -> Progress {
@@ -1157,6 +1265,7 @@ impl Progress {
             mx,
             rng: Rng::with_seed(seed),
             bars: Vec::new(),
+            step: 2,
         }
     }
 
@@ -1182,7 +1291,15 @@ impl Widget for Progress {
     }
 
     fn resize(&mut self, _w: u16, h: u16) {
-        let n = (h as usize / 2).clamp(1, 9);
+        // On the set a tall pane is not left half empty: a bar every third
+        // row, up to twelve.
+        let spread = self.mx.calm && h >= 27;
+        self.step = if spread { 3 } else { 2 };
+        let n = if spread {
+            (h as usize / 3).clamp(1, 12)
+        } else {
+            (h as usize / 2).clamp(1, 9)
+        };
         self.bars.clear();
         for _ in 0..n {
             self.bars.push(Self::fresh(&mut self.rng));
@@ -1198,12 +1315,20 @@ impl Widget for Progress {
                 b.done -= dt;
                 if b.done <= 0.0 {
                     *b = Self::fresh(&mut self.rng);
+                    if self.mx.calm {
+                        // On the set the bar that follows starts empty.
+                        b.pct = 0.0;
+                    }
                 }
             } else {
                 b.pct += b.rate * dt * (0.6 + self.rng.f32() * 0.8);
                 if b.pct >= 100.0 {
                     b.pct = 100.0;
-                    b.done = 1.4;
+                    b.done = if self.mx.calm {
+                        BAR_STAY + BAR_FADE
+                    } else {
+                        1.4
+                    };
                 }
             }
         }
@@ -1211,34 +1336,42 @@ impl Widget for Progress {
 
     fn draw(&mut self, c: &mut Canvas, r: Rect, env: &Env) {
         let pal = &env.pal;
+        let tag = if self.mx.is(Kind::Muertos) || dress(self.mx).is_some() {
+            "COMPLETO"
+        } else {
+            "COMPLETE"
+        };
         let mut t = String::new();
         for (i, b) in self.bars.iter().enumerate() {
-            let y = i as i32 * 2;
+            let y = i as i32 * self.step;
             if y + 1 >= r.h {
                 break;
             }
-            let done = b.done > 0.0;
+            // On the set a finished bar keeps its colors and only gets its
+            // tag, and once its stay is over its two rows fade out.
+            let finished = b.done > 0.0;
+            let done = finished && !self.mx.calm;
+            let fade = if finished && self.mx.calm && b.done < BAR_FADE {
+                1.0 - b.done / BAR_FADE
+            } else {
+                0.0
+            };
+            let tone = |col: Color| if fade > 0.0 { pal.fade(col, fade) } else { col };
             if done {
-                put(
-                    c,
-                    r,
-                    0,
-                    y,
-                    if self.mx.is(Kind::Muertos) || dress(self.mx).is_some() {
-                        "COMPLETO"
-                    } else {
-                        "COMPLETE"
-                    },
-                    pal.green,
-                    BOLD,
-                );
+                put(c, r, 0, y, tag, pal.green, BOLD);
                 put(c, r, 9, y, &b.label, pal.dim, 0);
             } else {
-                put(c, r, 0, y, &b.label, pal.bright, BOLD);
+                put(c, r, 0, y, &b.label, tone(pal.bright), BOLD);
+                if finished {
+                    // After the label, or over its end, a space before it.
+                    let x = (b.label.chars().count() as i32 + 2).min(r.w - tag.len() as i32);
+                    put(c, r, x - 1, y, " ", pal.dim, 0);
+                    put(c, r, x, y, tag, tone(pal.green), BOLD);
+                }
             }
             let bw = (r.w - 20).max(4);
             let filled = (b.pct / 100.0 * bw as f32) as i32;
-            put(c, r, 0, y + 1, "[", pal.dim, 0);
+            put(c, r, 0, y + 1, "[", tone(pal.dim), 0);
             for x in 0..bw {
                 let (ch, col) = if self.mx.is(Kind::Muertos) && !done && x + 1 == filled {
                     // A marigold at the head of the bar.
@@ -1258,7 +1391,7 @@ impl Widget for Progress {
                 } else {
                     ('\u{2591}', pal.dim)
                 };
-                put_ch(c, r, 1 + x, y + 1, ch, col, 0);
+                put_ch(c, r, 1 + x, y + 1, ch, tone(col), 0);
             }
             t.clear();
             let eta = ((100.0 - b.pct) / b.rate.max(0.1)) as u32;
@@ -1269,7 +1402,7 @@ impl Widget for Progress {
                 1 + bw,
                 y + 1,
                 &t,
-                if done { pal.green } else { pal.amber },
+                tone(if done { pal.green } else { pal.amber }),
                 0,
             );
         }

@@ -1065,3 +1065,437 @@ fn a_palette_without_rgb_shows_whole_banners() {
         assert!(whole, "{w}x{h}");
     }
 }
+
+// ------------------------------------------------------------------ the calm map, radar, bars and graph (spec 10.5)
+
+/// What an ordinary scene's widgets read: the classic theme, no set mode.
+fn ordinary_env() -> Env {
+    let theme = Theme::classic();
+    let o = Opts::new(INFO.options, toml::Table::new());
+    let ctx = Ctx {
+        theme: &theme,
+        opts: &o,
+        bg: Color::Reset,
+        seed: 11,
+        fiesta: Fiesta::NONE,
+    };
+    let mut s = Hollywood::new(&ctx);
+    s.resize(&ctx, 67, 60);
+    s.retheme(&ctx);
+    Env {
+        pal: s.env.pal.clone(),
+        level: 7,
+        day: 0.0,
+    }
+}
+
+/// FNV-1a, 64 bits, over a cell's character, colors and attributes.
+fn fnv(h: &mut u64, cell: &crate::render::Cell) {
+    let text = format!("{}{:?}{:?}{}", cell.ch, cell.fg, cell.bg, cell.attr);
+    for &b in text.as_bytes() {
+        *h ^= u64::from(b);
+        *h = h.wrapping_mul(0x0000_0100_0000_01b3);
+    }
+}
+
+/// Forty seconds at 30 frames a second of `make()` in a `w`x`h` pane, the
+/// cells `keep` takes hashed on every frame.
+fn hashed(
+    mut w: Box<dyn Widget>,
+    (pw, ph): (u16, u16),
+    env: &Env,
+    keep: impl Fn(i32, i32, &crate::render::Cell) -> bool,
+) -> u64 {
+    let r = Rect {
+        x: 0,
+        y: 0,
+        w: i32::from(pw),
+        h: i32::from(ph),
+    };
+    w.resize(pw, ph);
+    let mut h = 0xcbf2_9ce4_8422_2325;
+    for _ in 0..1_200 {
+        w.update(1.0 / 30.0, env);
+        let mut c = Canvas::new(pw, ph, Color::Reset);
+        w.draw(&mut c, r, env);
+        for y in 0..r.h {
+            for x in 0..r.w {
+                if let Some(cell) = c.get(x, y)
+                    && keep(x, y, cell)
+                {
+                    fnv(&mut h, cell);
+                }
+            }
+        }
+    }
+    h
+}
+
+/// The garbs an off-set map and radar are checked in.
+fn off_set_garbs() -> [Garb; 4] {
+    [
+        Garb::plain(Fiesta::NONE),
+        Garb::plain(Fiesta::height(Kind::Muertos)),
+        Garb::plain(Fiesta::height(Kind::Navidad)),
+        Garb::preset(preset_tests::example()),
+    ]
+}
+
+/// The map and the radar draw with `sin` and `cos`, so the fingerprint does
+/// not see them. Off the set they must draw what they drew before this
+/// work: recorded from the code before it, these hashes take what does not
+/// pass through `libm`, the map's status line and markers (every cell of its
+/// body that is no braille dot) and the radar's list of contacts.
+#[test]
+fn off_the_set_the_map_and_the_radar_are_as_they_were() {
+    let env = ordinary_env();
+    let mut got = Vec::new();
+    for garb in off_set_garbs() {
+        for seed in [3, 4821] {
+            let map = hashed(
+                Box::new(widgets::WorldMap::new(seed, garb)),
+                (66, 19),
+                &env,
+                |_, y, cell| {
+                    y == 0 || !(cell.ch == ' ' || ('\u{2800}'..='\u{28ff}').contains(&cell.ch))
+                },
+            );
+            let radar = hashed(
+                Box::new(widgets::Radar::new(seed, garb)),
+                (80, 24),
+                &env,
+                |x, _, _| x > 80 - 24,
+            );
+            got.push((map, radar));
+        }
+    }
+    const WAS: [(u64, u64); 8] = [
+        (7001762097568749303, 11534953743989375950),
+        (2811331368594250278, 13653743229296421183),
+        (17889000251268467378, 11463156078545078856),
+        (10762651964091869689, 12784404179825021967),
+        (6328951583175124021, 2953855297700573131),
+        (11853801781703247544, 12202924629939803787),
+        (3185698018617721378, 15975951440068147333),
+        (16307342254152320413, 2639719575933045089),
+    ];
+    assert_eq!(got, WAS);
+}
+
+/// The garbs the calm widgets are checked in: no preset, and the example.
+fn calm_garbs() -> [Garb; 2] {
+    [
+        Garb::plain(Fiesta::NONE).with_calm(true),
+        Garb::preset(preset_tests::example()).with_calm(true),
+    ]
+}
+
+/// A `w`x`h` pane as `widget` draws it, on a background of `BG`.
+fn drawn_in(widget: &mut dyn Widget, w: u16, h: u16, env: &Env) -> Canvas {
+    let mut c = Canvas::new(w, h, BG);
+    let r = Rect {
+        x: 0,
+        y: 0,
+        w: i32::from(w),
+        h: i32::from(h),
+    };
+    widget.draw(&mut c, r, env);
+    c
+}
+
+/// The text of row `y` from column `x0` on.
+fn row_text(c: &Canvas, y: i32, x0: i32) -> String {
+    (x0..c.w() as i32)
+        .map(|x| c.get(x, y).map_or(' ', |cell| cell.ch))
+        .collect()
+}
+
+/// The largest difference between two RGB colors in one channel.
+fn far(a: Color, b: Color) -> i32 {
+    let (a, b) = (channels(a), channels(b));
+    (0..3).map(|i| (a[i] - b[i]).abs()).max().unwrap_or(0)
+}
+
+/// Spec 10.5 and 11.5: on the set an arc that arrives keeps its color, its
+/// marker shows one glyph, and both fade to the background over 1.5 scene
+/// seconds before the arc is dropped.
+#[test]
+fn an_arrival_does_not_flash() {
+    let env = set_env(Theme::classic(), BG, Fiesta::NONE);
+    let pal = &env.pal;
+    // The first arc is born on the first update and arrives when its
+    // progress, half a unit a second, reaches 1: on update `arrival`, drawn
+    // in `frames[arrival - 1]`.
+    let (mut t, mut arrival) = (0f32, 0);
+    while t < 1.0 {
+        t = (t + FRAME * 0.5).min(1.0);
+        arrival += 1;
+    }
+    let [plain, dressed] = calm_garbs();
+    // Each garb's arc color, and the marker's second glyph off the set.
+    for (garb, col, blink) in [
+        (plain, pal.amber, '\u{25c9}'),
+        (dressed, pal.oro, '\u{2736}'),
+    ] {
+        for seed in [1, 7, 4821] {
+            let mut m = widgets::WorldMap::new(seed, garb);
+            m.resize(66, 19);
+            let (mut frames, mut lens) = (Vec::new(), Vec::new());
+            for _ in 0..arrival + 150 {
+                m.update(FRAME, &env);
+                frames.push(drawn_in(&mut m, 66, 19, &env));
+                lens.push(m.arcs_len());
+            }
+            for (i, c) in frames.iter().enumerate() {
+                for cell in c.cells() {
+                    assert!(cell.fg != pal.red, "seed {seed} frame {i}");
+                    assert!(cell.ch != blink, "seed {seed} frame {i}");
+                }
+            }
+            let (before, at, after) =
+                (&frames[arrival - 2], &frames[arrival - 1], &frames[arrival]);
+            let fg = |c: &Canvas, (x, y): (i32, i32)| c.get(x, y).map_or(BG, |cell| cell.fg);
+            // The cells in the arcs' color the frame before: the arc that
+            // arrives, and the ones still on their way.
+            let arc: Vec<(i32, i32)> = cells_of(PANE).filter(|&p| fg(before, p) == col).collect();
+            assert!(!arc.is_empty(), "seed {seed}");
+            let step = far(col, BG) / 60 + 1;
+            for &p in &arc {
+                assert_eq!(fg(at, p), col, "seed {seed} {p:?}");
+                assert!(far(fg(after, p), col) <= step, "seed {seed} {p:?}");
+            }
+            // The first arc to go is the first that came, 1.5 s after it arrived.
+            let drop = (1..lens.len())
+                .find(|&i| lens[i] < lens[i - 1])
+                .unwrap_or_else(|| panic!("seed {seed}: no arc dropped"));
+            let late = drop - (arrival - 1);
+            assert!(
+                (89..=91).contains(&late),
+                "seed {seed}: dropped {late} frames on"
+            );
+            // By then it has reached the background: the faintest of its
+            // cells on its last frame.
+            let faint = arc.iter().map(|&p| far(fg(&frames[drop - 1], p), BG)).min();
+            assert!(
+                faint <= Some(far(col, BG) / 50 + 1),
+                "seed {seed}: {faint:?}"
+            );
+        }
+    }
+    // Off the set the same arrival turns red.
+    let mut m = widgets::WorldMap::new(1, Garb::plain(Fiesta::NONE));
+    m.resize(66, 19);
+    let red = (0..arrival + 30).any(|_| {
+        m.update(FRAME, &env);
+        let c = drawn_in(&mut m, 66, 19, &env);
+        c.cells().iter().any(|cell| cell.fg == pal.red)
+    });
+    assert!(red);
+}
+
+/// Spec 10.5: on the set the radar's center holds one glyph.
+#[test]
+fn the_radars_center_is_one_glyph() {
+    let env = set_env(Theme::classic(), BG, Fiesta::NONE);
+    let [_, dressed] = calm_garbs();
+    // An 80x24 pane: the scope is 56 columns wide, its center at (28, 12).
+    let center = |r: &mut widgets::Radar| drawn_in(r, 80, 24, &env).get(28, 12).map(|c| c.ch);
+    let sweeps = (2.0 * std::f32::consts::TAU / 1.6 / FRAME) as usize + 1;
+    for seed in [1, 7, 4821] {
+        let mut r = widgets::Radar::new(seed, dressed);
+        r.resize(80, 24);
+        r.update(FRAME, &env);
+        let first = center(&mut r);
+        assert_eq!(first, Some('\u{2726}'), "seed {seed}");
+        for frame in 0..sweeps {
+            r.update(FRAME, &env);
+            assert_eq!(center(&mut r), first, "seed {seed} frame {frame}");
+        }
+    }
+    // Off the set its candle flickers.
+    let mut r = widgets::Radar::new(1, Garb::preset(preset_tests::example()));
+    r.resize(80, 24);
+    let seen: std::collections::HashSet<_> = (0..sweeps)
+        .map(|_| {
+            r.update(FRAME, &env);
+            center(&mut r)
+        })
+        .collect();
+    assert!(seen.len() > 1);
+}
+
+/// Spec 10.5 and 11.5: on the set a contact's line in the list is rewritten
+/// only when the sweep passes it (the frame its row turns red).
+#[test]
+fn a_contacts_line_waits_for_the_sweep() {
+    let env = set_env(Theme::classic(), BG, Fiesta::NONE);
+    let pal = &env.pal;
+    let [plain, _] = calm_garbs();
+    // The list of an 80x24 pane: from column 57, a contact a row from row 2.
+    let rows = 2..11;
+    let lines = |r: &mut widgets::Radar| {
+        let c = drawn_in(r, 80, 24, &env);
+        rows.clone()
+            .map(|y| (row_text(&c, y, 57), c.get(57, y).map(|cell| cell.fg)))
+            .collect::<Vec<_>>()
+    };
+    for seed in [1, 7, 4821] {
+        let mut r = widgets::Radar::new(seed, plain);
+        r.resize(80, 24);
+        r.update(FRAME, &env);
+        let mut was = lines(&mut r);
+        let mut changes = [0; 9];
+        for frame in 0..(30.0 / FRAME) as usize {
+            r.update(FRAME, &env);
+            let now = lines(&mut r);
+            for (i, ((t, fg), (old, _))) in now.iter().zip(&was).enumerate() {
+                if t != old {
+                    assert_eq!(*fg, Some(pal.red), "seed {seed} frame {frame} row {i}");
+                    changes[i] += 1;
+                }
+            }
+            was = now;
+        }
+        assert!(
+            changes.iter().all(|&n| (1..=9).contains(&n)),
+            "seed {seed}: {changes:?}"
+        );
+    }
+}
+
+/// Spec 10.5 and 11.5: on the set a bar that finishes keeps its colors and
+/// gets its tag; 3 s on its rows fade out over 0.5 s, and the bar that
+/// follows starts empty.
+#[test]
+fn a_finished_bar_keeps_its_colors() {
+    let env = set_env(Theme::classic(), BG, Fiesta::NONE);
+    let pal = &env.pal;
+    for (garb, tag) in calm_garbs().into_iter().zip(["COMPLETE", "COMPLETO"]) {
+        for seed in [1, 7, 4821] {
+            let mut p = widgets::Progress::new(seed, garb);
+            p.resize(66, 19);
+            p.update(FRAME, &env);
+            let mut prev = drawn_in(&mut p, 66, 19, &env);
+            // The first bar to finish, and the frame it does.
+            let (bar, done) = loop {
+                p.update(FRAME, &env);
+                let c = drawn_in(&mut p, 66, 19, &env);
+                let fresh = (0..9).find(|&i| {
+                    row_text(&c, 2 * i, 0).contains(tag) && !row_text(&prev, 2 * i, 0).contains(tag)
+                });
+                if let Some(i) = fresh {
+                    break (2 * i, c);
+                }
+                prev = c;
+            };
+            let cell = |c: &Canvas, x: i32, y: i32| c.get(x, y).map(|cell| (cell.ch, cell.fg));
+            for x in 0..66 {
+                let (ch, fg) = cell(&done, x, bar + 1).unwrap();
+                let (was_ch, was_fg) = cell(&prev, x, bar + 1).unwrap();
+                assert!(fg != pal.green, "seed {seed} column {x}");
+                if ch == was_ch {
+                    assert_eq!(fg, was_fg, "seed {seed} column {x}");
+                }
+            }
+            // Its two rows stay as they are for 3 s, then fade, and go.
+            let mut gone = None;
+            for k in 1..=240 {
+                p.update(FRAME, &env);
+                let c = drawn_in(&mut p, 66, 19, &env);
+                if k == 175 {
+                    for (x, y) in (0..66).flat_map(|x| [(x, bar), (x, bar + 1)]) {
+                        assert_eq!(cell(&c, x, y), cell(&done, x, y), "seed {seed} ({x}, {y})");
+                    }
+                }
+                if k == 195 {
+                    for (x, y) in (0..66).flat_map(|x| [(x, bar), (x, bar + 1)]) {
+                        let (ch, fg) = cell(&done, x, y).unwrap();
+                        if ch != ' ' {
+                            let now = cell(&c, x, y).unwrap().1;
+                            assert!(far(now, BG) < far(fg, BG), "seed {seed} ({x}, {y})");
+                        }
+                    }
+                }
+                if !row_text(&c, bar, 0).contains(tag) {
+                    assert!(row_text(&c, bar + 1, 0).contains("  0%"), "seed {seed}");
+                    gone = Some(k);
+                    break;
+                }
+            }
+            assert!(
+                gone.is_some_and(|k| (209..=212).contains(&k)),
+                "seed {seed}: {gone:?}"
+            );
+        }
+    }
+}
+
+/// Spec 10.5: on the set a pane of 27 rows or more has a bar every third
+/// row, up to twelve; a shorter one, as outside set mode.
+#[test]
+fn tall_panes_spread_their_bars() {
+    let env = set_env(Theme::classic(), BG, Fiesta::NONE);
+    let tops = |garb: Garb, h: u16| {
+        let mut p = widgets::Progress::new(5, garb);
+        p.resize(66, h);
+        p.update(FRAME, &env);
+        let c = drawn_in(&mut p, 66, h, &env);
+        // A bar's label row is the row above its `[`.
+        (1..i32::from(h))
+            .filter(|&y| c.get(0, y).is_some_and(|cell| cell.ch == '['))
+            .map(|y| y - 1)
+            .collect::<Vec<_>>()
+    };
+    for garb in calm_garbs() {
+        assert_eq!(tops(garb, 30), (0..10).map(|i| 3 * i).collect::<Vec<_>>());
+        assert_eq!(tops(garb, 40), (0..12).map(|i| 3 * i).collect::<Vec<_>>());
+        assert_eq!(tops(garb, 26), (0..9).map(|i| 2 * i).collect::<Vec<_>>());
+        assert_eq!(tops(garb, 26), tops(garb.with_calm(false), 26));
+        assert_eq!(
+            tops(garb.with_calm(false), 30),
+            (0..9).map(|i| 2 * i).collect::<Vec<_>>()
+        );
+    }
+}
+
+/// Spec 10.5 and 11.5: on the set the bandwidth's figures are rewritten
+/// once a scene second, while the graph moves as before.
+#[test]
+fn the_figures_tick_once_a_second() {
+    let env = set_env(Theme::classic(), BG, Fiesta::NONE);
+    for garb in calm_garbs() {
+        for seed in [1, 7, 4821] {
+            let mut b = widgets::Bandwidth::new(seed, garb);
+            b.resize(66, 19);
+            b.update(FRAME, &env);
+            let mut prev = drawn_in(&mut b, 66, 19, &env);
+            let (mut figures, mut graph) = (0, 0);
+            for _ in 0..(20.0 / FRAME) as usize {
+                b.update(FRAME, &env);
+                let c = drawn_in(&mut b, 66, 19, &env);
+                if [0, 18]
+                    .iter()
+                    .any(|&y| row_text(&c, y, 0) != row_text(&prev, y, 0))
+                {
+                    figures += 1;
+                }
+                let graph_moved = cells_of(Rect {
+                    x: 0,
+                    y: 1,
+                    w: 66,
+                    h: 17,
+                })
+                .any(|(x, y)| {
+                    let at = |c: &Canvas| c.get(x, y).map(|cell| (cell.ch, cell.fg));
+                    at(&c) != at(&prev)
+                });
+                if graph_moved {
+                    graph += 1;
+                }
+                prev = c;
+            }
+            assert!(figures <= 21, "seed {seed}: {figures}");
+            assert!(graph > 100, "seed {seed}: {graph}");
+        }
+    }
+}
