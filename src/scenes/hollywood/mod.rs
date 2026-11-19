@@ -98,6 +98,7 @@ mod feed;
 #[cfg(test)]
 mod fingerprint;
 mod garb;
+mod gate;
 mod grito;
 mod inocentes;
 mod letrero;
