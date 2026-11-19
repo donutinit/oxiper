@@ -1023,3 +1023,168 @@ fn the_captions_are_tema_and_the_authors() {
     }
     assert_eq!(both.len(), 2);
 }
+
+// ------------------------------------------------------------------ live edits (spec 8.7, 11.4)
+
+/// `secs` seconds of the interactive loop at 10 frames a second.
+fn play(s: &mut Hollywood, ctx: &Ctx, secs: f32) {
+    let mut c = Canvas::new(s.w.max(1) as u16, s.h.max(1) as u16, Color::Reset);
+    for _ in 0..(secs * 10.0) as usize {
+        s.tick(ctx, 0.1, 0.1);
+        c.clear();
+        s.draw(ctx, &mut c);
+    }
+}
+
+/// The ticker as it stands, fed to its length.
+fn tape(s: &mut Hollywood) -> String {
+    s.feed_tape();
+    s.tape.iter().collect()
+}
+
+/// A file with one headline, `text`.
+fn one_headline(text: &str) -> String {
+    format!("titulares = ['{text}']\n")
+}
+
+#[test]
+fn an_edit_shows_after_refresh() {
+    let path = cache::temp("edit", &one_headline("Primera version"));
+    scene(&naming(&path), Fiesta::NONE, 140, 40, |s, ctx| {
+        play(s, ctx, 3.0);
+        assert!(tape(s).contains("PRIMERA VERSION"));
+        assert_eq!(s.refresh(ctx), None);
+        let (rects, kinds) = (s.rects(), s.kinds());
+        let first = s.preset.unwrap();
+        std::fs::write(&path, one_headline("La segunda version")).unwrap();
+        assert_eq!(s.refresh(ctx), Some(Ok("preset reloaded".into())));
+        assert!(!std::ptr::eq(s.preset.unwrap(), first));
+        assert_eq!((s.rects(), s.kinds()), (rects.clone(), kinds.clone()));
+        let t = tape(s);
+        assert!(t.starts_with("LA SEGUNDA VERSION"), "{t}");
+        assert!(!t.contains("PRIMERA"), "{t}");
+        assert_eq!(s.refresh(ctx), None);
+        // An entry dropped: the HUD says how many.
+        std::fs::write(&path, "titulares = ['Tercera version', 'Hola {n']\n").unwrap();
+        assert_eq!(
+            s.refresh(ctx),
+            Some(Ok("preset reloaded \u{b7} 1 warning".into()))
+        );
+        assert!(tape(s).starts_with("TERCERA VERSION"));
+        std::fs::write(&path, "titulares = ['Cuarta', 'Hola {n', 'Adios }']\n").unwrap();
+        assert_eq!(
+            s.refresh(ctx),
+            Some(Ok("preset reloaded \u{b7} 2 warnings".into()))
+        );
+        assert_eq!((s.rects(), s.kinds()), (rects, kinds));
+        play(s, ctx, 3.0);
+    });
+    std::fs::remove_file(&path).ok();
+}
+
+#[test]
+fn a_broken_file_is_said_once() {
+    let path = cache::temp("broken-once", &one_headline("Lo que se dijo"));
+    scene(&naming(&path), Fiesta::NONE, 140, 40, |s, ctx| {
+        play(s, ctx, 1.0);
+        let first = s.preset.unwrap();
+        std::fs::write(&path, "tema = \n").unwrap();
+        let Some(Err(m)) = s.refresh(ctx) else {
+            panic!("a broken file was not said");
+        };
+        assert!(m.starts_with("preset: ") && m.contains("line"), "{m}");
+        assert!(!m.contains('\n') && m.chars().count() <= 60, "{m:?}");
+        play(s, ctx, 10.0);
+        assert!(std::ptr::eq(s.preset.unwrap(), first));
+        assert!(tape(s).contains("LO QUE SE DIJO"));
+        assert_eq!(s.refresh(ctx), None);
+        assert_eq!(s.refresh(ctx), None);
+        std::fs::write(&path, one_headline("Lo que se arreglo")).unwrap();
+        assert!(matches!(s.refresh(ctx), Some(Ok(_))));
+        assert!(tape(s).starts_with("LO QUE SE ARREGLO"));
+        assert_eq!(s.refresh(ctx), None);
+    });
+    std::fs::remove_file(&path).ok();
+}
+
+#[test]
+fn a_deleted_file_keeps_the_words() {
+    let path = cache::temp("deleted-scene", &one_headline("Aqui sigue"));
+    scene(&naming(&path), Fiesta::NONE, 80, 24, |s, ctx| {
+        play(s, ctx, 1.0);
+        std::fs::remove_file(&path).unwrap();
+        assert!(matches!(s.refresh(ctx), Some(Err(_))));
+        assert_eq!(s.refresh(ctx), None);
+        play(s, ctx, 3.0);
+        assert!(s.preset.is_some());
+        assert!(tape(s).contains("AQUI SIGUE"));
+    });
+}
+
+/// A scene built while the file is bad (by `r`, an arrow key) has the last
+/// good preset, and says why at its first `refresh`, once.
+#[test]
+fn a_bad_file_does_not_reach_the_screen_by_r() {
+    let good = "tema = 'software libre'\n";
+    for (name, broken) in [
+        ("by-r-broken", Some("tema = \n")),
+        ("by-r-emptied", Some("")),
+        ("by-r-deleted", None),
+    ] {
+        let path = cache::temp(name, good);
+        scene(&naming(&path), Fiesta::NONE, 80, 24, |s, ctx| {
+            let first = s.preset.unwrap();
+            match broken {
+                Some(text) => std::fs::write(&path, text).unwrap(),
+                None => std::fs::remove_file(&path).unwrap(),
+            }
+            let mut again = Hollywood::new(ctx);
+            again.resize(ctx, 80, 24);
+            again.retheme(ctx);
+            assert!(std::ptr::eq(again.preset.unwrap(), first), "{name}");
+            let Some(Err(m)) = again.refresh(ctx) else {
+                panic!("{name}: the first refresh did not say why");
+            };
+            assert!(m.starts_with("preset: "), "{name}: {m}");
+            assert_eq!(again.refresh(ctx), None, "{name}");
+            // The scene that was on screen says it too, once.
+            assert!(matches!(s.refresh(ctx), Some(Err(_))), "{name}");
+            assert_eq!(s.refresh(ctx), None, "{name}");
+        });
+        std::fs::remove_file(&path).ok();
+    }
+}
+
+#[test]
+fn rebuilds_do_not_read() {
+    let path = cache::temp("rebuilds", "tema = 'software libre'\n");
+    let theme = Theme::classic();
+    let o = crate::scene::Opts::new(INFO.options, naming(&path).parse().unwrap());
+    let ctx = Ctx {
+        theme: &theme,
+        opts: &o,
+        bg: Color::Reset,
+        seed: 11,
+        fiesta: Fiesta::NONE,
+    };
+    let first = Hollywood::new(&ctx).preset.unwrap();
+    for _ in 0..1000 {
+        let mut s = Hollywood::new(&ctx);
+        assert!(std::ptr::eq(s.preset.unwrap(), first));
+        assert_eq!(s.refresh(&ctx), None);
+    }
+    assert_eq!(cache::parses(&path), 1);
+    std::fs::remove_file(&path).ok();
+}
+
+#[test]
+fn refresh_without_a_preset_is_none() {
+    for opts in ["", "preset = ''"] {
+        scene(opts, Fiesta::NONE, 80, 24, |s, ctx| {
+            for _ in 0..5 {
+                assert_eq!(s.refresh(ctx), None);
+                play(s, ctx, 1.0);
+            }
+        });
+    }
+}

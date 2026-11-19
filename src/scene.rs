@@ -75,6 +75,12 @@ pub trait Scene {
     fn next_change(&self) -> f32 {
         0.0
     }
+    /// Called about once a second of real time by the interactive loop. A scene
+    /// that reads a file besides its options looks whether it changed and takes it
+    /// in. `Some(Ok(note))` and `Some(Err(why))` go to the HUD; `None`: nothing new.
+    fn refresh(&mut self, _ctx: &Ctx) -> Option<Result<String, String>> {
+        None
+    }
 }
 
 pub struct SceneInfo {

@@ -128,6 +128,7 @@ use fastrand::Rng;
 use garb::Garb;
 use inocentes::Fool;
 use preset::{Preset, Round};
+use std::path::PathBuf;
 
 pub const INFO: SceneInfo = SceneInfo {
     name: "hollywood",
@@ -182,7 +183,7 @@ pub fn preset_refusal(table: &toml::Table) -> Result<(), String> {
 
 /// The file the `preset` option names; a bare name is looked for beside the
 /// default config file (spec 8.4).
-fn wanted(table: &toml::Table) -> Result<Option<std::path::PathBuf>, String> {
+fn wanted(table: &toml::Table) -> Result<Option<PathBuf>, String> {
     let config = crate::config::default_path();
     cache::wanted(table, config.as_deref().and_then(std::path::Path::parent))
 }
@@ -202,6 +203,16 @@ fn check(table: &toml::Table) -> Result<Vec<String>, (String, String)> {
         // Loaded before and bad now: the scene keeps what it has and says so.
         cache::Answer::Kept { why, .. } => Ok(vec![format!("{name}: {why}")]),
         cache::Answer::Bad(why) => Err((path.display().to_string(), why)),
+    }
+}
+
+/// The HUD's note for a preset taken in while running: `preset reloaded`,
+/// with the number of entries dropped, if any.
+fn reloaded(warnings: usize) -> String {
+    match warnings {
+        0 => "preset reloaded".into(),
+        1 => "preset reloaded \u{b7} 1 warning".into(),
+        n => format!("preset reloaded \u{b7} {n} warnings"),
     }
 }
 
@@ -906,6 +917,10 @@ pub struct Hollywood {
     fiesta: Fiesta,
     /// The preset the screen talks about, which wins over the holiday.
     preset: Option<&'static Preset>,
+    /// The file the `preset` option names, which `refresh` watches.
+    preset_path: Option<PathBuf>,
+    /// The failure already shown on the HUD.
+    reported: Option<String>,
     /// The preset's titles and headlines, dealt in rounds.
     rounds: Rounds,
     seed: u64,
@@ -926,7 +941,11 @@ impl Hollywood {
             15.0
         };
         let speed = o.f("speed");
-        let preset = Self::load_preset(ctx);
+        // Through the cache (spec 8.4): the last good preset from its file,
+        // or none when it never loaded. (Start-up and reload say why; a scene
+        // that is built again never stops for it, and says so at `refresh`.)
+        let preset_path = wanted(o.table()).ok().flatten();
+        let preset = preset_path.as_deref().and_then(|p| cache::load(p).preset());
         // A preset wins over the holiday, forced or not (spec 8.3).
         let fiesta = if preset.is_some() {
             Fiesta::NONE
@@ -941,6 +960,8 @@ impl Hollywood {
             },
             fiesta,
             preset,
+            preset_path,
+            reported: None,
             rounds: Rounds::of(preset),
             seed: ctx.seed,
             clock: 0.0,
@@ -964,14 +985,6 @@ impl Hollywood {
         s.next_event = Self::interval(&mut rng, reshuffle);
         s.rng = rng;
         s
-    }
-
-    /// The preset the `preset` option names, through the cache (spec 8.4): the
-    /// last good one from its file, or none when it never loaded. (Start-up
-    /// and reload say why; a scene that is built again never stops for it.)
-    fn load_preset(ctx: &Ctx) -> Option<&'static Preset> {
-        let path = wanted(ctx.opts.table()).ok()??;
-        cache::load(&path).preset()
     }
 
     /// A jittered wait: with the default 15 s it lands between about 10 and 25.
@@ -1126,6 +1139,18 @@ impl Hollywood {
             root.layout(area);
         }
         self.ensure_signature();
+    }
+
+    /// Takes in a preset that is new since the panes were dressed (spec 8.7):
+    /// the panes are re-dressed where they stand, with fresh rounds of its
+    /// titles and headlines, and the ticker starts over.
+    fn take(&mut self, ctx: &Ctx, preset: &'static Preset) {
+        self.preset = Some(preset);
+        self.rounds = Rounds::of(self.preset);
+        // A scene that started without one (its file vanished before the
+        // first load) leaves the holiday for it.
+        self.env.pal = Pal::dressed(ctx, true);
+        self.dress(Fiesta::NONE);
     }
 
     /// Builds a fresh layout of `n` panes from `pool` (reused panes first).
@@ -1337,6 +1362,37 @@ impl Scene for Hollywood {
         self.build(pool, want.min(self.max_panes));
         self.tape.clear();
         self.tape_off = 0.0;
+    }
+
+    /// The preset file, through the cache: one `stat` when nothing changed.
+    /// What is new is told by the preset the cache answers with and by its
+    /// reason, never by the file's stamp, which a check at start-up or reload
+    /// may have seen first.
+    fn refresh(&mut self, ctx: &Ctx) -> Option<Result<String, String>> {
+        let answer = cache::load(self.preset_path.as_deref()?);
+        let new = answer
+            .preset()
+            .filter(|p| !self.preset.is_some_and(|q| std::ptr::eq(*p, q)));
+        if let Some(p) = new {
+            self.take(ctx, p);
+        }
+        let (why, warnings) = match answer {
+            cache::Answer::Good { warnings, .. } => (None, warnings.len()),
+            cache::Answer::Kept { why, .. } | cache::Answer::Bad(why) => (Some(why), 0),
+        };
+        match why {
+            // Once per failure, and once more for a scene built while it lasts.
+            Some(why) if self.reported.as_ref() != Some(&why) => {
+                let brief = cache::brief(&why);
+                self.reported = Some(why);
+                Some(Err(brief))
+            }
+            Some(_) => new.map(|_| Ok(reloaded(0))),
+            None => {
+                self.reported = None;
+                new.map(|_| Ok(reloaded(warnings)))
+            }
+        }
     }
 
     fn retheme(&mut self, ctx: &Ctx) {

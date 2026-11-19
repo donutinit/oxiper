@@ -310,6 +310,20 @@ impl Player {
         self.scene.retheme(&ctx);
     }
 
+    /// Lets the scene look at the files it reads besides its options (the
+    /// interactive loop only, once a second: `snap`, `record` and `bench`
+    /// stay reproducible). `Some`: a note or a reason for the HUD.
+    pub fn refresh(&mut self) -> Option<Result<String, String>> {
+        let ctx = Ctx {
+            theme: &self.theme,
+            opts: &self.opts,
+            bg: self.bg,
+            seed: self.seed,
+            fiesta: self.fiesta,
+        };
+        self.scene.refresh(&ctx)
+    }
+
     /// Rolls for an easter egg after `dt` real seconds (the interactive loop
     /// only: `snap`, `record` and `bench` stay reproducible).
     pub fn roll_egg(&mut self, dt: f64, allow: bool) {
@@ -669,6 +683,14 @@ pub fn run(cfg: Config, ro: RunOpts) -> Result<(), String> {
                 }
                 dirty = true;
             }
+            // The scene's own file (hollywood's preset), paused or not.
+            if let Some(refreshed) = player.refresh() {
+                match refreshed {
+                    Ok(note) => hud.show(note, 2.0),
+                    Err(why) => hud.show(why, 5.0),
+                }
+                dirty = true;
+            }
         }
 
         // Sleep until the next frame, or longer when the scene says nothing will
@@ -926,16 +948,36 @@ mod tests {
         assert!(player(&toml).is_ok());
     }
 
+    /// The bottom row of the player's next frame.
+    fn bottom_row(p: &mut Player) -> String {
+        let mut c = Canvas::new(p.w, p.h, Color::Reset);
+        p.draw(&mut c);
+        let w = p.w as usize;
+        c.cells()[c.cells().len() - w..]
+            .iter()
+            .map(|cell| cell.ch)
+            .collect()
+    }
+
     /// A reload that names a preset that never loaded and is broken is
-    /// refused, and the config in use stays.
+    /// refused: the scene, the config in use and the old preset stay
+    /// (spec 11.4).
     #[test]
     fn a_reload_naming_a_broken_preset_is_refused() {
+        let good = temp_file("reload-good", "titulares = ['Lo que se queda']\n");
         let broken = temp_file("reload-broken", "tema = \n");
-        let mut p = player("scene = 'neo,hollywood'\nfiestas = 'none'\n")
-            .ok()
-            .unwrap();
+        let mut p = player(&format!(
+            "scene = 'hollywood,neo'\nfiestas = 'none'\n{}",
+            naming(&good)
+        ))
+        .ok()
+        .unwrap();
+        assert!(bottom_row(&mut p).contains("LO QUE SE QUEDA"));
+        // Which scene is on: the same one, not one built again.
+        let on = |p: &Player| &*p.scene as *const dyn Scene as *const ();
+        let scene = on(&p);
         let bad = Config::from_toml(&format!(
-            "scene = 'neo,hollywood'\nfps = 12\n{}",
+            "scene = 'hollywood,neo'\nfps = 12\n{}",
             naming(&broken)
         ));
         let Err(e) = p.reload(bad) else {
@@ -943,6 +985,31 @@ mod tests {
         };
         assert!(e.starts_with("preset: ") && e.chars().count() <= 60, "{e}");
         assert_eq!(p.cfg.fps, 30);
+        assert_eq!(p.info.name, "hollywood");
+        assert!(std::ptr::eq(on(&p), scene));
+        p.update(5.0);
+        assert!(bottom_row(&mut p).contains("LO QUE SE QUEDA"));
+        assert_eq!(p.refresh(), None);
+    }
+
+    /// The interactive loop's once-a-second look reaches the scene: an edit of
+    /// hollywood's preset is taken in; a scene with no file answers nothing.
+    #[test]
+    fn refresh_reaches_the_scene() {
+        let path = temp_file("refresh", "titulares = ['Antes']\n");
+        let mut p = player(&format!(
+            "scene = 'hollywood'\nfiestas = 'none'\n{}",
+            naming(&path)
+        ))
+        .ok()
+        .unwrap();
+        assert_eq!(p.refresh(), None);
+        std::fs::write(&path, "titulares = ['Despues de editar']\n").unwrap();
+        assert!(matches!(p.refresh(), Some(Ok(_))));
+        assert!(bottom_row(&mut p).contains("DESPUES DE EDITAR"));
+        assert_eq!(p.refresh(), None);
+        let mut neo = player("scene = 'neo'\nfiestas = 'none'\n").ok().unwrap();
+        assert_eq!(neo.refresh(), None);
     }
 
     /// `config check` lists a preset's warnings, each with the preset's
