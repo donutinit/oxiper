@@ -76,7 +76,7 @@ fn env() -> Env {
         fiesta: Fiesta::NONE,
     };
     Env {
-        pal: Pal::dressed(&ctx, true),
+        pal: Pal::dressed(&ctx, true, 0.0),
         level: 7,
         day: 0.0,
     }

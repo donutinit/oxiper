@@ -1,5 +1,3 @@
-#![allow(dead_code)] // wired in Task 18
-
 //! The set layout (spec 10.3): in set mode the panes are a pure function of
 //! the seed and the size of the area they tile. A tall screen is a stack of
 //! full-width bands, one pane each; a wide one is a main column (the banner
@@ -53,6 +51,9 @@ pub struct Plan {
 
 /// `c` x `r` is the area the panes tile (the terminal less the ticker's row).
 pub fn plan(seed: u64, c: i32, r: i32) -> Plan {
+    // No terminal is larger, and the arithmetic below stays in `i32`.
+    let max = i32::from(u16::MAX);
+    let (c, r) = (c.min(max), r.min(max));
     let mut rng = Rng::with_seed(seed ^ SALT);
     let mut left = POOL.to_vec();
     rng.shuffle(&mut left);
@@ -542,5 +543,16 @@ mod tests {
             }
         }
         assert!(plan(1, 0, 0).seats.is_empty());
+        // Total over its inputs: the largest areas return too.
+        for (c, r) in [
+            (i32::MAX, i32::MAX),
+            (i32::MAX, 3),
+            (3, i32::MAX),
+            (-5, i32::MAX),
+        ] {
+            let p = plan(7, c, r);
+            assert!(p.seats.len() <= 4, "{c}x{r}: {p:?}");
+        }
+        assert_eq!(plan(7, i32::MAX, i32::MAX), plan(7, 65535, 65535));
     }
 }

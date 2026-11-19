@@ -118,6 +118,8 @@ mod preset;
 mod preset_tests;
 mod revolucion;
 mod rostro;
+#[cfg(test)]
+mod set_tests;
 mod sprite;
 mod widgets;
 
@@ -160,6 +162,16 @@ pub const INFO: SceneInfo = SceneInfo {
             key: "preset",
             default: Val::S(""),
             help: "Preset with the topic the screen talks about: a name under presets/hollywood/ in the config folder, or a path (docs/PRESETS.md)",
+        },
+        Opt {
+            key: "set_pace",
+            default: Val::F(0.5),
+            help: "In set mode, the pace of the widgets and the ticker, on top of speed (0.1 to 1)",
+        },
+        Opt {
+            key: "set_dim",
+            default: Val::F(0.25),
+            help: "In set mode, how far the colors fade toward the background (0 = as usual, 0.9 = barely there)",
         },
     ],
     make: |ctx| Box::new(Hollywood::new(ctx)),
@@ -384,12 +396,18 @@ impl Pal {
     /// The palette of the day (the scene itself builds it with `dressed`).
     #[cfg(test)]
     fn new(ctx: &Ctx) -> Pal {
-        Pal::dressed(ctx, false)
+        Pal::dressed(ctx, false, 0.0)
     }
 
     /// The palette; `plain` (under a preset): the holiday counts as none and
     /// the holiday gold is the palette's amber, so a theme sets every color.
-    fn dressed(ctx: &Ctx, plain: bool) -> Pal {
+    /// `dim` (set mode's `set_dim`) fades every color toward the background.
+    fn dressed(ctx: &Ctx, plain: bool, dim: f32) -> Pal {
+        Pal::undimmed(ctx, plain).faded(dim)
+    }
+
+    /// The palette before `set_dim`.
+    fn undimmed(ctx: &Ctx, plain: bool) -> Pal {
         let native = ctx.theme.native;
         let fiesta = if plain { Fiesta::NONE } else { ctx.fiesta };
         let mx = fiesta.is(Kind::Muertos);
@@ -462,6 +480,34 @@ impl Pal {
             },
             papel: std::array::from_fn(|i| ctx.pick(i, PAPEL[i])),
             bg: ctx.bg,
+        }
+    }
+
+    /// Every color faded toward the background by `k` (spec 10.4): the
+    /// tones, `ink`, the ramp (sampled, faded and built again) and the
+    /// holiday colors. `k <= 0` leaves the palette as it is.
+    fn faded(self, k: f32) -> Pal {
+        if k <= 0.0 {
+            return self;
+        }
+        let f = |c: Color| self.fade(c, k);
+        let stops: [Color; 32] = std::array::from_fn(|i| f(self.ramp.at(i as f32 / 31.0)));
+        Pal {
+            main: f(self.main),
+            dim: f(self.dim),
+            bright: f(self.bright),
+            cyan: f(self.cyan),
+            amber: f(self.amber),
+            red: f(self.red),
+            green: f(self.green),
+            ink: f(self.ink),
+            ramp: Gradient::new(&stops),
+            picado: self.picado.map(f),
+            flor: f(self.flor),
+            vela: f(self.vela),
+            oro: f(self.oro),
+            papel: self.papel.map(f),
+            bg: self.bg,
         }
     }
 
@@ -637,6 +683,9 @@ enum Node {
         a: Box<Node>,
         b: Box<Node>,
     },
+    /// Set mode: the plan's panes, each with its rectangle.
+    #[allow(clippy::vec_box)]
+    Seats(Vec<Box<Pane>>),
 }
 
 fn divide(r: Rect, vert: bool, frac: f32) -> (Rect, Rect) {
@@ -669,18 +718,28 @@ impl Node {
         match self {
             Node::Leaf(p) => {
                 p.rect = r;
-                let cw = (r.w - 1).max(0) as u16;
-                let ch = (r.h - 1).max(0) as u16;
-                if p.content != (cw, ch) {
-                    p.content = (cw, ch);
-                    p.widget.resize(cw, ch);
-                }
+                Node::fit(p);
             }
             Node::Split { vert, frac, a, b } => {
                 let (ra, rb) = divide(r, *vert, *frac);
                 a.layout(ra);
                 b.layout(rb);
             }
+            Node::Seats(panes) => {
+                for p in panes {
+                    Node::fit(p);
+                }
+            }
+        }
+    }
+
+    /// Tells a pane's widget its content size, if that changed.
+    fn fit(p: &mut Pane) {
+        let cw = (p.rect.w - 1).max(0) as u16;
+        let ch = (p.rect.h - 1).max(0) as u16;
+        if p.content != (cw, ch) {
+            p.content = (cw, ch);
+            p.widget.resize(cw, ch);
         }
     }
 
@@ -688,6 +747,7 @@ impl Node {
         match self {
             Node::Leaf(_) => 1,
             Node::Split { a, b, .. } => a.count() + b.count(),
+            Node::Seats(panes) => panes.len(),
         }
     }
 
@@ -698,6 +758,7 @@ impl Node {
                 a.each(f);
                 b.each(f);
             }
+            Node::Seats(panes) => panes.iter().for_each(|p| f(p)),
         }
     }
 
@@ -708,6 +769,7 @@ impl Node {
                 a.each_mut(f);
                 b.each_mut(f);
             }
+            Node::Seats(panes) => panes.iter_mut().for_each(|p| f(p)),
         }
     }
 
@@ -724,6 +786,8 @@ impl Node {
                 a.splittable(ra, out);
                 b.splittable(rb, out);
             }
+            // The set's layout holds still.
+            Node::Seats(_) => {}
         }
     }
 
@@ -771,13 +835,14 @@ impl Node {
                 a.split_at(ra, target, vert, frac, fresh);
                 b.split_at(rb, target, vert, frac, fresh);
             }
+            Node::Seats(_) => {}
         }
     }
 
     /// Number of splits whose two children are both leaves.
     fn mergeable(&self) -> usize {
         match self {
-            Node::Leaf(_) => 0,
+            Node::Leaf(_) | Node::Seats(_) => 0,
             Node::Split { a, b, .. } => {
                 if matches!((&**a, &**b), (Node::Leaf(_), Node::Leaf(_))) {
                     1
@@ -816,6 +881,7 @@ impl Node {
                 a.into_panes(out);
                 b.into_panes(out);
             }
+            Node::Seats(panes) => out.extend(panes),
         }
     }
 }
@@ -930,6 +996,12 @@ pub struct Hollywood {
     clock: f32,
     /// Santos Inocentes: the prank that takes over the panes now and then.
     fool: Option<Fool>,
+    /// On a film set (spec 10): the layout is `foro`'s and holds still.
+    set: bool,
+    /// What `dt` is multiplied by besides `speed`: `set_pace` on the set, else 1.
+    pace: f32,
+    /// How far the palette fades toward the background: `set_dim` on the set, else 0.
+    dim: f32,
 }
 
 impl Hollywood {
@@ -943,6 +1015,15 @@ impl Hollywood {
             15.0
         };
         let speed = o.f("speed");
+        let set = o.set_mode();
+        let (pace, dim) = if set {
+            (
+                Self::clamped(o.f("set_pace"), 0.1, 1.0, 0.5),
+                Self::clamped(o.f("set_dim"), 0.0, 0.9, 0.25),
+            )
+        } else {
+            (1.0, 0.0)
+        };
         // Through the cache (spec 8.4): the last good preset from its file,
         // or none when it never loaded. (Start-up and reload say why; a scene
         // that is built again never stops for it, and says so at `refresh`.)
@@ -956,7 +1037,7 @@ impl Hollywood {
         };
         let mut s = Hollywood {
             env: Env {
-                pal: Pal::dressed(ctx, preset.is_some()),
+                pal: Pal::dressed(ctx, preset.is_some(), dim),
                 level: o.i("babble").clamp(0, 10) as u8,
                 day: patrias::day_start(fiesta, ctx.seed),
             },
@@ -983,10 +1064,18 @@ impl Hollywood {
             tape_off: 0.0,
             tape_buf: String::new(),
             rng: Rng::with_seed(0),
+            set,
+            pace,
+            dim,
         };
         s.next_event = Self::interval(&mut rng, reshuffle);
         s.rng = rng;
         s
+    }
+
+    /// A number option clamped to `lo..=hi`; `bad` when it is not finite.
+    fn clamped(v: f32, lo: f32, hi: f32, bad: f32) -> f32 {
+        if v.is_finite() { v.clamp(lo, hi) } else { bad }
     }
 
     /// A jittered wait: with the default 15 s it lands between about 10 and 25.
@@ -1064,6 +1153,21 @@ impl Hollywood {
             .preset
             .filter(|pr| !pr.titles.is_empty())
             .and_then(|pr| Some((pr.vocab, *pr.titles.get(titles.next(rng))?)));
+        Self::title(p, rng, level, mx, given);
+        p.retitle = 8.0 + rng.f32() * 14.0;
+    }
+
+    /// Writes a pane's title: one of the preset's `titulos` (its vocabulary
+    /// and template) followed by the process name, or the process name and,
+    /// with any babble, a generated name.
+    fn title(
+        p: &mut Pane,
+        rng: &mut Rng,
+        level: u8,
+        mx: Garb,
+        given: Option<(&'static lexico::Vocab, &str)>,
+    ) {
+        p.title.clear();
         if let Some((v, tpl)) = given {
             v.expand(rng, tpl, &mut p.title);
             p.title.push_str(" \u{00b7} ");
@@ -1075,7 +1179,81 @@ impl Hollywood {
                 feed::title(rng, mx, &mut p.title);
             }
         }
-        p.retitle = 8.0 + rng.f32() * 14.0;
+    }
+
+    /// Set mode (spec 10.3): seats the screen by `foro::plan` of the seed
+    /// and the area, with fresh widgets from the seats' seeds. Nothing here
+    /// draws from `self.rng`, so neither the words nor a preset reloaded can
+    /// move a pane.
+    fn seat(&mut self) {
+        let area = self.area();
+        let plan = foro::plan(self.seed, area.w, area.h);
+        let (level, garb) = (self.env.level, self.garb());
+        let signature = self.signature_seat(&plan);
+        let mut panes: Vec<Box<Pane>> = plan
+            .seats
+            .iter()
+            .enumerate()
+            .map(|(i, seat)| {
+                let kind = match signature {
+                    Some((at, kind)) if at == i => kind,
+                    _ => seat.kind,
+                };
+                Box::new(Pane {
+                    rect: seat.rect,
+                    kind,
+                    widget: make_widget(kind, seat.seed, level, garb),
+                    title: String::new(),
+                    retitle: 0.0,
+                    age: 0.0,
+                    content: (u16::MAX, u16::MAX),
+                })
+            })
+            .collect();
+        Self::deal(&mut panes, plan.title_seed, level, garb);
+        let mut root = Node::Seats(panes);
+        root.layout(area);
+        self.root = Some(root);
+    }
+
+    /// Set mode: each pane's title, dealt once by position (spec 10.3). The
+    /// i-th pane takes the i-th of the shuffled `titulos`, the panes beyond
+    /// them a generated title; every draw from a generator of its own.
+    fn deal(panes: &mut [Box<Pane>], seed: u64, level: u8, mx: Garb) {
+        let mut rng = Rng::with_seed(seed);
+        let (vocab, given) = match mx.preset {
+            Some(p) => (Some(p.vocab), p.titles),
+            None => (None, &[][..]),
+        };
+        let mut order: Vec<usize> = (0..given.len()).collect();
+        rng.shuffle(&mut order);
+        for (i, p) in panes.iter_mut().enumerate() {
+            let tpl = order.get(i).and_then(|&k| given.get(k));
+            let given = vocab.zip(tpl.copied());
+            Self::title(p, &mut rng, level, mx, given);
+        }
+    }
+
+    /// Set mode with a forced holiday (spec 10.6): the first shape seat and
+    /// the signature widget it holds. Going round the holiday's signature
+    /// widgets from the plan's spare draw, the first kind no other seat holds.
+    fn signature_seat(&self, plan: &foro::Plan) -> Option<(usize, usize)> {
+        let sig = signature(self.fiesta);
+        let at = plan
+            .seats
+            .iter()
+            .position(|s| s.role == foro::Role::Shape)?;
+        let start = (plan.lot % sig.len().max(1) as u64) as usize;
+        (0..sig.len())
+            .map(|i| sig[(start + i) % sig.len()])
+            .find(|&k| {
+                !plan
+                    .seats
+                    .iter()
+                    .enumerate()
+                    .any(|(j, s)| j != at && s.kind == k)
+            })
+            .map(|k| (at, k))
     }
 
     /// A holiday with widgets of its own keeps at least one signature widget
@@ -1126,6 +1304,13 @@ impl Hollywood {
         self.fool = mx.inocentes().then(|| Fool::new(self.seed));
         self.tape.clear();
         self.tape_off = 0.0;
+        if self.set {
+            // The same seed and size: the same panes, in new clothes.
+            if self.root.is_some() {
+                self.seat();
+            }
+            return;
+        }
         let area = self.area();
         let (level, garb) = (self.env.level, self.garb());
         if let Some(root) = &mut self.root {
@@ -1151,7 +1336,7 @@ impl Hollywood {
         self.rounds = Rounds::of(self.preset);
         // A scene that started without one (its file vanished before the
         // first load) leaves the holiday for it.
-        self.env.pal = Pal::dressed(ctx, true);
+        self.env.pal = Pal::dressed(ctx, true, self.dim);
         self.dress(Fiesta::NONE);
     }
 
@@ -1349,6 +1534,12 @@ impl Scene for Hollywood {
     fn resize(&mut self, _ctx: &Ctx, w: u16, h: u16) {
         self.w = w as i32;
         self.h = h as i32;
+        if self.set {
+            self.seat();
+            self.tape.clear();
+            self.tape_off = 0.0;
+            return;
+        }
         let mut pool = Vec::new();
         if let Some(r) = self.root.take() {
             r.into_panes(&mut pool);
@@ -1400,7 +1591,7 @@ impl Scene for Hollywood {
     }
 
     fn retheme(&mut self, ctx: &Ctx) {
-        self.env.pal = Pal::dressed(ctx, self.preset.is_some());
+        self.env.pal = Pal::dressed(ctx, self.preset.is_some(), self.dim);
         // The holiday came or went (or moved on a day): new widgets in the
         // seats. Under a preset the calendar does not dress the screen.
         let mx = holiday(ctx);
@@ -1410,7 +1601,7 @@ impl Scene for Hollywood {
     }
 
     fn update(&mut self, _ctx: &Ctx, dt: f32) {
-        let dt = (dt * self.speed).clamp(0.0, 0.5);
+        let dt = (dt * self.speed * self.pace).clamp(0.0, 0.5);
         self.clock += dt;
         let env = &self.env;
         if let Some(r) = &mut self.root {
@@ -1435,6 +1626,10 @@ impl Scene for Hollywood {
         self.env.day += real;
         if let Some(f) = &mut self.fool {
             f.tick(real);
+        }
+        // On the set the layout and the titles hold still (spec 10.3).
+        if self.set {
+            return;
         }
         self.next_event -= real;
         if self.next_event <= 0.0 && self.w > 0 {
@@ -1465,10 +1660,11 @@ impl Scene for Hollywood {
                 if r.w < 3 || r.h < 3 {
                     return;
                 }
-                // New panes light their border up for a moment.
+                // New panes light their border up for a moment; on the set
+                // they are born settled.
                 let edge = if let Some(col) = alarm {
                     col
-                } else if p.age < 1.0 {
+                } else if p.age < 1.0 && !self.set {
                     pal.fade(pal.bright, p.age * 0.5)
                 } else {
                     pal.fade(pal.main, 0.45)

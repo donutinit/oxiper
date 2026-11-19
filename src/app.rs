@@ -1631,6 +1631,37 @@ mod tests {
         }
     }
 
+    /// On the set hollywood's panes come from the number (spec 11.6): after
+    /// `r`, the number on the HUD as `seed =` gives the same rectangles and
+    /// kinds at the same size. The panes are the scene's own, out of reach
+    /// here, so the first frames are compared: every pane's corner, edges and
+    /// title (its process name) are in them.
+    #[test]
+    fn the_layout_is_the_plans() {
+        let toml = "scene = 'hollywood'\nfiestas = 'none'\nset_mode = true\n";
+        let start = |toml: &str, w, h| {
+            Player::new(Config::from_toml(toml), TermColors::default(), w, h)
+                .ok()
+                .unwrap()
+        };
+        let frame = |p: &mut Player| {
+            let mut c = Canvas::new(p.w, p.h, Color::Reset);
+            p.draw(&mut c);
+            c
+        };
+        for (w, h) in [(67, 60), (120, 33), (213, 60)] {
+            let mut p = start(toml, w, h);
+            p.reseed();
+            let n = p.seed_no().unwrap();
+            let mut q = start(&format!("{toml}seed = {n}\n"), w, h);
+            assert_eq!(q.seed, p.seed, "{w}x{h}: {n}");
+            let (a, b) = (frame(&mut p), frame(&mut q));
+            let corners = a.cells().iter().filter(|c| c.ch == '\u{250c}').count();
+            assert!(corners >= 3, "{w}x{h}: {corners} panes\n{}", a.to_text());
+            assert!(a.cells() == b.cells(), "{w}x{h} seed {n}\n{}", a.to_text());
+        }
+    }
+
     /// `s` off and on again keeps the number and the seed: none is drawn,
     /// and the note says the number it keeps.
     #[test]

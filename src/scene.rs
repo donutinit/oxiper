@@ -162,7 +162,6 @@ impl Opts {
 
     /// Is this scene on a film set? It starts that way: the `Player`
     /// builds the scene again whenever set mode goes on or off.
-    #[allow(dead_code)] // scene API (docs/SCENES.md)
     pub fn set_mode(&self) -> bool {
         self.set
     }
