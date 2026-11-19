@@ -148,10 +148,20 @@ pub struct Player {
     /// off (to on), at start-up too; flipped by the `e` key; set again by a
     /// reload only when `set_eggs` changed in it.
     eggs_on: bool,
+    /// The number that, as `seed =`, leads to `seed`: the config's at
+    /// start-up, one drawn on the set, None once `r` or an arrow has drawn
+    /// a seed off it.
+    seed_no: Option<u64>,
 }
 
 /// Real seconds between looks at the date, so a holiday starts at midnight.
 const FIESTA_CHECK: f64 = 60.0;
+
+/// The numbers drawn on the set run from 1 to this (spec 9.4).
+const SEED_NOS: u64 = 9999;
+
+/// Seconds the HUD shows a number drawn on the set.
+const SEED_SECS: f32 = 4.0;
 
 impl Player {
     pub fn new(cfg: Config, tc: TermColors, w: u16, h: u16) -> Result<Player, String> {
@@ -162,9 +172,12 @@ impl Player {
             return Err(e);
         }
         preset_problems(&cfg)?;
-        let mut rng = cfg
+        // On the set without a `seed`, one is drawn, and the start is
+        // exactly the one `seed = n` makes, playlist order included.
+        let seed_no = cfg
             .seed
-            .map_or_else(fastrand::Rng::new, fastrand::Rng::with_seed);
+            .or_else(|| cfg.set_mode.then(|| fastrand::Rng::new().u64(1..=SEED_NOS)));
+        let mut rng = seed_no.map_or_else(fastrand::Rng::new, fastrand::Rng::with_seed);
         let mut order: Vec<usize> = (0..cfg.scenes.len()).collect();
         if cfg.shuffle {
             rng.shuffle(&mut order);
@@ -217,6 +230,7 @@ impl Player {
             fiesta_age: 0.0,
             set,
             eggs_on,
+            seed_no,
         })
     }
 
@@ -229,24 +243,66 @@ impl Player {
         }
     }
 
+    /// The number that, as `seed =`, leads to the seed in use; None when there is none.
+    pub fn seed_no(&self) -> Option<u64> {
+        self.seed_no
+    }
+
+    /// The HUD's note after `r` or the arrows on the set: the scene and its number.
+    fn seed_note(&self) -> Option<String> {
+        let n = self.seed_no.filter(|_| self.set)?;
+        Some(format!("{} · seed {n}", self.info.name))
+    }
+
+    /// The scene's next seed: on the set one that can be written down,
+    /// elsewhere the generator's next number, as it always was.
+    fn next_seed(&mut self) {
+        if self.set {
+            self.draw_number();
+        } else {
+            self.seed = self.rng.u64(..);
+            self.seed_no = None;
+        }
+    }
+
+    /// Draws a number from 1 to 9999 and does with it what `new` does with
+    /// `seed = n`: a generator started from it, the playlist's shuffle
+    /// (drawn and thrown away: the order in use stays), the scene's seed.
+    /// That generator is the player's from here on (spec 9.4).
+    fn draw_number(&mut self) {
+        let n = self.rng.u64(1..=SEED_NOS);
+        let mut rng = fastrand::Rng::with_seed(n);
+        if self.cfg.shuffle {
+            let mut order: Vec<usize> = (0..self.cfg.scenes.len()).collect();
+            rng.shuffle(&mut order);
+        }
+        self.seed = rng.u64(..);
+        self.rng = rng;
+        self.seed_no = Some(n);
+    }
+
     /// Does the playlist move on by itself?
     pub fn cycles(&self) -> bool {
         !self.set && self.duration() > 0.0 && self.cfg.scenes.len() > 1
     }
 
-    /// Flips set mode and rebuilds the scene; the HUD's note.
+    /// Flips set mode and rebuilds the scene; the HUD's note. Going on
+    /// with a seed no number leads to, it draws one and the note says it.
     pub fn toggle_set(&mut self) -> String {
         self.set = !self.set;
+        let draw = self.set && self.seed_no.is_none();
+        if draw {
+            self.draw_number();
+        }
         self.switch_eggs(!self.set || self.cfg.set_eggs);
         self.fiesta = Player::day(&self.cfg, self.set);
         self.overlay.update(0.0, self.fiesta);
         self.rebuild();
-        if self.set {
-            "set mode on"
-        } else {
-            "set mode off"
+        match self.seed_no {
+            Some(n) if draw => format!("set mode on · seed {n}"),
+            _ if self.set => "set mode on".into(),
+            _ => "set mode off".into(),
         }
-        .into()
     }
 
     /// Flips the eggs' switch; turning it off cuts the egg that is playing.
@@ -465,12 +521,12 @@ impl Player {
                 .unwrap_or(0) as i32;
             self.info = all[(i + dir).rem_euclid(all.len() as i32) as usize];
         }
-        self.seed = self.rng.u64(..);
+        self.next_seed();
         self.rebuild();
     }
 
     pub fn reseed(&mut self) {
-        self.seed = self.rng.u64(..);
+        self.next_seed();
         self.rebuild();
     }
 
@@ -700,6 +756,13 @@ pub fn run(cfg: Config, ro: RunOpts) -> Result<(), String> {
         until: Instant::now(),
         help: false,
     };
+    if hud_on
+        && !ro.saver
+        && player.set
+        && let Some(n) = player.seed_no()
+    {
+        hud.show(format!("set mode · seed {n}"), SEED_SECS);
+    }
     let mut events = Vec::with_capacity(16);
     let started = Instant::now();
     let mut last = Instant::now();
@@ -819,11 +882,17 @@ pub fn run(cfg: Config, ro: RunOpts) -> Result<(), String> {
                             Key::CtrlC | Key::CtrlD | Key::Esc | Key::Char('q') => quit(),
                             Key::Right | Key::Char('l' | 'n') => {
                                 player.step_scene(1);
-                                hud.show(player.label(), 1.6);
+                                match player.seed_note() {
+                                    Some(note) => hud.show(note, SEED_SECS),
+                                    None => hud.show(player.label(), 1.6),
+                                }
                             }
                             Key::Left | Key::Char('h' | 'p') => {
                                 player.step_scene(-1);
-                                hud.show(player.label(), 1.6);
+                                match player.seed_note() {
+                                    Some(note) => hud.show(note, SEED_SECS),
+                                    None => hud.show(player.label(), 1.6),
+                                }
                             }
                             Key::Up | Key::Char('k' | 't') => {
                                 player.step_theme(1);
@@ -859,11 +928,23 @@ pub fn run(cfg: Config, ro: RunOpts) -> Result<(), String> {
                             }
                             Key::Char('r') => {
                                 player.reseed();
-                                hud.show(format!("{} · reseeded", player.info.name), 1.2);
+                                match player.seed_note() {
+                                    Some(note) => hud.show(note, SEED_SECS),
+                                    None => {
+                                        hud.show(format!("{} · reseeded", player.info.name), 1.2)
+                                    }
+                                }
                             }
                             Key::Char('s') => {
+                                let had = player.seed_no();
                                 let note = player.toggle_set();
-                                hud.show(note, 2.0);
+                                // A number just drawn stays up as long as `r`'s.
+                                let secs = if player.seed_no() == had {
+                                    2.0
+                                } else {
+                                    SEED_SECS
+                                };
+                                hud.show(note, secs);
                             }
                             Key::Char('?') => hud.help = !hud.help,
                             Key::Char('e') => {
@@ -1507,5 +1588,122 @@ mod tests {
                 });
             }
         });
+    }
+
+    /// A playlist with hollywood first, on the set or off it, with no `seed`.
+    fn seeds_toml(shuffle: bool, set: bool) -> String {
+        format!(
+            "scene = 'hollywood,neo,fire'\nshuffle = {shuffle}\nfiestas = 'none'\nset_mode = {set}\n"
+        )
+    }
+
+    /// The run started again from a number written down as `seed =`.
+    fn written(shuffle: bool, n: u64) -> Player {
+        player(&format!("{}seed = {n}\n", seeds_toml(shuffle, true)))
+            .ok()
+            .unwrap()
+    }
+
+    /// The number on the HUD, written down as `seed =`, leads to the same
+    /// scene seed: after `r`, at start-up and after `s` (spec 9.4).
+    #[test]
+    fn a_written_seed_brings_the_scene_back() {
+        for shuffle in [false, true] {
+            let mut p = player(&seeds_toml(shuffle, true)).ok().unwrap();
+            p.reseed();
+            let n = p.seed_no().unwrap();
+            assert!((1..=9999).contains(&n), "shuffle {shuffle}: r drew {n}");
+            assert_eq!(written(shuffle, n).seed, p.seed, "shuffle {shuffle}: r");
+            // At start-up the playlist is shuffled as `seed = n` shuffles it,
+            // so the number brings back the first scene of the run too.
+            for _ in 0..5 {
+                let p = player(&seeds_toml(shuffle, true)).ok().unwrap();
+                let n = p.seed_no().unwrap();
+                assert!((1..=9999).contains(&n), "shuffle {shuffle}: start drew {n}");
+                let q = written(shuffle, n);
+                assert_eq!(q.seed, p.seed, "shuffle {shuffle}: start");
+                assert_eq!(q.info.name, p.info.name, "shuffle {shuffle}: start");
+            }
+            let mut p = player(&seeds_toml(shuffle, false)).ok().unwrap();
+            p.reseed();
+            p.toggle_set();
+            let n = p.seed_no().unwrap();
+            assert!((1..=9999).contains(&n), "shuffle {shuffle}: s drew {n}");
+            assert_eq!(written(shuffle, n).seed, p.seed, "shuffle {shuffle}: s");
+        }
+    }
+
+    /// `s` off and on again keeps the number and the seed: none is drawn.
+    #[test]
+    fn s_off_and_on_keeps_the_number() {
+        let mut p = player(&seeds_toml(false, true)).ok().unwrap();
+        let (n, seed) = (p.seed_no(), p.seed);
+        assert!(n.is_some());
+        assert_eq!(p.toggle_set(), "set mode off");
+        assert_eq!(p.toggle_set(), "set mode on");
+        assert_eq!((p.seed_no(), p.seed), (n, seed));
+    }
+
+    /// A `seed` from the config is already a number that can be written down.
+    #[test]
+    fn a_seed_from_the_config_is_its_own_number() {
+        let mut p = player(&format!("{}seed = 4821\n", seeds_toml(false, true)))
+            .ok()
+            .unwrap();
+        let seed = p.seed;
+        assert_eq!(p.seed_no(), Some(4821));
+        p.toggle_set();
+        p.toggle_set();
+        assert_eq!((p.seed_no(), p.seed), (Some(4821), seed));
+    }
+
+    /// On the set the arrow keys draw a number as `r` does, and the HUD
+    /// says it with the scene's name.
+    #[test]
+    fn the_arrows_draw_a_number_too() {
+        for shuffle in [false, true] {
+            let mut p = player(&seeds_toml(shuffle, true)).ok().unwrap();
+            p.step_scene(1);
+            let n = p.seed_no().unwrap();
+            assert!((1..=9999).contains(&n), "shuffle {shuffle}: {n}");
+            assert_eq!(written(shuffle, n).seed, p.seed, "shuffle {shuffle}");
+            assert_eq!(p.seed_note(), Some(format!("{} · seed {n}", p.info.name)));
+            p.reseed();
+            let n = p.seed_no().unwrap();
+            assert_eq!(p.seed_note(), Some(format!("{} · seed {n}", p.info.name)));
+        }
+    }
+
+    /// The arrow keys still change the scene on the set.
+    #[test]
+    fn the_arrows_still_change_the_scene_on_the_set() {
+        let mut p = player(&seeds_toml(false, false)).ok().unwrap();
+        p.toggle_set();
+        let name = p.info.name;
+        p.step_scene(1);
+        assert_ne!(p.info.name, name);
+        let name = p.info.name;
+        p.step_scene(-1);
+        assert_ne!(p.info.name, name);
+    }
+
+    /// Outside set mode `r` and the arrows leave no number; `s` then draws one.
+    #[test]
+    fn outside_set_mode_there_is_no_number() {
+        let mut p = player("scene = 'neo,fire'\nseed = 7\nfiestas = 'none'\n")
+            .ok()
+            .unwrap();
+        assert_eq!(p.seed_no(), Some(7));
+        p.reseed();
+        assert_eq!(p.seed_no(), None);
+        assert_eq!(p.seed_note(), None);
+        let note = p.toggle_set();
+        let n = p.seed_no().unwrap();
+        assert!((1..=9999).contains(&n), "{n}");
+        assert_eq!(note, format!("set mode on · seed {n}"));
+        p.toggle_set();
+        assert_eq!(p.seed_no(), Some(n));
+        p.step_scene(1);
+        assert_eq!(p.seed_no(), None);
     }
 }
