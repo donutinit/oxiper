@@ -1,0 +1,102 @@
+# hollywood preset for a video about free software.
+# Every key is optional. A list is one item per line between ''' and '''.
+
+tema = "Software libre"
+
+# --- What the camera reads: shown exactly as written -------------------------
+
+# The ticker along the bottom (shown in capitals).
+titulares = '''
+1983: Stallman anuncia el proyecto GNU
+1985: nace la Free Software Foundation
+1989: primera versión de la GPL
+1991: Torvalds publica el kernel Linux
+Libertad 0: usar el programa con cualquier propósito
+Libertad 1: estudiar cómo funciona y cambiarlo
+Libertad 2: redistribuir copias
+Libertad 3: distribuir tus versiones modificadas
+GNU no es Unix
+Libre como en libertad de expresión, no como en barra libre
+Copyleft: lo que es libre se queda libre
+{n} parches recibidos de la comunidad
+'''
+
+# The pane titles.
+titulos = '''
+Las cuatro libertades
+Proyecto GNU, 1983
+Kernel Linux, 1991
+Licencia GPL v3
+Copyleft
+Free Software Foundation
+Código fuente
+'''
+
+# The big banner of the access pane: two short lines split by " / ".
+# On a narrow screen a line of several words goes onto several lines of big letters.
+letrero_verde = '''
+SOFTWARE / LIBRE
+GNU / NO ES UNIX
+CUATRO / LIBERTADES
+'''
+letrero_rojo = '''
+CODIGO / CERRADO
+'''
+
+# --- What the small text is made of ------------------------------------------
+
+personas = '''
+Richard Stallman
+Linus Torvalds
+'''
+
+# Bare names: projects, products, acronyms, places.
+nombres = '''
+GNU
+Linux
+GPL
+Emacs
+GCC
+Debian
+FSF
+'''
+
+# Common nouns, each with its article.
+cosas = '''
+el kernel
+la licencia
+el código fuente
+el compilador
+la comunidad
+el parche
+el manifiesto
+el repositorio
+la libertad
+las cuatro libertades
+'''
+
+adjetivos = '''
+libre
+privativo
+comunitario
+auditable
+con copyleft
+sin puertas traseras
+'''
+
+verbos = '''
+liberar
+compartir
+compilar
+estudiar
+modificar
+distribuir
+'''
+
+# Whole lines for the logs. Blanks are filled at random.
+frases = '''
+Compilando {cosa} con GCC: {n} advertencias, 0 errores
+{persona} revisa el parche {n} de {nombre}
+Clonando el repositorio de {nombre}: {pct}% completado
+Licencia verificada: GPL versión {d}
+'''
