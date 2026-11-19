@@ -67,9 +67,14 @@ fn compose(c: char, mark: char) -> Option<char> {
         .map(|&(_, _, k)| k)
 }
 
-/// Combining marks (the general blocks, Hebrew and Arabic), zero-width and
-/// direction formatting characters, variation selectors and tags: what a
-/// terminal draws in no cell of its own, or draws over the one before.
+/// What a terminal draws in no cell of its own, or draws over the one
+/// before: the soft hyphen; the combining marks of Combining Diacritical
+/// Marks (U+0300-036F), its Extended and Supplement blocks (U+1AB0-1AFF,
+/// U+1DC0-1DFF), Combining Marks for Symbols (U+20D0-20FF), Combining Half
+/// Marks (U+FE20-FE2F), Cyrillic (U+0483-0489), Hebrew points and Arabic
+/// marks; zero-width and direction formatting characters, the BOM,
+/// variation selectors and tags. The combining marks of other scripts
+/// (Devanagari, Thai and the rest) are not covered and pass as one cell.
 fn takes_no_cell(c: char) -> bool {
     matches!(c as u32,
         0x00ad | 0x0300..=0x036f | 0x0483..=0x0489 | 0x0591..=0x05bd | 0x05bf
@@ -130,12 +135,22 @@ pub fn adjective(entry: &str) -> Result<String, String> {
     if words.is_empty() {
         return Err("empty".into());
     }
-    // A `*` stands for the `o` or `a` that ends a word.
+    // A `*` stands for the `o` or `a` that ends a word, so it follows the
+    // stem: `seri*`, `continu*`, `fe*`, `europe*`, never `privativo*`.
+    // (`libre*` cannot be told from `europe*`, so it passes.)
     let starred = words.iter().any(|w| w.contains('*'));
     for w in &words {
-        let stem = w.strip_suffix('*').unwrap_or(w);
+        let Some(stem) = w.strip_suffix('*') else {
+            if w.contains('*') {
+                return Err("a * only stands for a word's last o or a".into());
+            }
+            continue;
+        };
         if stem.contains('*') || stem.is_empty() {
             return Err("a * only stands for a word's last o or a".into());
+        }
+        if stem.ends_with(['o', 'a']) {
+            return Err("the * replaces the last o or a".into());
         }
     }
     if let [word] = words[..]
@@ -158,6 +173,7 @@ const IRREGULAR: &[(&str, &str, &str, bool)] = &[
     ("ver", "viendo", "vist", true),
     ("prever", "previendo", "previst", false),
     ("entrever", "entreviendo", "entrevist", false),
+    ("rever", "reviendo", "revist", false),
     // `corromper` is regular.
     ("romper", "rompiendo", "rot", true),
     ("poder", "pudiendo", "podid", true),
@@ -176,6 +192,9 @@ const IRREGULAR: &[(&str, &str, &str, bool)] = &[
     ("pudrir", "pudriendo", "podrid", false),
     ("freír", "friendo", "frit", false),
     ("eír", "iendo", "eíd", false),
+    // The same written without the accent, a likely slip.
+    ("freir", "friendo", "frit", false),
+    ("eir", "iendo", "eíd", false),
     ("güir", "guyendo", "güid", false),
     ("eñir", "iñendo", "eñid", false),
     // Stem-changers: `e` becomes `i` in the gerund.
@@ -396,13 +415,24 @@ pub fn letters(line: &str) -> Result<String, String> {
     if out.is_empty() {
         return Err("no letters".into());
     }
+    // A count past 99 is shown as `99+`, so the warning keeps to one line.
+    let count = |n: usize| {
+        if n > 99 {
+            "99+".to_string()
+        } else {
+            n.to_string()
+        }
+    };
     let longest = out.split(' ').map(|w| w.chars().count()).max().unwrap_or(0);
     if longest > LETTERS {
-        return Err(format!("a word of {longest} letters, {LETTERS} at most"));
+        return Err(format!(
+            "word of {} letters, {LETTERS} at most",
+            count(longest)
+        ));
     }
     let n = out.chars().count();
     if n > LETTERS {
-        return Err(format!("{n} characters, {LETTERS} at most"));
+        return Err(format!("{} characters, {LETTERS} at most", count(n)));
     }
     Ok(out)
 }
@@ -468,10 +498,23 @@ mod tests {
             ("protegid* por copyleft", "protegid* por copyleft"),
             ("español", "español"),
             ("auditable", "auditable"),
+            ("seri*", "seri*"),
+            ("continu*", "continu*"),
+            ("fe*", "fe*"),
+            ("europe*", "europe*"),
         ] {
             assert_eq!(adjective(entry), Ok(s(want)), "{entry}");
         }
-        for entry in ["", "*", "pro*tegido", "protegid** por copyleft", "* libre"] {
+        for entry in [
+            "",
+            "*",
+            "pro*tegido",
+            "protegid** por copyleft",
+            "* libre",
+            "privativo*",
+            "rapida*",
+            "protegido* por copyleft",
+        ] {
             assert!(adjective(entry).is_err(), "{entry}");
         }
     }
@@ -522,6 +565,13 @@ mod tests {
             ("satisfacer", "satisfaciendo", "satisfecho"),
             ("bendecir", "bendiciendo", "bendecido"),
             ("ir", "yendo", "ido"),
+            ("reir", "riendo", "reído"),
+            ("freir", "friendo", "frito"),
+            ("sonreir", "sonriendo", "sonreído"),
+            ("freír", "friendo", "frito"),
+            ("sonreír", "sonriendo", "sonreído"),
+            ("rever", "reviendo", "revisto"),
+            ("entrever", "entreviendo", "entrevisto"),
             ("Compilar", "compilando", "compilado"),
         ] {
             let got = verb(inf).map(|(i, g, p)| (i, g, format!("{p}o")));
@@ -709,16 +759,14 @@ mod tests {
         // The loader puts `cosas[399]: ` before them; the HUD line is 60.
         let long = "x".repeat(10_000);
         let wide = "界".repeat(100);
-        let errors: [Result<(), String>; 23] = [
-            tidy("\u{0}").map(drop),
-            tidy(&wide).map(drop),
-            tidy("\u{301}").map(drop),
+        let errors: [Result<(), String>; 15] = [
             noun("").map(drop),
             noun(&long).map(drop),
             noun("el").map(drop),
             noun("la licencia (f)").map(drop),
             adjective("*").map(drop),
             adjective("").map(drop),
+            adjective("privativo*").map(drop),
             verb(&long).map(drop),
             verb("liberarse").map(drop),
             verb("a | b").map(drop),
@@ -727,16 +775,29 @@ mod tests {
             blanks(&format!("{{{long}}}")).map(drop),
             blanks("{").map(drop),
             blanks("}").map(drop),
+        ];
+        for e in errors {
+            let e = e.unwrap_err();
+            assert!(e.chars().count() <= 44, "{e}");
+        }
+        // Banner lines go under `letrero_verde[400]: `, and they are tidied.
+        let banners: [Result<(), String>; 12] = [
+            tidy("\u{0}").map(drop),
+            tidy("\u{e0001}").map(drop),
+            tidy(&wide).map(drop),
+            tidy("\u{301}").map(drop),
             letters(&long).map(drop),
             letters(&format!("{long} {long}")).map(drop),
             letters("/").map(drop),
             letters("").map(drop),
             banner(&long).map(drop),
             banner(&format!("{long} / {long}")).map(drop),
+            banner(&format!("A / {long} {long}")).map(drop),
+            banner("A / \u{10ffff}").map(drop),
         ];
-        for e in errors {
+        for e in banners {
             let e = e.unwrap_err();
-            assert!(e.chars().count() <= 44, "{e}");
+            assert!(e.chars().count() <= 40, "{e}");
         }
     }
 }

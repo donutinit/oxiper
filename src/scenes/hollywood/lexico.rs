@@ -184,7 +184,8 @@ fn capitalize_from(s: &mut String, from: usize) {
 /// "a el" into "al" when `out` ends with that whole word (C30): "Auditoría
 /// de " and "el kernel" make "Auditoría del kernel", "De " makes "Del",
 /// "DE " makes "DEL" and "(de " makes "(del": punctuation before the word
-/// does not part it from the article.
+/// does not part it from the article. So a flag contracts too ("-a " and
+/// "el kernel" make "-al kernel"); that is accepted.
 fn push_thing(thing: &str, out: &mut String) {
     if let Some(rest) = thing.strip_prefix("el ")
         && let Some(head) = out.strip_suffix(' ')
