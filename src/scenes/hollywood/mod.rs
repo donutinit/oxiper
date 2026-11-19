@@ -100,6 +100,7 @@ mod fingerprint;
 mod garb;
 mod grito;
 mod inocentes;
+mod letrero;
 mod lexico;
 mod map;
 mod mictlan;
