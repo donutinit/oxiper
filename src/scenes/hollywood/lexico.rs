@@ -182,15 +182,19 @@ fn capitalize_from(s: &mut String, from: usize) {
 
 /// Appends a thing filled into a blank, contracting "de el" into "del" and
 /// "a el" into "al" when `out` ends with that whole word (C30): "Auditoría
-/// de " and "el kernel" make "Auditoría del kernel", "De " makes "Del".
+/// de " and "el kernel" make "Auditoría del kernel", "De " makes "Del",
+/// "DE " makes "DEL" and "(de " makes "(del": punctuation before the word
+/// does not part it from the article.
 fn push_thing(thing: &str, out: &mut String) {
     if let Some(rest) = thing.strip_prefix("el ")
         && let Some(head) = out.strip_suffix(' ')
     {
         let word = head.rsplit(' ').next().unwrap_or(head);
+        let word = word.trim_start_matches(|c: char| !c.is_alphanumeric());
         if word.eq_ignore_ascii_case("de") || word.eq_ignore_ascii_case("a") {
+            let caps = word.len() > 1 && word.bytes().all(|b| b.is_ascii_uppercase());
             out.pop();
-            out.push_str("l ");
+            out.push_str(if caps { "L " } else { "l " });
             out.push_str(rest);
             return;
         }
@@ -1205,7 +1209,12 @@ mod tests {
         for (tpl, want) in [
             ("de {o}", "del kernel"),
             ("a {o}", "al kernel"),
-            ("DE {o}", "DEl kernel"),
+            ("DE {o}", "DEL kernel"),
+            ("De {o}", "Del kernel"),
+            ("A {o}", "Al kernel"),
+            ("(de {o}", "(del kernel"),
+            ("«de {o}", "«del kernel"),
+            ("¿A {o}?", "¿Al kernel?"),
             ("Ruta A {o}", "Ruta Al kernel"),
             ("verde {o}", "verde el kernel"),
             ("hasta {o}", "hasta el kernel"),
