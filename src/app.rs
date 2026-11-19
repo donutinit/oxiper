@@ -237,7 +237,7 @@ impl Player {
     /// Flips set mode and rebuilds the scene; the HUD's note.
     pub fn toggle_set(&mut self) -> String {
         self.set = !self.set;
-        self.eggs_on = !self.set || self.cfg.set_eggs;
+        self.switch_eggs(!self.set || self.cfg.set_eggs);
         self.fiesta = Player::day(&self.cfg, self.set);
         self.overlay.update(0.0, self.fiesta);
         self.rebuild();
@@ -252,11 +252,17 @@ impl Player {
     /// Flips the eggs' switch; turning it off cuts the egg that is playing.
     /// The new state.
     pub fn toggle_eggs(&mut self) -> bool {
-        self.eggs_on = !self.eggs_on;
-        if !self.eggs_on {
+        self.switch_eggs(!self.eggs_on);
+        self.eggs_on
+    }
+
+    /// Sets the eggs' switch; turning it off cuts the egg that is playing,
+    /// turning it on starts none.
+    fn switch_eggs(&mut self, on: bool) {
+        if self.eggs_on && !on {
             self.eggs.stop();
         }
-        self.eggs_on
+        self.eggs_on = on;
     }
 
     /// Seconds to show the current scene: its own `duration`, else the global one.
@@ -532,7 +538,7 @@ impl Player {
         // The eggs' switch likewise: set again when set mode goes on or off,
         // or on the set when `set_eggs` changed.
         if !same_set || (self.set && cfg.set_eggs != self.cfg.set_eggs) {
-            self.eggs_on = !self.set || cfg.set_eggs;
+            self.switch_eggs(!self.set || cfg.set_eggs);
         }
         self.cfg = cfg;
         // Re-dressed below, with the theme.
@@ -1381,6 +1387,33 @@ mod tests {
             assert!(p.start_egg(), "set mode {set}");
             assert!(p.eggs.active(), "set mode {set}");
         }
+    }
+
+    /// Whatever turns the switch off cuts the egg that is playing: going
+    /// into set mode with `set_eggs` off, or a reload that turns
+    /// `set_eggs` off on the set.
+    #[test]
+    fn switching_off_cuts_the_egg() {
+        let cfg = |set_eggs: bool| {
+            Config::from_toml(&format!(
+                "scene = 'neo'\nfiestas = 'none'\nset_eggs = {set_eggs}\n{FORCED}"
+            ))
+        };
+        let mut p = Player::new(cfg(false), TermColors::default(), 80, 24)
+            .ok()
+            .unwrap();
+        assert!(p.eggs.active());
+        p.toggle_set();
+        assert!(!p.eggs.active());
+        // Turning it on starts none; the forced rate does, on the next frame.
+        p.reload(cfg(true)).unwrap();
+        assert!(!p.eggs.active());
+        p.update(1.0 / 30.0);
+        assert!(p.eggs.active());
+        p.reload(cfg(false)).unwrap();
+        assert!(!p.eggs.active());
+        p.update(1.0 / 30.0);
+        assert!(!p.eggs.active());
     }
 
     /// Going into set mode the switch takes `set_eggs`; coming out it is on.
