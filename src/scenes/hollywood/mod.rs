@@ -98,6 +98,7 @@ mod cache;
 mod feed;
 #[cfg(test)]
 mod fingerprint;
+mod foro;
 mod garb;
 mod gate;
 mod gramatica;
