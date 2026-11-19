@@ -1136,12 +1136,13 @@ impl Hollywood {
     }
 
     /// What every widget made from now on wears: the preset, or the day's
-    /// holiday.
+    /// holiday; calm on a film set.
     fn garb(&self) -> Garb {
         match self.preset {
             Some(p) => Garb::preset(p),
             None => Garb::plain(self.fiesta),
         }
+        .with_calm(self.set)
     }
 
     /// A pane's title: the widget's process name and a generated name, or

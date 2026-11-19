@@ -1,5 +1,3 @@
-#![allow(dead_code)] // phrases are used in Task 19
-
 //! A preset, from its file to a vocabulary (spec 7, 8.2, 8.4): the TOML an
 //! author writes between takes becomes a [`Preset`], a `Vocab` laid over a
 //! copy of the neutral base plus the few things `Vocab` has no field for.

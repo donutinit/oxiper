@@ -9,6 +9,7 @@
 
 use super::garb::Garb;
 use super::lexico::{self, Vocab};
+use super::preset::Round;
 use super::{Env, Rect, Tone, Widget, babble, muertos, put};
 use crate::fiesta::Kind;
 use crate::render::{BOLD, Canvas};
@@ -359,6 +360,14 @@ pub struct Feed {
     depth: usize,
     n: u32,
     scratch: String,
+    /// On the set, under a preset with `frases`: the mission log's sentences
+    /// since the last phrase (0 to 2), and the round every third sentence
+    /// comes from (spec 10.2).
+    said: u32,
+    phrases: Round,
+    /// Lines brought in by `update` so far.
+    #[cfg(test)]
+    born: u32,
 }
 
 impl Feed {
@@ -377,10 +386,15 @@ impl Feed {
             FeedKind::Passwords => 5.0,
             FeedKind::Auth => 3.0,
         };
+        let mx: Garb = mx.into();
+        let phrases = match (kind, mx.preset) {
+            (FeedKind::Mission, Some(p)) if mx.calm => p.phrases.len(),
+            _ => 0,
+        };
         Feed {
             kind,
             level,
-            mx: mx.into(),
+            mx,
             // (Not drawn from the generator: ordinary days draw the same numbers.)
             song: (seed % 9) as usize,
             verse: 0,
@@ -398,8 +412,18 @@ impl Feed {
             depth: 0,
             n: 0,
             scratch: String::new(),
+            said: 0,
+            phrases: Round::new(phrases),
+            #[cfg(test)]
+            born: 0,
             rng,
         }
+    }
+
+    /// Lines brought in by `update` so far.
+    #[cfg(test)]
+    pub fn born(&self) -> u32 {
+        self.born
     }
 
     /// The vocabulary of the day's holiday, if it has one besides Muertos.
@@ -1310,13 +1334,32 @@ impl Feed {
             Tone::Amber
         } else if roll < 55 {
             run(&mut prefix, Tone::Green, "[ OK ] ");
-            say(&mut self.rng, self.level, self.mx, &mut text);
+            self.sentence(&mut text);
             Tone::Bright
         } else {
-            say(&mut self.rng, self.level, self.mx, &mut text);
+            self.sentence(&mut text);
             Tone::Main
         };
         self.wrapped(prefix, &text, tone);
+    }
+
+    /// A sentence of the mission log. On the set, under a preset with
+    /// `frases`, every third is the next of them in a shuffled round
+    /// (spec 10.2); the others are the engine's, as in any log.
+    fn sentence(&mut self, out: &mut String) {
+        if let Some(p) = self.mx.preset
+            && self.mx.calm
+            && !p.phrases.is_empty()
+        {
+            self.said = (self.said + 1) % 3;
+            if self.said == 0 {
+                let at = self.phrases.next(&mut self.rng);
+                let tpl = p.phrases.get(at).copied().unwrap_or_default();
+                p.vocab.expand(&mut self.rng, tpl, out);
+                return;
+            }
+        }
+        say(&mut self.rng, self.level, self.mx, out);
     }
 
     fn birth_password(&mut self) {
@@ -1486,14 +1529,25 @@ impl Widget for Feed {
     }
 
     fn update(&mut self, dt: f32, _env: &Env) {
-        self.acc += dt * self.rate * (0.6 + self.rng.f32() * 0.8);
+        // On the set (spec 10.2): one line a scene second, never two in a
+        // frame, and no jitter.
+        let (gain, most) = if self.mx.calm {
+            (dt, 1)
+        } else {
+            (dt * self.rate * (0.6 + self.rng.f32() * 0.8), 60)
+        };
+        self.acc += gain;
         let mut steps = 0;
-        while self.acc >= 1.0 && steps < 60 {
+        while self.acc >= 1.0 && steps < most {
             self.acc -= 1.0;
             steps += 1;
             self.step();
         }
         self.acc = self.acc.min(1.0);
+        #[cfg(test)]
+        {
+            self.born += steps;
+        }
     }
 
     fn draw(&mut self, c: &mut Canvas, r: Rect, env: &Env) {

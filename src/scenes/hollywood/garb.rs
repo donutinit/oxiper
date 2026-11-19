@@ -17,6 +17,9 @@ pub struct Garb {
     pub preset: Option<&'static Preset>,
     /// Test only: the preset's words, but a holiday's share of them.
     leaky: bool,
+    /// On a film set (spec 10.5): what changes, eases, and the text feeds
+    /// bring a line at a time.
+    pub calm: bool,
 }
 
 /// What a preset derefs to: no holiday, at its height.
@@ -34,6 +37,7 @@ impl Garb {
             fiesta,
             preset: None,
             leaky: false,
+            calm: false,
         }
     }
 
@@ -44,6 +48,7 @@ impl Garb {
             fiesta: PRESET,
             preset: Some(p),
             leaky: false,
+            calm: false,
         }
     }
 
@@ -55,6 +60,11 @@ impl Garb {
             leaky: true,
             ..Garb::preset(p)
         }
+    }
+
+    /// The same clothes, calm on a film set or not.
+    pub fn with_calm(self, on: bool) -> Garb {
+        Garb { calm: on, ..self }
     }
 
     /// Is every word the preset's? (No draw is made for the share.)

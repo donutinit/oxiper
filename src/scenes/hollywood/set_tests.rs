@@ -1,8 +1,10 @@
 //! hollywood in set mode (spec 10, 11.5): a layout that is a function of the
 //! seed and the size and holds still, titles dealt once, a forced holiday's
 //! signature widget in the first shape pane, borders born settled, and the
-//! scene slower (`set_pace`) and dimmer (`set_dim`).
+//! scene slower (`set_pace`) and dimmer (`set_dim`), and a log that comes a
+//! line at a time, every third sentence one of the preset's `frases`.
 
+use super::feed::{Feed, FeedKind};
 use super::foro::{self, Role};
 use super::*;
 use crate::scene::Opts;
@@ -315,18 +317,18 @@ fn set_dim_fades_every_tone() {
         Tone::Red,
         Tone::Green,
     ];
-    let dimmed = |opts: &str| {
+    let dimmed = |opts: &str, bg: Color| {
         let (mut s, mut set) = set_scene(opts, Fiesta::NONE, 67, 60);
-        set.bg = Color::Rgb(16, 16, 24);
+        set.bg = bg;
         let ctx = set.ctx();
         s.retheme(&ctx);
         (s.env.pal.clone(), Pal::new(&ctx))
     };
-    let (pal, plain) = dimmed("set_dim = 0");
+    let (pal, plain) = dimmed("set_dim = 0", Color::Rgb(16, 16, 24));
     for t in TONES {
         assert_eq!(pal.tone(t), plain.tone(t), "{t:?}");
     }
-    let (pal, plain) = dimmed("set_dim = 0.25");
+    let (pal, plain) = dimmed("set_dim = 0.25", Color::Rgb(16, 16, 24));
     for t in TONES {
         assert!(
             pal.tone(t).luma() < plain.tone(t).luma(),
@@ -336,6 +338,13 @@ fn set_dim_fades_every_tone() {
         );
     }
     assert!(pal.ramp.at(0.9).luma() < plain.ramp.at(0.9).luma());
+    // `ink` is darker than that background, and a fade toward it brightens
+    // `ink`; toward black every color is darker.
+    let (pal, plain) = dimmed("set_dim = 0.25", Color::Rgb(0, 0, 0));
+    let more = |p: &Pal| [p.ink, p.oro, p.flor, p.vela, p.picado[0], p.papel[0]];
+    for (i, (dim, was)) in more(&pal).into_iter().zip(more(&plain)).enumerate() {
+        assert!(dim.luma() < was.luma(), "{i}: {dim:?} {was:?}");
+    }
 }
 
 #[test]
@@ -395,4 +404,221 @@ fn set_mode_survives_stress() {
             }
         }
     });
+}
+
+/// Spec 11.5: every pane's widget is the one its seat's seed makes, with no
+/// preset and with one; a widget seeded from anything else draws otherwise.
+#[test]
+fn every_widget_comes_from_its_seat() {
+    for opts in [String::new(), example()] {
+        let (mut s, _) = set_scene(&opts, Fiesta::NONE, 67, 60);
+        let plan = plan_of(11, 67, 60);
+        let (level, garb) = (s.env.level, s.garb());
+        let env = &s.env;
+        let drawn = |wd: &mut dyn Widget, w: u16, h: u16| {
+            let mut c = Canvas::new(w, h, Color::Reset);
+            let r = Rect {
+                x: 0,
+                y: 0,
+                w: i32::from(w),
+                h: i32::from(h),
+            };
+            wd.draw(&mut c, r, env);
+            c
+        };
+        let mut at = 0;
+        let root = s.root.as_mut().expect("seated");
+        root.each_mut(&mut |p| {
+            let seat = &plan.seats[at];
+            at += 1;
+            assert_eq!(p.kind, seat.kind, "{opts:?} pane {at}");
+            let (w, h) = p.content;
+            let mut made = make_widget(seat.kind, seat.seed, level, garb);
+            let mut other = make_widget(seat.kind, seat.seed ^ 1, level, garb);
+            made.resize(w, h);
+            other.resize(w, h);
+            for _ in 0..30 {
+                p.widget.update(1.0 / 60.0, env);
+                made.update(1.0 / 60.0, env);
+                other.update(1.0 / 60.0, env);
+            }
+            let shown = drawn(p.widget.as_mut(), w, h);
+            assert!(
+                shown.cells() == drawn(made.as_mut(), w, h).cells(),
+                "{opts:?} pane {at}: {}",
+                p.widget.name()
+            );
+            assert!(
+                shown.cells() != drawn(other.as_mut(), w, h).cells(),
+                "{opts:?} pane {at}: {} is the same from another seed",
+                p.widget.name()
+            );
+        });
+        assert_eq!(at, plan.seats.len());
+    }
+}
+
+/// The text of a 200-column log's last line, as drawn.
+fn last_line(f: &mut Feed, env: &Env) -> String {
+    let mut c = Canvas::new(200, 1, Color::Reset);
+    let r = Rect {
+        x: 0,
+        y: 0,
+        w: 200,
+        h: 1,
+    };
+    f.draw(&mut c, r, env);
+    let row: String = (0..200)
+        .map(|x| c.get(x, 0).map_or(' ', |cell| cell.ch))
+        .collect();
+    row.trim_end().to_string()
+}
+
+/// Spec 10.2 and 11.5: on the set the mission log and the logins bring one
+/// line a scene second, never two in a frame, whatever the frame's length.
+#[test]
+fn the_calm_log_brings_one_line_at_a_time() {
+    let (s, set) = set_scene("", Fiesta::NONE, 67, 60);
+    assert!(s.garb().calm);
+    let off = Opts::new(INFO.options, toml::Table::new());
+    let ctx = Ctx {
+        opts: &off,
+        ..set.ctx()
+    };
+    assert!(!Hollywood::new(&ctx).garb().calm);
+    for kind in [FeedKind::Mission, FeedKind::Auth] {
+        for seed in [1, 7, 4821] {
+            let calm = Garb::plain(Fiesta::NONE).with_calm(true);
+            let mut f = Feed::new(kind, seed, 7, calm);
+            f.resize(60, 20);
+            // A minute on the wall at 30 frames a second and the default pace.
+            for frame in 0..1_800 {
+                let before = f.born();
+                f.update(1.0 / 60.0, &s.env);
+                assert!(f.born() - before <= 1, "{kind:?} seed {seed} frame {frame}");
+            }
+            let born = f.born();
+            assert!((20..=40).contains(&born), "{kind:?} seed {seed}: {born}");
+            f.update(5.0, &s.env);
+            assert_eq!(f.born(), born + 1, "{kind:?} seed {seed}");
+        }
+    }
+}
+
+/// Spec 10.2 and 11.5: under a preset, every third sentence of the set's
+/// log is the next of its `frases`, in a shuffled round. They are also among
+/// the preset's canned lines (PF13), so the round is checked by position.
+#[test]
+fn one_sentence_in_three_is_a_frase() {
+    const FRASES: [&str; 4] = [
+        "Primera frase del guion",
+        "Segunda frase del guion",
+        "Tercera frase del guion",
+        "Cuarta frase del guion",
+    ];
+    let text = format!("frases = '''\n{}\n'''\n", FRASES.join("\n"));
+    let p = match preset::parse(text.as_bytes()) {
+        Ok(l) => l.preset,
+        Err(e) => panic!("{e}"),
+    };
+    assert_eq!(p.phrases, FRASES);
+    let (s, _) = set_scene("", Fiesta::NONE, 67, 60);
+    for seed in [3, 11, 4821] {
+        let mut f = Feed::new(FeedKind::Mission, seed, 7, Garb::preset(p).with_calm(true));
+        f.resize(200, 1);
+        // Every line, from the first the log wrote; a line that does not
+        // start with the clock goes on the sentence before it.
+        let mut entries: Vec<String> = Vec::new();
+        let mut sentences = 0;
+        let mut row = last_line(&mut f, &s.env);
+        while sentences < 301 && entries.len() < 5_000 {
+            match row.strip_prefix("[T+").and_then(|r| r.split_once("] ")) {
+                Some((_, rest)) => {
+                    let rest = rest.strip_prefix("[ OK ] ").unwrap_or(rest);
+                    if !rest.starts_with(p.vocab.phase) {
+                        sentences += 1;
+                    }
+                    entries.push(rest.to_string());
+                }
+                None => match entries.last_mut() {
+                    Some(e) => {
+                        e.push(' ');
+                        e.push_str(row.trim());
+                    }
+                    None => panic!("seed {seed}: {row:?}"),
+                },
+            }
+            let before = f.born();
+            f.update(1.0, &s.env);
+            assert_eq!(f.born(), before + 1);
+            row = last_line(&mut f, &s.env);
+        }
+        let sentences: Vec<&str> = entries
+            .iter()
+            .map(String::as_str)
+            .filter(|e| !e.starts_with(p.vocab.phase))
+            .take(300)
+            .collect();
+        assert_eq!(sentences.len(), 300, "seed {seed}");
+        let thirds: Vec<&str> = sentences.iter().skip(2).step_by(3).copied().collect();
+        for (i, t) in thirds.iter().enumerate() {
+            assert!(
+                FRASES.contains(t),
+                "seed {seed}: sentence {}: {t:?}",
+                3 * i + 3
+            );
+        }
+        let mut want = FRASES.to_vec();
+        want.sort_unstable();
+        for four in thirds.as_chunks::<4>().0 {
+            let mut got = four.to_vec();
+            got.sort_unstable();
+            assert_eq!(got, want, "seed {seed}: {four:?}");
+        }
+        let phrases = sentences.iter().filter(|e| FRASES.contains(e)).count();
+        assert!(
+            (75..=120).contains(&phrases),
+            "seed {seed}: {phrases} of 300"
+        );
+    }
+}
+
+/// A feed that is not calm is the feed it was: the same lines, frame by frame.
+#[test]
+fn a_feed_that_is_not_calm_is_as_it_was() {
+    let (s, _) = set_scene("", Fiesta::NONE, 67, 60);
+    let drawn = |f: &mut Feed| {
+        let mut c = Canvas::new(60, 20, Color::Reset);
+        let r = Rect {
+            x: 0,
+            y: 0,
+            w: 60,
+            h: 20,
+        };
+        f.draw(&mut c, r, &s.env);
+        c
+    };
+    let example = preset_tests::example();
+    let dressed: [(Garb, Garb); 2] = [
+        (Fiesta::NONE.into(), Garb::plain(Fiesta::NONE)),
+        (Garb::preset(example), Garb::preset(example)),
+    ];
+    for (bare, garb) in dressed {
+        for kind in [FeedKind::Mission, FeedKind::Auth, FeedKind::Log] {
+            let mut was = Feed::new(kind, 9, 7, bare);
+            let mut is = Feed::new(kind, 9, 7, garb.with_calm(false));
+            was.resize(60, 20);
+            is.resize(60, 20);
+            // Ten simulated seconds at 30 frames a second.
+            for frame in 0..300 {
+                was.update(1.0 / 30.0, &s.env);
+                is.update(1.0 / 30.0, &s.env);
+                assert!(
+                    drawn(&mut was).cells() == drawn(&mut is).cells(),
+                    "{kind:?} frame {frame}"
+                );
+            }
+            assert_eq!(was.born(), is.born());
+        }
+    }
 }
