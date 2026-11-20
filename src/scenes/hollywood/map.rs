@@ -340,6 +340,19 @@ pub fn project(lat: f32, lon: f32, pw: i32, ph: i32) -> (f32, f32) {
     )
 }
 
+/// The largest rectangle inside `w` x `h` that is between three and six times as many
+/// columns as rows, centered: (x, y, w, h). Never bigger than the area; at least 1x1 when the area is.
+pub fn keep(w: i32, h: i32) -> (i32, i32, i32, i32) {
+    if w < 1 || h < 1 {
+        return (0, 0, w.max(0), h.max(0));
+    }
+    // As many rows as the width allows at three columns a row, then as many
+    // columns as six a row allow: no larger rectangle keeps the ratio.
+    let rh = h.min(w / 3).max(1);
+    let rw = w.min(6 * rh);
+    ((w - rw) / 2, (h - rh) / 2, rw, rh)
+}
+
 /// Rasterizes the continents into `layer` (which should be freshly cleared).
 pub fn paint_land(layer: &mut Dots, color: Color) {
     let (pw, ph) = (layer.pw(), layer.ph());
@@ -369,5 +382,28 @@ mod tests {
         assert!(land(40.0, -100.0)); // US
         assert!(!land(0.0, -150.0)); // Pacific
         assert!(!land(-40.0, 0.0)); // South Atlantic
+    }
+
+    #[test]
+    fn keep_is_the_shape_of_the_world() {
+        assert_eq!(keep(34, 28), (0, 8, 34, 11));
+        assert_eq!(keep(140, 10), (40, 0, 60, 10));
+        assert_eq!(keep(120, 30), (0, 0, 120, 30));
+        for w in 0..=60 {
+            for h in 0..=60 {
+                let (x, y, rw, rh) = keep(w, h);
+                assert!(
+                    x >= 0 && y >= 0 && rw >= 0 && rh >= 0 && x + rw <= w && y + rh <= h,
+                    "{w}x{h}: {:?}",
+                    (x, y, rw, rh)
+                );
+                if w >= 1 && h >= 1 {
+                    assert!(rw >= 1 && rh >= 1, "{w}x{h}: {rw}x{rh}");
+                }
+                if w >= 3 && h >= 1 {
+                    assert!(3 * rh <= rw && rw <= 6 * rh, "{w}x{h}: {rw}x{rh}");
+                }
+            }
+        }
     }
 }

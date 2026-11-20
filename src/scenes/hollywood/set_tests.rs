@@ -1549,3 +1549,115 @@ fn the_land_comes_back_a_cell_at_a_time() {
         }
     }
 }
+
+/// Does ordinary hollywood (no set mode) with `opts`, resized to `w`x`h`,
+/// tell the widgets it makes to keep the maps' shape?
+fn keeps_off_the_set(opts: &str, w: u16, h: u16) -> bool {
+    let set = Set {
+        theme: Theme::classic(),
+        o: Opts::new(INFO.options, opts.parse().unwrap()),
+        fiesta: Fiesta::NONE,
+        seed: 11,
+        bg: Color::Reset,
+    };
+    let ctx = set.ctx();
+    let mut s = Hollywood::new(&ctx);
+    s.resize(&ctx, w, h);
+    s.garb().keep
+}
+
+/// Spec 10.8: the maps keep their shape under a preset, on the set, and on
+/// a terminal that is a screen on its side (`3 x rows >= 2 x columns`).
+#[test]
+fn a_screen_on_its_side_keeps_shapes() {
+    for (w, h) in [(67, 60), (120, 106)] {
+        assert!(keeps_off_the_set("", w, h), "{w}x{h}");
+    }
+    for (w, h) in [(80, 24), (213, 60), (106, 60)] {
+        assert!(!keeps_off_the_set("", w, h), "{w}x{h}");
+    }
+    assert!(keeps_off_the_set(&example(), 80, 24));
+    assert!(set_scene("", Fiesta::NONE, 80, 24).0.garb().keep);
+}
+
+/// The rows of `c` with a braille dot on them.
+fn dotted_rows(c: &Canvas) -> Vec<i32> {
+    (0..c.h() as i32)
+        .filter(|&y| {
+            (0..c.w() as i32).any(|x| {
+                c.get(x, y)
+                    .is_some_and(|cell| ('\u{2801}'..='\u{28ff}').contains(&cell.ch))
+            })
+        })
+        .collect()
+}
+
+/// Spec 10.8: a kept map in a 34x29 pane is the world's shape, 34x11 in
+/// the middle of its 34x28 body; a map told nothing fills the body.
+#[test]
+fn a_kept_map_is_not_stretched() {
+    let env = ordinary_env();
+    for seed in [3, 4821] {
+        let mut kept = widgets::WorldMap::new(seed, Garb::plain(Fiesta::NONE).with_keep(true));
+        kept.resize(34, 29);
+        let rows = dotted_rows(&drawn_in(&mut kept, 34, 29, &env));
+        assert!(!rows.is_empty() && rows.len() <= 12, "{rows:?}");
+        assert_eq!(
+            rows[rows.len() - 1] - rows[0] + 1,
+            rows.len() as i32,
+            "{rows:?}"
+        );
+        let mut plain = widgets::WorldMap::new(seed, Garb::plain(Fiesta::NONE));
+        plain.resize(34, 29);
+        let rows = dotted_rows(&drawn_in(&mut plain, 34, 29, &env));
+        assert!(rows.len() > 20, "{rows:?}");
+    }
+}
+
+/// Spec 10.8 and the scene rules: a kept map draws nothing outside its
+/// pane at any size, and does not panic.
+#[test]
+fn kept_maps_stay_in_their_panes() {
+    let env = ordinary_env();
+    let garb = Garb::plain(Fiesta::NONE).with_keep(true);
+    for (w, h) in [
+        (1, 1),
+        (2, 3),
+        (7, 2),
+        (34, 29),
+        (66, 8),
+        (140, 11),
+        (120, 40),
+    ] {
+        let widgets: [Box<dyn Widget>; 2] = [
+            Box::new(widgets::WorldMap::new(7, garb)),
+            Box::new(widgets::Satellites::new(7, garb)),
+        ];
+        for mut wd in widgets {
+            wd.resize(w, h);
+            let r = Rect {
+                x: 3,
+                y: 2,
+                w: i32::from(w),
+                h: i32::from(h),
+            };
+            for _ in 0..40 {
+                wd.update(0.25, &env);
+                let mut c = Canvas::new(w + 6, h + 4, BG);
+                wd.draw(&mut c, r, &env);
+                for y in 0..c.h() as i32 {
+                    for x in 0..c.w() as i32 {
+                        let inside = x >= r.x && y >= r.y && x < r.x + r.w && y < r.y + r.h;
+                        let cell = c.get(x, y).expect("in the canvas");
+                        assert!(
+                            inside || cell.ch == ' ',
+                            "{} at {w}x{h}: {:?} at {x},{y}",
+                            wd.name(),
+                            cell.ch
+                        );
+                    }
+                }
+            }
+        }
+    }
+}

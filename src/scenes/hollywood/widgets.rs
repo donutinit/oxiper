@@ -763,6 +763,34 @@ struct Arc {
 /// On the set, the scene seconds an arc that arrived takes to fade out.
 const ARC_FADE: f32 = 1.5;
 
+/// Where a map draws in `area`: all of it, or when it keeps its shape the
+/// rectangle of `map::keep` (spec 10.8).
+fn map_field(keep: bool, area: Rect) -> Rect {
+    if !keep {
+        return area;
+    }
+    let (x, y, w, h) = map::keep(area.w, area.h);
+    Rect {
+        x: area.x + x,
+        y: area.y + y,
+        w,
+        h,
+    }
+}
+
+/// The map's field of a `w` x `rows` area, from the origin.
+fn field_of(keep: bool, w: u16, rows: i32) -> Rect {
+    map_field(
+        keep,
+        Rect {
+            x: 0,
+            y: 0,
+            w: i32::from(w),
+            h: rows,
+        },
+    )
+}
+
 pub struct WorldMap {
     mx: Garb,
     /// Souls that got home (Día de Muertos).
@@ -808,8 +836,10 @@ impl Widget for WorldMap {
     }
 
     fn resize(&mut self, w: u16, h: u16) {
-        self.land = Dots::new(w.max(1), h.saturating_sub(1).max(1));
-        self.fx = Dots::new(w.max(1), h.saturating_sub(1).max(1));
+        let f = field_of(self.mx.keep, w, i32::from(h) - 1);
+        let (fw, fh) = (f.w.max(1) as u16, f.h.max(1) as u16);
+        self.land = Dots::new(fw, fh);
+        self.fx = Dots::new(fw, fh);
         self.painted = false;
     }
 
@@ -864,17 +894,20 @@ impl Widget for WorldMap {
 
     fn draw(&mut self, c: &mut Canvas, r: Rect, env: &Env) {
         let pal = &env.pal;
+        let body = map_field(
+            self.mx.keep,
+            Rect {
+                x: r.x,
+                y: r.y + 1,
+                w: r.w,
+                h: r.h - 1,
+            },
+        );
         if !self.painted {
-            self.land = Dots::new((r.w.max(1)) as u16, (r.h - 1).max(1) as u16);
+            self.land = Dots::new((body.w.max(1)) as u16, body.h.max(1) as u16);
             map::paint_land(&mut self.land, pal.fade(pal.main, 0.55));
             self.painted = true;
         }
-        let body = Rect {
-            x: r.x,
-            y: r.y + 1,
-            w: r.w,
-            h: r.h - 1,
-        };
         self.land.blit(c, body);
         let (pw, ph) = (self.fx.pw(), self.fx.ph());
         self.fx.clear();
@@ -1534,9 +1567,10 @@ impl Widget for Satellites {
         } else {
             0
         };
-        let rows = (h as i32 - self.list - 1).max(1) as u16;
-        self.land = Dots::new(w.max(1), rows);
-        self.fx = Dots::new(w.max(1), rows);
+        let f = field_of(self.mx.keep, w, h as i32 - self.list - 1);
+        let (fw, rows) = (f.w.max(1) as u16, f.h.max(1) as u16);
+        self.land = Dots::new(fw, rows);
+        self.fx = Dots::new(fw, rows);
         self.painted = false;
     }
 
@@ -1556,12 +1590,15 @@ impl Widget for Satellites {
             map::paint_land(&mut self.land, pal.fade(pal.main, 0.65));
             self.painted = true;
         }
-        let body = Rect {
-            x: r.x,
-            y: r.y + 1,
-            w: r.w,
-            h: r.h - 1 - self.list,
-        };
+        let body = map_field(
+            self.mx.keep,
+            Rect {
+                x: r.x,
+                y: r.y + 1,
+                w: r.w,
+                h: r.h - 1 - self.list,
+            },
+        );
         self.land.blit(c, body);
         let (pw, ph) = (self.fx.pw(), self.fx.ph());
         self.fx.clear();

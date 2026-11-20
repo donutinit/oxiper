@@ -20,6 +20,9 @@ pub struct Garb {
     /// On a film set (spec 10.5): what changes, eases, and the text feeds
     /// bring a line at a time.
     pub calm: bool,
+    /// The maps keep the world's proportions (spec 10.8) instead of
+    /// stretching it to their pane.
+    pub keep: bool,
 }
 
 /// What a preset derefs to: no holiday, at its height.
@@ -38,6 +41,7 @@ impl Garb {
             preset: None,
             leaky: false,
             calm: false,
+            keep: false,
         }
     }
 
@@ -49,6 +53,7 @@ impl Garb {
             preset: Some(p),
             leaky: false,
             calm: false,
+            keep: false,
         }
     }
 
@@ -65,6 +70,11 @@ impl Garb {
     /// The same clothes, calm on a film set or not.
     pub fn with_calm(self, on: bool) -> Garb {
         Garb { calm: on, ..self }
+    }
+
+    /// The same clothes, the maps keeping their shape or not.
+    pub fn with_keep(self, on: bool) -> Garb {
+        Garb { keep: on, ..self }
     }
 
     /// Is every word the preset's? (No draw is made for the share.)

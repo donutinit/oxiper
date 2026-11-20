@@ -1136,13 +1136,16 @@ impl Hollywood {
     }
 
     /// What every widget made from now on wears: the preset, or the day's
-    /// holiday; calm on a film set.
+    /// holiday; calm on a film set; the maps keeping their shape under a
+    /// preset, on the set, or on a screen on its side (spec 10.8).
     fn garb(&self) -> Garb {
+        let tall = 3 * self.h >= 2 * self.w;
         match self.preset {
             Some(p) => Garb::preset(p),
             None => Garb::plain(self.fiesta),
         }
         .with_calm(self.set)
+        .with_keep(self.preset.is_some() || self.set || tall)
     }
 
     /// A pane's title: the widget's process name and a generated name, or
