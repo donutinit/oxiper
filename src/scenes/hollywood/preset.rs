@@ -1492,6 +1492,49 @@ mod tests {
         }
     }
 
+    /// The fenced `toml` blocks of a Markdown text with no `[table]` header:
+    /// the presets it shows (a block with a header is a config).
+    fn presets_in(md: &str) -> Vec<String> {
+        let mut out = Vec::new();
+        let mut block: Option<String> = None;
+        for line in md.lines() {
+            match &mut block {
+                None if line.trim() == "```toml" => block = Some(String::new()),
+                None => {}
+                Some(_) if line.trim() == "```" => {
+                    let b = block.take().unwrap_or_default();
+                    if !b.lines().any(|l| l.trim_start().starts_with('[')) {
+                        out.push(b);
+                    }
+                }
+                Some(b) => {
+                    b.push_str(line);
+                    b.push('\n');
+                }
+            }
+        }
+        out
+    }
+
+    #[test]
+    fn the_guides_examples_load_clean() {
+        const GUIDE: &str = include_str!("../../../docs/PRESETS.md");
+        const README: &str = include_str!("../../../README.md");
+        let on_camera = README
+            .split_once("\n## On camera\n")
+            .map(|(_, rest)| rest.split_once("\n## ").map_or(rest, |(s, _)| s))
+            .unwrap_or_default();
+        let guide = presets_in(GUIDE);
+        let readme = presets_in(on_camera);
+        assert!(guide.len() >= 3, "{} presets in the guide", guide.len());
+        assert_eq!(readme.len(), 1, "the README's preset");
+        for text in guide.iter().chain(&readme) {
+            let l = load(text);
+            assert_eq!(l.warnings, Vec::<String>::new(), "{text}");
+            assert!(l.keys > 0, "{text}");
+        }
+    }
+
     #[test]
     fn a_round_goes_through_everything() {
         let mut rng = Rng::with_seed(5);

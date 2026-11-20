@@ -40,6 +40,13 @@ pub const INFO: SceneInfo = SceneInfo {
    (`f32::INFINITY` when it is static). The app sleeps until then instead of redrawing
    identical frames; that's how a grown bonsai costs no CPU. The default (0) means
    "every frame".
+6. Optionally, `refresh(ctx)` is called about once a second of real time by the
+   interactive loop, paused or not, beside its own look at the config file. It is
+   for a scene that reads a file besides its options (hollywood's preset): look
+   whether the file changed and take it in. Return `Some(Ok(note))` or
+   `Some(Err(why))` for the HUD (one line, 60 characters or fewer, the specific
+   part first) and `None` when nothing is new, which is the default. `snap`,
+   `record` and `bench` never call it, so they stay reproducible.
 
 ## Drawing
 
@@ -94,6 +101,31 @@ holidays have days of their own (`fiesta.date()`, and for the Navidad
 `reyes()`). In tests,
 `Fiesta::height(kind)` is a holiday at its height and `Fiesta::of_day(m, d)`
 or `Fiesta::of_date(y, m, d)` one of its days.
+
+One ordinary day is allowed to look different: on a terminal that is clearly
+a screen on its side (three rows or more for every two columns), hollywood's
+world map and satellite tracker keep the world's shape, drawn in the largest
+centered rectangle of their pane that is three to six times as wide as it is
+high, instead of stretching it three times too tall. Everything else on
+that screen, and every landscape terminal, is as it always was.
+
+## Set mode
+
+`ctx.opts.set_mode()` says the scene is on a film set (the `set_mode` setting,
+or the `s` key). The flag never changes under a running scene: the app builds
+the scene again whenever set mode goes on or off, so a scene only has to know
+how to start on the set.
+
+The app does its half for every scene: on the set `ctx.fiesta` is a holiday
+only when one is forced with `fiestas`, the playlist stays on the scene on
+screen, `r` and the arrow keys draw a seed the HUD shows as a number
+(`seed = n` brings it back), and the easter eggs have their own switch
+(`set_eggs`, the `e` key). A scene owes the set one thing: **nothing pops
+up**. Nothing switches on and off, and nothing large appears, disappears or
+changes color in one frame; what changes, eases. A scene that already holds
+to that needs nothing else, and in v1 only hollywood reads the flag (its
+fixed layout made for the screen's shape, `set_pace`, `set_dim`, and calm
+versions of its widgets).
 
 ## Rules
 

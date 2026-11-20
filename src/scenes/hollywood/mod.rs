@@ -87,10 +87,50 @@
 //! sombrero. Telegrams cross the map along the routes of the Revolución, and
 //! the access banner asks "¿QUIÉN VIVE?". Ordinary days are untouched.
 //!
+//! With a preset (the `preset` option, a TOML file of Spanish words; see
+//! docs/PRESETS.md) the screen talks about what a video is about. The ticker
+//! runs the author's headlines and nothing else, every pane title starts with
+//! one of the author's titles, bright, and the access banner says the
+//! author's pairs in big letters fitted to its pane: wrapped between words,
+//! in the biggest of eight sizes that fits, `Ñ` and `¿QUE ES?` included
+//! (`letrero.rs`). The small text is the author's too, all of it Spanish: the
+//! nouns with their articles, the adjectives agreeing by `*`, the verbs
+//! conjugated from the infinitive (`gramatica.rs`), the logs filled with the
+//! people and the names, the names turned into hosts, daemons, files, rain
+//! and satellites, laid over a neutral Spanish base that is about nothing in
+//! particular (`neutro.rs`). A preset is a holiday with no date: no dress of
+//! its own, always at its height, and the radar and the aligner show call
+//! signs and short names, never a person. The file is watched while it runs:
+//! a good save re-dresses the panes where they stand, a bad one keeps the
+//! last good preset on screen (`cache.rs`), and nothing the file says can
+//! make a widget panic (`preset.rs`, `gate.rs`).
+//!
+//! On a film set (`set_mode`, or the `s` key) the screen holds still for the
+//! camera. Three or four big panes are laid out once for the shape of the
+//! screen, a stack of full-width bands when it stands on its side and two
+//! columns when it lies down, always with the access banner and one slow
+//! mission log, the other panes the big visual widgets each where its shape
+//! fits (`foro.rs`). The layout is a function of the seed alone, so the
+//! number the HUD shows brings it back tomorrow and editing a preset cannot
+//! move a pane. Everything goes at half pace and a little dimmer (`set_pace`,
+//! `set_dim`), and nothing blinks or flashes: the banner fades in and out of
+//! the log beneath it, the log comes a line at a time, an arc of the map
+//! fades from its tail, a finished bar fades away. On a screen on its side
+//! the maps keep the shape of the world, on the set or not.
+//!
 //! Structure: the screen is a binary tree of panes (`Node`) whose leaves each
 //! own a `Widget`. Every 10 to 25 real seconds one pane splits, two panes
 //! merge, or the whole layout reshuffles. Panes tile the screen exactly; each
 //! draws its own title bar and left edge, so neighbours share one thin line.
+//! In set mode the tree is one flat row of seats (`Node::Seats`) from
+//! `foro::plan`, and none of the timers runs. Every widget wears a `Garb`
+//! (`garb.rs`): the day's holiday or the preset, calm on the set, keeping
+//! the maps' shape. A preset goes from file to `Preset` through `cache.rs`
+//! (the last good one, by path), `preset.rs` (the loader), `gramatica.rs`
+//! (the grammar), `neutro.rs` (the base) and `gate.rs` (the last check), and
+//! the banner it draws is `letrero.rs`. The tests that pin ordinary days and
+//! holidays, presets and the set are `fingerprint.rs`, `preset_tests.rs` and
+//! `set_tests.rs`.
 
 mod archivo;
 mod babble;

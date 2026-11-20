@@ -22,6 +22,7 @@ plus sixteen more scenes. One small binary. Nearly no CPU. Your terminal's trans
 [Customize](#make-it-yours) ·
 [Aquarium](#the-aquarium) ·
 [Fiestas](#fiestas) ·
+[On camera](#on-camera) ·
 [Transparency](#transparency) ·
 [Performance](#performance) ·
 [Scene options](#scene-options)
@@ -153,6 +154,7 @@ oxiper list options neo        # what you can tune
 | <kbd>←</kbd> <kbd>→</kbd> | previous / next scene | <kbd>space</kbd> | pause |
 | <kbd>↑</kbd> <kbd>↓</kbd> | next / previous theme | <kbd>+</kbd> <kbd>-</kbd> <kbd>0</kbd> | faster / slower / normal |
 | <kbd>r</kbd> | reseed the scene | <kbd>?</kbd> | help overlay |
+| <kbd>s</kbd> | set mode on / off ([on camera](#on-camera)) | <kbd>e</kbd> | easter eggs off / on |
 | <kbd>q</kbd> <kbd>esc</kbd> | quit | | (in `--saver` mode any key quits) |
 
 Leave it running in a spare tmux pane or a borderless terminal on your desktop: that's the
@@ -218,6 +220,8 @@ duration = 90.0
 theme = "rosepine"
 fps = 30
 background = "transparent"     # or "theme", or "#0b0e14"
+set_mode = false               # true on a film set: hollywood holds still (see "On camera")
+set_eggs = true                # in set mode, may the easter eggs play?
 
 [scenes.bonsai]
 theme = "classic"              # every scene can have its own theme…
@@ -579,6 +583,109 @@ serpent in her beak to land on a nopal.
 - **Día de la Revolución** (November 20): tricolor banderines over every scene, Adelitas marching
   and a revolutionary train. **hollywood** opens the Archivo de la Revolución, telegrams in Morse
   and the Plan de San Luis, and **dvd** bounces a sombrero with cananas ("¡TIERRA Y LIBERTAD!").
+
+## On camera
+
+hollywood is the scene most likely to end up behind someone on camera, so it has two things
+for a shoot: **set mode**, which makes it hold still for the camera, and **presets**, which make
+it talk about what the video is about.
+
+### Set mode
+
+Press <kbd>s</kbd> while it runs, or set `set_mode = true` in the config (`-o set_mode=true`
+for one run). On the set:
+
+- **hollywood holds still.** Three or four big panes, laid out for the shape of the screen: a
+  stack of full-width bands on a tall one, two columns on a wide one. Nothing splits, merges or
+  reshuffles, and the titles stay put. The access banner and one slow log are always there; the
+  other panes are the big visual widgets: the radar, the world map, the rain, the bandwidth
+  graph and the progress bars.
+- **Slower and dimmer**, by `set_pace` and `set_dim` (see [scene options](#scene-options)), and
+  **nothing blinks or flashes**: the banner fades in and out, the log comes a line at a time,
+  a map's arc fades from its tail.
+- **Nothing follows the calendar.** No holiday unless you force one with `fiestas`, and nothing
+  changes at midnight. The playlist stays on the scene on screen; the arrow keys still change
+  it.
+- **A layout has a number.** The layout is a function of the seed and the terminal's size.
+  <kbd>r</kbd> lays out a new one and the HUD shows its number (`hollywood · seed 4821`);
+  `seed = 4821` in the config brings the same panes back on a terminal of the same size.
+
+Other scenes only get the part the app does: the calendar, the playlist, the numbered seed and
+the eggs' switch.
+
+### Presets
+
+A preset is a small TOML file of Spanish words that the technobabble weaves in: the people, the
+names and the things a video is about. What a viewer can read (the ticker, the pane titles and
+the big banner) shows the file's own lines word for word; the rest of the text is built from
+its words. Ten lines are enough to start:
+
+```toml
+tema = "Software libre"
+titulares = '''
+1983: Stallman anuncia el proyecto GNU
+1991: Torvalds publica el kernel Linux
+'''
+titulos = ['Las cuatro libertades', 'Código fuente', 'Licencia GPL v3']
+letrero_verde = ['SOFTWARE / LIBRE', 'GNU / NO ES UNIX']
+nombres = ['GNU', 'Linux', 'GPL', 'Emacs']
+cosas = ['el kernel', 'la licencia', 'el código fuente']
+verbos = ['liberar', 'compartir', 'compilar']
+```
+
+Save it as `~/.config/oxiper/presets/hollywood/software-libre.toml` and name it:
+
+```toml
+set_mode = true
+
+[scenes.hollywood]
+preset = "software-libre"     # or a path: "~/presets/borrador.toml"
+```
+
+or `-o hollywood.preset=software-libre` for one run. Saved while oxiper runs, the file is taken
+in within a second, where the panes stand; a save that breaks it changes nothing on screen, and
+the HUD says why. [`docs/PRESETS.md`](docs/PRESETS.md) is the guide to every key and its rules,
+with a recipe for writing a preset from a script, and
+[`docs/presets/hollywood/software-libre.toml`](docs/presets/hollywood/software-libre.toml) is a
+full example. Check one before the shoot (from a checkout of this repository, for the example):
+
+```sh
+oxiper config check -o hollywood.preset=docs/presets/hollywood/software-libre.toml
+oxiper snap -s hollywood -o hollywood.preset=docs/presets/hollywood/software-libre.toml \
+            -o set_mode=true --size 67x60 --at 20     # a monitor on its side
+oxiper snap -s hollywood -o hollywood.preset=docs/presets/hollywood/software-libre.toml \
+            -o set_mode=true --size 120x33 --at 20    # and lying down
+```
+
+### Easter eggs on the set
+
+The [easter eggs](#easter-eggs) play on the set as anywhere else, about once an hour: the
+everyday three, and a forced holiday's own. Two ways to keep them out of a take:
+
+- `set_eggs = false` (or `-o set_eggs=false`): no eggs in set mode, and the eggs outside it as
+  they were.
+- <kbd>e</kbd>: switches them off at once, in any mode, and cuts the one crossing the screen;
+  press it again to switch them back on. While they are off, <kbd>E</kbd> answers `eggs off`.
+
+(`eggs = "none"` or `egg_rate = 0` turn them off everywhere, on the set or not.)
+
+### The set machine
+
+- **A monitor on its side.** Rotate the display in the system's settings, not the terminal:
+  oxiper only sees columns and rows. `tput cols; tput lines` in the fullscreen terminal says
+  what it has. Set mode lays out for a tall screen when there are more than half as many rows
+  as columns.
+- **The font is the terminal's.** A bigger font means fewer, bigger cells: on a 1080x1920
+  monitor about 120x106 with an ordinary font and about 67x60 with a big one. The layout is made
+  for 60x55 or more on a tall screen and 100x30 or more on a wide one; below that panes are
+  dropped, the banner last. The banner's letters, in short: from 67 columns a word of eight
+  letters is in wide letters, and shorter words are bigger.
+- **Preview without the monitor**: `oxiper snap -s hollywood -o set_mode=true --size 67x60`.
+- **Colors.** Film with a terminal that has RGB colors, or the fades are coarse.
+- **Keep it running.** Keep the window focused or set `unfocused_fps`, and turn off the
+  system's own screen blanking.
+- **Keep a layout.** Press <kbd>r</kbd> until it suits the framing, then set `seed =` the number
+  the HUD showed.
 
 ## The aquarium
 
@@ -1121,6 +1228,9 @@ Aliases: `hacker`, `technobabble`
 | `panes` | `6` | Most panes on screen at once (3 to 12) |
 | `reshuffle` | `15.0` | Average seconds between layout changes (real time) |
 | `babble` | `7` | How much technobabble, 0 (plain logs) to 10 (maximum) |
+| `preset` | `""` | Preset with the topic the screen talks about: a name under presets/hollywood/ in the config folder, or a path (docs/PRESETS.md) |
+| `set_pace` | `0.5` | In set mode, the pace of the widgets and the ticker, on top of speed (0.1 to 1) |
+| `set_dim` | `0.25` | In set mode, how far the colors fade toward the background (0 = as usual, 0.9 = barely there) |
 
 </details>
 
