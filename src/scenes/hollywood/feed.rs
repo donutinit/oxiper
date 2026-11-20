@@ -8,7 +8,7 @@
 //! art...) are those of Dustin Kirkland's hollywood (Apache License 2.0).
 
 use super::garb::Garb;
-use super::lexico::{self, Vocab};
+use super::lexico::{self, Dress, Vocab};
 use super::preset::Round;
 use super::{Env, Rect, Tone, Widget, babble, muertos, put};
 use crate::fiesta::Kind;
@@ -1345,7 +1345,9 @@ impl Feed {
 
     /// A sentence of the mission log. On the set, under a preset with
     /// `frases`, every third is the next of them in a shuffled round
-    /// (spec 10.2); the others are the engine's, as in any log.
+    /// (spec 10.2); the others are the engine's, as in any log, but for
+    /// the phrases at the head of its canned lines: a phrase comes by only
+    /// in its round, so every one comes by before any repeats.
     fn sentence(&mut self, out: &mut String) {
         if let Some(p) = self.mx.preset
             && self.mx.calm
@@ -1356,6 +1358,23 @@ impl Feed {
                 let at = self.phrases.next(&mut self.rng);
                 let tpl = p.phrases.get(at).copied().unwrap_or_default();
                 p.vocab.expand(&mut self.rng, tpl, out);
+                return;
+            }
+            if self.mx.whole() {
+                // What `say` does under a preset, from the base's lines: the
+                // canned ones (Spanish, and "English", the same under a
+                // preset) start with the phrases.
+                let rest = |c: &'static [&'static str]| match c.get(p.phrases.len()..) {
+                    Some(r) if !r.is_empty() && c.starts_with(p.phrases) => r,
+                    _ => c,
+                };
+                let v = Vocab {
+                    canned_es: rest(p.vocab.canned_es),
+                    canned_en: rest(p.vocab.canned_en),
+                    dress: Dress { ..p.vocab.dress },
+                    ..*p.vocab
+                };
+                v.sentence(&mut self.rng, self.level, out);
                 return;
             }
         }

@@ -544,7 +544,8 @@ fn the_calm_log_brings_one_line_at_a_time() {
 
 /// Spec 10.2 and 11.5: under a preset, every third sentence of the set's
 /// log is the next of its `frases`, in a shuffled round. They are also among
-/// the preset's canned lines (PF13), so the round is checked by position.
+/// the preset's canned lines (PF13), so the round is checked by position;
+/// the engine's sentences leave them to the round.
 #[test]
 fn one_sentence_in_three_is_a_frase() {
     const FRASES: [&str; 4] = [
@@ -612,11 +613,17 @@ fn one_sentence_in_three_is_a_frase() {
             got.sort_unstable();
             assert_eq!(got, want, "seed {seed}: {four:?}");
         }
-        let phrases = sentences.iter().filter(|e| FRASES.contains(e)).count();
-        assert!(
-            (75..=120).contains(&phrases),
-            "seed {seed}: {phrases} of 300"
-        );
+        // The engine's sentences between them are never a phrase: each
+        // comes by in its round only (spec 10.2).
+        for (i, e) in sentences.iter().enumerate() {
+            if i % 3 != 2 {
+                assert!(
+                    !FRASES.contains(e),
+                    "seed {seed}: sentence {}: {e:?}",
+                    i + 1
+                );
+            }
+        }
     }
 }
 
