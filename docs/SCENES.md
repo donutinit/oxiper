@@ -103,11 +103,12 @@ holidays have days of their own (`fiesta.date()`, and for the Navidad
 or `Fiesta::of_date(y, m, d)` one of its days.
 
 One ordinary day is allowed to look different: on a terminal that is clearly
-a screen on its side (three rows or more for every two columns), hollywood's
-world map and satellite tracker keep the world's shape, drawn in the largest
-centered rectangle of their pane that is three to six times as wide as it is
-high, instead of stretching it three times too tall. Everything else on
-that screen, and every landscape terminal, is as it always was.
+a screen on its side (two rows or more for every three columns: 67x60 and
+120x106 are, 106x60 is not), hollywood's world map and satellite tracker keep
+the world's shape, drawn in the largest centered rectangle of their pane that
+is three to six times as wide as it is high, instead of stretching it three
+times too tall. Everything else on that screen, and every landscape terminal,
+is as it always was.
 
 ## Set mode
 

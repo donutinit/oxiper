@@ -114,8 +114,8 @@ tools being imitated (`INFO`, `WARN`, `[ OK ]`, `Kernel panic - not syncing`, th
 network packets), which a Spanish-speaking admin reads in English every day.
 
 Under a preset the scene ignores the holiday, even one forced with `fiestas`: no holiday
-widgets, colors or songs. The app still draws a forced holiday's decorations and its easter
-eggs on top.
+widgets, colors or songs. The app still draws the day's holiday over it (in set mode, only a
+forced one): its decorations and its easter eggs.
 
 ## The keys
 
