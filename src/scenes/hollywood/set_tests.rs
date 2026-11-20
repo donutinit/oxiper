@@ -1274,8 +1274,15 @@ fn an_arrival_does_not_flash() {
                 "seed {seed}: dropped {late} frames on"
             );
             // By then it has reached the background: the faintest of its
-            // cells on its last frame.
-            let faint = arc.iter().map(|&p| far(fg(&frames[drop - 1], p), BG)).min();
+            // cells on its last frame (the arc has gone from its tail, so
+            // some of them are the land's again, or blank).
+            let land = pal.fade(pal.main, 0.55);
+            let faint = arc
+                .iter()
+                .map(|&p| fg(&frames[drop - 1], p))
+                .filter(|&c| matches!(c, Color::Rgb(..)) && c != land)
+                .map(|c| far(c, BG))
+                .min();
             assert!(
                 faint <= Some(far(col, BG) / 50 + 1),
                 "seed {seed}: {faint:?}"
@@ -1496,6 +1503,49 @@ fn the_figures_tick_once_a_second() {
             }
             assert!(figures <= 21, "seed {seed}: {figures}");
             assert!(graph > 100, "seed {seed}: {graph}");
+        }
+    }
+}
+
+/// Spec 10.5: on the set an arc goes from its tail while it fades, so the
+/// land under it comes back a cell at a time and nothing of the arc is left
+/// when it is dropped. Between two frames only a few cells of land come or
+/// go (a step of an arc's head or tail, a marker); the rest holds still.
+#[test]
+fn the_land_comes_back_a_cell_at_a_time() {
+    let env = set_env(Theme::classic(), BG, Fiesta::NONE);
+    let land = env.pal.fade(env.pal.main, 0.55);
+    // A blank cell's color is the terminal's.
+    let rgb = |c: Color| if matches!(c, Color::Rgb(..)) { c } else { BG };
+    let jump = far(land, BG) / 20 + 1;
+    for garb in calm_garbs() {
+        for seed in [1, 7, 4821] {
+            let mut m = widgets::WorldMap::new(seed, garb);
+            m.resize(66, 19);
+            m.update(FRAME, &env);
+            let mut prev = drawn_in(&mut m, 66, 19, &env);
+            let mut worst = (0, 0);
+            for frame in 0..(30.0 / FRAME) as usize {
+                m.update(FRAME, &env);
+                let c = drawn_in(&mut m, 66, 19, &env);
+                let fg = |c: &Canvas, (x, y): (i32, i32)| c.get(x, y).map_or(BG, |cell| cell.fg);
+                let jumps = cells_of(PANE)
+                    .filter(|&p| {
+                        let (a, b) = (fg(&prev, p), fg(&c, p));
+                        (a == land || b == land) && far(rgb(a), rgb(b)) > jump
+                    })
+                    .count();
+                worst = worst.max((jumps, frame));
+                prev = c;
+            }
+            // One step of an arc's head or tail covers up to four cells; a
+            // whole arc dropped at once was 37.
+            assert!(
+                worst.0 <= 6,
+                "seed {seed}: {} cells of land at frame {}",
+                worst.0,
+                worst.1
+            );
         }
     }
 }

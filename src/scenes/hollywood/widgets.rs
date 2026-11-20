@@ -756,7 +756,7 @@ struct Arc {
     to: (&'static str, f32, f32),
     t: f32,
     /// After the arrival: 0 to 1, how far the arc has glowed red (or, on
-    /// the set, faded to the background).
+    /// the set, faded to the background and gone from its tail).
     glow: f32,
 }
 
@@ -901,12 +901,21 @@ impl Widget for WorldMap {
                 col = pal.fade(col, a.glow);
             }
             let upto = (steps as f32 * a.t) as i32;
+            // On the set, while it fades, the arc also goes from its tail, so
+            // the land under it comes back a cell at a time.
+            let gone = if calm {
+                (steps as f32 * a.glow) as i32
+            } else {
+                0
+            };
             let (mut px, mut py) = (x0, y0);
             for i in 1..=upto {
                 let t = i as f32 / steps as f32;
                 let x = x0 + (x1 - x0) * t;
                 let y = y0 + (y1 - y0) * t - (t * PI).sin() * lift;
-                self.fx.line(px, py, x, y, col);
+                if i > gone {
+                    self.fx.line(px, py, x, y, col);
+                }
                 px = x;
                 py = y;
             }
