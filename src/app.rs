@@ -292,19 +292,26 @@ impl Player {
 
     /// Flips set mode and rebuilds the scene; the HUD's note. Going on
     /// with a seed no number leads to, it draws one; going on, the note
-    /// says the number.
+    /// says the number. The eggs are set again (to `set_eggs` going on, on
+    /// going off), and when that flips them the note says so.
     pub fn toggle_set(&mut self) -> String {
         self.set = !self.set;
         if self.set && self.seed_no.is_none() {
             self.draw_number();
         }
+        let eggs_were = self.eggs_on;
         self.switch_eggs(!self.set || self.cfg.set_eggs);
+        let eggs = match (eggs_were, self.eggs_on) {
+            (true, false) => " · eggs off",
+            (false, true) => " · eggs on",
+            _ => "",
+        };
         self.fiesta = Player::day(&self.cfg, self.set);
         self.overlay.update(0.0, self.fiesta);
         self.rebuild();
         match self.seed_no {
-            Some(n) if self.set => format!("set mode on · seed {n}"),
-            _ => "set mode off".into(),
+            Some(n) if self.set => format!("set mode on · seed {n}{eggs}"),
+            _ => format!("set mode off{eggs}"),
         }
     }
 
@@ -1654,6 +1661,28 @@ mod tests {
         p.toggle_set();
         assert_eq!(p.theme.name, stepped);
         assert_eq!(p.seed, seed);
+    }
+
+    /// `s` sets the eggs again (spec 9.3), and says so when that flips
+    /// what they were: off with `set_eggs` off, on again going off, on
+    /// again over an `e` that had them off.
+    #[test]
+    fn s_says_when_it_flips_the_eggs() {
+        let mut p = player("scene = 'neo'\nseed = 7\nfiestas = 'none'\nset_eggs = false\n")
+            .ok()
+            .unwrap();
+        assert_eq!(p.toggle_set(), "set mode on · seed 7 · eggs off");
+        assert!(!p.eggs_on);
+        assert_eq!(p.toggle_set(), "set mode off · eggs on");
+        assert!(p.eggs_on);
+        let mut p = player("scene = 'neo'\nseed = 7\nfiestas = 'none'\n")
+            .ok()
+            .unwrap();
+        assert!(!p.toggle_eggs());
+        assert_eq!(p.toggle_set(), "set mode on · seed 7 · eggs on");
+        assert!(p.eggs_on);
+        assert_eq!(p.toggle_set(), "set mode off");
+        assert!(p.toggle_set().chars().count() <= HUD_LINE);
     }
 
     /// A reload changes set mode only when the config's own `set_mode`

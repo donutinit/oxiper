@@ -6,9 +6,12 @@
 //! `egg_rate = 0`. The scene keeps running underneath.
 //!
 //! On a film set (`set_mode`) they play the same, unless `set_eggs = false`.
-//! The `e` key switches them off and back on for as long as oxiper runs, in
-//! any mode. The `Player` holds the switch; whatever turns it off (`e`,
-//! going into set mode with `set_eggs` off, a reload) cuts the egg that plays.
+//! The `e` key switches them off and back on, in any mode, until set mode
+//! goes on or off: going on (the `s` key, or a reload that changes
+//! `set_mode`) sets them to `set_eggs`, going off sets them back on, and a
+//! reload on the set that changes `set_eggs` sets them to it. The `Player`
+//! holds the switch; whatever turns it off (`e`, going into set mode with
+//! `set_eggs` off, a reload) cuts the egg that plays.
 //!
 //! The scheduler has its own RNG, separate from the scenes' seeded ones, so
 //! eggs never change what `record`, `snap` and `bench` produce. Those never

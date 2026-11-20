@@ -666,6 +666,9 @@ everyday three, and a forced holiday's own. Two ways to keep them out of a take:
   they were.
 - <kbd>e</kbd>: switches them off at once, in any mode, and cuts the one crossing the screen;
   press it again to switch them back on. While they are off, <kbd>E</kbd> answers `eggs off`.
+  The choice holds until set mode goes on or off: going on (<kbd>s</kbd>, or `set_mode` changed
+  in a reload) sets the eggs to `set_eggs`, going off switches them back on, and the HUD says so
+  when that changes them (`set mode on · seed 4821 · eggs off`).
 
 (`eggs = "none"` or `egg_rate = 0` turn them off everywhere, on the set or not.)
 
