@@ -649,12 +649,52 @@ struct Hud {
     text: String,
     until: Instant,
     help: bool,
+    /// The number on the set the HUD shows, and until when: a reason that
+    /// comes meanwhile goes after it on its line instead of hiding it.
+    seed: Option<(String, Instant)>,
 }
 
+/// The longest HUD line.
+const HUD_LINE: usize = 60;
+
+/// Seconds the HUD shows a reason (a refused reload, a bad preset).
+const REASON_SECS: f32 = 5.0;
+
 impl Hud {
+    fn new() -> Hud {
+        Hud {
+            text: String::new(),
+            until: Instant::now(),
+            help: false,
+            seed: None,
+        }
+    }
+
     fn show(&mut self, text: String, secs: f32) {
         self.text = text;
         self.until = Instant::now() + Duration::from_secs_f32(secs);
+        self.seed = None;
+    }
+
+    /// A note that says a number on the set (`hollywood · seed 4821`), for
+    /// `SEED_SECS`.
+    fn show_seed(&mut self, note: String) {
+        self.show(note.clone(), SEED_SECS);
+        self.seed = Some((note, self.until));
+    }
+
+    /// A reason, for `REASON_SECS`; while a number is up, after it on the
+    /// same line, cut to fit, so the number stays readable.
+    fn show_reason(&mut self, why: String) {
+        let seed = self
+            .seed
+            .take()
+            .filter(|(_, until)| Instant::now() < *until);
+        match &seed {
+            Some((note, _)) => self.show(joined(note, &why), REASON_SECS),
+            None => self.show(why, REASON_SECS),
+        }
+        self.seed = seed;
     }
 
     fn draw(&self, c: &mut Canvas, theme: &Theme) {
@@ -711,6 +751,17 @@ impl Hud {
             }
         }
     }
+}
+
+/// `note · why` on one HUD line: a longer one ends in `…`.
+fn joined(note: &str, why: &str) -> String {
+    let line = format!("{note} · {why}");
+    if line.chars().count() <= HUD_LINE {
+        return line;
+    }
+    let mut cut: String = line.chars().take(HUD_LINE - 1).collect();
+    cut.push('…');
+    cut
 }
 
 pub struct RunOpts {
@@ -774,17 +825,13 @@ pub fn run(cfg: Config, ro: RunOpts) -> Result<(), String> {
     let mut canvas = Canvas::new(w, h, player.canvas_bg());
     canvas.strict = player.cfg.strict;
     let mut renderer = Renderer::new(mode);
-    let mut hud = Hud {
-        text: String::new(),
-        until: Instant::now(),
-        help: false,
-    };
+    let mut hud = Hud::new();
     if hud_on
         && !ro.saver
         && player.set
         && let Some(n) = player.seed_no()
     {
-        hud.show(format!("set mode · seed {n}"), SEED_SECS);
+        hud.show_seed(format!("set mode · seed {n}"));
     }
     let mut events = Vec::with_capacity(16);
     let started = Instant::now();
@@ -845,7 +892,7 @@ pub fn run(cfg: Config, ro: RunOpts) -> Result<(), String> {
                         }
                         hud.show("config reloaded".into(), 1.5);
                     }
-                    Err(e) => hud.show(e, 5.0),
+                    Err(e) => hud.show_reason(e),
                 }
                 dirty = true;
             }
@@ -853,7 +900,7 @@ pub fn run(cfg: Config, ro: RunOpts) -> Result<(), String> {
             if let Some(refreshed) = player.refresh() {
                 match refreshed {
                     Ok(note) => hud.show(note, 2.0),
-                    Err(why) => hud.show(why, 5.0),
+                    Err(why) => hud.show_reason(why),
                 }
                 dirty = true;
             }
@@ -906,14 +953,14 @@ pub fn run(cfg: Config, ro: RunOpts) -> Result<(), String> {
                             Key::Right | Key::Char('l' | 'n') => {
                                 player.step_scene(1);
                                 match player.seed_note() {
-                                    Some(note) => hud.show(note, SEED_SECS),
+                                    Some(note) => hud.show_seed(note),
                                     None => hud.show(player.label(), 1.6),
                                 }
                             }
                             Key::Left | Key::Char('h' | 'p') => {
                                 player.step_scene(-1);
                                 match player.seed_note() {
-                                    Some(note) => hud.show(note, SEED_SECS),
+                                    Some(note) => hud.show_seed(note),
                                     None => hud.show(player.label(), 1.6),
                                 }
                             }
@@ -952,7 +999,7 @@ pub fn run(cfg: Config, ro: RunOpts) -> Result<(), String> {
                             Key::Char('r') => {
                                 player.reseed();
                                 match player.seed_note() {
-                                    Some(note) => hud.show(note, SEED_SECS),
+                                    Some(note) => hud.show_seed(note),
                                     None => {
                                         hud.show(format!("{} · reseeded", player.info.name), 1.2)
                                     }
@@ -961,8 +1008,11 @@ pub fn run(cfg: Config, ro: RunOpts) -> Result<(), String> {
                             Key::Char('s') => {
                                 let note = player.toggle_set();
                                 // The number stays up as long as `r`'s.
-                                let secs = if player.set { SEED_SECS } else { 2.0 };
-                                hud.show(note, secs);
+                                if player.set {
+                                    hud.show_seed(note);
+                                } else {
+                                    hud.show(note, 2.0);
+                                }
                             }
                             Key::Char('?') => hud.help = !hud.help,
                             Key::Char('e') => {
@@ -1334,6 +1384,50 @@ mod tests {
                 assert!(bottom_row(&mut p).contains("YA QUEDO BIEN"), "{scene}");
             }
         }
+    }
+
+    /// `r` on the set while the preset is bad: the scene built again says
+    /// the reason once more, and the HUD keeps the number readable beside it.
+    #[test]
+    fn a_reason_does_not_hide_the_number() {
+        let path = temp_file("seed-and-reason", "titulares = ['Primero']\n");
+        let mut p = player(&format!(
+            "scene = 'hollywood'\nfiestas = 'none'\nset_mode = true\n{}",
+            naming(&path)
+        ))
+        .ok()
+        .unwrap();
+        std::fs::write(&path, "titulares = [\n'Uno',\n").unwrap();
+        let mut hud = Hud::new();
+        let Some(Err(why)) = p.refresh() else {
+            panic!("a bad save was not said");
+        };
+        hud.show_reason(why.clone());
+        assert_eq!(hud.text, why);
+        p.reseed();
+        let note = p.seed_note().unwrap();
+        hud.show_seed(note.clone());
+        let Some(Err(again)) = p.refresh() else {
+            panic!("the scene built again did not say it");
+        };
+        hud.show_reason(again);
+        assert!(
+            hud.text.starts_with(&format!("{note} · preset: ")),
+            "{}",
+            hud.text
+        );
+        assert!(hud.text.chars().count() <= HUD_LINE, "{}", hud.text);
+        assert!(hud.until >= Instant::now() + Duration::from_secs_f32(SEED_SECS));
+        // Another reason meanwhile keeps the number too.
+        hud.show_reason("preset: the file is empty".into());
+        assert_eq!(hud.text, format!("{note} · preset: the file is empty"));
+        // Once anything else is said, a reason is a reason.
+        hud.show("eggs off".into(), 1.2);
+        hud.show_reason("preset: the file is empty".into());
+        assert_eq!(hud.text, "preset: the file is empty");
+        let long = joined("hollywood · seed 8964", &"x".repeat(80));
+        assert_eq!(long.chars().count(), HUD_LINE);
+        assert!(long.starts_with("hollywood · seed 8964 · x") && long.ends_with('…'));
     }
 
     /// Every scene survives every holiday's days at odd sizes, with the
