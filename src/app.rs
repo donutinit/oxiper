@@ -774,6 +774,20 @@ pub struct RunOpts {
 pub struct Reloaded {
     pub bg_changed: bool,
     pub mode: ColorMode,
+    /// The entries dropped from the hollywood preset the reload named anew
+    /// (0 when it named none, or the one in use).
+    pub preset_warnings: usize,
+}
+
+impl Reloaded {
+    /// The HUD's note: `config reloaded`, with the new preset's warnings.
+    pub fn note(&self) -> String {
+        match self.preset_warnings {
+            0 => "config reloaded".into(),
+            1 => "config reloaded · preset: 1 warning".into(),
+            n => format!("config reloaded · preset: {n} warnings"),
+        }
+    }
 }
 
 /// The once-a-second look at config.toml. None: unchanged. A refusal records
@@ -793,8 +807,22 @@ fn poll_config(player: &mut Player, ro: &RunOpts) -> Option<Result<Reloaded, Str
             let bg_changed =
                 cfg.background != player.cfg.background || cfg.strict != player.cfg.strict;
             let mode = cfg.color.unwrap_or_else(ColorMode::detect);
+            let hollywood = cfg.scene_table("hollywood");
+            let named =
+                hollywood.get("preset") != player.cfg.scene_table("hollywood").get("preset");
             match player.reload(cfg) {
-                Ok(()) => return Some(Ok(Reloaded { bg_changed, mode })),
+                Ok(()) => {
+                    let preset_warnings = if named {
+                        scenes::hollywood::preset_warnings(&hollywood)
+                    } else {
+                        0
+                    };
+                    return Some(Ok(Reloaded {
+                        bg_changed,
+                        mode,
+                        preset_warnings,
+                    }));
+                }
                 Err(e) => e,
             }
         }
@@ -890,7 +918,8 @@ pub fn run(cfg: Config, ro: RunOpts) -> Result<(), String> {
                             canvas.strict = player.cfg.strict;
                             renderer.invalidate();
                         }
-                        hud.show("config reloaded".into(), 1.5);
+                        let secs = if r.preset_warnings > 0 { 2.0 } else { 1.5 };
+                        hud.show(r.note(), secs);
                     }
                     Err(e) => hud.show_reason(e),
                 }
@@ -1383,6 +1412,53 @@ mod tests {
             if p.info.name == "hollywood" {
                 assert!(bottom_row(&mut p).contains("YA QUEDO BIEN"), "{scene}");
             }
+        }
+    }
+
+    /// A reload that names a preset with dropped entries says how many
+    /// (spec 8.6); one that keeps the preset in use says nothing of it.
+    #[test]
+    fn a_reload_onto_a_new_preset_counts_its_warnings() {
+        let path = temp_file("warn-config", "scene = 'hollywood'\nfiestas = 'none'\n");
+        let one = temp_file("warn-one", "titulares = ['GNU no es Unix', 'Hola {n']\n");
+        let two = temp_file("warn-two", "titulares = ['Bien', 'Hola {n', 'Adios {n']\n");
+        let cfg = Config::load(Some(&path), &[], false).unwrap();
+        let mut p = Player::new(cfg, TermColors::default(), 80, 24)
+            .ok()
+            .unwrap();
+        let ro = RunOpts {
+            config_path: Some(path.clone()),
+            overrides: vec![],
+            saver: false,
+        };
+        let head = "scene = 'hollywood'\nfiestas = 'none'\n";
+        for (secs, text, want) in [
+            (
+                5_000_000,
+                format!("{head}{}", naming(&one)),
+                "config reloaded · preset: 1 warning",
+            ),
+            (
+                5_000_001,
+                format!("{head}fps = 12\n{}", naming(&one)),
+                "config reloaded",
+            ),
+            (
+                5_000_002,
+                format!("{head}{}", naming(&two)),
+                "config reloaded · preset: 2 warnings",
+            ),
+            (5_000_003, head.to_string(), "config reloaded"),
+        ] {
+            std::fs::write(&path, &text).unwrap();
+            let f = std::fs::File::options().write(true).open(&path).unwrap();
+            f.set_modified(std::time::SystemTime::UNIX_EPOCH + Duration::from_secs(secs))
+                .unwrap();
+            let Some(Ok(r)) = poll_config(&mut p, &ro) else {
+                panic!("{text}: not reloaded");
+            };
+            assert_eq!(r.note(), want, "{text}");
+            assert!(r.note().chars().count() <= HUD_LINE);
         }
     }
 

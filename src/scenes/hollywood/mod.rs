@@ -236,6 +236,18 @@ pub fn preset_refusal(table: &toml::Table) -> Result<(), (String, Option<Waiting
         .map_err(|r| (cache::brief(&r.why), r.waiting))
 }
 
+/// How many entries the preset the option names dropped (spec 8.6): what
+/// the HUD says after a reload that named it. 0 when none is named.
+pub fn preset_warnings(table: &toml::Table) -> usize {
+    match wanted(table) {
+        Ok(Some(path)) => match cache::load(&path) {
+            cache::Answer::Good { warnings, .. } => warnings.len(),
+            _ => 0,
+        },
+        _ => 0,
+    }
+}
+
 /// A preset file that refused a reload: the file, and which failed save of
 /// it did.
 #[derive(Clone, PartialEq, Eq, Debug)]
