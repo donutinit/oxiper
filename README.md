@@ -643,7 +643,7 @@ preset = "software-libre"     # or a path: "~/presets/borrador.toml"
 ```
 
 or `-o hollywood.preset=software-libre` for one run. Saved while oxiper runs, the file is taken
-in within a second, where the panes stand; a save that breaks it changes nothing on screen, and
+in within a second, without moving a pane; a save that breaks it changes nothing on screen, and
 the HUD says why. [`docs/PRESETS.md`](docs/PRESETS.md) is the guide to every key and its rules,
 with a recipe for writing a preset from a script, and
 [`docs/presets/hollywood/software-libre.toml`](docs/presets/hollywood/software-libre.toml) is a
@@ -681,8 +681,9 @@ everyday three, and a forced holiday's own. Two ways to keep them out of a take:
 - **The font is the terminal's.** A bigger font means fewer, bigger cells: on a 1080x1920
   monitor about 120x106 with an ordinary font and about 67x60 with a big one. The layout is made
   for 60x55 or more on a tall screen and 100x30 or more on a wide one; below that panes are
-  dropped, the banner last. The banner's letters, in short: from 67 columns a word of eight
-  letters is in wide letters, and shorter words are bigger.
+  dropped, the banner last. The banner's letters, in short: a word of eight letters is in wide
+  letters from 67 columns on a tall screen, and from 108 on a wide one (where the banner has the
+  main column, 62% of the columns); shorter words are bigger.
 - **Preview without the monitor**: `oxiper snap -s hollywood -o set_mode=true --size 67x60`.
 - **Colors.** Film with a terminal that has RGB colors, or the fades are coarse.
 - **Keep it running.** Keep the window focused or set `unfocused_fps`, and turn off the

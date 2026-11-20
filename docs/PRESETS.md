@@ -46,7 +46,7 @@ config. A preset with an error stops oxiper from starting (see
 [Errors and warnings](#errors-and-warnings)).
 
 Edit the file while oxiper runs and save it: within a second the panes are dressed again in
-the new words, where they stand, and the HUD says `preset reloaded` (with the number of
+the new words, without moving a pane, and the HUD says `preset reloaded` (with the number of
 warnings, if any). A save that breaks the file changes nothing on screen: the last good preset
 stays, and the HUD shows the reason for five seconds. The next save is tried again.
 
@@ -208,8 +208,8 @@ Linus Torvalds
 People, written the way they should be read. They fill `{persona}`, they make the "de ..."
 tails of generated sentences (`el parche de Richard Stallman`), and the last word of each, in
 lower case and without accents, becomes a login name: `stallman`, for `{usuario}`, the login
-attempts under the banner and the users of the process table. A last word with `ñ` makes no
-login name.
+attempts under the banner and the users of the process table. With fewer than six people the
+base's logins (`operador`, `admin`, …) come too. A last word with `ñ` makes no login name.
 
 People never stand beside an invented number: the radar's contacts and the sequence aligner's
 subjects never come from `personas` (see [real names](#real-names)).
@@ -229,7 +229,7 @@ Debian
 Bare proper names, used without an article: `de GNU`. They fill `{nombre}`, and in ASCII form
 (lower case, accents stripped, spaces as `_`) they name things on the screen: identifiers
 (`gnu_servidor`), files (`gnu.tar.gz`), daemons (`linuxd`), hosts, the processes of the logs
-(`tail -f /var/log/linux.log`), the words falling in the rain, satellites (`EMACS-3`), the
+(`tail -f /var/log/linux.log`), the words falling in the rain, satellites (`EMACS-4`), the
 symbols of the market (names of six letters or fewer) and the sniffer's domain, which always
 ends in `.example`. A name with `ñ` is left out of all of these rather than misspelled.
 
@@ -373,7 +373,7 @@ In `titulares`, `titulos` and `frases`:
 | `{persona}` | one of `personas` |
 | `{nombre}` | one of `nombres` |
 | `{cosa}` | one of `cosas`, with its article |
-| `{usuario}` | a login name made from `personas` (`stallman`) |
+| `{usuario}` | a login name made from `personas` (`stallman`); with fewer than six people, or none, also the base's (`operador`, `admin`, …) |
 | `{n}` | a number, 2 to 9998 |
 | `{d}` | a digit, 1 to 9 |
 | `{pct}` | a number, 1 to 99 |
@@ -440,8 +440,9 @@ What follows from it:
 
 - **A long word costs more than a long line.** `LIBERTADES` drops a size where `NO ES UNIX`
   wraps and keeps it.
-- **A word of eight letters gets the wide x2 letters from 67 columns up**, and the narrow ones
-  below. For a small tall screen (a monitor on its side with a big font, 60 to 67 columns),
+- **A word of eight letters gets the wide x2 letters from 67 columns up on a tall screen**, and
+  the narrow ones below. On a wide screen the banner has the main column, 62% of the columns, so
+  it takes 108 columns or more. For a small tall screen (a monitor on its side with a big font, 60 to 67 columns),
   keep the words to seven letters or fewer.
 - Short words get bigger letters on every screen.
 

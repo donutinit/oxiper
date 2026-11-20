@@ -1364,7 +1364,7 @@ made:
 
 - a preset is on;
 - set mode is on;
-- the terminal is clearly a screen on its side: three rows or more for every two columns
+- the terminal is clearly a screen on its side: two rows or more for every three columns
   (`3 x rows >= 2 x columns`; physically 4:3 or taller). 67x60 and 120x106 are; 80x24 and
   213x60 are not, and neither is 106x60, a terminal filling half of a landscape screen, which
   must not change because of this.
