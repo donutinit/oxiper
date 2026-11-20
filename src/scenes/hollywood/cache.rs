@@ -79,8 +79,10 @@ struct Entry {
     /// The stamp of the file last read; `None` when it was not there or could
     /// not be read, so the next load looks again.
     stamp: Option<Stamp>,
-    /// The last preset that loaded from this path.
+    /// The last preset that loaded from this path, and the bytes it came
+    /// from: a save that changes nothing (`touch`) answers with it as it is.
     good: Option<Loaded>,
+    bytes: Vec<u8>,
     /// Why the file is bad right now.
     failure: Option<String>,
     /// Failed saves so far: a scene that said one failure says the next,
@@ -137,6 +139,7 @@ pub fn load(path: &Path) -> Answer {
         .or_insert_with(|| Entry {
             stamp: None,
             good: None,
+            bytes: Vec::new(),
             failure: None,
             failures: 0,
             failed_at: None,
@@ -161,6 +164,12 @@ pub fn load(path: &Path) -> Answer {
         }
     };
     entry.stamp = Some(stamp);
+    // The very file that last loaded: the same preset, not a new one to dress.
+    if entry.good.is_some() && bytes == entry.bytes {
+        entry.failure = None;
+        entry.failed_at = None;
+        return entry.answer();
+    }
     #[cfg(test)]
     {
         entry.parses += 1;
@@ -176,6 +185,7 @@ pub fn load(path: &Path) -> Answer {
         }
         Ok(l) => {
             entry.good = Some(l);
+            entry.bytes = bytes;
             entry.failure = None;
             entry.failed_at = None;
             entry.answer()
@@ -318,6 +328,29 @@ mod tests {
             assert!(std::ptr::eq(p, first));
         }
         assert_eq!(parses(&path), 1);
+        std::fs::remove_file(&path).ok();
+    }
+
+    /// A save that changes nothing (`touch`, or the file written back as it
+    /// was) is the preset it was: not parsed, not leaked, the same pointer.
+    #[test]
+    fn the_same_bytes_are_the_same_preset() {
+        let path = temp("same-bytes", GOOD);
+        let first = good(&load(&path));
+        let (n, leaked) = (parses(&path), preset::leaked());
+        let f = std::fs::File::options().write(true).open(&path).unwrap();
+        for secs in [1_000_000, 2_000_000] {
+            f.set_modified(SystemTime::UNIX_EPOCH + std::time::Duration::from_secs(secs))
+                .unwrap();
+            assert!(std::ptr::eq(good(&load(&path)), first));
+        }
+        // Broken, then written back as it was: the same preset again.
+        std::fs::write(&path, "tema = \n").unwrap();
+        kept(&load(&path));
+        std::fs::write(&path, GOOD).unwrap();
+        assert!(std::ptr::eq(good(&load(&path)), first));
+        assert_eq!(parses(&path), n + 1);
+        assert_eq!(preset::leaked(), leaked);
         std::fs::remove_file(&path).ok();
     }
 

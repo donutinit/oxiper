@@ -1615,9 +1615,15 @@ impl Hollywood {
 
 impl Scene for Hollywood {
     fn resize(&mut self, _ctx: &Ctx, w: u16, h: u16) {
+        let same = (self.w, self.h) == (w as i32, h as i32);
         self.w = w as i32;
         self.h = h as i32;
         if self.set {
+            // A resize to the size it has (a SIGWINCH that changed nothing)
+            // leaves the panes alone: the plan would be the same.
+            if same && self.root.is_some() {
+                return;
+            }
             self.seat();
             self.tape.clear();
             self.tape_off = 0.0;

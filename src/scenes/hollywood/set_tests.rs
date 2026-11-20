@@ -207,6 +207,43 @@ fn a_resize_and_back() {
     assert_eq!(layout(&s), first);
 }
 
+/// Where each pane's widget lives: a widget made again is somewhere else.
+fn widgets_at(s: &Hollywood) -> Vec<*const ()> {
+    let mut v = Vec::new();
+    if let Some(r) = &s.root {
+        r.each(&mut |p| v.push(&*p.widget as *const dyn Widget as *const ()));
+    }
+    v
+}
+
+/// Nothing on the set is made again for a change that changes nothing: a
+/// resize to the same size (a SIGWINCH), a save of the same preset file
+/// (`touch`). The banner stays where it was in its show, the HUD says nothing.
+#[test]
+fn nothing_is_made_again_for_nothing() {
+    let path = cache::temp("set-touch", "titulos = ['Lo mismo de siempre']\n");
+    let (mut s, set) = set_scene(&naming(&path), Fiesta::NONE, 67, 60);
+    let ctx = set.ctx();
+    assert_eq!(s.refresh(&ctx), None);
+    for _ in 0..90 {
+        s.tick(&ctx, 1.0 / 30.0, 1.0 / 30.0);
+    }
+    let (first, named, before) = (widgets_at(&s), titles(&s), draw(&mut s, &ctx, 67, 60));
+    s.feed_tape();
+    let tape = s.tape.len();
+    s.resize(&ctx, 67, 60);
+    assert_eq!(widgets_at(&s), first, "a resize to the same size");
+    assert_eq!(s.tape.len(), tape, "a resize to the same size");
+    let f = std::fs::File::options().write(true).open(&path).unwrap();
+    f.set_modified(std::time::SystemTime::UNIX_EPOCH + std::time::Duration::from_secs(4_000_000))
+        .unwrap();
+    assert_eq!(s.refresh(&ctx), None, "a touch");
+    assert_eq!(widgets_at(&s), first, "a touch");
+    assert_eq!(titles(&s), named, "a touch");
+    assert!(draw(&mut s, &ctx, 67, 60).cells() == before.cells());
+    std::fs::remove_file(&path).ok();
+}
+
 #[test]
 fn titles_are_dealt_by_position() {
     let given = preset_tests::example().titles;
