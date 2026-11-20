@@ -613,6 +613,10 @@ impl Player {
         if !same_set || (self.set && cfg.set_eggs != self.cfg.set_eggs) {
             self.switch_eggs(!self.set || cfg.set_eggs);
         }
+        // The number, as `seed =`, shuffles the playlist before the scene's
+        // seed is drawn: with another shuffle it leads somewhere else.
+        let stale = cfg.shuffle != self.cfg.shuffle
+            || (cfg.shuffle && cfg.scenes.len() != self.cfg.scenes.len());
         self.cfg = cfg;
         // Re-dressed below, with the theme.
         self.fiesta = Player::day(&self.cfg, self.set);
@@ -625,13 +629,18 @@ impl Player {
             self.pos = 0;
             self.info = self.cfg.scenes[self.order[0]];
         }
-        // Set mode turned on by the config, as by `s`: a number to write down.
-        if !same_set && self.set && self.seed_no.is_none() {
+        if stale {
+            self.seed_no = None;
+        }
+        // Set mode turned on by the config, as by `s`, or the number gone
+        // stale on the set: a number to write down, and the scene it gives.
+        let drawn = self.set && self.seed_no.is_none() && (!same_set || stale);
+        if drawn {
             self.draw_number();
         }
         self.forced_theme = None;
         self.set_theme(theme);
-        if !same_list || !same_opts || !same_bg || !same_set {
+        if !same_list || !same_opts || !same_bg || !same_set || drawn {
             self.rebuild();
         } else {
             self.apply_scene_theme();
@@ -2055,5 +2064,38 @@ mod tests {
             .unwrap();
             assert_eq!((p.seed_no(), p.seed), (Some(n), seed), "shuffle {shuffle}");
         }
+    }
+
+    /// A reload that changes `shuffle`, or the playlist's length with
+    /// shuffle on, leaves no stale number: off the set `s` then draws one
+    /// that `seed =` leads back to; on the set the reload draws one.
+    #[test]
+    fn a_reload_of_the_shuffle_leaves_no_stale_number() {
+        for shuffle in [false, true] {
+            let mut p = player(&format!("{}seed = 7\n", seeds_toml(shuffle, false)))
+                .ok()
+                .unwrap();
+            assert_eq!(p.seed_no(), Some(7));
+            p.reload(Config::from_toml(&seeds_toml(!shuffle, false)))
+                .unwrap();
+            assert_eq!(p.seed_no(), None, "shuffle {shuffle}");
+            p.toggle_set();
+            let n = p.seed_no().unwrap();
+            assert_eq!(written(!shuffle, n).seed, p.seed, "shuffle {shuffle}: s");
+            let mut p = player(&seeds_toml(shuffle, true)).ok().unwrap();
+            p.reload(Config::from_toml(&seeds_toml(!shuffle, true)))
+                .unwrap();
+            let n = p.seed_no().unwrap();
+            assert_eq!(written(!shuffle, n).seed, p.seed, "shuffle {shuffle}: set");
+            p.reseed();
+            let n = p.seed_no().unwrap();
+            assert_eq!(written(!shuffle, n).seed, p.seed, "shuffle {shuffle}: r");
+        }
+        let two = "scene = 'hollywood,neo'\nshuffle = true\nfiestas = 'none'\nset_mode = true\n";
+        let mut p = player(&seeds_toml(true, true)).ok().unwrap();
+        p.reload(Config::from_toml(two)).unwrap();
+        let n = p.seed_no().unwrap();
+        let q = player(&format!("{two}seed = {n}\n")).ok().unwrap();
+        assert_eq!(q.seed, p.seed, "two scenes: {n}");
     }
 }
