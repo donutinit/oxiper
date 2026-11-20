@@ -112,12 +112,12 @@
 //! mission log, the other panes the big visual widgets each where its shape
 //! fits (`foro.rs`). The layout is a function of the seed and the screen's
 //! size alone, so the number the HUD shows brings it back tomorrow on the
-//! same screen and editing a preset cannot move a pane. Everything goes at half pace and a little dimmer (`set_pace`,
-//! `set_dim`), and nothing blinks or flashes: the banner fades in and out of
-//! the log beneath it, the log comes a line at a time, an arc of the map
-//! fades from its tail, a finished bar fades away. The maps keep the shape
-//! of the world on the set and under a preset on any screen, and on a
-//! screen on its side always.
+//! same screen and editing a preset cannot move a pane. Everything goes at
+//! half pace and a little dimmer (`set_pace`, `set_dim`), and nothing
+//! blinks or flashes: the banner fades in and out of the log beneath it,
+//! the log comes a line at a time, an arc of the map fades from its tail, a
+//! finished bar fades away. The maps keep the shape of the world on the set
+//! and under a preset on any screen, and on a screen on its side always.
 //!
 //! Structure: the screen is a binary tree of panes (`Node`) whose leaves each
 //! own a `Widget`. Every 10 to 25 real seconds one pane splits, two panes
@@ -251,7 +251,6 @@ pub fn preset_warnings(table: &toml::Table) -> usize {
 
 /// A preset file that refused a reload: the file, and which failed save of
 /// it did.
-#[derive(Clone, PartialEq, Eq, Debug)]
 pub struct Waiting {
     path: PathBuf,
     save: u32,
