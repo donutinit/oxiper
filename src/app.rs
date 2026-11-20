@@ -152,6 +152,9 @@ pub struct Player {
     /// start-up, one drawn on the set, None once `r` or an arrow has drawn
     /// a seed off it.
     seed_no: Option<u64>,
+    /// The preset file that refused the last reload, which `poll_config`
+    /// watches besides config.toml (spec 8.6).
+    waiting: Option<scenes::hollywood::Waiting>,
 }
 
 /// Real seconds between looks at the date, so a holiday starts at midnight.
@@ -231,6 +234,7 @@ impl Player {
             set,
             eggs_on,
             seed_no,
+            waiting: None,
         })
     }
 
@@ -571,12 +575,19 @@ impl Player {
 
     /// Applies a reloaded config, keeping as much running state as possible.
     pub fn reload(&mut self, cfg: Config) -> Result<(), String> {
+        self.waiting = None;
         let theme = resolve_theme(&cfg.theme, &cfg, &self.tc)?;
         if let Some(e) = scene_theme_problems(&cfg, &self.tc).into_iter().next() {
             return Err(e);
         }
-        // For the HUD: the reason first, on one line.
-        scenes::hollywood::preset_refusal(&cfg.scene_table("hollywood"))?;
+        // For the HUD: the reason first, on one line. Refused for its file,
+        // it is tried again when the file changes.
+        if let Err((why, waiting)) =
+            scenes::hollywood::preset_refusal(&cfg.scene_table("hollywood"))
+        {
+            self.waiting = waiting;
+            return Err(why);
+        }
         let same_list = cfg.scenes.iter().map(|s| s.name).eq(self
             .cfg
             .scenes
@@ -715,9 +726,15 @@ pub struct Reloaded {
 }
 
 /// The once-a-second look at config.toml. None: unchanged. A refusal records
-/// the file's mtime, so it is not tried again until the file changes (K9).
+/// the file's mtime, so it is not tried again until the file changes (K9),
+/// or, refused for the preset it names, until that file changes: a new
+/// failed save is said once, and a good one lets the reload through.
 fn poll_config(player: &mut Player, ro: &RunOpts) -> Option<Result<Reloaded, String>> {
-    if !player.cfg.changed_on_disk() {
+    let preset_changed = player
+        .waiting
+        .as_ref()
+        .is_some_and(scenes::hollywood::Waiting::changed);
+    if !player.cfg.changed_on_disk() && !preset_changed {
         return None;
     }
     let refused = match Config::load(ro.config_path.as_deref(), &ro.overrides, ro.saver) {
@@ -730,7 +747,10 @@ fn poll_config(player: &mut Player, ro: &RunOpts) -> Option<Result<Reloaded, Str
                 Err(e) => e,
             }
         }
-        Err(e) => e,
+        Err(e) => {
+            player.waiting = None;
+            e
+        }
     };
     // Keep the old config but remember the mtime so we don't retry every second.
     player.cfg.mtime = player
@@ -1239,6 +1259,81 @@ mod tests {
         assert!(matches!(poll_config(&mut p, &ro), Some(Ok(_))));
         assert_eq!(p.cfg.fps, 12);
         assert!(poll_config(&mut p, &ro).is_none());
+    }
+
+    /// A reload refused for the preset it names is tried again when that
+    /// file changes, not only when config.toml does (spec 8.6): saved
+    /// broken again, the reason is said once more; saved good (or created),
+    /// the reload goes through. With hollywood and another preset on
+    /// screen, and with neo on screen and no preset.
+    #[test]
+    fn a_refused_preset_is_tried_again_when_its_file_changes() {
+        let cases = [
+            ("hollywood", true, true),
+            ("hollywood", true, false),
+            ("neo,hollywood", false, true),
+        ];
+        for (i, (scene, with_old, was_there)) in cases.into_iter().enumerate() {
+            let old = temp_file(&format!("retry-old-{i}"), "titulares = ['Lo de antes']\n");
+            let new = std::env::temp_dir().join(format!(
+                "oxiper-app-{}-retry-new-{i}.toml",
+                std::process::id()
+            ));
+            if was_there {
+                std::fs::write(&new, "tema = \n").unwrap();
+            } else {
+                std::fs::remove_file(&new).ok();
+            }
+            let head = format!("scene = '{scene}'\nfiestas = 'none'\n");
+            let first = if with_old {
+                format!("{head}{}", naming(&old))
+            } else {
+                head.clone()
+            };
+            let path = temp_file(&format!("retry-config-{i}"), &first);
+            let cfg = Config::load(Some(&path), &[], false).unwrap();
+            let mut p = Player::new(cfg, TermColors::default(), 80, 24)
+                .ok()
+                .unwrap();
+            let ro = RunOpts {
+                config_path: Some(path.clone()),
+                overrides: vec![],
+                saver: false,
+            };
+            let on = p.info.name;
+            std::fs::write(&path, format!("{head}fps = 12\n{}", naming(&new))).unwrap();
+            let f = std::fs::File::options().write(true).open(&path).unwrap();
+            f.set_modified(std::time::SystemTime::UNIX_EPOCH + Duration::from_secs(3_000_000))
+                .unwrap();
+            let Some(Err(why)) = poll_config(&mut p, &ro) else {
+                panic!("{scene}: a reload naming a broken preset was taken");
+            };
+            assert!(why.starts_with("preset: "), "{why}");
+            assert!(poll_config(&mut p, &ro).is_none(), "{scene}");
+            assert_eq!(p.refresh(), None, "{scene}");
+            // Broken again, for the same reason: said once more, once.
+            std::fs::write(&new, "tema = \n# otra vez\n").unwrap();
+            let Some(Err(again)) = poll_config(&mut p, &ro) else {
+                panic!("{scene}: a new bad save of the preset was not said");
+            };
+            if was_there {
+                assert_eq!(again, why, "{scene}");
+            }
+            assert!(poll_config(&mut p, &ro).is_none(), "{scene}");
+            assert_eq!(p.cfg.fps, 30, "{scene}");
+            assert_eq!(p.info.name, on, "{scene}");
+            // Fixed: the reload goes through as if config.toml were saved.
+            std::fs::write(&new, "titulares = ['Ya quedo bien']\n").unwrap();
+            assert!(
+                matches!(poll_config(&mut p, &ro), Some(Ok(_))),
+                "{scene}: the fixed preset was not taken"
+            );
+            assert_eq!(p.cfg.fps, 12, "{scene}");
+            assert!(poll_config(&mut p, &ro).is_none(), "{scene}");
+            if p.info.name == "hollywood" {
+                assert!(bottom_row(&mut p).contains("YA QUEDO BIEN"), "{scene}");
+            }
+        }
     }
 
     /// Every scene survives every holiday's days at odd sizes, with the

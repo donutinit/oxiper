@@ -223,15 +223,36 @@ pub const INFO: SceneInfo = SceneInfo {
 /// Err: `<path>: <why>` for a preset that cannot be used and has never loaded,
 /// or an option that is not a string.
 pub fn preset_check(table: &toml::Table) -> Result<Vec<String>, String> {
-    check(table).map_err(|(at, why)| format!("{at}: {why}"))
+    check(table).map_err(|r| format!("{}: {}", r.at, r.why))
 }
 
 /// The same check, a refusal in the HUD's form: `preset: <why>`, one line of
 /// 60 characters at most, the reason first (a long path would push it off).
-pub fn preset_refusal(table: &toml::Table) -> Result<(), String> {
+/// With it, when the file is to blame, the file to watch: a reload it
+/// refused is tried again when the file changes (spec 8.6).
+pub fn preset_refusal(table: &toml::Table) -> Result<(), (String, Option<Waiting>)> {
     check(table)
         .map(drop)
-        .map_err(|(_, why)| cache::brief(&why))
+        .map_err(|r| (cache::brief(&r.why), r.waiting))
+}
+
+/// A preset file that refused a reload: the file, and which failed save of
+/// it did.
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct Waiting {
+    path: PathBuf,
+    save: u32,
+}
+
+impl Waiting {
+    /// Is the file another than the one that refused: good now, or a new
+    /// failed save, with the same reason or not? One `stat` when unchanged.
+    pub fn changed(&self) -> bool {
+        match cache::load(&self.path) {
+            cache::Answer::Bad(_, save) => save != self.save,
+            _ => true,
+        }
+    }
 }
 
 /// The file the `preset` option names; a bare name is looked for beside the
@@ -241,12 +262,26 @@ fn wanted(table: &toml::Table) -> Result<Option<PathBuf>, String> {
     cache::wanted(table, config.as_deref().and_then(std::path::Path::parent))
 }
 
-/// The check, a refusal as where (the path, or the option) and why.
-fn check(table: &toml::Table) -> Result<Vec<String>, (String, String)> {
+/// Why a preset cannot be used: where (the path, or the option), why, and
+/// the file to watch when it is the file's fault.
+struct Refused {
+    at: String,
+    why: String,
+    waiting: Option<Waiting>,
+}
+
+/// The check, a refusal as a `Refused`.
+fn check(table: &toml::Table) -> Result<Vec<String>, Refused> {
     let path = match wanted(table) {
         Ok(Some(path)) => path,
         Ok(None) => return Ok(Vec::new()),
-        Err(why) => return Err(("scenes.hollywood.preset".into(), why)),
+        Err(why) => {
+            return Err(Refused {
+                at: "scenes.hollywood.preset".into(),
+                why,
+                waiting: None,
+            });
+        }
     };
     let name = path.file_stem().unwrap_or_default().to_string_lossy();
     match cache::load(&path) {
@@ -255,7 +290,11 @@ fn check(table: &toml::Table) -> Result<Vec<String>, (String, String)> {
         }
         // Loaded before and bad now: the scene keeps what it has and says so.
         cache::Answer::Kept { why, .. } => Ok(vec![format!("{name}: {why}")]),
-        cache::Answer::Bad(why, _) => Err((path.display().to_string(), why)),
+        cache::Answer::Bad(why, save) => Err(Refused {
+            at: path.display().to_string(),
+            why,
+            waiting: Some(Waiting { path, save }),
+        }),
     }
 }
 
