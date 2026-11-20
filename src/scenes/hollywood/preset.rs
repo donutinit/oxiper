@@ -112,7 +112,8 @@ pub(super) fn one_line(s: String) -> String {
 /// Bytes to a preset, or the one line that says why not. Total: never panics.
 pub fn parse(bytes: &[u8]) -> Result<Loaded, String> {
     if bytes.len() > MAX_BYTES {
-        return Err(format!("{} bytes, 256 KiB at most", bytes.len()));
+        // (The file was read to one byte past the limit: its size is not known.)
+        return Err("the file is over 256 KiB".into());
     }
     let text = std::str::from_utf8(bytes)
         .map_err(|e| format!("not UTF-8 (byte {})", e.valid_up_to() + 1))?;
@@ -1292,7 +1293,7 @@ mod tests {
             assert!(!e.is_empty() && e.chars().count() <= LINE, "{e:?}");
         }
         assert!(errs[0].contains("UTF-8"), "{}", errs[0]);
-        assert!(errs[1].contains("256 KiB"), "{}", errs[1]);
+        assert_eq!(errs[1], "the file is over 256 KiB");
         assert!(errs[2].starts_with("line 1: "), "{}", errs[2]);
         assert!(errs[3].starts_with("line 3: "), "{}", errs[3]);
         assert!(errs[4].starts_with("line 3: "), "{}", errs[4]);
@@ -1492,6 +1493,21 @@ mod tests {
         }
     }
 
+    /// Is this line a bare `[table]` (or `[[array]]`) header? A line of
+    /// `frases` such as `[ OK ] listo` is not.
+    fn is_header(line: &str) -> bool {
+        let t = line.trim();
+        let name = t
+            .strip_prefix("[[")
+            .and_then(|t| t.strip_suffix("]]"))
+            .or_else(|| t.strip_prefix('[').and_then(|t| t.strip_suffix(']')));
+        name.is_some_and(|n| {
+            !n.is_empty()
+                && n.chars()
+                    .all(|c| c.is_ascii_alphanumeric() || matches!(c, '_' | '-' | '.'))
+        })
+    }
+
     /// The fenced `toml` blocks of a Markdown text with no `[table]` header:
     /// the presets it shows (a block with a header is a config).
     fn presets_in(md: &str) -> Vec<String> {
@@ -1503,7 +1519,7 @@ mod tests {
                 None => {}
                 Some(_) if line.trim() == "```" => {
                     let b = block.take().unwrap_or_default();
-                    if !b.lines().any(|l| l.trim_start().starts_with('[')) {
+                    if !b.lines().any(is_header) {
                         out.push(b);
                     }
                 }
@@ -1526,7 +1542,9 @@ mod tests {
             .unwrap_or_default();
         let guide = presets_in(GUIDE);
         let readme = presets_in(on_camera);
-        assert!(guide.len() >= 3, "{} presets in the guide", guide.len());
+        assert_eq!(guide.len(), 12, "the presets in the guide");
+        assert!(is_header("[scenes.hollywood]") && is_header(" [[a]] "));
+        assert!(!is_header("[ OK ] listo") && !is_header("['GNU', 'Linux']") && !is_header("[]"));
         assert_eq!(readme.len(), 1, "the README's preset");
         for text in guide.iter().chain(&readme) {
             let l = load(text);

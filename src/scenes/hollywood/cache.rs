@@ -503,13 +503,15 @@ mod tests {
     fn a_big_file_is_read_to_the_limit_and_no_further() {
         let big = "#".repeat(preset::MAX_BYTES + 4096);
         let path = temp("big", &big);
+        assert_eq!(read(&path).map(|b| b.len()), Ok(preset::MAX_BYTES + 1));
         match load(&path) {
-            Answer::Bad(why, _) => assert!(
-                why.contains(&format!("{} bytes", preset::MAX_BYTES + 1)),
-                "{why}"
-            ),
+            Answer::Bad(why, _) => assert_eq!(why, "the file is over 256 KiB"),
             a => panic!("expected Bad, got {}", show(&a)),
         }
+        assert_eq!(
+            brief("the file is over 256 KiB"),
+            "preset: the file is over 256 KiB"
+        );
         std::fs::remove_file(&path).ok();
     }
 
